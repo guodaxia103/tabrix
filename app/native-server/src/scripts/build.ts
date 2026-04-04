@@ -3,6 +3,41 @@ import fs from 'fs';
 import path from 'path';
 
 const distDir = path.join(__dirname, '..', '..', 'dist');
+
+function safeCleanPath(targetPath: string, skipped: string[]): void {
+  if (!fs.existsSync(targetPath)) {
+    return;
+  }
+
+  const stat = fs.lstatSync(targetPath);
+  if (stat.isDirectory()) {
+    for (const entry of fs.readdirSync(targetPath)) {
+      safeCleanPath(path.join(targetPath, entry), skipped);
+    }
+    try {
+      fs.rmdirSync(targetPath);
+    } catch (err) {
+      const error = err as NodeJS.ErrnoException;
+      if (error.code !== 'ENOTEMPTY' && error.code !== 'EBUSY' && error.code !== 'EPERM') {
+        throw err;
+      }
+      skipped.push(targetPath);
+    }
+    return;
+  }
+
+  try {
+    fs.rmSync(targetPath, { force: true });
+  } catch (err) {
+    const error = err as NodeJS.ErrnoException;
+    if (error.code === 'EBUSY' || error.code === 'EPERM') {
+      skipped.push(targetPath);
+      return;
+    }
+    throw err;
+  }
+}
+
 // 清理上次构建
 console.log('清理上次构建...');
 try {
@@ -12,7 +47,16 @@ try {
   if (error.code === 'ENOENT') {
     // dist 不存在时无需处理
   } else if (error.code === 'EBUSY' || error.code === 'EPERM') {
-    console.warn(`警告: 无法完全清理 dist 目录（${error.code}），将继续覆盖构建产物`);
+    const skipped: string[] = [];
+    safeCleanPath(distDir, skipped);
+    if (skipped.length > 0) {
+      console.warn(
+        `警告: dist 中仍有 ${skipped.length} 个被占用路径未清理，将继续覆盖其余构建产物`,
+      );
+      skipped.slice(0, 5).forEach((item) => console.warn(`  - ${item}`));
+    } else {
+      console.warn(`警告: 无法完全清理 dist 目录（${error.code}），将继续覆盖构建产物`);
+    }
   } else {
     throw err;
   }
