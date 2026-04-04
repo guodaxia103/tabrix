@@ -25,6 +25,27 @@ describe('服务器测试', () => {
     });
   });
 
+  test('GET /status 应返回运行状态快照', async () => {
+    const response = await supertest(Server.getInstance().server)
+      .get('/status')
+      .expect(200)
+      .expect('Content-Type', /json/);
+
+    expect(response.body.status).toBe('ok');
+    expect(response.body.data).toMatchObject({
+      isRunning: false,
+      host: '127.0.0.1',
+      port: null,
+      nativeHostAttached: false,
+    });
+    expect(response.body.data.transports).toMatchObject({
+      total: 0,
+      sse: 0,
+      streamableHttp: 0,
+    });
+    expect(Array.isArray(response.body.data.transports.sessionIds)).toBe(true);
+  });
+
   test('POST /mcp initialize 可以连续创建多个独立会话', async () => {
     const initializeRequest = {
       jsonrpc: '2.0',

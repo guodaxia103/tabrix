@@ -51,6 +51,19 @@ type ManagedTransport =
       server: McpServer;
     };
 
+interface ServerStatusSnapshot {
+  isRunning: boolean;
+  host: string;
+  port: number | null;
+  nativeHostAttached: boolean;
+  transports: {
+    total: number;
+    sse: number;
+    streamableHttp: number;
+    sessionIds: string[];
+  };
+}
+
 // ============================================================
 // Server Class
 // ============================================================
@@ -60,6 +73,7 @@ export class Server {
   public isRunning = false;
   private nativeHost: NativeMessagingHost | null = null;
   private transportsMap: Map<string, ManagedTransport> = new Map();
+  private listeningPort: number | null = null;
   private agentStreamManager: AgentStreamManager;
   private agentChatService: AgentChatService;
 
@@ -125,6 +139,13 @@ export class Server {
       reply.status(HTTP_STATUS.OK).send({
         status: 'ok',
         message: 'pong',
+      });
+    });
+
+    this.fastify.get('/status', async (_request: FastifyRequest, reply: FastifyReply) => {
+      reply.status(HTTP_STATUS.OK).send({
+        status: 'ok',
+        data: this.getStatusSnapshot(),
       });
     });
   }
@@ -196,7 +217,7 @@ export class Server {
         });
 
         reply.raw.on('close', () => {
-          this.transportsMap.delete(transport.sessionId);
+          this.removeManagedTransport(transport.sessionId);
         });
 
         await server.connect(transport);
@@ -255,8 +276,8 @@ export class Server {
         });
 
         transport.onclose = () => {
-          if (transport?.sessionId && this.transportsMap.get(transport.sessionId)) {
-            this.transportsMap.delete(transport.sessionId);
+          if (transport?.sessionId) {
+            this.removeManagedTransport(transport.sessionId);
           }
         };
         await server.connect(transport);
@@ -357,8 +378,10 @@ export class Server {
       process.env.CHROME_MCP_PORT = String(port);
       process.env.MCP_HTTP_PORT = String(port);
 
+      this.listeningPort = port;
       this.isRunning = true;
     } catch (err) {
+      this.listeningPort = null;
       this.isRunning = false;
       throw err;
     }
@@ -370,10 +393,13 @@ export class Server {
     }
 
     try {
+      await this.closeManagedTransports();
       await this.fastify.close();
       closeDb();
+      this.listeningPort = null;
       this.isRunning = false;
     } catch (err) {
+      this.listeningPort = null;
       this.isRunning = false;
       closeDb();
       throw err;
@@ -382,6 +408,51 @@ export class Server {
 
   public getInstance(): FastifyInstance {
     return this.fastify;
+  }
+
+  public getStatusSnapshot(): ServerStatusSnapshot {
+    const sessionIds = [...this.transportsMap.keys()];
+    let sse = 0;
+    let streamableHttp = 0;
+
+    for (const entry of this.transportsMap.values()) {
+      if (entry.kind === 'sse') {
+        sse += 1;
+      } else {
+        streamableHttp += 1;
+      }
+    }
+
+    return {
+      isRunning: this.isRunning,
+      host: SERVER_CONFIG.HOST,
+      port: this.listeningPort,
+      nativeHostAttached: this.nativeHost !== null,
+      transports: {
+        total: sessionIds.length,
+        sse,
+        streamableHttp,
+        sessionIds,
+      },
+    };
+  }
+
+  private removeManagedTransport(sessionId: string): void {
+    const entry = this.transportsMap.get(sessionId);
+    if (!entry) {
+      return;
+    }
+
+    this.transportsMap.delete(sessionId);
+    void entry.server.close().catch(() => {
+      // Ignore cleanup failures during disconnect/teardown.
+    });
+  }
+
+  private async closeManagedTransports(): Promise<void> {
+    const entries = [...this.transportsMap.entries()];
+    this.transportsMap.clear();
+    await Promise.allSettled(entries.map(([, entry]) => entry.server.close()));
   }
 }
 

@@ -14,6 +14,7 @@ import {
 import { BrowserType, parseBrowserType, detectInstalledBrowsers } from './scripts/browser-config';
 import { runDoctor } from './scripts/doctor';
 import { runReport } from './scripts/report';
+import { runStatus } from './scripts/status';
 
 function hasWindowsAdminRights(): boolean {
   if (process.platform !== 'win32') {
@@ -227,6 +228,25 @@ program
       process.exit(exitCode);
     } catch (error: any) {
       console.error(colorText(`Report failed: ${error.message}`, 'red'));
+      process.exit(1);
+    }
+  });
+
+// Quick runtime status
+program
+  .command('status')
+  .description('Show local MCP server runtime status')
+  .option('--json', 'Output status as JSON')
+  .option('--timeout <ms>', 'Request timeout in milliseconds', '1500')
+  .action(async (options) => {
+    try {
+      const exitCode = await runStatus({
+        json: Boolean(options.json),
+        timeoutMs: options.timeout ? parseInt(options.timeout, 10) : undefined,
+      });
+      process.exit(exitCode);
+    } catch (error: any) {
+      console.error(colorText(`Status failed: ${error.message}`, 'red'));
       process.exit(1);
     }
   });
