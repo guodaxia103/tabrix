@@ -24,7 +24,7 @@ import {
   tryRegisterUserLevelHost,
   getLogDir,
 } from './utils';
-import { NATIVE_SERVER_PORT } from '../constant';
+import { HTTP_STATUS, NATIVE_SERVER_PORT } from '../constant';
 
 const EXPECTED_PORT = 12306;
 const SCHEMA_VERSION = 1;
@@ -595,6 +595,149 @@ async function checkConnectivity(
   }
 }
 
+async function fetchJson(
+  url: string,
+  init: { method?: string; headers?: Record<string, string>; body?: string },
+  timeoutMs: number,
+): Promise<{
+  ok: boolean;
+  status?: number;
+  headers?: Record<string, string>;
+  body?: unknown;
+  error?: string;
+}> {
+  const fetchFn = resolveFetch();
+  if (!fetchFn) {
+    return { ok: false, error: 'fetch is not available (requires Node.js >=18 or node-fetch)' };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  if (typeof timeout.unref === 'function') {
+    timeout.unref();
+  }
+
+  try {
+    const res = await fetchFn(url, {
+      method: init.method ?? 'GET',
+      headers: init.headers,
+      body: init.body,
+      signal: controller.signal,
+    });
+
+    const headers: Record<string, string> = {};
+    res.headers.forEach((value, key) => {
+      headers[key.toLowerCase()] = value;
+    });
+
+    const text = await res.text();
+    let body: unknown = text;
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = text;
+      }
+    }
+
+    return { ok: res.ok, status: res.status, headers, body };
+  } catch (e: unknown) {
+    const errMessage = e instanceof Error ? e.message : String(e);
+    const errName = e instanceof Error ? e.name : '';
+    if (errName === 'AbortError' || errMessage.toLowerCase().includes('abort')) {
+      return { ok: false, error: `Timeout after ${timeoutMs}ms` };
+    }
+    return { ok: false, error: errMessage };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function checkRuntimeStatus(baseUrl: URL): Promise<{
+  ok: boolean;
+  status?: number;
+  snapshot?: Record<string, unknown>;
+  error?: string;
+}> {
+  const statusUrl = new URL('/status', baseUrl);
+  const response = await fetchJson(statusUrl.toString(), { method: 'GET' }, 1500);
+  const payload =
+    response.body && typeof response.body === 'object'
+      ? (response.body as { data?: Record<string, unknown> })
+      : undefined;
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    snapshot: payload?.data,
+    error: response.error,
+  };
+}
+
+async function checkMcpInitialize(baseUrl: URL): Promise<{
+  ok: boolean;
+  status?: number;
+  sessionId?: string;
+  error?: string;
+}> {
+  const mcpUrl = new URL('/mcp', baseUrl);
+  const response = await fetchJson(
+    mcpUrl.toString(),
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: {
+            name: 'doctor',
+            version: '1.0.0',
+          },
+        },
+      }),
+    },
+    2500,
+  );
+
+  const sessionId = response.headers?.['mcp-session-id'];
+  if (!response.ok || !sessionId) {
+    return {
+      ok: false,
+      status: response.status,
+      error:
+        response.error ||
+        (response.ok ? 'Initialize succeeded but no mcp-session-id was returned' : undefined),
+    };
+  }
+
+  const deleteResponse = await fetchJson(
+    mcpUrl.toString(),
+    {
+      method: 'DELETE',
+      headers: {
+        'mcp-session-id': sessionId,
+      },
+    },
+    1500,
+  );
+
+  return {
+    ok: deleteResponse.ok || deleteResponse.status === HTTP_STATUS.NO_CONTENT,
+    status: response.status,
+    sessionId,
+    error: deleteResponse.ok
+      ? undefined
+      : deleteResponse.error || `DELETE /mcp returned ${deleteResponse.status}`,
+  };
+}
+
 // ============================================================================
 // Summary Computation
 // ============================================================================
@@ -1014,6 +1157,44 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
           },
         });
         if (!ping.ok) nextSteps.push('Click "Connect" in the extension, then re-run doctor');
+
+        const runtimeStatus = await checkRuntimeStatus(url);
+        checks.push({
+          id: 'runtime.status',
+          title: 'Runtime status',
+          status: runtimeStatus.ok ? 'ok' : 'warn',
+          message: runtimeStatus.ok
+            ? `GET ${new URL('/status', url)} -> ${runtimeStatus.status}`
+            : `GET ${new URL('/status', url)} failed (${runtimeStatus.error || 'unknown error'})`,
+          details: {
+            snapshot: runtimeStatus.snapshot,
+            hint: 'Use "mcp-chrome-bridge status" for a concise runtime summary.',
+          },
+        });
+
+        if (ping.ok) {
+          const initialize = await checkMcpInitialize(url);
+          checks.push({
+            id: 'mcp.initialize',
+            title: 'MCP initialize',
+            status: initialize.ok ? 'ok' : 'warn',
+            message: initialize.ok
+              ? `POST /mcp initialize -> ${initialize.status} (session ${initialize.sessionId})`
+              : `POST /mcp initialize failed (${initialize.error || initialize.status || 'unknown error'})`,
+            details: {
+              sessionId: initialize.sessionId,
+              hint: initialize.ok
+                ? 'A real MCP initialize call succeeded and the session cleaned up correctly.'
+                : 'If this fails while /ping is healthy, the transport/session layer likely needs attention.',
+            },
+          });
+
+          if (!initialize.ok) {
+            nextSteps.push(
+              'Check transport/session logs or run mcp-chrome-bridge report --include-logs tail',
+            );
+          }
+        }
       } catch (e) {
         checks.push({
           id: 'port.config',
