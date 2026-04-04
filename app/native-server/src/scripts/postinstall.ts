@@ -3,6 +3,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { execSync } from 'child_process';
 import { COMMAND_NAME } from './constant';
 import { colorText, tryRegisterUserLevelHost, writeNodePathFile } from './utils';
 
@@ -57,6 +58,7 @@ function detectGlobalInstall(): boolean {
 }
 
 const isGlobalInstall = detectGlobalInstall();
+const verboseInstallDebug = process.env.CHROME_MCP_DEBUG_INSTALL === '1';
 
 /**
  * Detect if running with elevated privileges (sudo/admin)
@@ -64,13 +66,16 @@ const isGlobalInstall = detectGlobalInstall();
  */
 function isRunningElevated(): boolean {
   if (process.platform === 'win32') {
-    // On Windows, check common admin indicators
-    // Note: Full admin check requires is-admin package which is ESM
-    return false; // Skip for now, Windows npm usually doesn't run as admin by default
-  } else {
-    // On Unix, check if running as root (UID 0)
-    return process.getuid?.() === 0;
+    try {
+      execSync('fltmc', { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
   }
+
+  // On Unix, check if running as root (UID 0)
+  return process.getuid?.() === 0;
 }
 
 /**
@@ -163,15 +168,28 @@ async function tryRegisterNativeHost(): Promise<void> {
 
     // Check if running with elevated privileges
     if (isRunningElevated()) {
+      const privilegeLabel = process.platform === 'win32' ? 'administrator' : 'sudo/root';
       console.log(
-        colorText('\n⚠️  WARNING: Running with elevated privileges (sudo/root)', 'yellow'),
+        colorText(`\n⚠️  WARNING: Running with elevated privileges (${privilegeLabel})`, 'yellow'),
       );
-      console.log(
-        colorText("   User-level registration will be written to root's home directory,", 'yellow'),
-      );
-      console.log(
-        colorText('   which may not work correctly for your normal user account.', 'yellow'),
-      );
+      if (process.platform === 'win32') {
+        console.log(
+          colorText(
+            '   Automatic user-level registration may target the elevated user context instead of your normal shell.',
+            'yellow',
+          ),
+        );
+      } else {
+        console.log(
+          colorText(
+            "   User-level registration will be written to root's home directory,",
+            'yellow',
+          ),
+        );
+        console.log(
+          colorText('   which may not work correctly for your normal user account.', 'yellow'),
+        );
+      }
       console.log(
         colorText(
           '\n   Please run the following command as your normal user after installation:',
@@ -282,13 +300,14 @@ function printManualInstructions(): void {
 async function main(): Promise<void> {
   console.log(colorText(`Installing ${COMMAND_NAME}...`, 'green'));
 
-  // Debug information
-  console.log(colorText('Installation environment debug info:', 'blue'));
-  console.log(`  __dirname: ${__dirname}`);
-  console.log(`  npm_config_global: ${process.env.npm_config_global}`);
-  console.log(`  PNPM_HOME: ${process.env.PNPM_HOME}`);
-  console.log(`  npm_config_prefix: ${process.env.npm_config_prefix}`);
-  console.log(`  isGlobalInstall: ${isGlobalInstall}`);
+  if (verboseInstallDebug) {
+    console.log(colorText('Installation environment debug info:', 'blue'));
+    console.log(`  __dirname: ${__dirname}`);
+    console.log(`  npm_config_global: ${process.env.npm_config_global}`);
+    console.log(`  PNPM_HOME: ${process.env.PNPM_HOME}`);
+    console.log(`  npm_config_prefix: ${process.env.npm_config_prefix}`);
+    console.log(`  isGlobalInstall: ${isGlobalInstall}`);
+  }
 
   // Always ensure execution permissions first
   await ensureExecutionPermissions();
