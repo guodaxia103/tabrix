@@ -8,6 +8,34 @@ import nativeMessagingHostInstance from '../native-messaging-host';
 import { NativeMessageType, TOOL_SCHEMAS } from 'chrome-mcp-shared';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
+function parseToolList(value?: string): Set<string> {
+  return new Set(
+    (value || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
+}
+
+function filterToolsByEnvironment(tools: Tool[]): Tool[] {
+  const enabledTools = parseToolList(process.env.ENABLE_MCP_TOOLS);
+  const disabledTools = parseToolList(process.env.DISABLE_MCP_TOOLS);
+
+  if (enabledTools.size > 0) {
+    return tools.filter((tool) => enabledTools.has(tool.name));
+  }
+
+  if (disabledTools.size > 0) {
+    return tools.filter((tool) => !disabledTools.has(tool.name));
+  }
+
+  return tools;
+}
+
+function isToolAllowed(toolName: string, tools: Tool[]): boolean {
+  return tools.some((tool) => tool.name === toolName);
+}
+
 async function listDynamicFlowTools(): Promise<Tool[]> {
   try {
     const response = await nativeMessagingHostInstance.sendRequestToExtensionAndWait(
@@ -70,7 +98,7 @@ export const setupTools = (server: Server) => {
   // List tools handler
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const dynamicTools = await listDynamicFlowTools();
-    return { tools: [...TOOL_SCHEMAS, ...dynamicTools] };
+    return { tools: filterToolsByEnvironment([...TOOL_SCHEMAS, ...dynamicTools]) };
   });
 
   // Call tool handler
@@ -81,6 +109,21 @@ export const setupTools = (server: Server) => {
 
 const handleToolCall = async (name: string, args: any): Promise<CallToolResult> => {
   try {
+    const dynamicTools = await listDynamicFlowTools();
+    const allowedTools = filterToolsByEnvironment([...TOOL_SCHEMAS, ...dynamicTools]);
+
+    if (!isToolAllowed(name, allowedTools)) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Tool "${name}" is disabled or not available in the current server configuration.`,
+          },
+        ],
+        isError: true,
+      };
+    }
+
     // If calling a dynamic flow tool (name starts with flow.), proxy to common flow-run tool
     if (name && name.startsWith('flow.')) {
       // We need to resolve flow by slug to ID

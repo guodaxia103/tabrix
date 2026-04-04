@@ -24,4 +24,41 @@ describe('服务器测试', () => {
       message: 'pong',
     });
   });
+
+  test('POST /mcp initialize 可以连续创建多个独立会话', async () => {
+    const initializeRequest = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: {
+          name: 'phase0-test-client',
+          version: '1.0.0',
+        },
+      },
+    };
+
+    const firstResponse = await supertest(Server.getInstance().server)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Content-Type', 'application/json')
+      .send(initializeRequest)
+      .expect(200);
+
+    const secondResponse = await supertest(Server.getInstance().server)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Content-Type', 'application/json')
+      .send({ ...initializeRequest, id: 2 })
+      .expect(200);
+
+    const firstSessionId = firstResponse.headers['mcp-session-id'];
+    const secondSessionId = secondResponse.headers['mcp-session-id'];
+
+    expect(firstSessionId).toBeTruthy();
+    expect(secondSessionId).toBeTruthy();
+    expect(firstSessionId).not.toEqual(secondSessionId);
+  });
 });

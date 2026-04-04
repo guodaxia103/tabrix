@@ -3,6 +3,7 @@
 import { program } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import {
   tryRegisterUserLevelHost,
   colorText,
@@ -13,6 +14,19 @@ import {
 import { BrowserType, parseBrowserType, detectInstalledBrowsers } from './scripts/browser-config';
 import { runDoctor } from './scripts/doctor';
 import { runReport } from './scripts/report';
+
+function hasWindowsAdminRights(): boolean {
+  if (process.platform !== 'win32') {
+    return false;
+  }
+
+  try {
+    execSync('fltmc', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 program
   .version(require('../package.json').version)
@@ -68,17 +82,7 @@ program
       // Detect if running with root/administrator privileges
       const isRoot = process.getuid && process.getuid() === 0; // Unix/Linux/Mac
 
-      let isAdmin = false;
-      if (process.platform === 'win32') {
-        try {
-          isAdmin = require('is-admin')(); // Windows requires additional package
-        } catch (error) {
-          console.warn(
-            colorText('Warning: Unable to detect administrator privileges on Windows', 'yellow'),
-          );
-          isAdmin = false;
-        }
-      }
+      const isAdmin = hasWindowsAdminRights();
 
       const hasElevatedPermissions = isRoot || isAdmin;
 

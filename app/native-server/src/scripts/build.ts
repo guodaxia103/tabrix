@@ -6,10 +6,16 @@ const distDir = path.join(__dirname, '..', '..', 'dist');
 // 清理上次构建
 console.log('清理上次构建...');
 try {
-  fs.rmSync(distDir, { recursive: true, force: true });
+  fs.rmSync(distDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 } catch (err) {
-  // 忽略目录不存在的错误
-  console.log(err);
+  const error = err as NodeJS.ErrnoException;
+  if (error.code === 'ENOENT') {
+    // dist 不存在时无需处理
+  } else if (error.code === 'EBUSY' || error.code === 'EPERM') {
+    console.warn(`警告: 无法完全清理 dist 目录（${error.code}），将继续覆盖构建产物`);
+  } else {
+    throw err;
+  }
 }
 
 // 创建dist目录

@@ -152,7 +152,9 @@ export class AgentChatService {
     let resolvedImagePaths: string[] | undefined;
 
     if (projectId && payload.attachments && payload.attachments.length > 0) {
-      const imageAttachments = payload.attachments.filter((a) => a.type === 'image');
+      const imageAttachments = payload.attachments.filter(
+        (a: { type?: string }) => a.type === 'image',
+      );
 
       if (imageAttachments.length > 0) {
         try {

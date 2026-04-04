@@ -22,13 +22,14 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { randomUUID } from 'node:crypto';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
-import { getMcpServer } from '../mcp/mcp-server';
+import { createMcpServer } from '../mcp/mcp-server';
 import { AgentStreamManager } from '../agent/stream-manager';
 import { AgentChatService } from '../agent/chat-service';
 import { CodexEngine } from '../agent/engines/codex';
 import { ClaudeEngine } from '../agent/engines/claude';
 import { closeDb } from '../agent/db';
 import { registerAgentRoutes } from './routes';
+import { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
 
 // ============================================================
 // Types
@@ -38,6 +39,18 @@ interface ExtensionRequestPayload {
   data?: unknown;
 }
 
+type ManagedTransport =
+  | {
+      kind: 'sse';
+      transport: SSEServerTransport;
+      server: McpServer;
+    }
+  | {
+      kind: 'streamable-http';
+      transport: StreamableHTTPServerTransport;
+      server: McpServer;
+    };
+
 // ============================================================
 // Server Class
 // ============================================================
@@ -46,8 +59,7 @@ export class Server {
   private fastify: FastifyInstance;
   public isRunning = false;
   private nativeHost: NativeMessagingHost | null = null;
-  private transportsMap: Map<string, StreamableHTTPServerTransport | SSEServerTransport> =
-    new Map();
+  private transportsMap: Map<string, ManagedTransport> = new Map();
   private agentStreamManager: AgentStreamManager;
   private agentChatService: AgentChatService;
 
@@ -168,6 +180,7 @@ export class Server {
     // SSE endpoint
     this.fastify.get('/sse', async (_, reply) => {
       try {
+        reply.hijack();
         reply.raw.writeHead(HTTP_STATUS.OK, {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
@@ -175,19 +188,25 @@ export class Server {
         });
 
         const transport = new SSEServerTransport('/messages', reply.raw);
-        this.transportsMap.set(transport.sessionId, transport);
+        const server = createMcpServer();
+        this.transportsMap.set(transport.sessionId, {
+          kind: 'sse',
+          transport,
+          server,
+        });
 
         reply.raw.on('close', () => {
           this.transportsMap.delete(transport.sessionId);
         });
 
-        const server = getMcpServer();
         await server.connect(transport);
 
-        reply.raw.write(':\n\n');
+        if (!reply.raw.writableEnded) {
+          reply.raw.write(':\n\n');
+        }
       } catch (error) {
-        if (!reply.sent) {
-          reply.code(HTTP_STATUS.INTERNAL_SERVER_ERROR).send(ERROR_MESSAGES.INTERNAL_SERVER_ERROR);
+        if (!reply.raw.writableEnded) {
+          reply.raw.end(ERROR_MESSAGES.INTERNAL_SERVER_ERROR);
         }
       }
     });
@@ -196,15 +215,15 @@ export class Server {
     this.fastify.post('/messages', async (req, reply) => {
       try {
         const { sessionId } = req.query as { sessionId?: string };
-        const transport = this.transportsMap.get(sessionId || '') as SSEServerTransport;
-        if (!sessionId || !transport) {
+        const entry = this.transportsMap.get(sessionId || '');
+        if (!sessionId || !entry || entry.kind !== 'sse') {
           reply.code(HTTP_STATUS.BAD_REQUEST).send('No transport found for sessionId');
           return;
         }
 
-        await transport.handlePostMessage(req.raw, reply.raw, req.body);
+        await entry.transport.handlePostMessage(req.raw, reply.raw, req.body);
       } catch (error) {
-        if (!reply.sent) {
+        if (!reply.sent && !reply.raw.writableEnded) {
           reply.code(HTTP_STATUS.INTERNAL_SERVER_ERROR).send(ERROR_MESSAGES.INTERNAL_SERVER_ERROR);
         }
       }
@@ -213,19 +232,24 @@ export class Server {
     // MCP POST endpoint
     this.fastify.post('/mcp', async (request, reply) => {
       const sessionId = request.headers['mcp-session-id'] as string | undefined;
-      let transport: StreamableHTTPServerTransport | undefined = this.transportsMap.get(
-        sessionId || '',
-      ) as StreamableHTTPServerTransport;
+      const managedTransport = sessionId ? this.transportsMap.get(sessionId) : undefined;
+      let transport: StreamableHTTPServerTransport | undefined =
+        managedTransport?.kind === 'streamable-http' ? managedTransport.transport : undefined;
 
       if (transport) {
         // Transport found, proceed
       } else if (!sessionId && isInitializeRequest(request.body)) {
         const newSessionId = randomUUID();
+        const server = createMcpServer();
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => newSessionId,
           onsessioninitialized: (initializedSessionId) => {
             if (transport && initializedSessionId === newSessionId) {
-              this.transportsMap.set(initializedSessionId, transport);
+              this.transportsMap.set(initializedSessionId, {
+                kind: 'streamable-http',
+                transport,
+                server,
+              });
             }
           },
         });
@@ -235,7 +259,7 @@ export class Server {
             this.transportsMap.delete(transport.sessionId);
           }
         };
-        await getMcpServer().connect(transport);
+        await server.connect(transport);
       } else {
         reply.code(HTTP_STATUS.BAD_REQUEST).send({ error: ERROR_MESSAGES.INVALID_MCP_REQUEST });
         return;
@@ -244,7 +268,7 @@ export class Server {
       try {
         await transport.handleRequest(request.raw, reply.raw, request.body);
       } catch (error) {
-        if (!reply.sent) {
+        if (!reply.sent && !reply.raw.writableEnded) {
           reply
             .code(HTTP_STATUS.INTERNAL_SERVER_ERROR)
             .send({ error: ERROR_MESSAGES.MCP_REQUEST_PROCESSING_ERROR });
@@ -255,15 +279,15 @@ export class Server {
     // MCP GET endpoint (SSE stream)
     this.fastify.get('/mcp', async (request, reply) => {
       const sessionId = request.headers['mcp-session-id'] as string | undefined;
-      const transport = sessionId
-        ? (this.transportsMap.get(sessionId) as StreamableHTTPServerTransport)
-        : undefined;
+      const entry = sessionId ? this.transportsMap.get(sessionId) : undefined;
+      const transport = entry?.kind === 'streamable-http' ? entry.transport : undefined;
 
       if (!transport) {
         reply.code(HTTP_STATUS.BAD_REQUEST).send({ error: ERROR_MESSAGES.INVALID_SSE_SESSION });
         return;
       }
 
+      reply.hijack();
       reply.raw.setHeader('Content-Type', 'text/event-stream');
       reply.raw.setHeader('Cache-Control', 'no-cache');
       reply.raw.setHeader('Connection', 'keep-alive');
@@ -288,9 +312,8 @@ export class Server {
     // MCP DELETE endpoint
     this.fastify.delete('/mcp', async (request, reply) => {
       const sessionId = request.headers['mcp-session-id'] as string | undefined;
-      const transport = sessionId
-        ? (this.transportsMap.get(sessionId) as StreamableHTTPServerTransport)
-        : undefined;
+      const entry = sessionId ? this.transportsMap.get(sessionId) : undefined;
+      const transport = entry?.kind === 'streamable-http' ? entry.transport : undefined;
 
       if (!transport) {
         reply.code(HTTP_STATUS.BAD_REQUEST).send({ error: ERROR_MESSAGES.INVALID_SESSION_ID });
@@ -303,7 +326,7 @@ export class Server {
           reply.code(HTTP_STATUS.NO_CONTENT).send();
         }
       } catch (error) {
-        if (!reply.sent) {
+        if (!reply.sent && !reply.raw.writableEnded) {
           reply
             .code(HTTP_STATUS.INTERNAL_SERVER_ERROR)
             .send({ error: ERROR_MESSAGES.MCP_SESSION_DELETION_ERROR });

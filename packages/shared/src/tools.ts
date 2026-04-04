@@ -50,6 +50,10 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.GET_WINDOWS_AND_TABS,
     description: 'Get all currently open browser windows and tabs',
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {},
@@ -140,6 +144,10 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.PERFORMANCE_ANALYZE_INSIGHT,
     description:
       'Provides a lightweight summary of the last recorded trace. For deep insights (CWV, breakdowns), integrate native-side DevTools trace engine.',
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -161,6 +169,9 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.READ_PAGE,
     description:
       'Get an accessibility tree representation of visible elements on the page. Only returns elements that are visible in the viewport. Optionally filter for only interactive elements.\nTip: If the returned elements do not include the specific element you need, use the computer tool\'s screenshot (action="screenshot") to capture the element\'s on-screen coordinates, then operate by coordinates.',
+    annotations: {
+      readOnlyHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -398,6 +409,9 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.NAVIGATE,
     description:
       'Navigate to a URL, refresh the current tab, or navigate browser history (back/forward)',
+    annotations: {
+      destructiveHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -448,6 +462,9 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.SCREENSHOT,
     description:
       '[Prefer read_page over taking a screenshot and Prefer chrome_computer] Take a screenshot of the current page or a specific element. For new usage, use chrome_computer with action="screenshot". Use this tool if you need advanced options.',
+    annotations: {
+      readOnlyHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -489,6 +506,9 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.CLOSE_TABS,
     description: 'Close one or more browser tabs',
+    annotations: {
+      destructiveHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -526,6 +546,9 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.WEB_FETCHER,
     description: 'Fetch content from a web page',
+    annotations: {
+      readOnlyHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -650,6 +673,9 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.HISTORY,
     description: 'Retrieve and search browsing history from Chrome',
+    annotations: {
+      readOnlyHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -685,6 +711,10 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.BOOKMARK_SEARCH,
     description: 'Search Chrome bookmarks by title and URL',
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -736,6 +766,9 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.BOOKMARK_DELETE,
     description: 'Delete a bookmark from Chrome',
+    annotations: {
+      destructiveHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -838,6 +871,9 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.JAVASCRIPT,
     description:
       'Execute JavaScript code in a browser tab and return the result. Uses CDP Runtime.evaluate with awaitPromise and returnByValue; automatically falls back to chrome.scripting.executeScript if the debugger is busy. Output is sanitized (sensitive data redacted) and truncated by default.',
+    annotations: {
+      destructiveHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -867,6 +903,9 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.CLICK,
     description:
       'Click on an element in a web page. Supports multiple targeting methods: CSS selector, XPath, element ref (from chrome_read_page), or viewport coordinates. More focused than chrome_computer for simple click operations.',
+    annotations: {
+      destructiveHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -939,6 +978,9 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.FILL,
     description:
       'Fill or select a form element on a web page. Supports input, textarea, select, checkbox, and radio elements. Use CSS selector, XPath, or element ref to target the element.',
+    annotations: {
+      destructiveHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -1072,6 +1114,9 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.CONSOLE,
     description:
       'Capture console output from a browser tab. Supports snapshot mode (default; one-time capture with ~2s wait) and buffer mode (persistent per-tab buffer you can read/clear instantly without waiting).',
+    annotations: {
+      readOnlyHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -1144,6 +1189,9 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.FILE_UPLOAD,
     description:
       'Upload files to web forms with file input elements using Chrome DevTools Protocol',
+    annotations: {
+      destructiveHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {

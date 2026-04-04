@@ -387,14 +387,17 @@ export async function tryRegisterUserLevelHost(targetBrowsers?: BrowserType[]): 
   }
 }
 
-// 导入is-admin包（仅在Windows平台使用）
-let isAdmin: () => boolean = () => false;
-if (process.platform === 'win32') {
+async function checkWindowsAdminRights(): Promise<boolean> {
+  if (process.platform !== 'win32') {
+    return false;
+  }
+
   try {
-    isAdmin = require('is-admin');
-  } catch (error) {
-    console.warn('缺少is-admin依赖，Windows平台下可能无法正确检测管理员权限');
-    console.warn(error);
+    // fltmc succeeds only in elevated shells on standard Windows setups.
+    execSync('fltmc', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -420,7 +423,7 @@ export async function registerWithElevatedPermissions(): Promise<void> {
 
     // 5. 检测是否已经有管理员权限
     const isRoot = process.getuid && process.getuid() === 0; // Unix/Linux/Mac
-    const hasAdminRights = process.platform === 'win32' ? isAdmin() : false; // Windows平台检测管理员权限
+    const hasAdminRights = await checkWindowsAdminRights(); // Windows平台检测管理员权限
     const hasElevatedPermissions = isRoot || hasAdminRights;
 
     // 准备命令

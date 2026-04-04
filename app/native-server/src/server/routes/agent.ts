@@ -611,7 +611,8 @@ export function registerAgentRoutes(fastify: FastifyInstance, options: AgentRout
       reply: FastifyReply,
     ) => {
       const { sessionId } = request.params;
-      const { target } = request.body || {};
+      const body = request.body as OpenProjectRequest | undefined;
+      const target = body?.target;
 
       if (!sessionId) {
         return reply
@@ -680,7 +681,8 @@ export function registerAgentRoutes(fastify: FastifyInstance, options: AgentRout
       reply: FastifyReply,
     ) => {
       const { projectId } = request.params;
-      const { target } = request.body || {};
+      const body = request.body as OpenProjectRequest | undefined;
+      const target = body?.target;
 
       if (!projectId) {
         return reply
@@ -1235,7 +1237,7 @@ export function registerAgentRoutes(fastify: FastifyInstance, options: AgentRout
     '/agent/attachments',
     async (request: FastifyRequest<{ Body?: AttachmentCleanupRequest }>, reply: FastifyReply) => {
       try {
-        const body = request.body;
+        const body = request.body as AttachmentCleanupRequest | undefined;
         const projectIds = body?.projectIds;
 
         const result = await attachmentService.cleanupAttachments(
