@@ -18,6 +18,60 @@ interface NavigateToolParams {
   background?: boolean; // when true, do not activate tab or focus window
 }
 
+function shouldAddWwwVariant(hostname: string): boolean {
+  if (!hostname || hostname === 'localhost') {
+    return false;
+  }
+
+  // IPv6 literals arrive without brackets in URL.hostname.
+  if (hostname.includes(':')) {
+    return false;
+  }
+
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)) {
+    return false;
+  }
+
+  return hostname.includes('.');
+}
+
+export function buildNavigateUrlPatterns(input: string): string[] {
+  const patterns = new Set<string>();
+
+  try {
+    if (!input.includes('*')) {
+      const u = new URL(input);
+      const pathWildcard = '/*';
+
+      const hostNoWww = u.host.replace(/^www\./, '');
+      const hostWithWww = shouldAddWwwVariant(u.hostname)
+        ? hostNoWww.startsWith('www.')
+          ? hostNoWww
+          : `www.${hostNoWww}`
+        : null;
+
+      patterns.add(`${u.protocol}//${u.host}${pathWildcard}`);
+      patterns.add(`${u.protocol}//${hostNoWww}${pathWildcard}`);
+      if (hostWithWww) {
+        patterns.add(`${u.protocol}//${hostWithWww}${pathWildcard}`);
+      }
+
+      const altProtocol = u.protocol === 'https:' ? 'http:' : 'https:';
+      patterns.add(`${altProtocol}//${u.host}${pathWildcard}`);
+      patterns.add(`${altProtocol}//${hostNoWww}${pathWildcard}`);
+      if (hostWithWww) {
+        patterns.add(`${altProtocol}//${hostWithWww}${pathWildcard}`);
+      }
+    } else {
+      patterns.add(input);
+    }
+  } catch {
+    patterns.add(input.endsWith('/') ? `${input}*` : `${input}/*`);
+  }
+
+  return Array.from(patterns);
+}
+
 /**
  * Tool for navigating to URLs in browser tabs or windows
  */
@@ -146,40 +200,7 @@ class NavigateTool extends BaseBrowserToolExecutor {
       // Build robust match patterns from the provided URL.
       // This mirrors the approach in CloseTabsTool: ensure wildcard path and
       // add common variants (www/no-www, http/https) to handle real-world redirects.
-      const buildUrlPatterns = (input: string): string[] => {
-        const patterns = new Set<string>();
-        try {
-          if (!input.includes('*')) {
-            const u = new URL(input);
-            // Use host-level wildcard to include all paths; we'll do precise selection later
-            const pathWildcard = '/*';
-
-            const hostNoWww = u.host.replace(/^www\./, '');
-            const hostWithWww = hostNoWww.startsWith('www.') ? hostNoWww : `www.${hostNoWww}`;
-
-            // Keep original host
-            patterns.add(`${u.protocol}//${u.host}${pathWildcard}`);
-            // Add no-www variant
-            patterns.add(`${u.protocol}//${hostNoWww}${pathWildcard}`);
-            // Add www variant
-            patterns.add(`${u.protocol}//${hostWithWww}${pathWildcard}`);
-
-            // Add protocol variant to catch http↔https redirects
-            const altProtocol = u.protocol === 'https:' ? 'http:' : 'https:';
-            patterns.add(`${altProtocol}//${u.host}${pathWildcard}`);
-            patterns.add(`${altProtocol}//${hostNoWww}${pathWildcard}`);
-            patterns.add(`${altProtocol}//${hostWithWww}${pathWildcard}`);
-          } else {
-            patterns.add(input);
-          }
-        } catch {
-          // Fallback: best-effort wildcard suffix
-          patterns.add(input.endsWith('/') ? `${input}*` : `${input}/*`);
-        }
-        return Array.from(patterns);
-      };
-
-      const urlPatterns = buildUrlPatterns(url);
+      const urlPatterns = buildNavigateUrlPatterns(url);
       const candidateTabs = await chrome.tabs.query({ url: urlPatterns });
       console.log(`Found ${candidateTabs.length} matching tabs with patterns:`, urlPatterns);
 
