@@ -1,9 +1,13 @@
 # Phase 0 Execution Tracker
 
-Last updated: `2026-04-05 18:40 Asia/Shanghai`
+Last updated: `2026-04-05 18:48 Asia/Shanghai`
 Branch: `codex/phase0-stabilization`
 
 This document is the live execution board for Phase 0.
+
+Primary dated task board for today:
+
+- [2026-04-05-phase0-tasks.md](D:\projects\ai\codex\mcp-chrome\docs\2026-04-05-phase0-tasks.md)
 
 Status legend:
 
