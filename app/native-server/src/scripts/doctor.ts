@@ -1195,14 +1195,27 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
   for (const browser of browsersToCheck) {
     const config = getBrowserConfig(browser);
     const extension = readLoadedExtensionPath(browser);
+    const metadataLooksComplete =
+      Boolean(extension.loadedPath) &&
+      typeof extension.location === 'number' &&
+      typeof extension.manifestVersion === 'string' &&
+      extension.manifestVersion.length > 0;
+    const extensionStatus: DoctorStatus = extension.loadedPath
+      ? metadataLooksComplete
+        ? 'ok'
+        : 'warn'
+      : 'warn';
+    const extensionMessage = extension.loadedPath
+      ? metadataLooksComplete
+        ? extension.loadedPath
+        : `${extension.loadedPath} (reload unpacked extension to refresh runtime metadata)`
+      : extension.error || 'Unable to detect loaded extension path';
 
     checks.push({
       id: `extension-path.${browser}`,
       title: `${config.displayName} extension path`,
-      status: extension.loadedPath ? 'ok' : 'warn',
-      message: extension.loadedPath
-        ? extension.loadedPath
-        : extension.error || 'Unable to detect loaded extension path',
+      status: extensionStatus,
+      message: extensionMessage,
       details: {
         securePreferencesPath: extension.securePreferencesPath,
         loadedPath: extension.loadedPath,
@@ -1210,7 +1223,9 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
         state: extension.state,
         manifestVersion: extension.manifestVersion,
         hint: extension.loadedPath
-          ? 'If builds seem stale, make sure Chrome is loading this unpacked directory.'
+          ? metadataLooksComplete
+            ? 'If builds seem stale, make sure Chrome is loading this unpacked directory.'
+            : 'Chrome knows the unpacked directory, but the extension metadata looks incomplete. Reload the unpacked extension in chrome://extensions/.'
           : 'Load or reload the unpacked extension in Chrome, then re-run doctor.',
       },
     });
