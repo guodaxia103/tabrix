@@ -86,6 +86,22 @@ interface WindowsRegistrySnapshot {
   entries: WindowsRegistryEntrySnapshot[];
 }
 
+interface RuntimeSnapshot {
+  baseUrl: string;
+  ping: {
+    ok: boolean;
+    status?: number;
+    body?: unknown;
+    error?: string;
+  };
+  status: {
+    ok: boolean;
+    status?: number;
+    body?: unknown;
+    error?: string;
+  };
+}
+
 export interface DiagnosticReport {
   schemaVersion: number;
   timestamp: string;
@@ -114,6 +130,7 @@ export interface DiagnosticReport {
   };
   doctor?: DoctorReport;
   doctorError?: string;
+  runtime: RuntimeSnapshot;
   manifests: ManifestSnapshot[];
   wrapperLogs: WrapperLogsSnapshot;
   windowsRegistry?: WindowsRegistrySnapshot;
@@ -177,6 +194,75 @@ function parsePositiveInt(raw: unknown, fallback: number): number {
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
   }
   return fallback;
+}
+
+type FetchFn = typeof globalThis.fetch;
+
+function resolveFetch(): FetchFn | null {
+  if (typeof globalThis.fetch === 'function') {
+    return globalThis.fetch.bind(globalThis) as FetchFn;
+  }
+  try {
+    const mod = require('node-fetch');
+    return (mod.default ?? mod) as FetchFn;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchJsonWithTimeout(
+  url: string,
+  timeoutMs: number,
+): Promise<{ ok: boolean; status?: number; body?: unknown; error?: string }> {
+  const fetchFn = resolveFetch();
+  if (!fetchFn) {
+    return { ok: false, error: 'fetch is not available' };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  if (typeof timeout.unref === 'function') {
+    timeout.unref();
+  }
+
+  try {
+    const response = await fetchFn(url, {
+      method: 'GET',
+      signal: controller.signal,
+    });
+
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      body = await response.text();
+    }
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      body,
+      ...(response.ok ? {} : { error: `HTTP ${response.status}` }),
+    };
+  } catch (e) {
+    return { ok: false, error: stringifyError(e) };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function collectRuntimeSnapshot(): Promise<RuntimeSnapshot> {
+  const baseUrl = 'http://127.0.0.1:12306';
+  const [ping, status] = await Promise.all([
+    fetchJsonWithTimeout(`${baseUrl}/ping`, 1500),
+    fetchJsonWithTimeout(`${baseUrl}/status`, 1500),
+  ]);
+
+  return {
+    baseUrl,
+    ping,
+    status,
+  };
 }
 
 function resolveBrowsers(browserArg: string | undefined): BrowserType[] {
@@ -577,6 +663,35 @@ function renderMarkdown(report: DiagnosticReport): string {
   }
   lines.push('');
 
+  lines.push('## Runtime');
+  lines.push('');
+  lines.push(`**Base URL:** \`${report.runtime.baseUrl}\``);
+  lines.push(`- **Ping:** ${report.runtime.ping.ok ? 'ok' : 'failed'}`);
+  if (typeof report.runtime.ping.status === 'number') {
+    lines.push(`  - HTTP status: ${report.runtime.ping.status}`);
+  }
+  if (report.runtime.ping.error) {
+    lines.push(`  - Error: ${report.runtime.ping.error}`);
+  }
+  lines.push(`- **Status endpoint:** ${report.runtime.status.ok ? 'ok' : 'failed'}`);
+  if (typeof report.runtime.status.status === 'number') {
+    lines.push(`  - HTTP status: ${report.runtime.status.status}`);
+  }
+  if (report.runtime.status.error) {
+    lines.push(`  - Error: ${report.runtime.status.error}`);
+  }
+  if (report.runtime.status.body !== undefined) {
+    lines.push('');
+    lines.push('<details>');
+    lines.push('<summary>Click to expand runtime status response</summary>');
+    lines.push('');
+    lines.push('```json');
+    lines.push(JSON.stringify(report.runtime.status.body, null, 2));
+    lines.push('```');
+    lines.push('</details>');
+  }
+  lines.push('');
+
   lines.push('## Doctor Output');
   lines.push('');
   if (report.doctor) {
@@ -803,6 +918,7 @@ export async function runReport(options: ReportOptions): Promise<number> {
       },
       doctor,
       doctorError,
+      runtime: await collectRuntimeSnapshot(),
       manifests: collectManifests(browsers),
       wrapperLogs: collectWrapperLogs(getLogDir(), includeLogs, logLines),
       windowsRegistry: process.platform === 'win32' ? collectWindowsRegistry(browsers) : undefined,

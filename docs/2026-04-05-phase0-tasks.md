@@ -155,8 +155,9 @@ Main validation board:
 - `[x]` `smoke` command exists and runs
 - `[~]` reduce remaining smoke tail failures
 - `[~]` reduce extension error-page noise caused by test pages
+  Progress: `element-picker` teardown was switched from `unload` to `pagehide` and rebuilt into the unpacked extension output; needs one more live-page verification pass.
 - `[ ]` re-run smoke repeatedly until results are stable enough for delivery confidence
-- `[ ]` strengthen `report` output with richer runtime and delivery diagnostics
+- `[x]` strengthen `report` output with richer runtime and delivery diagnostics
 
 ### 4.5 CoPaw integration and skill polish
 

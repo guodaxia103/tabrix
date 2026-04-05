@@ -194,8 +194,9 @@ export default defineContentScript({
     // Register message listener
     chrome.runtime.onMessage.addListener(handleMessage);
 
-    // Cleanup on page unload
-    window.addEventListener('unload', () => {
+    // Cleanup on page teardown. `unload` can be blocked by page permissions in some documents,
+    // while `pagehide` is broadly supported and avoids noisy extension error logs.
+    window.addEventListener('pagehide', () => {
       chrome.runtime.onMessage.removeListener(handleMessage);
       controller?.dispose();
       controller = null;
