@@ -50,6 +50,10 @@ Still rolling into today's plan:
 - `[ ]` complete CoPaw re-validation on upgraded `v1.0.1`
 - `[ ]` finish smoke tail fixes and runtime-noise cleanup
 - `[ ]` finish compatibility/documentation/usability polish
+- `[ ]`补全统一执行日志、trace、截图与错误码梳理
+- `[ ]`补强 `report`，让交付排障信息更完整
+- `[ ]`整理一版面向试点安装/交付的产物和说明
+- `[ ]`建立内部 issue 优先级整理结果
 - `[ ]` close remaining partial items from the original Phase 0 plan
 
 ## 3. Unfinished Tasks Carried Over From `mcp-chrome-phase0-plan.md`
@@ -65,6 +69,17 @@ Still rolling into today's plan:
 
 - `[~]` B4. Improve dev environment and optional dependency handling
   Why still open: Windows/admin/build friction improved, but broader environment hardening is still not complete.
+
+### Cross-cutting delivery items from the original Phase 0 product route
+
+- `[ ]` unified execution logs, traces, screenshots, and error-code review
+  Why still open: diagnostics improved a lot, but the delivery-grade observability pass is still not complete.
+- `[~]` strengthen `report`
+  Why still open: `doctor` is much stronger now, but `report` still needs to aggregate more runtime and delivery context.
+- `[ ]` trial-delivery installation package/checklist
+  Why still open: current output is good for local development and testing, but not yet fully shaped as a pilot delivery bundle.
+- `[ ]` issue labels and internal priority mapping
+  Why still open: analysis exists, but it is not yet formalized into a maintained tracker artifact.
 
 ### Track C. Client compatibility and execution correctness
 
@@ -137,6 +152,7 @@ Main validation board:
 - `[~]` reduce remaining smoke tail failures
 - `[~]` reduce extension error-page noise caused by test pages
 - `[ ]` re-run smoke repeatedly until results are stable enough for delivery confidence
+- `[ ]` strengthen `report` output with richer runtime and delivery diagnostics
 
 ### 4.5 CoPaw integration and skill polish
 
@@ -155,6 +171,13 @@ Main validation board:
 - `[~]` expand troubleshooting guide
 - `[~]` expand skills usage examples
 - `[ ]` make “install -> connect -> verify -> first task” smooth enough for a beginner
+- `[ ]` shape a pilot-ready installation/checklist package
+
+### 4.7 Delivery observability and governance
+
+- `[ ]` review unified execution logs, traces, screenshots, and error-code coverage
+- `[ ]` document current observability gaps and minimum delivery standard
+- `[ ]` create an internal issue-priority summary for remaining Phase 0 defects
 
 ## 5. Highest Priority Remaining Work Tonight
 
@@ -163,7 +186,9 @@ Main validation board:
 3. `[ ]` either fix or clearly document every remaining `warn`
 4. `[ ]` reduce extension error-page noise to only meaningful errors
 5. `[ ]` finish beginner-friendly installation and troubleshooting docs
-6. `[ ]` keep updates small: every tested fix gets its own commit
+6. `[ ]` strengthen `report` and delivery observability
+7. `[ ]` prepare a pilot-ready installation/checklist package
+8. `[ ]` keep updates small: every tested fix gets its own commit
 
 ## 6. Files To Check Tomorrow Morning
 
