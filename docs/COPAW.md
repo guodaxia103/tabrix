@@ -40,6 +40,12 @@ The default local API is:
 
 - `http://127.0.0.1:8088`
 
+If you are using Codex or another skill-aware assistant locally, the recommended skill is:
+
+- [`$copaw-mcp-browser`](C:/Users/guo/.codex/skills/copaw-mcp-browser/SKILL.md)
+
+That skill encodes a stable read-plan-act-verify playbook so the assistant is less likely to blind click or retry uselessly.
+
 ## 3. Verify the MCP client was loaded
 
 Check the CoPaw config file:
@@ -59,6 +65,19 @@ curl http://127.0.0.1:8088/api/mcp
 The loaded client list should include:
 
 - `streamable-mcp-server`
+
+Before testing through CoPaw, make sure the local bridge itself is healthy:
+
+```powershell
+mcp-chrome-bridge status
+mcp-chrome-bridge doctor
+```
+
+The most useful new doctor check is:
+
+- `Chrome extension path`
+
+This tells you which unpacked extension directory Chrome is really running. If CoPaw cannot drive the browser after a fresh build, confirm Chrome is not still using an older unpacked directory.
 
 ## 4. Verified behavior
 
@@ -127,7 +146,18 @@ For reliable browser tasks, guide CoPaw in this order:
 
 This avoids vague prompts that cause blind clicking.
 
-## 7. Current caveat in CoPaw
+## 7. Fast recovery checklist
+
+If CoPaw appears to have the MCP client but browser operations do nothing:
+
+1. Run `mcp-chrome-bridge doctor`
+2. Check `Chrome extension path`
+3. Open the extension popup and click `Connect`
+4. Re-run `mcp-chrome-bridge status`
+5. Check `http://127.0.0.1:8088/api/mcp`
+6. Retry the CoPaw task with an explicit browser-operation prompt
+
+## 8. Current caveat in CoPaw
 
 During direct Python-side MCP client cleanup, CoPaw's underlying MCP stack currently emits a cancel-scope cleanup error while closing the HTTP client. The browser operation itself still succeeds, but shutdown logging can look noisy.
 
@@ -140,7 +170,7 @@ Current assessment:
 - the tool call itself succeeds
 - the noisy error appears during CoPaw-side client cleanup, not during normal `mcp-chrome` tool execution
 
-## 8. Best verification commands
+## 9. Best verification commands
 
 Before debugging CoPaw, first confirm `mcp-chrome` itself is healthy:
 
