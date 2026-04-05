@@ -31,6 +31,9 @@
                 {{ getMessage('lastUpdatedLabel') }}
                 {{ new Date(serverStatus.lastUpdated).toLocaleTimeString() }}
               </div>
+              <div v-if="statusDetailText" class="status-detail">
+                {{ statusDetailText }}
+              </div>
             </div>
 
             <div v-if="showMcpConfig" class="mcp-config-section">
@@ -515,6 +518,7 @@ const runFlow = async (flowId: string) => {
 const nativeConnectionStatus = ref<'unknown' | 'connected' | 'disconnected'>('unknown');
 const isConnecting = ref(false);
 const nativeServerPort = ref<number>(12306);
+const lastNativeError = ref<string | null>(null);
 
 const serverStatus = ref<{
   isRunning: boolean;
@@ -714,6 +718,19 @@ const getStatusText = () => {
     return getMessage('detectingStatus');
   }
 };
+
+const statusDetailText = computed(() => {
+  if (lastNativeError.value) {
+    return `最近一次连接错误: ${lastNativeError.value}`;
+  }
+  if (nativeConnectionStatus.value === 'connected' && !serverStatus.value.isRunning) {
+    return 'Native host 已连接，但本地服务还没有成功启动。可先点刷新，若仍失败请在 chrome://extensions/ 重新加载扩展。';
+  }
+  if (nativeConnectionStatus.value === 'disconnected') {
+    return '点击连接后如果仍无法启动，请确认扩展已重新加载，且本地 native host manifest 已重新注册。';
+  }
+  return '';
+});
 
 const formatIndexSize = () => {
   if (!storageStats.value?.indexSize) return '0 MB';
@@ -1011,6 +1028,9 @@ const checkServerStatus = async () => {
     if (response?.success && response.serverStatus) {
       serverStatus.value = response.serverStatus;
     }
+    if (typeof response?.lastError === 'string' || response?.lastError === null) {
+      lastNativeError.value = response.lastError ?? null;
+    }
 
     if (response?.connected !== undefined) {
       nativeConnectionStatus.value = response.connected ? 'connected' : 'disconnected';
@@ -1028,6 +1048,9 @@ const refreshServerStatus = async () => {
     });
     if (response?.success && response.serverStatus) {
       serverStatus.value = response.serverStatus;
+    }
+    if (typeof response?.lastError === 'string' || response?.lastError === null) {
+      lastNativeError.value = response.lastError ?? null;
     }
 
     if (response?.connected !== undefined) {
@@ -1071,7 +1094,10 @@ const testNativeConnection = async () => {
         type: 'connectNative',
         port: nativeServerPort.value,
       });
-      if (response && response.success) {
+      if (typeof response?.lastError === 'string' || response?.lastError === null) {
+        lastNativeError.value = response.lastError ?? null;
+      }
+      if (response?.success && response?.connected) {
         nativeConnectionStatus.value = 'connected';
         console.log('连接成功:', response);
         await savePortPreference(nativeServerPort.value);
@@ -2000,6 +2026,18 @@ onUnmounted(() => {
   font-size: 12px;
   color: #9ca3af;
   margin-top: 4px;
+}
+
+.status-detail {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8b5e34;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.16);
+  border-radius: 10px;
+  padding: 8px 10px;
+  word-break: break-word;
 }
 
 .mcp-config-section {

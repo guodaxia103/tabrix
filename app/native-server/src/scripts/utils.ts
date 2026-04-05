@@ -10,6 +10,13 @@ export const access = promisify(fs.access);
 export const mkdir = promisify(fs.mkdir);
 export const writeFile = promisify(fs.writeFile);
 
+export interface DetectedExtensionOrigin {
+  browser: BrowserType;
+  id: string;
+  path: string;
+  securePreferencesPath: string;
+}
+
 /**
  * Get the log directory path for wrapper scripts.
  * Uses platform-appropriate user directories to avoid permission issues.
@@ -238,14 +245,102 @@ async function ensureWindowsFilePermissions(packageDistDir: string): Promise<voi
  */
 export async function createManifestContent(): Promise<any> {
   const mainPath = await getMainPath();
+  const detectedOrigins = discoverLoadedExtensionOrigins();
+  const allowedOrigins = Array.from(
+    new Set([`chrome-extension://${EXTENSION_ID}/`, ...detectedOrigins.origins]),
+  );
 
   return {
     name: HOST_NAME,
     description: DESCRIPTION,
     path: mainPath, // Node.js可执行文件路径
     type: 'stdio',
-    allowed_origins: [`chrome-extension://${EXTENSION_ID}/`],
+    allowed_origins: allowedOrigins,
   };
+}
+
+function getSecurePreferencesPath(browser: BrowserType): string | null {
+  const home = os.homedir();
+
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+    const baseDir =
+      browser === BrowserType.CHROMIUM
+        ? path.join(localAppData, 'Chromium', 'User Data')
+        : path.join(localAppData, 'Google', 'Chrome', 'User Data');
+    return path.join(baseDir, 'Default', 'Secure Preferences');
+  }
+
+  if (process.platform === 'darwin') {
+    const baseDir =
+      browser === BrowserType.CHROMIUM
+        ? path.join(home, 'Library', 'Application Support', 'Chromium')
+        : path.join(home, 'Library', 'Application Support', 'Google', 'Chrome');
+    return path.join(baseDir, 'Default', 'Secure Preferences');
+  }
+
+  const baseDir =
+    browser === BrowserType.CHROMIUM
+      ? path.join(home, '.config', 'chromium')
+      : path.join(home, '.config', 'google-chrome');
+  return path.join(baseDir, 'Default', 'Secure Preferences');
+}
+
+function looksLikeChromeMcpExtensionPath(candidatePath: string): boolean {
+  return /(chrome-mcp-server|mcp-chrome)/i.test(candidatePath);
+}
+
+export function discoverLoadedExtensionOrigins(targetBrowsers?: BrowserType[]): {
+  origins: string[];
+  detected: DetectedExtensionOrigin[];
+} {
+  const browsers =
+    targetBrowsers && targetBrowsers.length > 0
+      ? targetBrowsers
+      : detectInstalledBrowsers().length > 0
+        ? detectInstalledBrowsers()
+        : [BrowserType.CHROME, BrowserType.CHROMIUM];
+
+  const detected: DetectedExtensionOrigin[] = [];
+
+  for (const browser of browsers) {
+    const securePreferencesPath = getSecurePreferencesPath(browser);
+    if (!securePreferencesPath || !fs.existsSync(securePreferencesPath)) {
+      continue;
+    }
+
+    try {
+      const raw = fs.readFileSync(securePreferencesPath, 'utf8');
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const settings = (parsed.extensions as Record<string, unknown> | undefined)?.settings as
+        | Record<string, unknown>
+        | undefined;
+
+      if (!settings) {
+        continue;
+      }
+
+      for (const [id, entry] of Object.entries(settings)) {
+        const extensionEntry = entry as Record<string, unknown>;
+        const extensionPath = typeof extensionEntry.path === 'string' ? extensionEntry.path : '';
+        if (!extensionPath || !looksLikeChromeMcpExtensionPath(extensionPath)) {
+          continue;
+        }
+
+        detected.push({
+          browser,
+          id,
+          path: extensionPath,
+          securePreferencesPath,
+        });
+      }
+    } catch {
+      // ignore malformed Secure Preferences here; doctor surfaces parsing issues separately
+    }
+  }
+
+  const origins = Array.from(new Set(detected.map((entry) => `chrome-extension://${entry.id}/`)));
+  return { origins, detected };
 }
 
 /**

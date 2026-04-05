@@ -220,6 +220,7 @@ export const SEMANTIC_CONFIG = {
 // Storage Keys
 export const STORAGE_KEYS = {
   SERVER_STATUS: 'serverStatus',
+  LAST_NATIVE_ERROR: 'lastNativeError',
   NATIVE_SERVER_PORT: 'nativeServerPort',
   NATIVE_AUTO_CONNECT_ENABLED: 'nativeAutoConnectEnabled',
   SEMANTIC_MODEL: 'selectedModel',

@@ -23,6 +23,7 @@ import {
   ensureExecutionPermissions,
   tryRegisterUserLevelHost,
   getLogDir,
+  discoverLoadedExtensionOrigins,
 } from './utils';
 import { HTTP_STATUS, NATIVE_SERVER_PORT } from '../constant';
 
@@ -1032,7 +1033,9 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
   });
 
   // Check 5: Manifest checks per browser
+  const discoveredOrigins = discoverLoadedExtensionOrigins(browsersToCheck);
   const expectedOrigin = `chrome-extension://${EXTENSION_ID}/`;
+  const expectedOrigins = Array.from(new Set([expectedOrigin, ...discoveredOrigins.origins]));
   for (const browser of browsersToCheck) {
     const config = getBrowserConfig(browser);
     const candidates = [config.userManifestPath, config.systemManifestPath];
@@ -1081,8 +1084,12 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
       if (!fs.existsSync(manifest.path)) issues.push('path target does not exist');
     }
     const allowedOrigins = manifest.allowed_origins;
-    if (!Array.isArray(allowedOrigins) || !allowedOrigins.includes(expectedOrigin)) {
-      issues.push(`allowed_origins missing ${expectedOrigin}`);
+    const manifestOrigins = Array.isArray(allowedOrigins)
+      ? allowedOrigins.filter((value): value is string => typeof value === 'string')
+      : [];
+    const missingOrigins = expectedOrigins.filter((origin) => !manifestOrigins.includes(origin));
+    if (missingOrigins.length > 0) {
+      issues.push(`allowed_origins missing ${missingOrigins.join(', ')}`);
     }
 
     checks.push({
@@ -1094,6 +1101,9 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
         path: found,
         expectedWrapperPath: wrapperPath,
         expectedOrigin,
+        expectedOrigins,
+        manifestOrigins,
+        discoveredOrigins: discoveredOrigins.detected,
         fix: issues.length === 0 ? undefined : [`${COMMAND_NAME} register --browser ${browser}`],
       },
     });
@@ -1195,6 +1205,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
   for (const browser of browsersToCheck) {
     const config = getBrowserConfig(browser);
     const extension = readLoadedExtensionPath(browser);
+    const browserOrigins = discoveredOrigins.detected.filter((entry) => entry.browser === browser);
     const metadataLooksComplete =
       Boolean(extension.loadedPath) &&
       typeof extension.location === 'number' &&
@@ -1219,6 +1230,12 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
       details: {
         securePreferencesPath: extension.securePreferencesPath,
         loadedPath: extension.loadedPath,
+        detectedIds: browserOrigins.map((entry) => entry.id),
+        expectedOrigins: expectedOrigins.filter(
+          (origin) =>
+            browserOrigins.some((entry) => origin === `chrome-extension://${entry.id}/`) ||
+            origin === expectedOrigin,
+        ),
         location: extension.location,
         state: extension.state,
         manifestVersion: extension.manifestVersion,

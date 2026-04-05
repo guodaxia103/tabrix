@@ -36,6 +36,8 @@ interface ServerStatus {
   lastUpdated: number;
 }
 
+let lastNativeError: string | null = null;
+
 let currentServerStatus: ServerStatus = {
   isRunning: false,
   lastUpdated: Date.now(),
@@ -50,6 +52,43 @@ async function saveServerStatus(status: ServerStatus): Promise<void> {
   } catch (error) {
     console.error(ERROR_MESSAGES.SERVER_STATUS_SAVE_FAILED, error);
   }
+}
+
+async function saveLastNativeError(error: string | null): Promise<void> {
+  try {
+    await chrome.storage.local.set({ [STORAGE_KEYS.LAST_NATIVE_ERROR]: error });
+  } catch (storageError) {
+    console.error(`${LOG_PREFIX} Failed to save last native error`, storageError);
+  }
+}
+
+async function loadLastNativeError(): Promise<string | null> {
+  try {
+    const result = await chrome.storage.local.get([STORAGE_KEYS.LAST_NATIVE_ERROR]);
+    const value = result[STORAGE_KEYS.LAST_NATIVE_ERROR];
+    return typeof value === 'string' && value.trim().length > 0 ? value : null;
+  } catch (storageError) {
+    console.error(`${LOG_PREFIX} Failed to load last native error`, storageError);
+    return null;
+  }
+}
+
+async function setLastNativeError(error: unknown): Promise<void> {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : error
+          ? String(error)
+          : null;
+  lastNativeError = message;
+  await saveLastNativeError(message);
+}
+
+async function clearLastNativeError(): Promise<void> {
+  lastNativeError = null;
+  await saveLastNativeError(null);
 }
 
 /**
@@ -435,6 +474,7 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
           port: port,
           lastUpdated: Date.now(),
         };
+        await clearLastNativeError();
         await saveServerStatus(currentServerStatus);
         broadcastServerStatusChange(currentServerStatus);
         // Server is confirmed running - now we can reset reconnect state
@@ -450,7 +490,9 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         broadcastServerStatusChange(currentServerStatus);
         console.log(SUCCESS_MESSAGES.SERVER_STOPPED);
       } else if (message.type === NativeMessageType.ERROR_FROM_NATIVE_HOST) {
-        console.error('Error from native host:', message.payload?.message || 'Unknown error');
+        const nativeError = message.payload?.message || 'Unknown error';
+        console.error('Error from native host:', nativeError);
+        void setLastNativeError(nativeError);
       } else if (message.type === 'file_operation_response') {
         // Forward file operation response back to the requesting tool
         chrome.runtime.sendMessage(message).catch(() => {
@@ -460,11 +502,15 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
     });
 
     nativePort.onDisconnect.addListener(() => {
+      const lastError = chrome.runtime.lastError?.message || null;
       console.warn(ERROR_MESSAGES.NATIVE_DISCONNECTED, chrome.runtime.lastError);
       nativePort = null;
 
       // Mark server as stopped since native host disconnection means server is down
       void markServerStopped('native_port_disconnected');
+      if (lastError) {
+        void setLastNativeError(lastError);
+      }
 
       // Handle reconnection based on disconnect reason
       if (manualDisconnect) {
@@ -482,6 +528,7 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
   } catch (error) {
     console.warn(ERROR_MESSAGES.NATIVE_CONNECTION_FAILED, error);
     nativePort = null;
+    void setLastNativeError(error);
     return false;
   }
 }
@@ -497,6 +544,13 @@ export const initNativeHostListener = () => {
     })
     .catch((error) => {
       console.error(ERROR_MESSAGES.SERVER_STATUS_LOAD_FAILED, error);
+    });
+  loadLastNativeError()
+    .then((error) => {
+      lastNativeError = error;
+    })
+    .catch((error) => {
+      console.error(`${LOG_PREFIX} Failed to initialize last native error`, error);
     });
 
   // Auto-connect on SW activation (covers SW restart after idle termination)
@@ -530,10 +584,20 @@ export const initNativeHostListener = () => {
       const portOverride = typeof message === 'object' ? message.port : undefined;
       ensureNativeConnected('ui_ensure', portOverride)
         .then((connected) => {
-          sendResponse({ success: true, connected, autoConnectEnabled });
+          sendResponse({
+            success: true,
+            connected,
+            autoConnectEnabled,
+            lastError: lastNativeError,
+          });
         })
         .catch((e) => {
-          sendResponse({ success: false, connected: nativePort !== null, error: String(e) });
+          sendResponse({
+            success: false,
+            connected: nativePort !== null,
+            error: String(e),
+            lastError: lastNativeError,
+          });
         });
       return true;
     }
@@ -559,10 +623,15 @@ export const initNativeHostListener = () => {
         return ensureNativeConnected('ui_connect', normalized ?? undefined);
       })()
         .then((connected) => {
-          sendResponse({ success: true, connected });
+          sendResponse({ success: true, connected, lastError: lastNativeError });
         })
         .catch((e) => {
-          sendResponse({ success: false, connected: nativePort !== null, error: String(e) });
+          sendResponse({
+            success: false,
+            connected: nativePort !== null,
+            error: String(e),
+            lastError: lastNativeError,
+          });
         });
       return true;
     }
@@ -596,10 +665,11 @@ export const initNativeHostListener = () => {
         await markServerStopped('manual_disconnect');
       })()
         .then(() => {
-          sendResponse({ success: true });
+          void clearLastNativeError();
+          sendResponse({ success: true, lastError: null });
         })
         .catch((e) => {
-          sendResponse({ success: false, error: String(e) });
+          sendResponse({ success: false, error: String(e), lastError: lastNativeError });
         });
       return true;
     }
@@ -609,6 +679,7 @@ export const initNativeHostListener = () => {
         success: true,
         serverStatus: getEffectiveServerStatus(),
         connected: nativePort !== null,
+        lastError: lastNativeError,
       });
       return true;
     }
@@ -634,6 +705,7 @@ export const initNativeHostListener = () => {
           success: true,
           serverStatus: getEffectiveServerStatus(),
           connected: nativePort !== null,
+          lastError: lastNativeError,
         };
       })()
         .then((payload) => {
@@ -648,6 +720,7 @@ export const initNativeHostListener = () => {
             error: ERROR_MESSAGES.SERVER_STATUS_LOAD_FAILED,
             serverStatus: getEffectiveServerStatus(),
             connected: nativePort !== null,
+            lastError: lastNativeError,
           });
         });
       return true;
