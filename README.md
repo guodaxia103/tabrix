@@ -27,6 +27,7 @@ Chrome MCP Server is a Chrome extension-based **Model Context Protocol (MCP) ser
 
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md)
 - [CoPaw Integration Guide](docs/COPAW.md)
+- [Phase 0 Test Matrix](docs/PHASE0_TEST_MATRIX.md)
 
 ## ✨ Core Features
 
@@ -92,6 +93,18 @@ mcp-chrome-bridge register
    - Click "Load unpacked" and select `your/dowloaded/extension/folder`
    - Click the extension icon to open the plugin, then click connect to see the MCP configuration
      <img width="475" alt="Screenshot 2025-06-09 15 52 06" src="https://github.com/user-attachments/assets/241e57b8-c55f-41a4-9188-0367293dc5bc" />
+
+### Stable local verification
+
+For a hardened local validation flow, use:
+
+```bash
+mcp-chrome-bridge status
+mcp-chrome-bridge doctor
+mcp-chrome-bridge smoke
+```
+
+Use the popup `Refresh` button or `Disconnect -> Connect` if the UI says connected but the local service is not running yet. For the full troubleshooting flow, see [Stable Quickstart](docs/STABLE_QUICKSTART.md).
 
 ### Usage with MCP Protocol Clients
 
