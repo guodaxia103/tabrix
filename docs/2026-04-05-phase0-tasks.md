@@ -158,6 +158,7 @@ Main validation board:
   Progress: `element-picker` teardown was switched from `unload` to `pagehide` and rebuilt into the unpacked extension output; needs one more live-page verification pass.
 - `[ ]` re-run smoke repeatedly until results are stable enough for delivery confidence
 - `[x]` strengthen `report` output with richer runtime and delivery diagnostics
+  Progress: `report` now includes runtime snapshot data and Windows command resolution for `npm/pnpm`.
 
 ### 4.5 CoPaw integration and skill polish
 
@@ -176,13 +177,15 @@ Main validation board:
 - `[~]` expand troubleshooting guide
 - `[~]` expand skills usage examples
 - `[ ]` make “install -> connect -> verify -> first task” smooth enough for a beginner
-- `[ ]` shape a pilot-ready installation/checklist package
+- `[~]` shape a pilot-ready installation/checklist package
+  Progress: first version added in [PILOT_INSTALL_CHECKLIST.md](D:\projects\ai\codex\mcp-chrome\docs\PILOT_INSTALL_CHECKLIST.md)
 
 ### 4.7 Delivery observability and governance
 
 - `[ ]` review unified execution logs, traces, screenshots, and error-code coverage
 - `[ ]` document current observability gaps and minimum delivery standard
-- `[ ]` create an internal issue-priority summary for remaining Phase 0 defects
+- `[~]` create an internal issue-priority summary for remaining Phase 0 defects
+  Progress: first version added in [PHASE0_ISSUE_PRIORITY_SUMMARY.md](D:\projects\ai\codex\mcp-chrome\docs\PHASE0_ISSUE_PRIORITY_SUMMARY.md)
 
 ## 5. Highest Priority Remaining Work Tonight
 
