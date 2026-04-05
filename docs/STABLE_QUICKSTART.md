@@ -133,3 +133,7 @@ Look for:
 
 - On Windows, rebuilding while the native host is active may log a non-fatal `EBUSY` warning during `dist` cleanup. The build continues and overwrites artifacts.
 - If you rebuild local source, restart the native host once so the running process picks up the latest `dist` output.
+
+For the current Phase 0 validation checklist, see:
+
+- [Phase 0 Test Matrix](D:/projects/ai/codex/mcp-chrome/docs/PHASE0_TEST_MATRIX.md)
