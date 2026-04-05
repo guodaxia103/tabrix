@@ -9,6 +9,10 @@ It merges:
 - today's 15-hour execution plan
 - unfinished work from [mcp-chrome-phase0-plan.md](D:\projects\ai\codex\mcp-chrome-phase0-plan.md)
 
+Long-lived roadmap:
+
+- [MASTER_TASK_ROADMAP.md](D:\projects\ai\codex\mcp-chrome\docs\MASTER_TASK_ROADMAP.md)
+
 Status legend:
 
 - `[x]` completed
