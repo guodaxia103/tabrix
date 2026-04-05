@@ -252,6 +252,94 @@ function pickLatestVersionDir(parentDir: string): string | null {
   return best ? path.join(parentDir, best.name) : null;
 }
 
+function getSecurePreferencesPath(browser: BrowserType): string | null {
+  const home = os.homedir();
+
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+    const baseDir =
+      browser === BrowserType.CHROMIUM
+        ? path.join(localAppData, 'Chromium', 'User Data')
+        : path.join(localAppData, 'Google', 'Chrome', 'User Data');
+    return path.join(baseDir, 'Default', 'Secure Preferences');
+  }
+
+  if (process.platform === 'darwin') {
+    const baseDir =
+      browser === BrowserType.CHROMIUM
+        ? path.join(home, 'Library', 'Application Support', 'Chromium')
+        : path.join(home, 'Library', 'Application Support', 'Google', 'Chrome');
+    return path.join(baseDir, 'Default', 'Secure Preferences');
+  }
+
+  const baseDir =
+    browser === BrowserType.CHROMIUM
+      ? path.join(home, '.config', 'chromium')
+      : path.join(home, '.config', 'google-chrome');
+  return path.join(baseDir, 'Default', 'Secure Preferences');
+}
+
+function readLoadedExtensionPath(browser: BrowserType): {
+  securePreferencesPath: string;
+  exists: boolean;
+  loadedPath?: string;
+  location?: number;
+  state?: number;
+  manifestVersion?: string;
+  error?: string;
+} {
+  const securePreferencesPath = getSecurePreferencesPath(browser);
+  if (!securePreferencesPath) {
+    return {
+      securePreferencesPath: '',
+      exists: false,
+      error: `Secure Preferences lookup is not supported on ${process.platform}`,
+    };
+  }
+
+  if (!fs.existsSync(securePreferencesPath)) {
+    return {
+      securePreferencesPath,
+      exists: false,
+      error: 'Secure Preferences file not found',
+    };
+  }
+
+  try {
+    const raw = fs.readFileSync(securePreferencesPath, 'utf8');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const settings = (parsed.extensions as Record<string, unknown> | undefined)?.settings as
+      | Record<string, unknown>
+      | undefined;
+    const extensionEntry = settings?.[EXTENSION_ID] as Record<string, unknown> | undefined;
+
+    if (!extensionEntry) {
+      return {
+        securePreferencesPath,
+        exists: true,
+        error: `Extension ${EXTENSION_ID} is not present in Secure Preferences`,
+      };
+    }
+
+    const manifest = extensionEntry.manifest as Record<string, unknown> | undefined;
+
+    return {
+      securePreferencesPath,
+      exists: true,
+      loadedPath: typeof extensionEntry.path === 'string' ? extensionEntry.path : undefined,
+      location: typeof extensionEntry.location === 'number' ? extensionEntry.location : undefined,
+      state: typeof extensionEntry.state === 'number' ? extensionEntry.state : undefined,
+      manifestVersion: typeof manifest?.version === 'string' ? manifest.version : undefined,
+    };
+  } catch (error) {
+    return {
+      securePreferencesPath,
+      exists: true,
+      error: stringifyError(error),
+    };
+  }
+}
+
 // ============================================================================
 // Node Resolution (mirrors run_host.sh/bat logic)
 // ============================================================================
@@ -1103,7 +1191,32 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     }
   }
 
-  // Check 7: Port configuration
+  // Check 7: Loaded extension path
+  for (const browser of browsersToCheck) {
+    const config = getBrowserConfig(browser);
+    const extension = readLoadedExtensionPath(browser);
+
+    checks.push({
+      id: `extension-path.${browser}`,
+      title: `${config.displayName} extension path`,
+      status: extension.loadedPath ? 'ok' : 'warn',
+      message: extension.loadedPath
+        ? extension.loadedPath
+        : extension.error || 'Unable to detect loaded extension path',
+      details: {
+        securePreferencesPath: extension.securePreferencesPath,
+        loadedPath: extension.loadedPath,
+        location: extension.location,
+        state: extension.state,
+        manifestVersion: extension.manifestVersion,
+        hint: extension.loadedPath
+          ? 'If builds seem stale, make sure Chrome is loading this unpacked directory.'
+          : 'Load or reload the unpacked extension in Chrome, then re-run doctor.',
+      },
+    });
+  }
+
+  // Check 8: Port configuration
   if (fs.existsSync(stdioConfigPath)) {
     const cfg = readJsonFile(stdioConfigPath);
     if (!cfg.ok) {
@@ -1206,7 +1319,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     }
   }
 
-  // Check 8: Logs directory
+  // Check 9: Logs directory
   checks.push({
     id: 'logs',
     title: 'Logs',
