@@ -271,6 +271,28 @@ async function markServerStopped(reason: string): Promise<void> {
   console.debug(`${LOG_PREFIX} Server marked stopped (${reason})`);
 }
 
+function getEffectiveServerStatus(): ServerStatus {
+  if (!nativePort && currentServerStatus.isRunning) {
+    return {
+      isRunning: false,
+      port: currentServerStatus.port,
+      lastUpdated: currentServerStatus.lastUpdated,
+    };
+  }
+
+  return currentServerStatus;
+}
+
+async function waitForServerStatusSettle(timeoutMs: number = 1200): Promise<void> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!nativePort) return;
+    if (currentServerStatus.isRunning) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
 // ==================== Core Ensure Function ====================
 
 /**
@@ -585,20 +607,38 @@ export const initNativeHostListener = () => {
     if (message.type === BACKGROUND_MESSAGE_TYPES.GET_SERVER_STATUS) {
       sendResponse({
         success: true,
-        serverStatus: currentServerStatus,
+        serverStatus: getEffectiveServerStatus(),
         connected: nativePort !== null,
       });
       return true;
     }
 
     if (message.type === BACKGROUND_MESSAGE_TYPES.REFRESH_SERVER_STATUS) {
-      loadServerStatus()
-        .then((storedStatus) => {
-          currentServerStatus = storedStatus;
+      (async () => {
+        const storedStatus = await loadServerStatus();
+        currentServerStatus = storedStatus;
+
+        if (!nativePort) {
+          await ensureNativeConnected('ui_refresh_status').catch(() => false);
+        }
+
+        if (nativePort && !currentServerStatus.isRunning) {
+          await waitForServerStatusSettle();
+        }
+
+        if (!nativePort && currentServerStatus.isRunning) {
+          await markServerStopped('refresh_without_native_port');
+        }
+
+        return {
+          success: true,
+          serverStatus: getEffectiveServerStatus(),
+          connected: nativePort !== null,
+        };
+      })()
+        .then((payload) => {
           sendResponse({
-            success: true,
-            serverStatus: currentServerStatus,
-            connected: nativePort !== null,
+            ...payload,
           });
         })
         .catch((error) => {
@@ -606,7 +646,7 @@ export const initNativeHostListener = () => {
           sendResponse({
             success: false,
             error: ERROR_MESSAGES.SERVER_STATUS_LOAD_FAILED,
-            serverStatus: currentServerStatus,
+            serverStatus: getEffectiveServerStatus(),
             connected: nativePort !== null,
           });
         });

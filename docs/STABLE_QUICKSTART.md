@@ -88,7 +88,9 @@ If the client cannot use tools, check in this order:
 3. Confirm `doctor` reports the expected `Chrome extension path`
 4. Confirm the extension popup shows the server as running
 5. Confirm `http://127.0.0.1:12306/status` is reachable
-6. Reconnect the extension once
+6. In the popup, try `Disconnect -> Connect`
+7. Use the popup `Refresh` button to force a status refresh and recovery attempt
+8. If you just updated extension code, reload the unpacked extension once in `chrome://extensions/`
 
 ## 6. What the new diagnostics mean
 
@@ -104,6 +106,7 @@ If the client cannot use tools, check in this order:
 - `smoke`
   - Runs a real browser smoke test against the local MCP runtime
   - If the extension is disconnected, it now fails with an actionable hint instead of a generic fetch error
+  - If the popup says connected but the service is still down, use `Refresh` or `Disconnect -> Connect` once before retrying
 
 ## 7. Local development workflow that avoids stale builds
 
