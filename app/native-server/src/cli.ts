@@ -15,6 +15,7 @@ import { BrowserType, parseBrowserType, detectInstalledBrowsers } from './script
 import { runDoctor } from './scripts/doctor';
 import { runReport } from './scripts/report';
 import { runStatus } from './scripts/status';
+import { runSmoke } from './scripts/smoke';
 
 function hasWindowsAdminRights(): boolean {
   if (process.platform !== 'win32') {
@@ -247,6 +248,24 @@ program
       process.exit(exitCode);
     } catch (error: any) {
       console.error(colorText(`Status failed: ${error.message}`, 'red'));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('smoke')
+  .description('Run a live browser smoke test against the local MCP server')
+  .option('--json', 'Output smoke test results as JSON')
+  .option('--keep-tab', 'Keep the temporary smoke-test tab open for inspection')
+  .action(async (options) => {
+    try {
+      const exitCode = await runSmoke({
+        json: Boolean(options.json),
+        keepTab: Boolean(options.keepTab),
+      });
+      process.exit(exitCode);
+    } catch (error: any) {
+      console.error(colorText(`Smoke test failed: ${error.message}`, 'red'));
       process.exit(1);
     }
   });

@@ -44,6 +44,7 @@ The fastest checks are now:
 ```powershell
 mcp-chrome-bridge status
 mcp-chrome-bridge doctor
+mcp-chrome-bridge smoke
 ```
 
 Expected healthy output:
@@ -54,6 +55,7 @@ Expected healthy output:
   - `Connectivity`
   - `Runtime status`
   - `MCP initialize`
+- `smoke` can open a temporary test page and run a live browser sanity check
 
 You can also verify raw endpoints:
 
@@ -99,6 +101,9 @@ If the client cannot use tools, check in this order:
   - Also performs a real MCP `initialize` request against `/mcp`
 - `report`
   - Produces a shareable support bundle for issue filing
+- `smoke`
+  - Runs a real browser smoke test against the local MCP runtime
+  - If the extension is disconnected, it now fails with an actionable hint instead of a generic fetch error
 
 ## 7. Local development workflow that avoids stale builds
 
