@@ -1,10 +1,27 @@
 # Skills Stack
 
-Last updated: `2026-04-06 12:50 Asia/Shanghai`
+Last updated: `2026-04-06 13:15 Asia/Shanghai`
 
 This document records the local skill stack being used to improve execution continuity and delivery quality.
 
-## Installed From GitHub
+## Installed From GitHub / Upstream Runtime
+
+### `oh-my-codex` runtime
+
+Status:
+
+- globally installed via npm
+- `omx setup` completed successfully
+- `omx doctor` passes with warnings only
+- Windows `psmux/tmux` backend installed
+- `codex`, `omx`, and `tmux` resolution fixed for fresh PowerShell sessions
+
+What is now directly reused:
+
+- upstream prompts
+- upstream AGENTS orchestration layer
+- upstream OMX skills such as `team`, `ralph`, `ralplan`, `deep-interview`, `autopilot`
+- upstream MCP/runtime wiring written into `C:\Users\guo\.codex\config.toml`
 
 ### `note`
 
@@ -19,10 +36,10 @@ Why it was selected:
 - directly useful for compaction resilience
 - does not require the full OMX runtime to be conceptually useful
 
-Why the rest of `oh-my-codex` was not blindly installed:
+Why `note` was still called out separately:
 
-- many skills assume OMX-specific runtime, state tools, slash commands, or team orchestration that do not cleanly map to the current Windows + Codex desktop + `mcp-chrome` environment
-- we only want skills that improve reliability immediately
+- it was the first lightweight skill adopted before the full OMX runtime install
+- it remains a useful low-friction memory layer even after full OMX setup
 
 ## Custom Local Skills
 
@@ -69,4 +86,4 @@ The skill stack is intentionally layered:
 3. `github-delivery-loop` for shipping cadence
 4. built-in GitHub skills for repo/PR/CI workflows
 
-This avoids adopting a heavy external workflow system wholesale while still improving long-task reliability.
+This now uses the upstream OMX runtime directly, while keeping a thin layer of local skills for repo-specific discipline.
