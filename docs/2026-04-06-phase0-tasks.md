@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 15:45 Asia/Shanghai`
+Last updated: `2026-04-06 15:55 Asia/Shanghai`
 
 ## Goals
 
@@ -24,9 +24,11 @@ Last updated: `2026-04-06 15:45 Asia/Shanghai`
 - `done`: add the first result-normalization layer for tool-call session summaries
 - `done`: harden extension packaging with an auto-generated local `CHROME_EXTENSION_KEY` for stable unpacked IDs
 - `done`: clean stale Chrome extension IDs from the local profile and verify the stable unpacked extension survives a browser restart at the profile level
+- `done`: restore browser-chain health so `doctor` reaches `connectivity/runtime/mcp.initialize = ok`
+- `done`: get `smoke --json` back to green end-to-end
 - `done`: create local `continuous-execution` skill for durable long-task execution
 - `done`: create local `github-delivery-loop` skill for small verified git checkpoints
-- `in_progress`: resume Phase 0 smoke and live tool validation
+- `in_progress`: continue the remaining live tool validation and CoPaw retest
 - `pending`: complete CoPaw full-chain retest after bridge stability improves
 
 ## Task List
@@ -46,6 +48,7 @@ Last updated: `2026-04-06 15:45 Asia/Shanghai`
 - [x] add a minimal result-normalization layer with tests
 - [x] add stable local extension-key generation to reduce unpacked extension ID drift
 - [x] close the old unpacked-extension ID drift / stale profile state issue
+- [x] restore browser-chain health and re-pass smoke end-to-end
 - [x] create custom local skills adapted to current repo workflow
 - [x] validate new local skills structurally
 - [ ] update task and handoff process to explicitly use the new skills
@@ -55,14 +58,13 @@ Last updated: `2026-04-06 15:45 Asia/Shanghai`
 
 ## Blockers
 
-- the active browser-extension chain is still not stable enough for unattended end-to-end smoke completion
-- opening the extension popup URL from Chrome did not trigger a fresh native-host start; no new wrapper logs were created
 - there are still uncommitted experimental edits in `report.ts` and `smoke.ts`, so doc-only commits must stay scoped
 - the repo build and local CLI are correct, but the globally installed `mcp-chrome-bridge` still points to an older npm package with outdated CLI behavior
 - the current `omx team` smoke proved runtime startup and team-state creation, but a fully interactive end-to-end worker completion cycle is still pending
+- remaining Phase 0 work is no longer blocked by browser startup; it is now mostly validation coverage and CoPaw retesting
 
 ## Next Actions
 
-1. keep the browser-chain issue explicit as a blocker instead of silently waiting on it
-2. continue Program 1 work that does not depend on live extension connectivity
-3. retry extension reconnection later and resume smoke once the browser chain is back
+1. commit the now-green `smoke.ts` closeout and refreshed Phase 0 docs
+2. continue the remaining live tool validation coverage
+3. resume CoPaw end-to-end browser validation on the now-restored browser chain

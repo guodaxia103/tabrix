@@ -11,27 +11,27 @@ Status legend:
 
 ## Browser Core
 
-| Tool                              | Category     | Live MCP | CoPaw   | Notes                                           |
-| --------------------------------- | ------------ | -------- | ------- | ----------------------------------------------- |
-| `get_windows_and_tabs`            | windows/tabs | pass     | pass    | Verified against real Chrome windows and tabs   |
-| `chrome_navigate`                 | navigation   | pass     | pending | Localhost/new-window navigation verified        |
-| `chrome_switch_tab`               | navigation   | pass     | pending | Verified in smoke and direct MCP                |
-| `chrome_close_tabs`               | navigation   | pass     | pending | Verified by smoke cleanup                       |
-| `chrome_read_page`                | page-read    | pass     | pending | Verified on smoke page                          |
-| `chrome_get_web_content`          | page-read    | warn     | pending | Tool works; smoke assertion still being aligned |
-| `chrome_get_interactive_elements` | page-read    | pending  | pending |                                                 |
-| `search_tabs_content`             | page-read    | pending  | pending |                                                 |
+| Tool                              | Category     | Live MCP | CoPaw   | Notes                                                         |
+| --------------------------------- | ------------ | -------- | ------- | ------------------------------------------------------------- |
+| `get_windows_and_tabs`            | windows/tabs | pass     | pass    | Verified against real Chrome windows and tabs                 |
+| `chrome_navigate`                 | navigation   | pass     | pending | Localhost/new-window navigation verified                      |
+| `chrome_switch_tab`               | navigation   | pass     | pending | Verified in smoke and direct MCP                              |
+| `chrome_close_tabs`               | navigation   | pass     | pending | Verified by smoke cleanup                                     |
+| `chrome_read_page`                | page-read    | pass     | pending | Verified on smoke page                                        |
+| `chrome_get_web_content`          | page-read    | pass     | pending | Verified via smoke using selector-targeted content extraction |
+| `chrome_get_interactive_elements` | page-read    | pending  | pending |                                                               |
+| `search_tabs_content`             | page-read    | pending  | pending |                                                               |
 
 ## Interaction
 
-| Tool                               | Category    | Live MCP | CoPaw   | Notes                                                  |
-| ---------------------------------- | ----------- | -------- | ------- | ------------------------------------------------------ |
-| `chrome_click_element`             | interaction | pass     | pending | Verified on smoke page                                 |
-| `chrome_fill_or_select`            | interaction | pass     | pending | Verified on text/select/checkbox                       |
-| `chrome_keyboard`                  | interaction | pass     | pending | Verified on text input                                 |
-| `chrome_computer`                  | interaction | pass     | pending | Screenshot action verified; more actions pending       |
-| `chrome_handle_dialog`             | interaction | warn     | pending | Tool reachable; smoke result still under investigation |
-| `chrome_request_element_selection` | interaction | pending  | pending | Human-in-the-loop flow to validate manually            |
+| Tool                               | Category    | Live MCP | CoPaw   | Notes                                                                                    |
+| ---------------------------------- | ----------- | -------- | ------- | ---------------------------------------------------------------------------------------- |
+| `chrome_click_element`             | interaction | pass     | pending | Verified on smoke page                                                                   |
+| `chrome_fill_or_select`            | interaction | pass     | pending | Verified on text/select/checkbox                                                         |
+| `chrome_keyboard`                  | interaction | pass     | pending | Verified on text input                                                                   |
+| `chrome_computer`                  | interaction | pass     | pending | Screenshot action verified; more actions pending                                         |
+| `chrome_handle_dialog`             | interaction | warn     | pending | Page result verified in smoke; tool may race with prompt auto-resolution on simple pages |
+| `chrome_request_element_selection` | interaction | pending  | pending | Human-in-the-loop flow to validate manually                                              |
 
 ## Network / Console / JS
 
