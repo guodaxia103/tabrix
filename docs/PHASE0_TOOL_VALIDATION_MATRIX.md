@@ -24,14 +24,14 @@ Status legend:
 
 ## Interaction
 
-| Tool                               | Category    | Live MCP | CoPaw   | Notes                                                                                      |
-| ---------------------------------- | ----------- | -------- | ------- | ------------------------------------------------------------------------------------------ |
-| `chrome_click_element`             | interaction | pass     | pass    | Verified on smoke page and direct CoPaw interaction flow                                   |
-| `chrome_fill_or_select`            | interaction | pass     | pass    | Verified on text/select/checkbox and direct CoPaw interaction flow                         |
-| `chrome_keyboard`                  | interaction | pass     | warn    | CoPaw direct test shows it treats full text as invalid key-string input                    |
-| `chrome_computer`                  | interaction | pass     | pending | Screenshot action verified; more actions pending                                           |
-| `chrome_handle_dialog`             | interaction | warn     | pending | Page result verified in smoke; tool may race with prompt auto-resolution on simple pages   |
-| `chrome_request_element_selection` | interaction | warn     | pending | Validated that the picker session starts and returns a structured timeout result after 10s |
+| Tool                               | Category    | Live MCP | CoPaw | Notes                                                                                                        |
+| ---------------------------------- | ----------- | -------- | ----- | ------------------------------------------------------------------------------------------------------------ |
+| `chrome_click_element`             | interaction | pass     | pass  | Verified on smoke page and direct CoPaw interaction flow                                                     |
+| `chrome_fill_or_select`            | interaction | pass     | pass  | Verified on text/select/checkbox and direct CoPaw interaction flow                                           |
+| `chrome_keyboard`                  | interaction | pass     | warn  | CoPaw direct test shows it treats full text as invalid key-string input                                      |
+| `chrome_computer`                  | interaction | pass     | pass  | Screenshot action verified directly and through `chrome_computer`                                            |
+| `chrome_handle_dialog`             | interaction | warn     | warn  | Page result verified in smoke; direct call on a page without an active dialog returns `No dialog is showing` |
+| `chrome_request_element_selection` | interaction | warn     | warn  | Picker session starts and returns a structured timeout result; this is expected without human selection      |
 
 ## Network / Console / JS
 
@@ -44,12 +44,12 @@ Status legend:
 
 ## Files / Media
 
-| Tool                     | Category | Live MCP | CoPaw   | Notes                                                               |
-| ------------------------ | -------- | -------- | ------- | ------------------------------------------------------------------- |
-| `chrome_screenshot`      | media    | pass     | warn    | Verified in smoke; CoPaw direct runtime hit `image readback failed` |
-| `chrome_upload_file`     | files    | pass     | pass    | Verified with temp file upload in MCP and direct CoPaw validation   |
-| `chrome_handle_download` | files    | pass     | pending | Verified against a real local download and completion wait          |
-| `chrome_gif_recorder`    | media    | warn     | pending | Status query verified; recording path still pending                 |
+| Tool                     | Category | Live MCP | CoPaw   | Notes                                                                                      |
+| ------------------------ | -------- | -------- | ------- | ------------------------------------------------------------------------------------------ |
+| `chrome_screenshot`      | media    | pass     | warn    | Verified in smoke; CoPaw direct runtime hit `image readback failed`                        |
+| `chrome_upload_file`     | files    | pass     | pass    | Verified with temp file upload in MCP and direct CoPaw validation                          |
+| `chrome_handle_download` | files    | pass     | pending | Verified against a real local download and completion wait                                 |
+| `chrome_gif_recorder`    | media    | warn     | warn    | Status query verified in MCP and direct tool call; recording/export path still not covered |
 
 ## Bookmarks / History
 

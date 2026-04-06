@@ -25,7 +25,7 @@ Phase 0 is **not complete** until all items below are either:
 - [x] Core network/console/js tools verified
 - [x] Core browser-data tools verified
 - [x] Core screenshot/upload/trace tools verified
-- [x] Remaining `pending` public interaction tool `chrome_request_element_selection` has a verified minimum behavior result
+- [x] Every public tool in the active `tools/list` surface now has a live validation result
 - [ ] Hidden or deprecated tools are explicitly classified and not left ambiguous:
   - `search_tabs_content`
   - `chrome_get_interactive_elements`

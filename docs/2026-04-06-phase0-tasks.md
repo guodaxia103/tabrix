@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 19:35 Asia/Shanghai`
+Last updated: `2026-04-06 19:50 Asia/Shanghai`
 
 ## Goals
 
@@ -33,6 +33,7 @@ Last updated: `2026-04-06 19:35 Asia/Shanghai`
 - `done`: validate `performance_analyze_insight` after adding latest-trace fallback logic
 - `done`: validate `chrome_request_element_selection` timeout behavior for the human-in-the-loop path
 - `done`: classify `search_tabs_content` as a remaining functional gap instead of unknown pending work
+- `done`: give every currently public tool in `tools/list` a concrete validation result (`pass`, `warn`, or `fail`)
 - `done`: draft a beginner handoff guide for install, validation, and first-task success
 - `done`: create local `continuous-execution` skill for durable long-task execution
 - `done`: create local `github-delivery-loop` skill for small verified git checkpoints
@@ -63,6 +64,7 @@ Last updated: `2026-04-06 19:35 Asia/Shanghai`
 - [x] validate CoPaw click/fill/close-tab flows and classify keyboard/screenshot caveats
 - [x] convert two remaining `pending` tools into explicit validated outcomes (`pass` or `fail`)
 - [x] validate `performance_analyze_insight` and `chrome_request_element_selection` behavior
+- [x] complete live validation coverage for every currently public tool
 - [x] draft the beginner handoff package for install and first-task success
 - [x] create custom local skills adapted to current repo workflow
 - [x] validate new local skills structurally
