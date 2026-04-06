@@ -168,6 +168,21 @@ function safeOsVersion(): string | undefined {
 }
 
 function safeExecVersion(command: string): VersionResult {
+  if (process.platform === 'win32') {
+    try {
+      const shell = process.env.ComSpec || 'cmd.exe';
+      const out = execFileSync(shell, ['/d', '/s', '/c', `${command} -v`], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 2500,
+        windowsHide: true,
+      });
+      return { version: out.trim() };
+    } catch (e) {
+      return { error: stringifyError(e) };
+    }
+  }
+
   try {
     const out = execFileSync(command, ['-v'], {
       encoding: 'utf8',
