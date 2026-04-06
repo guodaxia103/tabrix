@@ -44,12 +44,12 @@ Status legend:
 
 ## Files / Media
 
-| Tool                     | Category | Live MCP | CoPaw   | Notes                                                                                      |
-| ------------------------ | -------- | -------- | ------- | ------------------------------------------------------------------------------------------ |
-| `chrome_screenshot`      | media    | pass     | warn    | Verified in smoke; CoPaw direct runtime hit `image readback failed`                        |
-| `chrome_upload_file`     | files    | pass     | pass    | Verified with temp file upload in MCP and direct CoPaw validation                          |
-| `chrome_handle_download` | files    | pass     | pending | Verified against a real local download and completion wait                                 |
-| `chrome_gif_recorder`    | media    | warn     | warn    | Status query verified in MCP and direct tool call; recording/export path still not covered |
+| Tool                     | Category | Live MCP | CoPaw   | Notes                                                                                                 |
+| ------------------------ | -------- | -------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| `chrome_screenshot`      | media    | pass     | warn    | Verified in smoke; CoPaw direct runtime hit `image readback failed`                                   |
+| `chrome_upload_file`     | files    | pass     | pass    | Verified with temp file upload in MCP and direct CoPaw validation                                     |
+| `chrome_handle_download` | files    | pass     | pending | Verified against a real local download and completion wait                                            |
+| `chrome_gif_recorder`    | media    | warn     | warn    | `status` and `start` succeed; simple `start -> stop` flow can still return `No recording in progress` |
 
 ## Bookmarks / History
 
