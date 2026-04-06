@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 15:10 Asia/Shanghai`
+Last updated: `2026-04-06 15:20 Asia/Shanghai`
 
 ## Goals
 
@@ -21,6 +21,7 @@ Last updated: `2026-04-06 15:10 Asia/Shanghai`
 - `done`: validate and keep the Windows-safe `report.ts` enhancement for package-manager/version diagnostics
 - `done`: wrap current MCP tool dispatch with the first session-aware execution lifecycle
 - `done`: expose execution task/session summary through the `/status` snapshot
+- `done`: add the first result-normalization layer for tool-call session summaries
 - `done`: create local `continuous-execution` skill for durable long-task execution
 - `done`: create local `github-delivery-loop` skill for small verified git checkpoints
 - `in_progress`: resume Phase 0 smoke and live tool validation
@@ -40,6 +41,7 @@ Last updated: `2026-04-06 15:10 Asia/Shanghai`
 - [x] validate and keep the `report.ts` Windows command-version fix
 - [x] connect `register-tools` to the first task/session/step execution wrapper
 - [x] extend `/status` with execution summary and tests
+- [x] add a minimal result-normalization layer with tests
 - [x] create custom local skills adapted to current repo workflow
 - [x] validate new local skills structurally
 - [ ] update task and handoff process to explicitly use the new skills

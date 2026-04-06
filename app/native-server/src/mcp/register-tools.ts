@@ -8,6 +8,7 @@ import nativeMessagingHostInstance from '../native-messaging-host';
 import { NativeMessageType, TOOL_SCHEMAS } from 'chrome-mcp-shared';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { sessionManager } from '../execution/session-manager';
+import { normalizeToolCallResult } from '../execution/result-normalizer';
 
 function parseToolList(value?: string): Set<string> {
   return new Set(
@@ -181,13 +182,14 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           120000,
         );
         if (proxyRes.status === 'success') {
+          const normalized = normalizeToolCallResult(name, proxyRes.data);
           sessionManager.completeStep(session.sessionId, step.stepId, {
             status: 'completed',
-            resultSummary: `Dynamic flow ${name} completed`,
+            resultSummary: normalized.stepSummary,
           });
           sessionManager.finishSession(session.sessionId, {
             status: 'completed',
-            summary: `Dynamic flow ${name} completed successfully`,
+            summary: normalized.executionResult.summary,
           });
           return proxyRes.data;
         }
@@ -230,13 +232,14 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       120000, // 延长到 120 秒，避免性能分析等长任务超时
     );
     if (response.status === 'success') {
+      const normalized = normalizeToolCallResult(name, response.data);
       sessionManager.completeStep(session.sessionId, step.stepId, {
         status: 'completed',
-        resultSummary: `Tool ${name} completed successfully`,
+        resultSummary: normalized.stepSummary,
       });
       sessionManager.finishSession(session.sessionId, {
         status: 'completed',
-        summary: `Tool ${name} completed successfully`,
+        summary: normalized.executionResult.summary,
       });
       return response.data;
     } else {
