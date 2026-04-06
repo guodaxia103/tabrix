@@ -35,19 +35,19 @@ Status legend:
 
 ## Network / Console / JS
 
-| Tool                     | Category    | Live MCP | CoPaw   | Notes                                    |
-| ------------------------ | ----------- | -------- | ------- | ---------------------------------------- |
-| `chrome_network_capture` | network     | pass     | pending | Verified local fetch capture             |
-| `chrome_network_request` | network     | pass     | pass    | Verified direct request in MCP and CoPaw |
-| `chrome_console`         | diagnostics | pass     | pending | Buffer mode verified                     |
-| `chrome_javascript`      | diagnostics | pass     | pass    | Verified DOM reads in MCP and CoPaw      |
+| Tool                     | Category    | Live MCP | CoPaw   | Notes                                                   |
+| ------------------------ | ----------- | -------- | ------- | ------------------------------------------------------- |
+| `chrome_network_capture` | network     | pass     | pending | Verified local fetch capture                            |
+| `chrome_network_request` | network     | pass     | pass    | Verified direct request in MCP and CoPaw                |
+| `chrome_console`         | diagnostics | pass     | pass    | Buffer mode verified in MCP and direct CoPaw validation |
+| `chrome_javascript`      | diagnostics | pass     | pass    | Verified DOM reads in MCP and CoPaw                     |
 
 ## Files / Media
 
 | Tool                     | Category | Live MCP | CoPaw   | Notes                                                               |
 | ------------------------ | -------- | -------- | ------- | ------------------------------------------------------------------- |
 | `chrome_screenshot`      | media    | pass     | warn    | Verified in smoke; CoPaw direct runtime hit `image readback failed` |
-| `chrome_upload_file`     | files    | pass     | pending | Verified with temp file upload                                      |
+| `chrome_upload_file`     | files    | pass     | pass    | Verified with temp file upload in MCP and direct CoPaw validation   |
 | `chrome_handle_download` | files    | pass     | pending | Verified against a real local download and completion wait          |
 | `chrome_gif_recorder`    | media    | warn     | pending | Status query verified; recording path still pending                 |
 
@@ -64,8 +64,8 @@ Status legend:
 
 | Tool                          | Category    | Live MCP | CoPaw   | Notes                                                                     |
 | ----------------------------- | ----------- | -------- | ------- | ------------------------------------------------------------------------- |
-| `performance_start_trace`     | performance | pass     | pending | Verified via smoke                                                        |
-| `performance_stop_trace`      | performance | pass     | pending | Verified via smoke                                                        |
+| `performance_start_trace`     | performance | pass     | pass    | Verified via smoke and direct CoPaw validation                            |
+| `performance_stop_trace`      | performance | pass     | pass    | Verified via smoke and direct CoPaw validation                            |
 | `performance_analyze_insight` | performance | pass     | pending | Validated after adding fallback to the most recent recorded trace result  |
 | `chrome_userscript`           | advanced    | fail     | pending | Documented in shared schema but not exposed by the current MCP tools/list |
 
