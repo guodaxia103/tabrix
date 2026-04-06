@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 13:50 Asia/Shanghai`
+Last updated: `2026-04-06 14:05 Asia/Shanghai`
 
 ## Goals
 
@@ -16,6 +16,7 @@ Last updated: `2026-04-06 13:50 Asia/Shanghai`
 - `done`: run `omx setup`, `omx doctor`, `codex login status`, and shell-resolution checks
 - `done`: initialize a real `omx team` state in a smoke repo to verify Windows team runtime startup
 - `done`: reframe the `mcp-chrome` secondary development program using OMX workflow concepts
+- `done`: write the approved Program 1 / Phase 1 execution-platform plan
 - `done`: create local `continuous-execution` skill for durable long-task execution
 - `done`: create local `github-delivery-loop` skill for small verified git checkpoints
 - `in_progress`: fold the new OMX-backed skill stack into current delivery workflow
@@ -31,6 +32,7 @@ Last updated: `2026-04-06 13:50 Asia/Shanghai`
 - [x] validate `omx setup` and `omx doctor`
 - [x] validate `omx team` startup path in a Windows smoke repo
 - [x] write an OMX-style reorganization plan for the `mcp-chrome` program
+- [x] write the Program 1 / Phase 1 approved plan
 - [x] create custom local skills adapted to current repo workflow
 - [x] validate new local skills structurally
 - [ ] update task and handoff process to explicitly use the new skills
