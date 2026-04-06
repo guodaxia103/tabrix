@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 17:35 Asia/Shanghai`
+Last updated: `2026-04-06 18:15 Asia/Shanghai`
 
 ## Goals
 
@@ -27,6 +27,7 @@ Last updated: `2026-04-06 17:35 Asia/Shanghai`
 - `done`: restore browser-chain health so `doctor` reaches `connectivity/runtime/mcp.initialize = ok`
 - `done`: get `smoke --json` back to green end-to-end
 - `done`: validate CoPaw can connect to the browser MCP, list tools, navigate, and read selector-targeted content
+- `done`: validate CoPaw click/fill/close-tab interaction flows and classify keyboard/screenshot caveats
 - `done`: validate `chrome_handle_download` against a real local download flow
 - `done`: validate `performance_analyze_insight` after adding latest-trace fallback logic
 - `done`: validate `chrome_request_element_selection` timeout behavior for the human-in-the-loop path
@@ -56,6 +57,7 @@ Last updated: `2026-04-06 17:35 Asia/Shanghai`
 - [x] close the old unpacked-extension ID drift / stale profile state issue
 - [x] restore browser-chain health and re-pass smoke end-to-end
 - [x] validate the CoPaw browser MCP client on high-value read/navigation flows
+- [x] validate CoPaw click/fill/close-tab flows and classify keyboard/screenshot caveats
 - [x] convert two remaining `pending` tools into explicit validated outcomes (`pass` or `fail`)
 - [x] validate `performance_analyze_insight` and `chrome_request_element_selection` behavior
 - [x] draft the beginner handoff package for install and first-task success

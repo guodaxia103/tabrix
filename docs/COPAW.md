@@ -95,7 +95,11 @@ Additional direct validation through CoPaw's MCP runtime:
 
 - `chrome_navigate` can open a real local page in a new browser window
 - `chrome_get_web_content` can read selector-targeted page content successfully
+- `chrome_click_element` succeeds on a simple local interaction page
+- `chrome_fill_or_select` succeeds on a simple local input field
 - `chrome_read_page` may degrade on `chrome://` tabs or extremely sparse localhost pages, where the accessibility tree is too thin for its main extraction strategy
+- `chrome_keyboard` currently behaves more like a key/chord sender than a full-text typing helper in direct CoPaw tests
+- `chrome_screenshot` can time out in direct CoPaw tests even when the same tool passes through direct MCP smoke
 
 ## 5. Recommended usage pattern in CoPaw
 

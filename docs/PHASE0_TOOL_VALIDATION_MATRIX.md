@@ -16,7 +16,7 @@ Status legend:
 | `get_windows_and_tabs`            | windows/tabs | pass     | pass    | Verified against real Chrome windows and tabs in MCP and CoPaw                             |
 | `chrome_navigate`                 | navigation   | pass     | pass    | Localhost/new-window navigation verified in MCP and CoPaw                                  |
 | `chrome_switch_tab`               | navigation   | pass     | pending | Verified in smoke and direct MCP                                                           |
-| `chrome_close_tabs`               | navigation   | pass     | pending | Verified by smoke cleanup                                                                  |
+| `chrome_close_tabs`               | navigation   | pass     | pass    | Verified by smoke cleanup and CoPaw close-tab flow                                         |
 | `chrome_read_page`                | page-read    | pass     | warn    | Verified on smoke page; CoPaw degrades on `chrome://` and sparse localhost pages           |
 | `chrome_get_web_content`          | page-read    | pass     | pass    | Verified via smoke and CoPaw using selector-targeted content extraction                    |
 | `chrome_get_interactive_elements` | page-read    | warn     | pending | Deprecated and not exposed in current tools/list; `chrome_read_page` is the supported path |
@@ -26,9 +26,9 @@ Status legend:
 
 | Tool                               | Category    | Live MCP | CoPaw   | Notes                                                                                      |
 | ---------------------------------- | ----------- | -------- | ------- | ------------------------------------------------------------------------------------------ |
-| `chrome_click_element`             | interaction | pass     | pending | Verified on smoke page                                                                     |
-| `chrome_fill_or_select`            | interaction | pass     | pending | Verified on text/select/checkbox                                                           |
-| `chrome_keyboard`                  | interaction | pass     | pending | Verified on text input                                                                     |
+| `chrome_click_element`             | interaction | pass     | pass    | Verified on smoke page and direct CoPaw interaction flow                                   |
+| `chrome_fill_or_select`            | interaction | pass     | pass    | Verified on text/select/checkbox and direct CoPaw interaction flow                         |
+| `chrome_keyboard`                  | interaction | pass     | warn    | CoPaw direct test shows it treats full text as invalid key-string input                    |
 | `chrome_computer`                  | interaction | pass     | pending | Screenshot action verified; more actions pending                                           |
 | `chrome_handle_dialog`             | interaction | warn     | pending | Page result verified in smoke; tool may race with prompt auto-resolution on simple pages   |
 | `chrome_request_element_selection` | interaction | warn     | pending | Validated that the picker session starts and returns a structured timeout result after 10s |
