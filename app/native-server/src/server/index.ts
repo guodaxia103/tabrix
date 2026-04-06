@@ -84,6 +84,10 @@ interface ServerStatusSnapshot {
   };
 }
 
+function canWriteReply(reply: FastifyReply): boolean {
+  return !reply.sent && !reply.raw.writableEnded && !reply.raw.headersSent;
+}
+
 // ============================================================
 // Server Class
 // ============================================================
@@ -264,7 +268,7 @@ export class Server {
 
         await entry.transport.handlePostMessage(req.raw, reply.raw, req.body);
       } catch (error) {
-        if (!reply.sent && !reply.raw.writableEnded) {
+        if (canWriteReply(reply)) {
           reply.code(HTTP_STATUS.INTERNAL_SERVER_ERROR).send(ERROR_MESSAGES.INTERNAL_SERVER_ERROR);
         }
       }
@@ -309,7 +313,7 @@ export class Server {
       try {
         await transport.handleRequest(request.raw, reply.raw, request.body);
       } catch (error) {
-        if (!reply.sent && !reply.raw.writableEnded) {
+        if (canWriteReply(reply)) {
           reply
             .code(HTTP_STATUS.INTERNAL_SERVER_ERROR)
             .send({ error: ERROR_MESSAGES.MCP_REQUEST_PROCESSING_ERROR });
@@ -340,7 +344,7 @@ export class Server {
           reply.hijack();
         }
       } catch (error) {
-        if (!reply.raw.writableEnded) {
+        if (!reply.raw.writableEnded && !reply.raw.destroyed) {
           reply.raw.end();
         }
       }
@@ -363,11 +367,11 @@ export class Server {
 
       try {
         await transport.handleRequest(request.raw, reply.raw);
-        if (!reply.sent) {
+        if (canWriteReply(reply)) {
           reply.code(HTTP_STATUS.NO_CONTENT).send();
         }
       } catch (error) {
-        if (!reply.sent && !reply.raw.writableEnded) {
+        if (canWriteReply(reply)) {
           reply
             .code(HTTP_STATUS.INTERNAL_SERVER_ERROR)
             .send({ error: ERROR_MESSAGES.MCP_SESSION_DELETION_ERROR });
