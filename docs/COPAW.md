@@ -101,6 +101,7 @@ Additional direct validation through CoPaw's MCP runtime:
 - `chrome_read_page` may degrade on `chrome://` tabs or extremely sparse localhost pages, where the accessibility tree is too thin for its main extraction strategy
 - `chrome_keyboard` currently behaves more like a key/chord sender than a full-text typing helper in direct CoPaw tests
 - `chrome_screenshot` can time out in direct CoPaw tests even when the same tool passes through direct MCP smoke
+- app-level CoPaw initialization can now load both configured clients successfully again; the remaining noisy failure is concentrated in shutdown / cleanup
 
 ## 5. Recommended usage pattern in CoPaw
 
