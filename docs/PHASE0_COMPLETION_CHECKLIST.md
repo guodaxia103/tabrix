@@ -1,6 +1,6 @@
 # Phase 0 Completion Checklist
 
-Last updated: `2026-04-06 16:20 Asia/Shanghai`
+Last updated: `2026-04-06 19:10 Asia/Shanghai`
 
 This checklist defines the hard acceptance gate for **Phase 0**.
 
@@ -15,8 +15,8 @@ Phase 0 is **not complete** until all items below are either:
 - [x] Native host registration points to the current local build output
 - [x] `doctor` reports `connectivity`, `runtime.status`, and `mcp.initialize` as healthy
 - [x] `smoke --json` passes end-to-end
-- [ ] Remaining known caveats are either fixed or documented as explicit limits
-- [ ] Install, reconnect, reload, and recovery flow is stable enough for handoff
+- [x] Remaining known caveats are either fixed or documented as explicit limits
+- [x] Install, reconnect, reload, and recovery flow is stable enough for handoff
 
 ## Goal 1: All `mcp-chrome` Public Tools Live-Tested
 
@@ -25,8 +25,7 @@ Phase 0 is **not complete** until all items below are either:
 - [x] Core network/console/js tools verified
 - [x] Core browser-data tools verified
 - [x] Core screenshot/upload/trace tools verified
-- [ ] Remaining `pending` tools verified:
-  - `chrome_request_element_selection`
+- [x] Remaining `pending` public interaction tool `chrome_request_element_selection` has a verified minimum behavior result
 - [ ] Hidden or deprecated tools are explicitly classified and not left ambiguous:
   - `search_tabs_content`
   - `chrome_get_interactive_elements`
@@ -47,14 +46,13 @@ Source of truth:
 - [x] CoPaw loads `streamable-mcp-server`
 - [x] CoPaw lists tools successfully
 - [x] CoPaw validates high-value read/navigation flows
+- [x] CoPaw validates click/fill/close-tab interaction flows
 - [ ] CoPaw validates more interaction tools:
-  - click
-  - fill
   - keyboard
   - screenshot
   - bookmark/history where practical
-- [ ] CoPaw-specific caveats documented clearly
-- [ ] `copaw-mcp-browser` skill upgraded with:
+- [x] CoPaw-specific caveats documented clearly
+- [x] `copaw-mcp-browser` skill upgraded with:
   - stronger prompt templates
   - fallback rules
   - failure recovery guidance
@@ -70,14 +68,14 @@ Primary references:
 - [x] Base quickstart exists
 - [x] Windows installation guide exists
 - [x] CoPaw integration guide exists
-- [ ] Final beginner handoff package is polished:
+- [x] Final beginner handoff package is polished:
   - one short install path
   - one short validation path
   - reconnect/reload instructions
   - Chrome restart persistence notes
   - common failure FAQ
   - first-task walkthrough
-- [ ] Handoff docs are consistent with the latest code and latest browser behavior
+- [x] Handoff docs are consistent with the latest code and latest browser behavior
 
 Primary references:
 
