@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 16:25 Asia/Shanghai`
+Last updated: `2026-04-06 16:50 Asia/Shanghai`
 
 ## Goals
 
@@ -28,7 +28,9 @@ Last updated: `2026-04-06 16:25 Asia/Shanghai`
 - `done`: get `smoke --json` back to green end-to-end
 - `done`: validate CoPaw can connect to the browser MCP, list tools, navigate, and read selector-targeted content
 - `done`: validate `chrome_handle_download` against a real local download flow
-- `done`: classify `search_tabs_content` and `performance_analyze_insight` as remaining functional gaps instead of unknown pending items
+- `done`: validate `performance_analyze_insight` after adding latest-trace fallback logic
+- `done`: validate `chrome_request_element_selection` timeout behavior for the human-in-the-loop path
+- `done`: classify `search_tabs_content` as a remaining functional gap instead of unknown pending work
 - `done`: create local `continuous-execution` skill for durable long-task execution
 - `done`: create local `github-delivery-loop` skill for small verified git checkpoints
 - `in_progress`: continue the remaining live tool validation and CoPaw retest
@@ -54,6 +56,7 @@ Last updated: `2026-04-06 16:25 Asia/Shanghai`
 - [x] restore browser-chain health and re-pass smoke end-to-end
 - [x] validate the CoPaw browser MCP client on high-value read/navigation flows
 - [x] convert two remaining `pending` tools into explicit validated outcomes (`pass` or `fail`)
+- [x] validate `performance_analyze_insight` and `chrome_request_element_selection` behavior
 - [x] create custom local skills adapted to current repo workflow
 - [x] validate new local skills structurally
 - [ ] update task and handoff process to explicitly use the new skills
@@ -63,16 +66,14 @@ Last updated: `2026-04-06 16:25 Asia/Shanghai`
 
 ## Blockers
 
-- there are still uncommitted experimental edits in `report.ts` and `smoke.ts`, so doc-only commits must stay scoped
 - the repo build and local CLI are correct, but the globally installed `mcp-chrome-bridge` still points to an older npm package with outdated CLI behavior
 - the current `omx team` smoke proved runtime startup and team-state creation, but a fully interactive end-to-end worker completion cycle is still pending
 - remaining Phase 0 work is no longer blocked by browser startup; it is now mostly validation coverage and CoPaw retesting
 - CoPaw still emits a known cleanup warning during `close_all()` on streamable HTTP clients, even after successful MCP operations
 - `search_tabs_content` is exposed in docs/shared schemas but is currently unavailable in the active bridge runtime
-- `performance_analyze_insight` currently fails to find a just-recorded trace result after successful trace stop
 
 ## Next Actions
 
-1. commit the latest validation findings and refreshed Phase 0 docs
+1. commit the latest performance and interaction validation findings
 2. continue the remaining live tool validation coverage
-3. decide whether to fix or explicitly de-scope the remaining failing tools for Phase 0
+3. decide whether to fix or explicitly de-scope `search_tabs_content` and non-exposed tools for Phase 0

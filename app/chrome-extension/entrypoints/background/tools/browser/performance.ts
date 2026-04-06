@@ -18,6 +18,7 @@ interface StopTraceParams {
 
 interface AnalyzeInsightParams {
   insightName?: string; // placeholder for future deep insights
+  tabId?: number; // optional explicit tab to analyze
 }
 
 type DebuggeeEvent = (source: chrome.debugger.Debuggee, method: string, params?: any) => void;
@@ -44,6 +45,26 @@ const LAST_RESULTS = new Map<
     metrics?: Record<string, number>;
   }
 >();
+
+function getLatestRecordedResult():
+  | {
+      tabId: number;
+      result: {
+        events: any[];
+        startedAt: number;
+        endedAt: number;
+        tabUrl: string;
+        saved?: { downloadId?: number; filename?: string; fullPath?: string };
+        metrics?: Record<string, number>;
+      };
+    }
+  | undefined {
+  const entries = [...LAST_RESULTS.entries()];
+  if (entries.length === 0) return undefined;
+  entries.sort((a, b) => (b[1].endedAt || 0) - (a[1].endedAt || 0));
+  const [tabId, result] = entries[0];
+  return { tabId, result };
+}
 
 function tracingCategories(): string[] {
   // Keep broadly consistent with other project
@@ -418,13 +439,25 @@ class PerformanceAnalyzeInsightTool extends BaseBrowserToolExecutor {
   name = TOOL_NAMES.BROWSER.PERFORMANCE_ANALYZE_INSIGHT;
 
   async execute(args: AnalyzeInsightParams & { timeoutMs?: number }): Promise<ToolResult> {
-    const { insightName } = args || {};
+    const { insightName, tabId: requestedTabId } = args || {};
     try {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!activeTab?.id) return createErrorResponse('No active tab found');
-      const tabId = activeTab.id;
-      const result = LAST_RESULTS.get(tabId);
+      let tabId: number | null = typeof requestedTabId === 'number' ? requestedTabId : null;
+
+      if (tabId === null) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        tabId = activeTab?.id ?? null;
+      }
+
+      let result = typeof tabId === 'number' ? LAST_RESULTS.get(tabId) : undefined;
       if (!result) {
+        const latest = getLatestRecordedResult();
+        if (latest) {
+          tabId = latest.tabId;
+          result = latest.result;
+        }
+      }
+
+      if (!result || tabId === null) {
         return {
           content: [
             {
@@ -483,6 +516,7 @@ class PerformanceAnalyzeInsightTool extends BaseBrowserToolExecutor {
                   type: 'text',
                   text: JSON.stringify({
                     success: true,
+                    tabId,
                     url: result.tabUrl,
                     startedAt: result.startedAt,
                     endedAt: result.endedAt,
@@ -520,6 +554,7 @@ class PerformanceAnalyzeInsightTool extends BaseBrowserToolExecutor {
             type: 'text',
             text: JSON.stringify({
               success: true,
+              tabId,
               info: 'Lightweight analysis (no saved file path). Native-side deep analysis unavailable.',
               requestedInsight: insightName || null,
               url: result.tabUrl,

@@ -26,13 +26,12 @@ Phase 0 is **not complete** until all items below are either:
 - [x] Core browser-data tools verified
 - [x] Core screenshot/upload/trace tools verified
 - [ ] Remaining `pending` tools verified:
-  - `search_tabs_content`
-  - `chrome_get_interactive_elements` (or explicitly marked deprecated / backward-compat only)
   - `chrome_request_element_selection`
+- [ ] Hidden or deprecated tools are explicitly classified and not left ambiguous:
+  - `search_tabs_content`
+  - `chrome_get_interactive_elements`
   - `chrome_inject_script`
   - `chrome_send_command_to_inject_script`
-  - `chrome_handle_download`
-  - `performance_analyze_insight`
   - `chrome_userscript`
 - [ ] Remaining `warn` tools either fixed or documented:
   - `chrome_handle_dialog`

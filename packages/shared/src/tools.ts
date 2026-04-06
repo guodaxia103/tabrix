@@ -156,6 +156,11 @@ export const TOOL_SCHEMAS: Tool[] = [
           description:
             'Optional insight name for future deep analysis (e.g., "DocumentLatency"). Currently informational only.',
         },
+        tabId: {
+          type: 'number',
+          description:
+            'Optional tab ID whose last recorded trace result should be analyzed. If omitted, uses the active tab and falls back to the most recent recorded trace.',
+        },
         timeoutMs: {
           type: 'number',
           description:
