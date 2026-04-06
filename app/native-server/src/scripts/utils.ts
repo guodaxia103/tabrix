@@ -246,9 +246,10 @@ async function ensureWindowsFilePermissions(packageDistDir: string): Promise<voi
 export async function createManifestContent(): Promise<any> {
   const mainPath = await getMainPath();
   const detectedOrigins = discoverLoadedExtensionOrigins();
-  const allowedOrigins = Array.from(
-    new Set([`chrome-extension://${EXTENSION_ID}/`, ...detectedOrigins.origins]),
-  );
+  const allowedOrigins =
+    detectedOrigins.origins.length > 0
+      ? Array.from(new Set(detectedOrigins.origins))
+      : [`chrome-extension://${EXTENSION_ID}/`];
 
   return {
     name: HOST_NAME,

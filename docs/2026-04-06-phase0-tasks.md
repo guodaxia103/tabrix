@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 15:30 Asia/Shanghai`
+Last updated: `2026-04-06 15:45 Asia/Shanghai`
 
 ## Goals
 
@@ -23,6 +23,7 @@ Last updated: `2026-04-06 15:30 Asia/Shanghai`
 - `done`: expose execution task/session summary through the `/status` snapshot
 - `done`: add the first result-normalization layer for tool-call session summaries
 - `done`: harden extension packaging with an auto-generated local `CHROME_EXTENSION_KEY` for stable unpacked IDs
+- `done`: clean stale Chrome extension IDs from the local profile and verify the stable unpacked extension survives a browser restart at the profile level
 - `done`: create local `continuous-execution` skill for durable long-task execution
 - `done`: create local `github-delivery-loop` skill for small verified git checkpoints
 - `in_progress`: resume Phase 0 smoke and live tool validation
@@ -44,6 +45,7 @@ Last updated: `2026-04-06 15:30 Asia/Shanghai`
 - [x] extend `/status` with execution summary and tests
 - [x] add a minimal result-normalization layer with tests
 - [x] add stable local extension-key generation to reduce unpacked extension ID drift
+- [x] close the old unpacked-extension ID drift / stale profile state issue
 - [x] create custom local skills adapted to current repo workflow
 - [x] validate new local skills structurally
 - [ ] update task and handoff process to explicitly use the new skills

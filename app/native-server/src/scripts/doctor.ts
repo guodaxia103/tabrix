@@ -1034,8 +1034,12 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
 
   // Check 5: Manifest checks per browser
   const discoveredOrigins = discoverLoadedExtensionOrigins(browsersToCheck);
-  const expectedOrigin = `chrome-extension://${EXTENSION_ID}/`;
-  const expectedOrigins = Array.from(new Set([expectedOrigin, ...discoveredOrigins.origins]));
+  const fallbackOrigin = `chrome-extension://${EXTENSION_ID}/`;
+  const expectedOrigins =
+    discoveredOrigins.origins.length > 0
+      ? Array.from(new Set(discoveredOrigins.origins))
+      : [fallbackOrigin];
+  const expectedOrigin = expectedOrigins[0];
   for (const browser of browsersToCheck) {
     const config = getBrowserConfig(browser);
     const candidates = [config.userManifestPath, config.systemManifestPath];
@@ -1231,10 +1235,8 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
         securePreferencesPath: extension.securePreferencesPath,
         loadedPath: extension.loadedPath,
         detectedIds: browserOrigins.map((entry) => entry.id),
-        expectedOrigins: expectedOrigins.filter(
-          (origin) =>
-            browserOrigins.some((entry) => origin === `chrome-extension://${entry.id}/`) ||
-            origin === expectedOrigin,
+        expectedOrigins: expectedOrigins.filter((origin) =>
+          browserOrigins.some((entry) => origin === `chrome-extension://${entry.id}/`),
         ),
         location: extension.location,
         state: extension.state,
