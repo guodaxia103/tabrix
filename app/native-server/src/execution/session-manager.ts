@@ -169,6 +169,11 @@ export class SessionManager {
     return Array.from(this.sessions.values());
   }
 
+  public reset(): void {
+    this.tasks.clear();
+    this.sessions.clear();
+  }
+
   private getStep(session: ExecutionSession, stepId: string): ExecutionStep {
     const step = session.steps.find((candidate) => candidate.stepId === stepId);
     if (!step) {

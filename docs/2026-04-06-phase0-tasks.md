@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 14:30 Asia/Shanghai`
+Last updated: `2026-04-06 14:45 Asia/Shanghai`
 
 ## Goals
 
@@ -19,6 +19,7 @@ Last updated: `2026-04-06 14:30 Asia/Shanghai`
 - `done`: write the approved Program 1 / Phase 1 execution-platform plan
 - `done`: land the first Program 1 execution skeleton (`types.ts` + `session-manager.ts`) with passing test and build
 - `done`: validate and keep the Windows-safe `report.ts` enhancement for package-manager/version diagnostics
+- `done`: wrap current MCP tool dispatch with the first session-aware execution lifecycle
 - `done`: create local `continuous-execution` skill for durable long-task execution
 - `done`: create local `github-delivery-loop` skill for small verified git checkpoints
 - `in_progress`: resume Phase 0 smoke and live tool validation
@@ -36,6 +37,7 @@ Last updated: `2026-04-06 14:30 Asia/Shanghai`
 - [x] write the Program 1 / Phase 1 approved plan
 - [x] add the first execution-core code skeleton with a minimal lifecycle test
 - [x] validate and keep the `report.ts` Windows command-version fix
+- [x] connect `register-tools` to the first task/session/step execution wrapper
 - [x] create custom local skills adapted to current repo workflow
 - [x] validate new local skills structurally
 - [ ] update task and handoff process to explicitly use the new skills

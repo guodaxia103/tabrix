@@ -7,6 +7,7 @@ import {
 import nativeMessagingHostInstance from '../native-messaging-host';
 import { NativeMessageType, TOOL_SCHEMAS } from 'chrome-mcp-shared';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { sessionManager } from '../execution/session-manager';
 
 function parseToolList(value?: string): Set<string> {
   return new Set(
@@ -34,6 +35,18 @@ function filterToolsByEnvironment(tools: Tool[]): Tool[] {
 
 function isToolAllowed(toolName: string, tools: Tool[]): boolean {
   return tools.some((tool) => tool.name === toolName);
+}
+
+function createErrorResult(text: string): CallToolResult {
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text,
+      },
+    ],
+    isError: true,
+  };
 }
 
 async function listDynamicFlowTools(): Promise<Tool[]> {
@@ -107,21 +120,45 @@ export const setupTools = (server: Server) => {
   );
 };
 
-const handleToolCall = async (name: string, args: any): Promise<CallToolResult> => {
+export const handleToolCall = async (name: string, args: any): Promise<CallToolResult> => {
+  const task = sessionManager.createTask({
+    taskType: name.startsWith('flow.') ? 'flow-call' : 'tool-call',
+    title: `Execute ${name}`,
+    intent: `Run MCP tool ${name}`,
+    origin: 'mcp',
+    labels: ['mcp', name.startsWith('flow.') ? 'flow' : 'tool'],
+  });
+  const session = sessionManager.startSession({
+    taskId: task.taskId,
+    transport: 'mcp',
+    clientName: 'mcp-server',
+  });
+  const step = sessionManager.startStep({
+    sessionId: session.sessionId,
+    toolName: name,
+    stepType: name.startsWith('flow.') ? 'flow_call' : 'tool_call',
+    inputSummary: JSON.stringify(args ?? {}),
+  });
+
   try {
     const dynamicTools = await listDynamicFlowTools();
     const allowedTools = filterToolsByEnvironment([...TOOL_SCHEMAS, ...dynamicTools]);
 
     if (!isToolAllowed(name, allowedTools)) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Tool "${name}" is disabled or not available in the current server configuration.`,
-          },
-        ],
-        isError: true,
-      };
+      const result = createErrorResult(
+        `Tool "${name}" is disabled or not available in the current server configuration.`,
+      );
+      sessionManager.completeStep(session.sessionId, step.stepId, {
+        status: 'failed',
+        errorCode: 'tool_not_available',
+        errorSummary: `Tool "${name}" is disabled or unavailable`,
+        resultSummary: 'Tool rejected by current configuration',
+      });
+      sessionManager.finishSession(session.sessionId, {
+        status: 'failed',
+        summary: `Tool ${name} rejected by configuration`,
+      });
+      return result;
     }
 
     // If calling a dynamic flow tool (name starts with flow.), proxy to common flow-run tool
@@ -143,21 +180,44 @@ const handleToolCall = async (name: string, args: any): Promise<CallToolResult> 
           NativeMessageType.CALL_TOOL,
           120000,
         );
-        if (proxyRes.status === 'success') return proxyRes.data;
-        return {
-          content: [{ type: 'text', text: `Error calling dynamic flow tool: ${proxyRes.error}` }],
-          isError: true,
-        };
+        if (proxyRes.status === 'success') {
+          sessionManager.completeStep(session.sessionId, step.stepId, {
+            status: 'completed',
+            resultSummary: `Dynamic flow ${name} completed`,
+          });
+          sessionManager.finishSession(session.sessionId, {
+            status: 'completed',
+            summary: `Dynamic flow ${name} completed successfully`,
+          });
+          return proxyRes.data;
+        }
+        const result = createErrorResult(`Error calling dynamic flow tool: ${proxyRes.error}`);
+        sessionManager.completeStep(session.sessionId, step.stepId, {
+          status: 'failed',
+          errorCode: 'dynamic_flow_error',
+          errorSummary: String(proxyRes.error || 'Unknown dynamic flow error'),
+          resultSummary: `Dynamic flow ${name} failed`,
+        });
+        sessionManager.finishSession(session.sessionId, {
+          status: 'failed',
+          summary: `Dynamic flow ${name} failed`,
+        });
+        return result;
       } catch (err: any) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Error resolving dynamic flow tool: ${err?.message || String(err)}`,
-            },
-          ],
-          isError: true,
-        };
+        const result = createErrorResult(
+          `Error resolving dynamic flow tool: ${err?.message || String(err)}`,
+        );
+        sessionManager.completeStep(session.sessionId, step.stepId, {
+          status: 'failed',
+          errorCode: 'dynamic_flow_resolution_error',
+          errorSummary: err?.message || String(err),
+          resultSummary: `Dynamic flow ${name} could not be resolved`,
+        });
+        sessionManager.finishSession(session.sessionId, {
+          status: 'failed',
+          summary: `Dynamic flow ${name} resolution failed`,
+        });
+        return result;
       }
     }
     // 发送请求到Chrome扩展并等待响应
@@ -170,27 +230,41 @@ const handleToolCall = async (name: string, args: any): Promise<CallToolResult> 
       120000, // 延长到 120 秒，避免性能分析等长任务超时
     );
     if (response.status === 'success') {
+      sessionManager.completeStep(session.sessionId, step.stepId, {
+        status: 'completed',
+        resultSummary: `Tool ${name} completed successfully`,
+      });
+      sessionManager.finishSession(session.sessionId, {
+        status: 'completed',
+        summary: `Tool ${name} completed successfully`,
+      });
       return response.data;
     } else {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error calling tool: ${response.error}`,
-          },
-        ],
-        isError: true,
-      };
+      const result = createErrorResult(`Error calling tool: ${response.error}`);
+      sessionManager.completeStep(session.sessionId, step.stepId, {
+        status: 'failed',
+        errorCode: 'tool_call_error',
+        errorSummary: String(response.error || 'Unknown tool error'),
+        resultSummary: `Tool ${name} failed`,
+      });
+      sessionManager.finishSession(session.sessionId, {
+        status: 'failed',
+        summary: `Tool ${name} failed`,
+      });
+      return result;
     }
   } catch (error: any) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Error calling tool: ${error.message}`,
-        },
-      ],
-      isError: true,
-    };
+    const result = createErrorResult(`Error calling tool: ${error.message}`);
+    sessionManager.completeStep(session.sessionId, step.stepId, {
+      status: 'failed',
+      errorCode: 'tool_call_exception',
+      errorSummary: error.message,
+      resultSummary: `Tool ${name} threw an exception`,
+    });
+    sessionManager.finishSession(session.sessionId, {
+      status: 'failed',
+      summary: `Tool ${name} threw an exception`,
+    });
+    return result;
   }
 };
