@@ -15,7 +15,7 @@ Status legend:
 | --------------------------------- | ------------ | -------- | ------- | ------------------------------------------------------------------------------------------ |
 | `get_windows_and_tabs`            | windows/tabs | pass     | pass    | Verified against real Chrome windows and tabs in MCP and CoPaw                             |
 | `chrome_navigate`                 | navigation   | pass     | pass    | Localhost/new-window navigation verified in MCP and CoPaw                                  |
-| `chrome_switch_tab`               | navigation   | pass     | pending | Verified in smoke and direct MCP                                                           |
+| `chrome_switch_tab`               | navigation   | pass     | pass    | Verified in smoke, direct MCP, and CoPaw                                                   |
 | `chrome_close_tabs`               | navigation   | pass     | pass    | Verified by smoke cleanup and CoPaw close-tab flow                                         |
 | `chrome_read_page`                | page-read    | pass     | warn    | Verified on smoke page; CoPaw degrades on `chrome://` and sparse localhost pages           |
 | `chrome_get_web_content`          | page-read    | pass     | pass    | Verified via smoke and CoPaw using selector-targeted content extraction                    |
@@ -35,12 +35,12 @@ Status legend:
 
 ## Network / Console / JS
 
-| Tool                     | Category    | Live MCP | CoPaw   | Notes                                     |
-| ------------------------ | ----------- | -------- | ------- | ----------------------------------------- |
-| `chrome_network_capture` | network     | pass     | pending | Verified local fetch capture              |
-| `chrome_network_request` | network     | pass     | pending | Verified direct request to smoke endpoint |
-| `chrome_console`         | diagnostics | pass     | pending | Buffer mode verified                      |
-| `chrome_javascript`      | diagnostics | pass     | pending | Verified DOM reads                        |
+| Tool                     | Category    | Live MCP | CoPaw   | Notes                                    |
+| ------------------------ | ----------- | -------- | ------- | ---------------------------------------- |
+| `chrome_network_capture` | network     | pass     | pending | Verified local fetch capture             |
+| `chrome_network_request` | network     | pass     | pass    | Verified direct request in MCP and CoPaw |
+| `chrome_console`         | diagnostics | pass     | pending | Buffer mode verified                     |
+| `chrome_javascript`      | diagnostics | pass     | pass    | Verified DOM reads in MCP and CoPaw      |
 
 ## Files / Media
 
@@ -53,12 +53,12 @@ Status legend:
 
 ## Bookmarks / History
 
-| Tool                     | Category     | Live MCP | CoPaw   | Notes                       |
-| ------------------------ | ------------ | -------- | ------- | --------------------------- |
-| `chrome_history`         | browser-data | pass     | pending | Verified query path         |
-| `chrome_bookmark_search` | browser-data | pass     | pending | Verified after add          |
-| `chrome_bookmark_add`    | browser-data | pass     | pending | Verified with temp bookmark |
-| `chrome_bookmark_delete` | browser-data | pass     | pending | Verified with temp bookmark |
+| Tool                     | Category     | Live MCP | CoPaw | Notes                                        |
+| ------------------------ | ------------ | -------- | ----- | -------------------------------------------- |
+| `chrome_history`         | browser-data | pass     | pass  | Verified query path in MCP and CoPaw         |
+| `chrome_bookmark_search` | browser-data | pass     | pass  | Verified after add in MCP and CoPaw          |
+| `chrome_bookmark_add`    | browser-data | pass     | pass  | Verified with temp bookmark in MCP and CoPaw |
+| `chrome_bookmark_delete` | browser-data | pass     | pass  | Verified with temp bookmark in MCP and CoPaw |
 
 ## Performance / Advanced
 
