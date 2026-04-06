@@ -103,6 +103,14 @@ Additional direct validation through CoPaw's MCP runtime:
 - `chrome_screenshot` can time out in direct CoPaw tests even when the same tool passes through direct MCP smoke
 - app-level CoPaw initialization can now load both configured clients successfully again; the remaining noisy failure is concentrated in shutdown / cleanup
 
+Additional chat-visible validation through CoPaw's own `/api/agent/process` path:
+
+- `phase0-copaw-chat-1`: `get_windows_and_tabs`
+- `phase0-copaw-chat-2`: `chrome_history` + `chrome_bookmark_search`
+- `phase0-copaw-chat-3`: localhost page interaction ending in `chrome_get_web_content` returning `submitted:hello-copaw`
+
+These sessions are stored in CoPaw itself, not only in our external validation notes.
+
 ## 5. Recommended usage pattern in CoPaw
 
 Do not only say "use MCP". Be explicit about the tool intent and result you want.
@@ -199,3 +207,22 @@ Then check CoPaw:
 curl http://127.0.0.1:8088/api/mcp
 Get-Content C:\Users\guo\.copaw\copaw.log -Tail 100
 ```
+
+## 10. Chat-visible validation path
+
+If you want browser tests to appear in CoPaw's own chat history, use the app API instead of only the Python MCP manager:
+
+1. Start the CoPaw app server
+2. POST to `http://127.0.0.1:8088/api/agent/process`
+3. Supply a unique `session_id`
+4. Read the resulting chat via:
+   - `GET /api/chats`
+   - `GET /api/chats/{chat_id}`
+
+This preserves:
+
+- the user message
+- assistant reasoning
+- plugin/tool calls
+- plugin/tool outputs
+- the final assistant answer

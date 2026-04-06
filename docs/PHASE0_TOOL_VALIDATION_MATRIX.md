@@ -11,23 +11,23 @@ Status legend:
 
 ## Browser Core
 
-| Tool                              | Category     | Live MCP | CoPaw   | Notes                                                                                      |
-| --------------------------------- | ------------ | -------- | ------- | ------------------------------------------------------------------------------------------ |
-| `get_windows_and_tabs`            | windows/tabs | pass     | pass    | Verified against real Chrome windows and tabs in MCP and CoPaw                             |
-| `chrome_navigate`                 | navigation   | pass     | pass    | Localhost/new-window navigation verified in MCP and CoPaw                                  |
-| `chrome_switch_tab`               | navigation   | pass     | pass    | Verified in smoke, direct MCP, and CoPaw                                                   |
-| `chrome_close_tabs`               | navigation   | pass     | pass    | Verified by smoke cleanup and CoPaw close-tab flow                                         |
-| `chrome_read_page`                | page-read    | pass     | warn    | Verified on smoke page; CoPaw degrades on `chrome://` and sparse localhost pages           |
-| `chrome_get_web_content`          | page-read    | pass     | pass    | Verified via smoke and CoPaw using selector-targeted content extraction                    |
-| `chrome_get_interactive_elements` | page-read    | warn     | pending | Deprecated and not exposed in current tools/list; `chrome_read_page` is the supported path |
-| `search_tabs_content`             | page-read    | fail     | pending | Documented in shared schema but not exposed by the current MCP tools/list response         |
+| Tool                              | Category     | Live MCP | CoPaw   | Notes                                                                                       |
+| --------------------------------- | ------------ | -------- | ------- | ------------------------------------------------------------------------------------------- |
+| `get_windows_and_tabs`            | windows/tabs | pass     | pass    | Verified against real Chrome windows and tabs in MCP, CoPaw runtime, and CoPaw chat history |
+| `chrome_navigate`                 | navigation   | pass     | pass    | Localhost/new-window navigation verified in MCP and CoPaw                                   |
+| `chrome_switch_tab`               | navigation   | pass     | pass    | Verified in smoke, direct MCP, and CoPaw                                                    |
+| `chrome_close_tabs`               | navigation   | pass     | pass    | Verified by smoke cleanup and CoPaw close-tab flow                                          |
+| `chrome_read_page`                | page-read    | pass     | warn    | Verified on smoke page; CoPaw degrades on `chrome://` and sparse localhost pages            |
+| `chrome_get_web_content`          | page-read    | pass     | pass    | Verified via smoke, CoPaw runtime, and CoPaw chat-visible `#result` extraction              |
+| `chrome_get_interactive_elements` | page-read    | warn     | pending | Deprecated and not exposed in current tools/list; `chrome_read_page` is the supported path  |
+| `search_tabs_content`             | page-read    | fail     | pending | Documented in shared schema but not exposed by the current MCP tools/list response          |
 
 ## Interaction
 
 | Tool                               | Category    | Live MCP | CoPaw | Notes                                                                                                        |
 | ---------------------------------- | ----------- | -------- | ----- | ------------------------------------------------------------------------------------------------------------ |
-| `chrome_click_element`             | interaction | pass     | pass  | Verified on smoke page and direct CoPaw interaction flow                                                     |
-| `chrome_fill_or_select`            | interaction | pass     | pass  | Verified on text/select/checkbox and direct CoPaw interaction flow                                           |
+| `chrome_click_element`             | interaction | pass     | pass  | Verified on smoke page, direct CoPaw interaction flow, and CoPaw chat-visible submit click                   |
+| `chrome_fill_or_select`            | interaction | pass     | pass  | Verified on text/select/checkbox and direct CoPaw interaction flow; CoPaw chat path needed JS fallback once  |
 | `chrome_keyboard`                  | interaction | pass     | warn  | CoPaw direct test shows it treats full text as invalid key-string input                                      |
 | `chrome_computer`                  | interaction | pass     | pass  | Screenshot action verified directly and through `chrome_computer`                                            |
 | `chrome_handle_dialog`             | interaction | warn     | warn  | Page result verified in smoke; direct call on a page without an active dialog returns `No dialog is showing` |
@@ -53,12 +53,12 @@ Status legend:
 
 ## Bookmarks / History
 
-| Tool                     | Category     | Live MCP | CoPaw | Notes                                        |
-| ------------------------ | ------------ | -------- | ----- | -------------------------------------------- |
-| `chrome_history`         | browser-data | pass     | pass  | Verified query path in MCP and CoPaw         |
-| `chrome_bookmark_search` | browser-data | pass     | pass  | Verified after add in MCP and CoPaw          |
-| `chrome_bookmark_add`    | browser-data | pass     | pass  | Verified with temp bookmark in MCP and CoPaw |
-| `chrome_bookmark_delete` | browser-data | pass     | pass  | Verified with temp bookmark in MCP and CoPaw |
+| Tool                     | Category     | Live MCP | CoPaw | Notes                                                                     |
+| ------------------------ | ------------ | -------- | ----- | ------------------------------------------------------------------------- |
+| `chrome_history`         | browser-data | pass     | pass  | Verified query path in MCP, CoPaw runtime, and CoPaw chat-visible session |
+| `chrome_bookmark_search` | browser-data | pass     | pass  | Verified after add in MCP, CoPaw runtime, and CoPaw chat-visible session  |
+| `chrome_bookmark_add`    | browser-data | pass     | pass  | Verified with temp bookmark in MCP and CoPaw                              |
+| `chrome_bookmark_delete` | browser-data | pass     | pass  | Verified with temp bookmark in MCP and CoPaw                              |
 
 ## Performance / Advanced
 

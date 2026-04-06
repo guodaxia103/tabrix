@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 20:05 Asia/Shanghai`
+Last updated: `2026-04-06 20:41 Asia/Shanghai`
 
 ## Goals
 
@@ -36,6 +36,9 @@ Last updated: `2026-04-06 20:05 Asia/Shanghai`
 - `done`: give every currently public tool in `tools/list` a concrete validation result (`pass`, `warn`, or `fail`)
 - `done`: complete Goal 1 by classifying all hidden/deprecated tools and documenting every remaining public-surface `warn`
 - `done`: draft a beginner handoff guide for install, validation, and first-task success
+- `done`: prove CoPaw chat-visible browser validation through `/api/agent/process` and `/api/chats/{chat_id}`
+- `done`: record CoPaw-visible sessions for `get_windows_and_tabs`, `chrome_history`, `chrome_bookmark_search`, and localhost interaction flow
+- `done`: install `copaw-mcp-browser` into CoPaw active skills so the app can use the same browser-MCP playbook
 - `done`: create local `continuous-execution` skill for durable long-task execution
 - `done`: create local `github-delivery-loop` skill for small verified git checkpoints
 - `in_progress`: OMX team closeout run launched as `omx-mnn1u7ui` with 3 lanes (public tools, CoPaw+skill, beginner handoff)
@@ -68,6 +71,8 @@ Last updated: `2026-04-06 20:05 Asia/Shanghai`
 - [x] complete live validation coverage for every currently public tool
 - [x] complete Goal 1: all current public tools validated and all hidden/deprecated tools explicitly classified
 - [x] draft the beginner handoff package for install and first-task success
+- [x] prove CoPaw chat-history-visible browser validation
+- [x] install the improved `copaw-mcp-browser` skill into CoPaw active skills
 - [x] create custom local skills adapted to current repo workflow
 - [x] validate new local skills structurally
 - [~] run an OMX team closeout lane for parallel validation/doc work
@@ -83,11 +88,12 @@ Last updated: `2026-04-06 20:05 Asia/Shanghai`
 - remaining Phase 0 work is no longer blocked by browser startup; it is now mostly validation coverage and CoPaw retesting
 - CoPaw still emits a known cleanup warning during `close_all()` on streamable HTTP clients, even after successful MCP operations
 - CoPaw app-level initialization now loads `streamable-mcp-server` again; the remaining noise is concentrated in shutdown / cleanup
+- CoPaw chat-path browser testing now works through `POST /api/agent/process`, but app restarts can still drop the first request while uvicorn is warming up
 - `search_tabs_content` is exposed in docs/shared schemas but is currently unavailable in the active bridge runtime
 - some interaction-heavy CoPaw flows still need broader coverage beyond read/navigation
 
 ## Next Actions
 
 1. commit the latest validation findings, matrix cleanup, and beginner handoff guide
-2. continue the remaining live tool validation coverage
-3. continue CoPaw interaction-heavy validation and finalize the skill guidance
+2. continue CoPaw interaction-heavy validation through the chat-visible `/api/agent/process` path
+3. finalize Goal 2 evidence and then move on

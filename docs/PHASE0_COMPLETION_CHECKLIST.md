@@ -1,6 +1,6 @@
 # Phase 0 Completion Checklist
 
-Last updated: `2026-04-06 19:10 Asia/Shanghai`
+Last updated: `2026-04-06 20:41 Asia/Shanghai`
 
 This checklist defines the hard acceptance gate for **Phase 0**.
 
@@ -47,10 +47,12 @@ Source of truth:
 - [x] CoPaw lists tools successfully
 - [x] CoPaw validates high-value read/navigation flows
 - [x] CoPaw validates click/fill/close-tab interaction flows
-- [ ] CoPaw validates more interaction tools:
+- [x] CoPaw validates bookmark/history flows
+- [x] CoPaw produces browser-test records inside its own chat history through `/api/agent/process`
+- [x] Improved `copaw-mcp-browser` skill is installed into CoPaw active skills
+- [ ] CoPaw validates remaining harder interaction tools:
   - keyboard
   - screenshot
-  - bookmark/history where practical
 - [x] CoPaw-specific caveats documented clearly
 - [x] `copaw-mcp-browser` skill upgraded with:
   - stronger prompt templates
