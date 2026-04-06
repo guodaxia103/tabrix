@@ -91,6 +91,12 @@ This integration was validated against the local runtime by:
 
 The call returned real Chrome window and tab data.
 
+Additional direct validation through CoPaw's MCP runtime:
+
+- `chrome_navigate` can open a real local page in a new browser window
+- `chrome_get_web_content` can read selector-targeted page content successfully
+- `chrome_read_page` may degrade on `chrome://` tabs or extremely sparse localhost pages, where the accessibility tree is too thin for its main extraction strategy
+
 ## 5. Recommended usage pattern in CoPaw
 
 Do not only say "use MCP". Be explicit about the tool intent and result you want.
@@ -169,6 +175,7 @@ Current assessment:
 
 - the tool call itself succeeds
 - the noisy error appears during CoPaw-side client cleanup, not during normal `mcp-chrome` tool execution
+- repeated direct validation confirms the cleanup noise happens after successful MCP operations, during client shutdown
 
 ## 9. Best verification commands
 

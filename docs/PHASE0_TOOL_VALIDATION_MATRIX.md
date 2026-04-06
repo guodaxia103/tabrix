@@ -11,16 +11,16 @@ Status legend:
 
 ## Browser Core
 
-| Tool                              | Category     | Live MCP | CoPaw   | Notes                                                         |
-| --------------------------------- | ------------ | -------- | ------- | ------------------------------------------------------------- |
-| `get_windows_and_tabs`            | windows/tabs | pass     | pass    | Verified against real Chrome windows and tabs                 |
-| `chrome_navigate`                 | navigation   | pass     | pending | Localhost/new-window navigation verified                      |
-| `chrome_switch_tab`               | navigation   | pass     | pending | Verified in smoke and direct MCP                              |
-| `chrome_close_tabs`               | navigation   | pass     | pending | Verified by smoke cleanup                                     |
-| `chrome_read_page`                | page-read    | pass     | pending | Verified on smoke page                                        |
-| `chrome_get_web_content`          | page-read    | pass     | pending | Verified via smoke using selector-targeted content extraction |
-| `chrome_get_interactive_elements` | page-read    | pending  | pending |                                                               |
-| `search_tabs_content`             | page-read    | pending  | pending |                                                               |
+| Tool                              | Category     | Live MCP | CoPaw   | Notes                                                                            |
+| --------------------------------- | ------------ | -------- | ------- | -------------------------------------------------------------------------------- |
+| `get_windows_and_tabs`            | windows/tabs | pass     | pass    | Verified against real Chrome windows and tabs in MCP and CoPaw                   |
+| `chrome_navigate`                 | navigation   | pass     | pass    | Localhost/new-window navigation verified in MCP and CoPaw                        |
+| `chrome_switch_tab`               | navigation   | pass     | pending | Verified in smoke and direct MCP                                                 |
+| `chrome_close_tabs`               | navigation   | pass     | pending | Verified by smoke cleanup                                                        |
+| `chrome_read_page`                | page-read    | pass     | warn    | Verified on smoke page; CoPaw degrades on `chrome://` and sparse localhost pages |
+| `chrome_get_web_content`          | page-read    | pass     | pass    | Verified via smoke and CoPaw using selector-targeted content extraction          |
+| `chrome_get_interactive_elements` | page-read    | pending  | pending |                                                                                  |
+| `search_tabs_content`             | page-read    | pending  | pending |                                                                                  |
 
 ## Interaction
 

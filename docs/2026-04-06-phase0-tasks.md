@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 15:55 Asia/Shanghai`
+Last updated: `2026-04-06 16:05 Asia/Shanghai`
 
 ## Goals
 
@@ -26,6 +26,7 @@ Last updated: `2026-04-06 15:55 Asia/Shanghai`
 - `done`: clean stale Chrome extension IDs from the local profile and verify the stable unpacked extension survives a browser restart at the profile level
 - `done`: restore browser-chain health so `doctor` reaches `connectivity/runtime/mcp.initialize = ok`
 - `done`: get `smoke --json` back to green end-to-end
+- `done`: validate CoPaw can connect to the browser MCP, list tools, navigate, and read selector-targeted content
 - `done`: create local `continuous-execution` skill for durable long-task execution
 - `done`: create local `github-delivery-loop` skill for small verified git checkpoints
 - `in_progress`: continue the remaining live tool validation and CoPaw retest
@@ -49,11 +50,12 @@ Last updated: `2026-04-06 15:55 Asia/Shanghai`
 - [x] add stable local extension-key generation to reduce unpacked extension ID drift
 - [x] close the old unpacked-extension ID drift / stale profile state issue
 - [x] restore browser-chain health and re-pass smoke end-to-end
+- [x] validate the CoPaw browser MCP client on high-value read/navigation flows
 - [x] create custom local skills adapted to current repo workflow
 - [x] validate new local skills structurally
 - [ ] update task and handoff process to explicitly use the new skills
 - [ ] continue live validation for remaining MCP tools
-- [ ] continue CoPaw real-environment retest
+- [~] continue CoPaw real-environment retest
 - [ ] commit the new repo docs separately from unfinished code changes
 
 ## Blockers
@@ -62,9 +64,10 @@ Last updated: `2026-04-06 15:55 Asia/Shanghai`
 - the repo build and local CLI are correct, but the globally installed `mcp-chrome-bridge` still points to an older npm package with outdated CLI behavior
 - the current `omx team` smoke proved runtime startup and team-state creation, but a fully interactive end-to-end worker completion cycle is still pending
 - remaining Phase 0 work is no longer blocked by browser startup; it is now mostly validation coverage and CoPaw retesting
+- CoPaw still emits a known cleanup warning during `close_all()` on streamable HTTP clients, even after successful MCP operations
 
 ## Next Actions
 
-1. commit the now-green `smoke.ts` closeout and refreshed Phase 0 docs
+1. commit the CoPaw validation findings and refreshed Phase 0 docs
 2. continue the remaining live tool validation coverage
-3. resume CoPaw end-to-end browser validation on the now-restored browser chain
+3. expand CoPaw validation to additional interaction flows on stable non-`chrome://` pages
