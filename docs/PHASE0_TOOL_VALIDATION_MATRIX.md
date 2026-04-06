@@ -35,23 +35,21 @@ Status legend:
 
 ## Network / Console / JS
 
-| Tool                                   | Category    | Live MCP | CoPaw   | Notes                                     |
-| -------------------------------------- | ----------- | -------- | ------- | ----------------------------------------- |
-| `chrome_network_capture`               | network     | pass     | pending | Verified local fetch capture              |
-| `chrome_network_request`               | network     | pass     | pending | Verified direct request to smoke endpoint |
-| `chrome_console`                       | diagnostics | pass     | pending | Buffer mode verified                      |
-| `chrome_javascript`                    | diagnostics | pass     | pending | Verified DOM reads                        |
-| `chrome_inject_script`                 | diagnostics | pending  | pending |                                           |
-| `chrome_send_command_to_inject_script` | diagnostics | pending  | pending |                                           |
+| Tool                     | Category    | Live MCP | CoPaw   | Notes                                     |
+| ------------------------ | ----------- | -------- | ------- | ----------------------------------------- |
+| `chrome_network_capture` | network     | pass     | pending | Verified local fetch capture              |
+| `chrome_network_request` | network     | pass     | pending | Verified direct request to smoke endpoint |
+| `chrome_console`         | diagnostics | pass     | pending | Buffer mode verified                      |
+| `chrome_javascript`      | diagnostics | pass     | pending | Verified DOM reads                        |
 
 ## Files / Media
 
-| Tool                     | Category | Live MCP | CoPaw   | Notes                                                      |
-| ------------------------ | -------- | -------- | ------- | ---------------------------------------------------------- |
-| `chrome_screenshot`      | media    | pass     | pending | Verified in smoke                                          |
-| `chrome_upload_file`     | files    | pass     | pending | Verified with temp file upload                             |
-| `chrome_handle_download` | files    | pass     | pending | Verified against a real local download and completion wait |
-| `chrome_gif_recorder`    | media    | warn     | pending | Status query verified; recording path still pending        |
+| Tool                     | Category | Live MCP | CoPaw   | Notes                                                               |
+| ------------------------ | -------- | -------- | ------- | ------------------------------------------------------------------- |
+| `chrome_screenshot`      | media    | pass     | warn    | Verified in smoke; CoPaw direct runtime hit `image readback failed` |
+| `chrome_upload_file`     | files    | pass     | pending | Verified with temp file upload                                      |
+| `chrome_handle_download` | files    | pass     | pending | Verified against a real local download and completion wait          |
+| `chrome_gif_recorder`    | media    | warn     | pending | Status query verified; recording path still pending                 |
 
 ## Bookmarks / History
 
@@ -64,17 +62,29 @@ Status legend:
 
 ## Performance / Advanced
 
-| Tool                          | Category    | Live MCP | CoPaw   | Notes                                                                    |
-| ----------------------------- | ----------- | -------- | ------- | ------------------------------------------------------------------------ |
-| `performance_start_trace`     | performance | pass     | pending | Verified via smoke                                                       |
-| `performance_stop_trace`      | performance | pass     | pending | Verified via smoke                                                       |
-| `performance_analyze_insight` | performance | pass     | pending | Validated after adding fallback to the most recent recorded trace result |
-| `chrome_userscript`           | advanced    | pending  | pending |                                                                          |
+| Tool                          | Category    | Live MCP | CoPaw   | Notes                                                                     |
+| ----------------------------- | ----------- | -------- | ------- | ------------------------------------------------------------------------- |
+| `performance_start_trace`     | performance | pass     | pending | Verified via smoke                                                        |
+| `performance_stop_trace`      | performance | pass     | pending | Verified via smoke                                                        |
+| `performance_analyze_insight` | performance | pass     | pending | Validated after adding fallback to the most recent recorded trace result  |
+| `chrome_userscript`           | advanced    | fail     | pending | Documented in shared schema but not exposed by the current MCP tools/list |
+
+## Non-exposed / Backward-Compat Surface
+
+These names exist in shared schemas or extension code, but are not currently exposed by the active `tools/list` response. They should not block Phase 0 public-surface completion once documented clearly.
+
+| Tool                                   | Status | Notes                                                                     |
+| -------------------------------------- | ------ | ------------------------------------------------------------------------- |
+| `search_tabs_content`                  | fail   | Mentioned in docs/shared schema, but not returned by current `tools/list` |
+| `chrome_get_interactive_elements`      | warn   | Deprecated in favor of `chrome_read_page`                                 |
+| `chrome_inject_script`                 | fail   | Current bridge returns disabled/unavailable when called directly          |
+| `chrome_send_command_to_inject_script` | fail   | Current bridge returns disabled/unavailable when called directly          |
+| `chrome_userscript`                    | fail   | Mentioned in shared schema, but not returned by current `tools/list`      |
 
 ## Validation Goals
 
 Before Phase 0 is considered complete:
 
-1. Every public tool must have a live-MCP result.
+1. Every public tool in the active `tools/list` surface must have a live-MCP result.
 2. High-value tools must also be re-validated through CoPaw.
 3. Any `warn` or `fail` entry must link to a concrete issue, code fix, or documented limitation.
