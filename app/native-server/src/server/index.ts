@@ -30,6 +30,7 @@ import { ClaudeEngine } from '../agent/engines/claude';
 import { closeDb } from '../agent/db';
 import { registerAgentRoutes } from './routes';
 import { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
+import { sessionManager } from '../execution/session-manager';
 
 // ============================================================
 // Types
@@ -61,6 +62,25 @@ interface ServerStatusSnapshot {
     sse: number;
     streamableHttp: number;
     sessionIds: string[];
+  };
+  execution: {
+    tasks: {
+      total: number;
+      pending: number;
+      running: number;
+      completed: number;
+      failed: number;
+      cancelled: number;
+    };
+    sessions: {
+      total: number;
+      starting: number;
+      running: number;
+      completed: number;
+      failed: number;
+      aborted: number;
+    };
+    lastSessionId: string | null;
   };
 }
 
@@ -414,6 +434,8 @@ export class Server {
     const sessionIds = [...this.transportsMap.keys()];
     let sse = 0;
     let streamableHttp = 0;
+    const tasks = sessionManager.listTasks();
+    const executionSessions = sessionManager.listSessions();
 
     for (const entry of this.transportsMap.values()) {
       if (entry.kind === 'sse') {
@@ -433,6 +455,28 @@ export class Server {
         sse,
         streamableHttp,
         sessionIds,
+      },
+      execution: {
+        tasks: {
+          total: tasks.length,
+          pending: tasks.filter((task) => task.status === 'pending').length,
+          running: tasks.filter((task) => task.status === 'running').length,
+          completed: tasks.filter((task) => task.status === 'completed').length,
+          failed: tasks.filter((task) => task.status === 'failed').length,
+          cancelled: tasks.filter((task) => task.status === 'cancelled').length,
+        },
+        sessions: {
+          total: executionSessions.length,
+          starting: executionSessions.filter((session) => session.status === 'starting').length,
+          running: executionSessions.filter((session) => session.status === 'running').length,
+          completed: executionSessions.filter((session) => session.status === 'completed').length,
+          failed: executionSessions.filter((session) => session.status === 'failed').length,
+          aborted: executionSessions.filter((session) => session.status === 'aborted').length,
+        },
+        lastSessionId:
+          executionSessions.length > 0
+            ? executionSessions[executionSessions.length - 1].sessionId
+            : null,
       },
     };
   }

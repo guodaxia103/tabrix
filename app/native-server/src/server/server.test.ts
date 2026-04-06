@@ -1,6 +1,7 @@
 import { describe, expect, test, afterAll, beforeAll } from '@jest/globals';
 import supertest from 'supertest';
 import Server from './index';
+import { sessionManager } from '../execution/session-manager';
 
 describe('服务器测试', () => {
   // 启动服务器测试实例
@@ -26,6 +27,7 @@ describe('服务器测试', () => {
   });
 
   test('GET /status 应返回运行状态快照', async () => {
+    sessionManager.reset();
     const response = await supertest(Server.getInstance().server)
       .get('/status')
       .expect(200)
@@ -43,7 +45,67 @@ describe('服务器测试', () => {
       sse: 0,
       streamableHttp: 0,
     });
+    expect(response.body.data.execution).toMatchObject({
+      tasks: {
+        total: 0,
+        pending: 0,
+        running: 0,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+      },
+      sessions: {
+        total: 0,
+        starting: 0,
+        running: 0,
+        completed: 0,
+        failed: 0,
+        aborted: 0,
+      },
+      lastSessionId: null,
+    });
     expect(Array.isArray(response.body.data.transports.sessionIds)).toBe(true);
+  });
+
+  test('GET /status 应暴露 execution 快照', async () => {
+    sessionManager.reset();
+    const task = sessionManager.createTask({
+      taskType: 'browser-action',
+      title: 'Status snapshot test',
+      intent: 'Verify execution summary exposure',
+      origin: 'server-test',
+    });
+    sessionManager.startSession({
+      taskId: task.taskId,
+      transport: 'mcp',
+      clientName: 'jest',
+    });
+
+    const response = await supertest(Server.getInstance().server)
+      .get('/status')
+      .expect(200)
+      .expect('Content-Type', /json/);
+
+    expect(response.body.status).toBe('ok');
+    expect(response.body.data.execution).toMatchObject({
+      tasks: {
+        total: 1,
+        pending: 0,
+        running: 1,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+      },
+      sessions: {
+        total: 1,
+        starting: 0,
+        running: 1,
+        completed: 0,
+        failed: 0,
+        aborted: 0,
+      },
+    });
+    expect(typeof response.body.data.execution.lastSessionId).toBe('string');
   });
 
   test('POST /mcp initialize 可以连续创建多个独立会话', async () => {

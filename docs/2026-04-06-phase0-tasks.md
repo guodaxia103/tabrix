@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 14:45 Asia/Shanghai`
+Last updated: `2026-04-06 15:10 Asia/Shanghai`
 
 ## Goals
 
@@ -20,6 +20,7 @@ Last updated: `2026-04-06 14:45 Asia/Shanghai`
 - `done`: land the first Program 1 execution skeleton (`types.ts` + `session-manager.ts`) with passing test and build
 - `done`: validate and keep the Windows-safe `report.ts` enhancement for package-manager/version diagnostics
 - `done`: wrap current MCP tool dispatch with the first session-aware execution lifecycle
+- `done`: expose execution task/session summary through the `/status` snapshot
 - `done`: create local `continuous-execution` skill for durable long-task execution
 - `done`: create local `github-delivery-loop` skill for small verified git checkpoints
 - `in_progress`: resume Phase 0 smoke and live tool validation
@@ -38,6 +39,7 @@ Last updated: `2026-04-06 14:45 Asia/Shanghai`
 - [x] add the first execution-core code skeleton with a minimal lifecycle test
 - [x] validate and keep the `report.ts` Windows command-version fix
 - [x] connect `register-tools` to the first task/session/step execution wrapper
+- [x] extend `/status` with execution summary and tests
 - [x] create custom local skills adapted to current repo workflow
 - [x] validate new local skills structurally
 - [ ] update task and handoff process to explicitly use the new skills
@@ -48,12 +50,13 @@ Last updated: `2026-04-06 14:45 Asia/Shanghai`
 ## Blockers
 
 - the active browser-extension chain is still not stable enough for unattended end-to-end smoke completion
+- opening the extension popup URL from Chrome did not trigger a fresh native-host start; no new wrapper logs were created
 - there are still uncommitted experimental edits in `report.ts` and `smoke.ts`, so doc-only commits must stay scoped
 - the repo build and local CLI are correct, but the globally installed `mcp-chrome-bridge` still points to an older npm package with outdated CLI behavior
 - the current `omx team` smoke proved runtime startup and team-state creation, but a fully interactive end-to-end worker completion cycle is still pending
 
 ## Next Actions
 
-1. commit the verified `report.ts` improvement without pulling in unfinished `smoke.ts`
-2. continue Phase 0 validation from the current live-tool matrix
-3. reconnect the extension when available and re-run smoke
+1. keep the browser-chain issue explicit as a blocker instead of silently waiting on it
+2. continue Program 1 work that does not depend on live extension connectivity
+3. retry extension reconnection later and resume smoke once the browser chain is back
