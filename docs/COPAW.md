@@ -97,6 +97,7 @@ Additional direct validation through CoPaw's MCP runtime:
 - `chrome_get_web_content` can read selector-targeted page content successfully
 - `chrome_click_element` succeeds on a simple local interaction page
 - `chrome_fill_or_select` succeeds on a simple local input field
+- `chrome_close_tabs` succeeds in direct CoPaw validation
 - `chrome_read_page` may degrade on `chrome://` tabs or extremely sparse localhost pages, where the accessibility tree is too thin for its main extraction strategy
 - `chrome_keyboard` currently behaves more like a key/chord sender than a full-text typing helper in direct CoPaw tests
 - `chrome_screenshot` can time out in direct CoPaw tests even when the same tool passes through direct MCP smoke
@@ -180,6 +181,7 @@ Current assessment:
 - the tool call itself succeeds
 - the noisy error appears during CoPaw-side client cleanup, not during normal `mcp-chrome` tool execution
 - repeated direct validation confirms the cleanup noise happens after successful MCP operations, during client shutdown
+- in longer-lived CoPaw app/manager sessions, `streamable-mcp-server` can still fail to initialize with `502 Bad Gateway` plus `CancelledError` / cancel-scope noise
 
 ## 9. Best verification commands
 

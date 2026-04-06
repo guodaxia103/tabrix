@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 18:15 Asia/Shanghai`
+Last updated: `2026-04-06 18:55 Asia/Shanghai`
 
 ## Goals
 
@@ -35,6 +35,7 @@ Last updated: `2026-04-06 18:15 Asia/Shanghai`
 - `done`: draft a beginner handoff guide for install, validation, and first-task success
 - `done`: create local `continuous-execution` skill for durable long-task execution
 - `done`: create local `github-delivery-loop` skill for small verified git checkpoints
+- `in_progress`: OMX team closeout run launched as `omx-mnn1u7ui` with 3 lanes (public tools, CoPaw+skill, beginner handoff)
 - `in_progress`: continue the remaining live tool validation and CoPaw retest
 - `pending`: complete CoPaw full-chain retest after bridge stability improves
 
@@ -63,6 +64,7 @@ Last updated: `2026-04-06 18:15 Asia/Shanghai`
 - [x] draft the beginner handoff package for install and first-task success
 - [x] create custom local skills adapted to current repo workflow
 - [x] validate new local skills structurally
+- [~] run an OMX team closeout lane for parallel validation/doc work
 - [ ] update task and handoff process to explicitly use the new skills
 - [ ] continue live validation for remaining MCP tools
 - [~] continue CoPaw real-environment retest
@@ -74,6 +76,7 @@ Last updated: `2026-04-06 18:15 Asia/Shanghai`
 - the current `omx team` smoke proved runtime startup and team-state creation, but a fully interactive end-to-end worker completion cycle is still pending
 - remaining Phase 0 work is no longer blocked by browser startup; it is now mostly validation coverage and CoPaw retesting
 - CoPaw still emits a known cleanup warning during `close_all()` on streamable HTTP clients, even after successful MCP operations
+- CoPaw app/manager can still fail to initialize `streamable-mcp-server` with `502 Bad Gateway` and `CancelledError` on longer sessions
 - `search_tabs_content` is exposed in docs/shared schemas but is currently unavailable in the active bridge runtime
 - some interaction-heavy CoPaw flows still need broader coverage beyond read/navigation
 
