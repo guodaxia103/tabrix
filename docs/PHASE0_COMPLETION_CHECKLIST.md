@@ -26,13 +26,13 @@ Phase 0 is **not complete** until all items below are either:
 - [x] Core browser-data tools verified
 - [x] Core screenshot/upload/trace tools verified
 - [x] Every public tool in the active `tools/list` surface now has a live validation result
-- [ ] Hidden or deprecated tools are explicitly classified and not left ambiguous:
+- [x] Hidden or deprecated tools are explicitly classified and not left ambiguous:
   - `search_tabs_content`
   - `chrome_get_interactive_elements`
   - `chrome_inject_script`
   - `chrome_send_command_to_inject_script`
   - `chrome_userscript`
-- [ ] Remaining `warn` tools either fixed or documented:
+- [x] Remaining `warn` tools are documented as explicit limitations:
   - `chrome_handle_dialog`
   - `chrome_gif_recorder`
   - `chrome_read_page` caveat cases
