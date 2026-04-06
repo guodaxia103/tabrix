@@ -287,6 +287,7 @@ function readLoadedExtensionPath(browser: BrowserType): {
   location?: number;
   state?: number;
   manifestVersion?: string;
+  matchedExtensionId?: string;
   error?: string;
 } {
   const securePreferencesPath = getSecurePreferencesPath(browser);
@@ -312,13 +313,26 @@ function readLoadedExtensionPath(browser: BrowserType): {
     const settings = (parsed.extensions as Record<string, unknown> | undefined)?.settings as
       | Record<string, unknown>
       | undefined;
-    const extensionEntry = settings?.[EXTENSION_ID] as Record<string, unknown> | undefined;
+
+    if (!settings) {
+      return {
+        securePreferencesPath,
+        exists: true,
+        error: 'No extension settings found in Secure Preferences',
+      };
+    }
+
+    const discovered = discoverLoadedExtensionOrigins([browser]).detected.find(
+      (entry) => entry.browser === browser,
+    );
+    const matchedExtensionId = discovered?.id || EXTENSION_ID;
+    const extensionEntry = settings[matchedExtensionId] as Record<string, unknown> | undefined;
 
     if (!extensionEntry) {
       return {
         securePreferencesPath,
         exists: true,
-        error: `Extension ${EXTENSION_ID} is not present in Secure Preferences`,
+        error: `Extension ${matchedExtensionId} is not present in Secure Preferences`,
       };
     }
 
@@ -331,6 +345,7 @@ function readLoadedExtensionPath(browser: BrowserType): {
       location: typeof extensionEntry.location === 'number' ? extensionEntry.location : undefined,
       state: typeof extensionEntry.state === 'number' ? extensionEntry.state : undefined,
       manifestVersion: typeof manifest?.version === 'string' ? manifest.version : undefined,
+      matchedExtensionId,
     };
   } catch (error) {
     return {
@@ -1210,21 +1225,17 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     const config = getBrowserConfig(browser);
     const extension = readLoadedExtensionPath(browser);
     const browserOrigins = discoveredOrigins.detected.filter((entry) => entry.browser === browser);
+    const detectedLoadedPath = browserOrigins[0]?.path;
     const metadataLooksComplete =
-      Boolean(extension.loadedPath) &&
-      typeof extension.location === 'number' &&
-      typeof extension.manifestVersion === 'string' &&
-      extension.manifestVersion.length > 0;
-    const extensionStatus: DoctorStatus = extension.loadedPath
-      ? metadataLooksComplete
-        ? 'ok'
-        : 'warn'
-      : 'warn';
-    const extensionMessage = extension.loadedPath
-      ? metadataLooksComplete
-        ? extension.loadedPath
-        : `${extension.loadedPath} (reload unpacked extension to refresh runtime metadata)`
-      : extension.error || 'Unable to detect loaded extension path';
+      Boolean(extension.loadedPath || detectedLoadedPath) && typeof extension.location === 'number';
+    const extensionStatus: DoctorStatus =
+      extension.loadedPath || detectedLoadedPath ? (metadataLooksComplete ? 'ok' : 'warn') : 'warn';
+    const extensionMessage =
+      extension.loadedPath || detectedLoadedPath
+        ? metadataLooksComplete
+          ? extension.loadedPath || detectedLoadedPath
+          : `${extension.loadedPath || detectedLoadedPath} (reload unpacked extension to refresh runtime metadata)`
+        : extension.error || 'Unable to detect loaded extension path';
 
     checks.push({
       id: `extension-path.${browser}`,
@@ -1233,7 +1244,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
       message: extensionMessage,
       details: {
         securePreferencesPath: extension.securePreferencesPath,
-        loadedPath: extension.loadedPath,
+        loadedPath: extension.loadedPath || detectedLoadedPath,
         detectedIds: browserOrigins.map((entry) => entry.id),
         expectedOrigins: expectedOrigins.filter((origin) =>
           browserOrigins.some((entry) => origin === `chrome-extension://${entry.id}/`),
@@ -1244,7 +1255,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
         hint: extension.loadedPath
           ? metadataLooksComplete
             ? 'If builds seem stale, make sure Chrome is loading this unpacked directory.'
-            : 'Chrome knows the unpacked directory, but the extension metadata looks incomplete. Reload the unpacked extension in chrome://extensions/.'
+            : 'Chrome knows the unpacked directory, but some optional metadata is incomplete. Reload the unpacked extension in chrome://extensions/ if behavior looks stale.'
           : 'Load or reload the unpacked extension in Chrome, then re-run doctor.',
       },
     });

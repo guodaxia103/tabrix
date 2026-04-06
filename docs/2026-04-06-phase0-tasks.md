@@ -1,6 +1,6 @@
 # 2026-04-06 Phase 0 Tasks
 
-Last updated: `2026-04-06 19:20 Asia/Shanghai`
+Last updated: `2026-04-06 19:35 Asia/Shanghai`
 
 ## Goals
 
@@ -26,6 +26,7 @@ Last updated: `2026-04-06 19:20 Asia/Shanghai`
 - `done`: clean stale Chrome extension IDs from the local profile and verify the stable unpacked extension survives a browser restart at the profile level
 - `done`: restore browser-chain health so `doctor` reaches `connectivity/runtime/mcp.initialize = ok`
 - `done`: get `smoke --json` back to green end-to-end
+- `done`: remove the final `doctor` extension-path false warning so the installation/health path is fully green
 - `done`: validate CoPaw can connect to the browser MCP, list tools, navigate, and read selector-targeted content
 - `done`: validate CoPaw click/fill/close-tab interaction flows and classify keyboard/screenshot caveats
 - `done`: validate `chrome_handle_download` against a real local download flow
@@ -57,6 +58,7 @@ Last updated: `2026-04-06 19:20 Asia/Shanghai`
 - [x] add stable local extension-key generation to reduce unpacked extension ID drift
 - [x] close the old unpacked-extension ID drift / stale profile state issue
 - [x] restore browser-chain health and re-pass smoke end-to-end
+- [x] close the final install/doctor false-positive warning and complete Goal 0
 - [x] validate the CoPaw browser MCP client on high-value read/navigation flows
 - [x] validate CoPaw click/fill/close-tab flows and classify keyboard/screenshot caveats
 - [x] convert two remaining `pending` tools into explicit validated outcomes (`pass` or `fail`)
