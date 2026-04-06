@@ -31,6 +31,14 @@ For source builds, the unpacked extension output is:
 D:\projects\ai\codex\mcp-chrome\app\chrome-extension\.output\chrome-mv3
 ```
 
+The extension build now ensures a local `CHROME_EXTENSION_KEY` in:
+
+```powershell
+D:\projects\ai\codex\mcp-chrome\app\chrome-extension\.env
+```
+
+That key keeps the unpacked extension ID stable across rebuilds on the same machine.
+
 Important:
 
 - Chrome keeps using the exact unpacked directory you loaded the first time
@@ -115,7 +123,13 @@ If `doctor` shows Chrome is loading a different unpacked directory than the one 
 1. Reload the unpacked extension from the new build folder in `chrome://extensions/`, or
 2. Copy the latest build output into the directory shown by `Chrome extension path`
 
-Example sync command:
+Recommended stable unpacked directory:
+
+```powershell
+D:\projects\ai\chrome-mcp-server-1.0.0
+```
+
+Recommended sync command:
 
 ```powershell
 robocopy D:\projects\ai\codex\mcp-chrome\app\chrome-extension\.output\chrome-mv3 D:\projects\ai\chrome-mcp-server-1.0.0 /MIR
@@ -124,13 +138,21 @@ robocopy D:\projects\ai\codex\mcp-chrome\app\chrome-extension\.output\chrome-mv3
 After syncing:
 
 ```powershell
-mcp-chrome-bridge doctor
+node app\native-server\dist\cli.js doctor
 ```
 
 Look for:
 
 - `Chrome extension path` points to the expected unpacked folder
 - `Runtime status` becomes healthy after clicking `Connect`
+
+If Chrome forgets the unpacked extension after restart, remove stale old entries in `chrome://extensions/`, then load the same stable directory again:
+
+```powershell
+D:\projects\ai\chrome-mcp-server-1.0.0
+```
+
+Do not keep switching between multiple unpacked build folders.
 
 ## 8. Known notes
 
