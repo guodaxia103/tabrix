@@ -11,16 +11,16 @@ Status legend:
 
 ## Browser Core
 
-| Tool                              | Category     | Live MCP | CoPaw   | Notes                                                                            |
-| --------------------------------- | ------------ | -------- | ------- | -------------------------------------------------------------------------------- |
-| `get_windows_and_tabs`            | windows/tabs | pass     | pass    | Verified against real Chrome windows and tabs in MCP and CoPaw                   |
-| `chrome_navigate`                 | navigation   | pass     | pass    | Localhost/new-window navigation verified in MCP and CoPaw                        |
-| `chrome_switch_tab`               | navigation   | pass     | pending | Verified in smoke and direct MCP                                                 |
-| `chrome_close_tabs`               | navigation   | pass     | pending | Verified by smoke cleanup                                                        |
-| `chrome_read_page`                | page-read    | pass     | warn    | Verified on smoke page; CoPaw degrades on `chrome://` and sparse localhost pages |
-| `chrome_get_web_content`          | page-read    | pass     | pass    | Verified via smoke and CoPaw using selector-targeted content extraction          |
-| `chrome_get_interactive_elements` | page-read    | pending  | pending |                                                                                  |
-| `search_tabs_content`             | page-read    | pending  | pending |                                                                                  |
+| Tool                              | Category     | Live MCP | CoPaw   | Notes                                                                               |
+| --------------------------------- | ------------ | -------- | ------- | ----------------------------------------------------------------------------------- |
+| `get_windows_and_tabs`            | windows/tabs | pass     | pass    | Verified against real Chrome windows and tabs in MCP and CoPaw                      |
+| `chrome_navigate`                 | navigation   | pass     | pass    | Localhost/new-window navigation verified in MCP and CoPaw                           |
+| `chrome_switch_tab`               | navigation   | pass     | pending | Verified in smoke and direct MCP                                                    |
+| `chrome_close_tabs`               | navigation   | pass     | pending | Verified by smoke cleanup                                                           |
+| `chrome_read_page`                | page-read    | pass     | warn    | Verified on smoke page; CoPaw degrades on `chrome://` and sparse localhost pages    |
+| `chrome_get_web_content`          | page-read    | pass     | pass    | Verified via smoke and CoPaw using selector-targeted content extraction             |
+| `chrome_get_interactive_elements` | page-read    | pending  | pending |                                                                                     |
+| `search_tabs_content`             | page-read    | fail     | pending | Current bridge reports tool disabled/unavailable in the active server configuration |
 
 ## Interaction
 
@@ -46,12 +46,12 @@ Status legend:
 
 ## Files / Media
 
-| Tool                     | Category | Live MCP | CoPaw   | Notes                                               |
-| ------------------------ | -------- | -------- | ------- | --------------------------------------------------- |
-| `chrome_screenshot`      | media    | pass     | pending | Verified in smoke                                   |
-| `chrome_upload_file`     | files    | pass     | pending | Verified with temp file upload                      |
-| `chrome_handle_download` | files    | pending  | pending |                                                     |
-| `chrome_gif_recorder`    | media    | warn     | pending | Status query verified; recording path still pending |
+| Tool                     | Category | Live MCP | CoPaw   | Notes                                                      |
+| ------------------------ | -------- | -------- | ------- | ---------------------------------------------------------- |
+| `chrome_screenshot`      | media    | pass     | pending | Verified in smoke                                          |
+| `chrome_upload_file`     | files    | pass     | pending | Verified with temp file upload                             |
+| `chrome_handle_download` | files    | pass     | pending | Verified against a real local download and completion wait |
+| `chrome_gif_recorder`    | media    | warn     | pending | Status query verified; recording path still pending        |
 
 ## Bookmarks / History
 
@@ -64,12 +64,12 @@ Status legend:
 
 ## Performance / Advanced
 
-| Tool                          | Category    | Live MCP | CoPaw   | Notes              |
-| ----------------------------- | ----------- | -------- | ------- | ------------------ |
-| `performance_start_trace`     | performance | pass     | pending | Verified via smoke |
-| `performance_stop_trace`      | performance | pass     | pending | Verified via smoke |
-| `performance_analyze_insight` | performance | pending  | pending |                    |
-| `chrome_userscript`           | advanced    | pending  | pending |                    |
+| Tool                          | Category    | Live MCP | CoPaw   | Notes                                                                         |
+| ----------------------------- | ----------- | -------- | ------- | ----------------------------------------------------------------------------- |
+| `performance_start_trace`     | performance | pass     | pending | Verified via smoke                                                            |
+| `performance_stop_trace`      | performance | pass     | pending | Verified via smoke                                                            |
+| `performance_analyze_insight` | performance | fail     | pending | Returned `No recorded traces found` immediately after a successful trace stop |
+| `chrome_userscript`           | advanced    | pending  | pending |                                                                               |
 
 ## Validation Goals
 
