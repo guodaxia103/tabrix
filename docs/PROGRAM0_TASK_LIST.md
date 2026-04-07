@@ -374,7 +374,7 @@
 - `[x]` **G8**：新增 `docs/WHY_MCP_CHROME.md`，README 已链入。
 - `[x]` **I4 v1**：新增 `skills/chrome_mcp_browser/SKILL.md` 与 `references/quick_ref.md`。
 - `[x]` **E12 回归**：`navigate-patterns.test.ts` 增加 `https://192.168.0.1:4430/` 用例。
-- `[~]` **E10（部分）**：dialog、`chrome_network_request`、`chrome_network_capture`（含底层 start/stop）、performance 系列、bookmark_add、get_interactive_elements、close_tabs、send_command_to_inject_script、`chrome_javascript`、`chrome_gif_recorder`、userscript（含 remove 清理）等已尊重 `tabId`/`windowId`（#275 余量见边缘工具）。
+- `[~]` **E10（部分）**：dialog、`chrome_network_request`、`chrome_network_capture`（含底层 start/stop）、performance 系列、bookmark_add、get_interactive_elements、close_tabs、send_command_to_inject_script、`chrome_javascript`、`chrome_gif_recorder`、`chrome_get_web_content`（含 url 新开标签时的 `windowId`）、userscript（含 remove 清理）等已尊重 `tabId`/`windowId`（#275 余量见边缘工具）。
 - `[x]` **B4（部分）**：popup 在「已连接但服务未起」时的 `statusDetailText` 已补充 `mcp-chrome-bridge doctor`、端口/防火墙与重载扩展提示（`App.vue`）。
 - `[~]` **D9**：本机在扩展已连接、`12306` 可达时 **连续 3 次** `mcp-chrome-bridge smoke` 全绿（单次约 50s+）；清单原目标为 **5+ 次**，余下次数见 **§十二**。
 - **维护约定**：任务合并时请同步更新本文件状态，自动化无法覆盖项写入 **§十二**。详见文首 **「维护约定（任务闭环）」**。
