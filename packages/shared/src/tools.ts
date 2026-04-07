@@ -593,6 +593,11 @@ export const TOOL_SCHEMAS: Tool[] = [
           type: 'number',
           description: 'Target an existing tab by ID (default: active tab).',
         },
+        windowId: {
+          type: 'number',
+          description:
+            'When tabId is omitted: use the active tab in this window (default: current window). When url is opened in a new tab, create the tab in this window.',
+        },
         background: {
           type: 'boolean',
           description: 'Do not activate tab/focus window while fetching (default: false)',

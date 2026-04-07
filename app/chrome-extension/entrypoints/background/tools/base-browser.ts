@@ -124,12 +124,10 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
   }
 
   /**
-   * Get the active tab in the current window. Throws when not found.
+   * Active tab in the **current** Chrome window. Same as `getActiveTabOrThrowInWindow()` with no `windowId`.
    */
   protected async getActiveTabOrThrow(): Promise<chrome.tabs.Tab> {
-    const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!active || !active.id) throw new Error('Active tab not found');
-    return active;
+    return this.getActiveTabOrThrowInWindow();
   }
 
   /**

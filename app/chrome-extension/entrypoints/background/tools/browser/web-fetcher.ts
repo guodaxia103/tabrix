@@ -62,7 +62,11 @@ class WebFetcherTool extends BaseBrowserToolExecutor {
         } else {
           // Create new tab with the URL
           console.log(`No existing tab found with URL: ${url}, creating new tab`);
-          tab = await chrome.tabs.create({ url, active: background ? false : true });
+          tab = await chrome.tabs.create({
+            url,
+            active: background ? false : true,
+            ...(typeof windowId === 'number' ? { windowId } : {}),
+          });
 
           // Wait for page to load
           console.log('Waiting for page to load...');
