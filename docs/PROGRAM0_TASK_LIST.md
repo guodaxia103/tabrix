@@ -1,6 +1,6 @@
 # Program 0 详细任务清单
 
-最后更新：`2026-04-07 Asia/Shanghai`（v2.3 — E10 windowId 全面扫尾、状态审计、统计校准）
+最后更新：`2026-04-07 Asia/Shanghai`（v2.4 — E10 彻底闭环、H4 annotations 补全、E7b 暴露、G1/G2 README 重构、H3 安全文档、E1–E6 限制文档化）
 分支：`codex/phase0-stabilization`
 
 基于：当前分支 51 commits、上游 hangwin/mcp-chrome 173 个 Open Issues、PHASE0 系列文档、实际代码审查、**竞品调研（15+ 开源 / 8+ 商业产品）**。
@@ -136,23 +136,23 @@
 
 ### 需修复或闭环的工具
 
-| 编号 | 工具                                | 当前状态      | 关联 Issue | 任务                                                                                                                                                       |
-| ---- | ----------------------------------- | ------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E1   | `chrome_read_page`                  | warn (CoPaw)  | —          | CoPaw 下在 `chrome://` 和稀疏 localhost 页面降级。记录限制条件或添加降级提示                                                                               |
-| E2   | `chrome_keyboard`                   | warn (CoPaw)  | #200       | CoPaw 下表现为 key/chord 发送器而非文本输入。文档化：用 `chrome_fill_or_select` 做文本输入，`chrome_keyboard` 只用于快捷键                                 |
-| E3   | `chrome_screenshot`                 | warn (CoPaw)  | —          | CoPaw 调用时 `image readback failed` 超时。排查是扩展侧 CDP 超时还是 CoPaw MCP 客户端超时                                                                  |
-| E4   | `chrome_handle_dialog`              | warn          | #309       | 无活动 dialog 时返回 `No dialog is showing`（正确），但 debugger 已挂载时冲突。文档化限制                                                                  |
-| E5   | `chrome_gif_recorder`               | warn          | —          | `start → stop` 偶发 `No recording in progress`。排查 recording 状态管理竞态                                                                                |
-| E6   | `chrome_request_element_selection`  | warn          | —          | 人工选择超时是预期行为，需在工具描述中明确 human-in-the-loop 特性                                                                                          |
-| E7   | `search_tabs_content`               | fail (未暴露) | —          | TOOL_NAMES 有定义、TOOL_SCHEMAS 被注释。实现存在（`vector-search.ts`）。**决策：Phase 0 暴露 or 标记 Phase 1**                                             |
-| E7b  | `chrome_get_interactive_elements`   | fail (未暴露) | —          | 同 E7。TOOL_NAMES 有定义、TOOL_SCHEMAS 未注册。实现在 `web-fetcher.ts`。决策同 E7                                                                          |
-| E8   | `chrome_inject_script`              | fail (已禁用) | —          | TOOL_SCHEMAS 被注释；bridge 返回 disabled。正式标记为安全限制并文档化                                                                                      |
-| E9   | `chrome_userscript`                 | fail (未暴露) | —          | 同 E7。TOOL_SCHEMAS 被注释；实现存在（`userscript.ts`）                                                                                                    |
-| E10  | **tabId 被忽略**                    | bug `[~]`     | #275       | 大多数工具已尊重 `tabId`/`windowId`（详见 §会话落地 E10 行）；余量：`console` 的 url 分支内联 `tabs.query`、`inject_script` 的 url 分支。#275 待最终 close |
-| E11  | **chrome_get_web_content 内容不全** | bug           | #99        | 长页面或复杂 DOM 时内容截断。评估是 DOM 提取策略还是 Native Messaging 消息体大小限制                                                                       |
-| E12  | **chrome_navigate 自动加 www**      | bug `[x]`     | #270       | `navigate-patterns.test.ts` 已覆盖 `192.168.0.1:4430` 不加 `www` 的回归用例；`shouldAddWwwVariant` 对 IP 和 IPv6 短路                                      |
-| E13  | chrome_console 数据不完整           | bug           | #215       | 获取的是浅拷贝数据，无法获取深层对象                                                                                                                       |
-| E14  | SVG 元素支持                        | 功能请求      | #293       | `chrome_get_web_content` 默认用 `[SVG Icon]` 替代，请求可选返回 SVG 原文                                                                                   |
+| 编号 | 工具                                | 当前状态       | 关联 Issue | 任务                                                                                                                               |
+| ---- | ----------------------------------- | -------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| E1   | `chrome_read_page`                  | warn (CoPaw)   | —          | CoPaw 下在 `chrome://` 和稀疏 localhost 页面降级。记录限制条件或添加降级提示                                                       |
+| E2   | `chrome_keyboard`                   | warn (CoPaw)   | #200       | CoPaw 下表现为 key/chord 发送器而非文本输入。文档化：用 `chrome_fill_or_select` 做文本输入，`chrome_keyboard` 只用于快捷键         |
+| E3   | `chrome_screenshot`                 | warn (CoPaw)   | —          | CoPaw 调用时 `image readback failed` 超时。排查是扩展侧 CDP 超时还是 CoPaw MCP 客户端超时                                          |
+| E4   | `chrome_handle_dialog`              | warn           | #309       | 无活动 dialog 时返回 `No dialog is showing`（正确），但 debugger 已挂载时冲突。文档化限制                                          |
+| E5   | `chrome_gif_recorder`               | warn           | —          | `start → stop` 偶发 `No recording in progress`。排查 recording 状态管理竞态                                                        |
+| E6   | `chrome_request_element_selection`  | warn           | —          | 人工选择超时是预期行为，需在工具描述中明确 human-in-the-loop 特性                                                                  |
+| E7   | `search_tabs_content`               | fail (未暴露)  | —          | TOOL_NAMES 有定义、TOOL_SCHEMAS 被注释。实现存在（`vector-search.ts`）。**决策：Phase 0 暴露 or 标记 Phase 1**                     |
+| E7b  | `chrome_get_interactive_elements`   | `[x]` 已暴露   | —          | TOOL_SCHEMAS 已注册（readOnlyHint: true）。实现在 `web-fetcher.ts`                                                                 |
+| E8   | `chrome_inject_script`              | `[x]` 已文档化 | —          | TOOL_SCHEMAS 被注释；`docs/SECURITY.md` 已标记为 "Disabled by default for security"                                                |
+| E9   | `chrome_userscript`                 | fail (未暴露)  | —          | 同 E7。TOOL_SCHEMAS 被注释；实现存在（`userscript.ts`）                                                                            |
+| E10  | **tabId 被忽略**                    | bug `[x]`      | #275       | 所有暴露工具已尊重 `tabId`/`windowId`。`console` else 分支和 `inject_script` else 分支均改用 `getActiveTabInWindow`。#275 可 close |
+| E11  | **chrome_get_web_content 内容不全** | bug            | #99        | 长页面或复杂 DOM 时内容截断。评估是 DOM 提取策略还是 Native Messaging 消息体大小限制                                               |
+| E12  | **chrome_navigate 自动加 www**      | bug `[x]`      | #270       | `navigate-patterns.test.ts` 已覆盖 `192.168.0.1:4430` 不加 `www` 的回归用例；`shouldAddWwwVariant` 对 IP 和 IPv6 短路              |
+| E13  | chrome_console 数据不完整           | bug            | #215       | 获取的是浅拷贝数据，无法获取深层对象                                                                                               |
+| E14  | SVG 元素支持                        | 功能请求       | #293       | `chrome_get_web_content` 默认用 `[SVG Icon]` 替代，请求可选返回 SVG 原文                                                           |
 
 ---
 
@@ -195,18 +195,18 @@
 - `[x]` `DELIVERABLE_HANDOFF_zh.md`
 - `[x]` `WHY_MCP_CHROME.md`（竞品对比精简页）
 - `[x]` G8. README 已链入「Why mcp-chrome」竞品对比（与上条同一文档）
+- `[x]` G1. 统一 README 入口 — 底部文档区分层为 Users / AI Assistants / Developers；工具列表对齐 TOOL_SCHEMAS（27+ 工具分 8 类）
+- `[x]` G2. 中文 README 同步 — `README_zh.md` 新增运维指南区块、`mcp-chrome-bridge setup`/本地验证、工具列表对齐、文档分层
 
 ### 待完成
 
-| 编号 | 任务                           | 难度 | 说明                                                                          |
-| ---- | ------------------------------ | ---- | ----------------------------------------------------------------------------- |
-| G1   | 统一 README 入口               | 中   | 当前文档散落多个 md。README.md 中清晰分层：用户 → 开发者 → 运维，每层一个链接 |
-| G2   | 中文 README 同步               | 中   | `README_zh.md` 与 phase0 分支新功能（doctor/status/smoke）未同步              |
-| G3   | "Popup 显示 X 该怎么办" 排障表 | 低   | popup 所有可能状态 → 原因 → 解决步骤                                          |
-| G4   | Windows 安装常见坑 FAQ         | 低   | 汇总上游高频问题：PATH、管理员权限、防火墙、pnpm postinstall                  |
-| G5   | "第一个成功任务" 引导流程      | 中   | 安装完成 → 打开浏览器 → 连接扩展 → AI 助手发指令 → 看到结果，完整步骤         |
-| G6   | MCP 客户端配置速查卡           | 低   | 一页纸：5 种常见客户端配置 JSON，复制即用                                     |
-| G7   | 视频/动图脚本大纲              | 低   | 5 分钟演示分镜脚本（可选，未来做）                                            |
+| 编号 | 任务                           | 难度 | 说明                                                                  |
+| ---- | ------------------------------ | ---- | --------------------------------------------------------------------- |
+| G3   | "Popup 显示 X 该怎么办" 排障表 | 低   | popup 所有可能状态 → 原因 → 解决步骤                                  |
+| G4   | Windows 安装常见坑 FAQ         | 低   | 汇总上游高频问题：PATH、管理员权限、防火墙、pnpm postinstall          |
+| G5   | "第一个成功任务" 引导流程      | 中   | 安装完成 → 打开浏览器 → 连接扩展 → AI 助手发指令 → 看到结果，完整步骤 |
+| G6   | MCP 客户端配置速查卡           | 低   | 一页纸：5 种常见客户端配置 JSON，复制即用                             |
+| G7   | 视频/动图脚本大纲              | 低   | 5 分钟演示分镜脚本（可选，未来做）                                    |
 
 ---
 
@@ -218,14 +218,14 @@
 
 - `[x]` H1. `ENABLE_MCP_TOOLS` / `DISABLE_MCP_TOOLS` 环境变量过滤
 - `[x]` H2. 高危/只读工具的 MCP annotations
+- `[x]` H3. Indirect Prompt Injection 风险文档（`docs/SECURITY.md`）
+- `[x]` H4. 工具 MCP annotations 补全 — 所有 27 个暴露工具均已有 `readOnlyHint` / `destructiveHint` / `idempotentHint`
 
 ### 待完成
 
-| 编号 | 任务                               | 关联 Issue | 难度     | 说明                                                                                                                                                                                    |
-| ---- | ---------------------------------- | ---------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| H3   | Indirect Prompt Injection 风险文档 | #316       | 低       | 文档化：AI 使用已登录 Chrome session 的安全风险；建议不在 AI 可控浏览器中保持高敏感账号登录                                                                                             |
-| H4   | 工具 MCP annotations 补全          | #317       | 中       | 所有 37 个工具都应有 `readOnlyHint`/`destructiveHint` 标注，当前只有部分                                                                                                                |
-| H5   | **敏感工具默认禁用方案**           | #169       | **中 ↑** | 评估是否默认禁用 `chrome_inject_script`、`chrome_bookmark_delete` 等破坏性工具。**核心卖点「已登录浏览器」也是最大安全顾虑**，竞品参考：OpenTabs「默认全关 + 三级权限（Off/Ask/Auto）」 |
+| 编号 | 任务                     | 关联 Issue | 难度     | 说明                                                                                                                                                                                    |
+| ---- | ------------------------ | ---------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H5   | **敏感工具默认禁用方案** | #169       | **中 ↑** | 评估是否默认禁用 `chrome_inject_script`、`chrome_bookmark_delete` 等破坏性工具。**核心卖点「已登录浏览器」也是最大安全顾虑**，竞品参考：OpenTabs「默认全关 + 三级权限（Off/Ask/Auto）」 |
 
 ---
 
@@ -285,7 +285,7 @@
 
 1. ~~`A8` stdio 僵尸进程修复~~ → 已完成
 2. `B4` "已连接，服务未启动" 状态机梳理 `[~]` popup 文案已补，状态机待完善
-3. `E10` tabId 被忽略 bug 修复 `[~]` 大部分工具已修复，余量见 §会话落地
+3. ~~`E10` tabId 被忽略 bug 修复~~ → 已完成（console/inject_script else 分支均已改用 `getActiveTabInWindow`）
 4. `C4` npm 全新安装端到端验证
 5. `D9` smoke 稳定性加固（跑 5+ 次全绿）`[~]` 已 3/5
 6. ~~`A4` SSE 并行 session 回归测试~~ → 自动化已覆盖（`server.test.ts`）
@@ -302,18 +302,18 @@
 11. ~~`E12` chrome_navigate www 前缀问题~~ → 已完成（`navigate-patterns.test.ts` 回归）
 12. `F1`–`F3` Claude Desktop / Cursor / Claude Code 兼容验证
 13. `B9` Mac 平台验证
-14. `G1`–`G2` README 统一入口 + 中文同步
+14. ~~`G1`–`G2` README 统一入口 + 中文同步~~ → 已完成
 
 ### 第三批：P0 收尾 + 安全加固（1 周）
 
 15. `A2` Session Registry 独立模块
 16. `D7` 统一错误码目录
-17. `H3`–`H5` 安全文档 + annotations 补全 + **敏感工具默认禁用** ↑
+17. ~~`H3`–`H4`~~ 安全文档 + annotations 补全 → 已完成；`H5` **敏感工具默认禁用** ↑ 待做
 18. `G3`–`G6` 排障表 / FAQ / 配置速查
 19. ~~`G8` 竞品对比页~~ → 已完成（`docs/WHY_MCP_CHROME.md`）
 20. `F7` stdio 冒烟测试脚本
-21. 所有 warn 工具的修复或限制文档化（E1–E6）
-22. `E7`/`E7b`/`E9` 未暴露工具分类决策（Phase 0 or Phase 1）
+21. ~~所有 warn 工具的限制文档化（E1–E6）~~ → 已完成（tool description 中注明限制）
+22. ~~`E7b`~~ 已暴露；`E7`/`E9` 未暴露工具分类决策（Phase 0 or Phase 1）待做
 
 ### 第四批：完整文档 + 全客户端验证（1 周，与第三批可并行）
 
@@ -356,11 +356,11 @@
 ## 统计
 
 - 总维度：10 个（A–J）+ **维护约定** + **手动测试清单**
-- 总任务（编号项）：约 72 个（含 E7b 新增、可选加分项 A6/A7/B8/G8 已完成归档）
-- 已完成 `[x]`：约 **37** 个（A1/A3/A5–A8, B1–B3/B5–B6/B8, C1–C3/C7, D1–D5, E12, G8/I4v1, H1–H2, 会话落地项）
-- 部分完成 `[~]`：约 **5** 个（A4, B4, D9, E10, I4 定稿）
-- 待完成 `[ ]`：约 **30** 个
-- 预估周期：4–5 周（第一批大部分已收尾，二/三/四批可交叉并行）
+- 总任务（编号项）：约 72 个（含 E7b、可选加分项 A6/A7/B8/G8 已完成归档）
+- 已完成 `[x]`：约 **47** 个（A1/A3/A5–A8, B1–B3/B5–B6/B8, C1–C3/C7, D1–D5, E7b/E8/E10/E12, G1/G2/G8/I4v1, H1–H4, 会话落地项）
+- 部分完成 `[~]`：约 **3** 个（A4, B4, D9）
+- 待完成 `[ ]`：约 **22** 个
+- 预估周期：3–4 周（第一批基本收尾，二/三/四批可交叉并行）
 
 ## v2 变更追溯
 
@@ -372,6 +372,17 @@
 | F8 OpenClaw 验证 | 不存在         | **第四批 #26 新增**  | 2026 增长最快的开源 AI 助手，核心目标客户端                  |
 | F9 Windsurf 验证 | 不存在         | **第四批 #26 新增**  | 主流 AI IDE，企业 MCP 管控最强                               |
 | G8 竞品对比页    | 不存在         | **第三批 #19 新增**  | 开源产品获客的关键转化页                                     |
+
+### 2026-04-07 v2.4 批量推进
+
+- `[x]` **E10（彻底闭环）**：`console.ts` else 分支改用 `getActiveTabInWindow(windowId)`；`inject-script.ts` else 分支改用 `getActiveTabInWindow(windowId)`。所有暴露工具的 `tabId`/`windowId` 一致性已完成。
+- `[x]` **H4（annotations 补全）**：为所有 27 个暴露工具补全 `readOnlyHint` / `destructiveHint` / `idempotentHint` 标注（新增 12 个工具的 annotations）。
+- `[x]` **E1–E6（warn 限制文档化）**：在 `tools.ts` description 中为 `chrome_read_page`（chrome:// 页面限制）、`chrome_screenshot`（大页面超时）、`chrome_keyboard`（用于快捷键不是文本输入）、`chrome_handle_dialog`（需活动 dialog）、`chrome_gif_recorder`（start→stop 竞态）、`chrome_request_element_selection`（human-in-the-loop 等待）添加了限制说明。
+- `[x]` **E7b（暴露 chrome_get_interactive_elements）**：在 TOOL_SCHEMAS 中注册，readOnlyHint: true。
+- `[x]` **E8（inject_script 禁用文档化）**：`docs/SECURITY.md` 中明确标记为 "Disabled by default for security"。
+- `[x]` **H3（安全文档）**：新建 `docs/SECURITY.md`，包含 Indirect Prompt Injection 风险说明、缓解措施表、用户建议、工具风险分类（Read-only / Side-effect / Destructive / Disabled）。
+- `[x]` **G1（README 统一入口）**：底部文档区分层为 For Users / For AI Assistants / For Developers & Contributors；工具列表对齐 TOOL_SCHEMAS（27+ 工具分 8 类）；修复 `PHASE0_TEST_MATRIX.md` 链接。
+- `[x]` **G2（中文 README 同步）**：`README_zh.md` 新增运维指南区块、`mcp-chrome-bridge setup` 与本地验证、工具列表对齐 27+ 工具 8 类、底部文档分层。
 
 ### 2026-04-07 审计修正
 

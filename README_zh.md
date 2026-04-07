@@ -16,9 +16,16 @@
 
 Chrome MCP Server 是一个基于chrome插件的 **模型上下文协议 (MCP) 服务器**，它将您的 Chrome 浏览器功能暴露给 Claude 等 AI 助手，实现复杂的浏览器自动化、内容分析和语义搜索等。与传统的浏览器自动化工具（如playwright）不同，**Chrome MCP server**直接使用您日常使用的chrome浏览器，基于现有的用户习惯和配置、登录态，让各种大模型或者各种chatbot都可以接管你的浏览器，真正成为你的日常助手
 
-## ✨ 船新的功能(2025/12/30)
+## ✨ 新功能(2025/12/30)
 
-- **让Claude Code/Codex也能使用的可视化编辑器**, 更多详情请看: [VisualEditor](docs/VisualEditor_zh.md)
+- **让 Claude Code / Codex 也能使用的可视化编辑器**：详情请看 [VisualEditor](docs/VisualEditor_zh.md)
+- **稳定运行时诊断**：使用 `mcp-chrome-bridge status`、`doctor`、`report` 快速排障
+
+## 📘 运维指南
+
+- [快速入门](docs/STABLE_QUICKSTART.md)
+- [CoPaw 集成指南](docs/COPAW.md)
+- [Phase 0 工具验证矩阵](docs/PHASE0_TOOL_VALIDATION_MATRIX.md)
 
 ## ✨ 核心特性
 
@@ -76,6 +83,8 @@ pnpm install -g mcp-chrome-bridge
 mcp-chrome-bridge register
 ```
 
+**引导式安装（注册 + 后续步骤）：** 安装完成后，运行 `mcp-chrome-bridge setup` 执行注册并查看后续检查清单（扩展加载 URL、`doctor`、`smoke`）。
+
 > 注意：pnpm v7+ 默认禁用 postinstall 脚本以提高安全性。`enable-pre-post-scripts` 设置控制是否运行 pre/post 安装脚本。如果自动注册失败，请使用上述手动注册命令。
 
 3. **加载 Chrome 扩展**
@@ -84,6 +93,18 @@ mcp-chrome-bridge register
    - 点击"加载已解压的扩展程序"，选择 `your/dowloaded/extension/folder`
    - 点击插件图标打开插件，点击连接即可看到mcp的配置
      <img width="475" alt="截屏2025-06-09 15 52 06" src="https://github.com/user-attachments/assets/241e57b8-c55f-41a4-9188-0367293dc5bc" />
+
+### 本地验证
+
+安装完成后，使用以下命令验证环境：
+
+```bash
+mcp-chrome-bridge status
+mcp-chrome-bridge doctor
+mcp-chrome-bridge smoke
+```
+
+如果 popup 显示已连接但本地服务未启动，点击 popup 的 `刷新` 按钮或 `断开 → 连接`。详细排障流程见 [快速入门](docs/STABLE_QUICKSTART.md)。
 
 ### 在支持MCP协议的客户端中使用
 
@@ -140,60 +161,76 @@ pnpm list -g mcp-chrome-bridge
 
 <img width="494" alt="截屏2025-06-22 22 11 25" src="https://github.com/user-attachments/assets/07c0b090-622b-433d-be70-44e8cb8980a5" />
 
-## 🛠️ 可用工具
+## 🛠️ 可用工具 (27+)
 
-完整工具列表：[完整工具列表](docs/TOOLS_zh.md)
+完整工具列表：[工具 API (中文)](docs/TOOLS_zh.md) | [TOOLS API (EN)](docs/TOOLS.md)
 
 <details>
-<summary><strong>📊 浏览器管理 (6个工具)</strong></summary>
+<summary><strong>📊 浏览器管理 (4个工具)</strong></summary>
 
 - `get_windows_and_tabs` - 列出所有浏览器窗口和标签页
-- `chrome_navigate` - 导航到 URL 并控制视口
+- `chrome_navigate` - 导航到 URL、刷新、前进/后退
 - `chrome_switch_tab` - 切换当前显示的标签页
 - `chrome_close_tabs` - 关闭特定标签页或窗口
-- `chrome_go_back_or_forward` - 浏览器导航控制
-- `chrome_inject_script` - 向网页注入内容脚本
-- `chrome_send_command_to_inject_script` - 向已注入的内容脚本发送指令
 </details>
 
 <details>
-<summary><strong>📸 截图和视觉 (1个工具)</strong></summary>
+<summary><strong>🖱️ 页面交互 (6个工具)</strong></summary>
 
-- `chrome_screenshot` - 高级截图捕获，支持元素定位、全页面和自定义尺寸
+- `chrome_computer` - 鼠标、键盘、滚动、截图 — 统一交互工具
+- `chrome_click_element` - 通过 CSS/XPath/ref/坐标 点击元素
+- `chrome_fill_or_select` - 填充表单输入、下拉框、复选框
+- `chrome_keyboard` - 模拟键盘快捷键和特殊按键
+- `chrome_request_element_selection` - 人工辅助元素选择器
+- `chrome_upload_file` - 上传文件到文件输入框
 </details>
 
 <details>
-<summary><strong>🌐 网络监控 (4个工具)</strong></summary>
+<summary><strong>🔍 内容读取 (4个工具)</strong></summary>
 
-- `chrome_network_capture_start/stop` - webRequest API 网络捕获
-- `chrome_network_debugger_start/stop` - Debugger API 包含响应体
-- `chrome_network_request` - 发送自定义 HTTP 请求
-</details>
-
-<details>
-<summary><strong>🔍 内容分析 (4个工具)</strong></summary>
-
-- `search_tabs_content` - AI 驱动的浏览器标签页语义搜索
+- `chrome_read_page` - 页面可见元素的可访问性树
 - `chrome_get_web_content` - 从页面提取 HTML/文本内容
-- `chrome_get_interactive_elements` - 查找可点击元素
-- `chrome_console` - 捕获和获取浏览器标签页的控制台输出
+- `chrome_get_interactive_elements` - 查找可交互元素
+- `chrome_console` - 捕获控制台输出（快照模式或持久缓冲）
 </details>
 
 <details>
-<summary><strong>🎯 交互操作 (3个工具)</strong></summary>
+<summary><strong>📸 截图与录制 (3个工具)</strong></summary>
 
-- `chrome_click_element` - 使用 CSS 选择器点击元素
-- `chrome_fill_or_select` - 填充表单和选择选项
-- `chrome_keyboard` - 模拟键盘输入和快捷键
+- `chrome_screenshot` - 高级截图：元素定位、全页面、自定义尺寸
+- `chrome_gif_recorder` - 录制浏览器操作为动态 GIF
+- `chrome_handle_dialog` - 处理 JS alert/confirm/prompt 弹窗
 </details>
 
 <details>
-<summary><strong>📚 数据管理 (5个工具)</strong></summary>
+<summary><strong>🌐 网络 (3个工具)</strong></summary>
+
+- `chrome_network_capture` - 启动/停止网络流量捕获（webRequest 或 Debugger）
+- `chrome_network_request` - 使用浏览器 cookie/session 发送 HTTP 请求
+- `chrome_handle_download` - 等待下载完成并返回文件详情
+</details>
+
+<details>
+<summary><strong>📈 性能 (3个工具)</strong></summary>
+
+- `performance_start_trace` - 启动性能追踪录制
+- `performance_stop_trace` - 停止追踪并可选保存到下载目录
+- `performance_analyze_insight` - 分析最近录制的追踪摘要
+</details>
+
+<details>
+<summary><strong>📚 数据管理 (4个工具)</strong></summary>
 
 - `chrome_history` - 搜索浏览器历史记录，支持时间过滤
 - `chrome_bookmark_search` - 按关键词查找书签
 - `chrome_bookmark_add` - 添加新书签，支持文件夹
 - `chrome_bookmark_delete` - 删除书签
+</details>
+
+<details>
+<summary><strong>🔧 高级 / JavaScript</strong></summary>
+
+- `chrome_javascript` - 在浏览器标签页中执行 JavaScript（CDP + 回退）
 </details>
 
 ## 🧪 使用示例
@@ -295,11 +332,27 @@ https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
 
 本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
 
-## 📚 更多文档
+## 📚 文档
 
-- [架构设计](docs/ARCHITECTURE_zh.md) - 详细的技术架构说明
-- [工具列表](docs/TOOLS_zh.md) - 完整的工具 API 文档
-- [故障排除](docs/TROUBLESHOOTING_zh.md) - 常见问题解决方案
+### 用户文档
+
+- [为什么选 mcp-chrome？(vs Playwright / browser-use)](docs/WHY_MCP_CHROME.md) — 定位与取舍
+- [快速入门](docs/STABLE_QUICKSTART.md) — 安装、验证、首次成功
+- [工具 API (中文)](docs/TOOLS_zh.md) | [TOOLS API (EN)](docs/TOOLS.md) — 完整工具参考
+- [MCP 传输方式 (HTTP / SSE / stdio)](docs/TRANSPORT.md) — 选择哪种模式
+- [故障排除](docs/TROUBLESHOOTING_zh.md) — 常见问题解决方案
+- [CoPaw 集成指南](docs/COPAW.md) — 与 CoPaw AI 客户端配合使用
+
+### AI 助手文档
+
+- [AI 助手技能包（跨客户端通用）](skills/chrome_mcp_browser/SKILL.md) — 任意 MCP 客户端可用的操作手册
+
+### 开发者文档
+
+- [架构设计](docs/ARCHITECTURE_zh.md) — 详细技术架构说明
+- [安全考量](docs/SECURITY.md) — Prompt Injection 风险、工具风险分类
+- [贡献指南](docs/CONTRIBUTING_zh.md) — 如何参与贡献
+- [可视化编辑器](docs/VisualEditor_zh.md) — Claude Code & Codex 可视化编辑器
 
 ## 微信交流群
 

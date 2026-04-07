@@ -102,6 +102,9 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.PERFORMANCE_START_TRACE,
     description:
       'Starts a performance trace recording on the selected page. Optionally reloads the page and/or auto-stops after a short duration.',
+    annotations: {
+      readOnlyHint: false,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -134,6 +137,9 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.PERFORMANCE_STOP_TRACE,
     description: 'Stops the active performance trace recording on the selected page.',
+    annotations: {
+      readOnlyHint: false,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -196,7 +202,7 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.READ_PAGE,
     description:
-      'Get an accessibility tree representation of visible elements on the page. Only returns elements that are visible in the viewport. Optionally filter for only interactive elements.\nTip: If the returned elements do not include the specific element you need, use the computer tool\'s screenshot (action="screenshot") to capture the element\'s on-screen coordinates, then operate by coordinates.',
+      'Get an accessibility tree representation of visible elements on the page. Only returns elements that are visible in the viewport. Optionally filter for only interactive elements.\nTip: If the returned elements do not include the specific element you need, use the computer tool\'s screenshot (action="screenshot") to capture the element\'s on-screen coordinates, then operate by coordinates.\nLimitation: Does not work on chrome:// or browser-internal pages; returns degraded output on sparse localhost pages.',
     annotations: {
       readOnlyHint: true,
     },
@@ -234,6 +240,9 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.COMPUTER,
     description:
       "Use a mouse and keyboard to interact with a web browser, and take screenshots.\n* Whenever you intend to click on an element like an icon, you should consult a read_page to determine the ref of the element before moving the cursor.\n* If you tried clicking on a program or link but it failed to load, even after waiting, try screenshot and then adjusting your click location so that the tip of the cursor visually falls on the element that you want to click.\n* Make sure to click any buttons, links, icons, etc with the cursor tip in the center of the element. Don't click boxes on their edges unless asked.",
+    annotations: {
+      destructiveHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -489,7 +498,7 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.SCREENSHOT,
     description:
-      '[Prefer read_page over taking a screenshot and Prefer chrome_computer] Take a screenshot of the current page or a specific element. For new usage, use chrome_computer with action="screenshot". Use this tool if you need advanced options.',
+      '[Prefer read_page over taking a screenshot and Prefer chrome_computer] Take a screenshot of the current page or a specific element. For new usage, use chrome_computer with action="screenshot". Use this tool if you need advanced options.\nLimitation: Full-page or large-viewport captures may time out on complex pages. If the capture fails, try a smaller viewport or use chrome_computer action="screenshot" instead.',
     annotations: {
       readOnlyHint: true,
     },
@@ -561,6 +570,10 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.SWITCH_TAB,
     description: 'Switch to a specific browser tab',
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -625,6 +638,9 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.NETWORK_REQUEST,
     description: 'Send a network request from the browser with cookies and other browser context',
+    annotations: {
+      readOnlyHint: false,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -671,6 +687,9 @@ export const TOOL_SCHEMAS: Tool[] = [
     name: TOOL_NAMES.BROWSER.NETWORK_CAPTURE,
     description:
       'Unified network capture tool. Use action="start" to begin capturing, action="stop" to end and retrieve results. Set needResponseBody=true to capture response bodies (uses Debugger API, may conflict with DevTools). Default mode uses webRequest API (lightweight, no debugger conflict, but no response body).',
+    annotations: {
+      readOnlyHint: false,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -718,6 +737,9 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.HANDLE_DOWNLOAD,
     description: 'Wait for a browser download and return details (id, filename, url, state, size)',
+    annotations: {
+      readOnlyHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -797,6 +819,9 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.BOOKMARK_ADD,
     description: 'Add a new bookmark to Chrome',
+    annotations: {
+      readOnlyHint: false,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -852,6 +877,47 @@ export const TOOL_SCHEMAS: Tool[] = [
         title: {
           type: 'string',
           description: 'Title of the bookmark to help with matching when deleting by URL.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: TOOL_NAMES.BROWSER.GET_INTERACTIVE_ELEMENTS,
+    description:
+      'Get interactive elements (buttons, links, inputs, selects, etc.) from the current page. Returns element details including text, type, coordinates, and attributes. Useful for discovering actionable UI elements before interacting with them.',
+    annotations: {
+      readOnlyHint: true,
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        textQuery: {
+          type: 'string',
+          description:
+            'Text to search for within interactive elements (fuzzy match on visible text or aria-label).',
+        },
+        selector: {
+          type: 'string',
+          description: 'CSS selector to filter interactive elements.',
+        },
+        includeCoordinates: {
+          type: 'boolean',
+          description: 'Include element coordinates in the response (default: true).',
+        },
+        types: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Types of interactive elements to include (e.g., "button", "link", "input", "select"). Default: all types.',
+        },
+        tabId: {
+          type: 'number',
+          description: 'Target tab ID. If omitted, uses the current active tab.',
+        },
+        windowId: {
+          type: 'number',
+          description: 'Window ID to select active tab from (when tabId is omitted).',
         },
       },
       required: [],
@@ -1095,7 +1161,10 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.REQUEST_ELEMENT_SELECTION,
     description:
-      'Request the user to manually select one or more elements on the current page. Use this as a human-in-the-loop fallback when you cannot reliably locate the target element after approximately 3 attempts using chrome_read_page combined with chrome_click_element/chrome_fill_or_select/chrome_computer. The user will see a panel with instructions and can click on the requested elements. Returns element refs compatible with chrome_click_element/chrome_fill_or_select (including iframe frameId for cross-frame support).',
+      'Request the user to manually select one or more elements on the current page. This is a human-in-the-loop tool: the user must physically click elements in the browser, so expect a wait of seconds to minutes. Use as a fallback when you cannot reliably locate the target element after ~3 attempts using chrome_read_page combined with chrome_click_element/chrome_fill_or_select/chrome_computer. Returns element refs compatible with chrome_click_element/chrome_fill_or_select (including iframe frameId for cross-frame support).',
+    annotations: {
+      readOnlyHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -1146,7 +1215,10 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.KEYBOARD,
     description:
-      'Simulate keyboard input on a web page. Supports single keys (Enter, Tab, Escape), key combinations (Ctrl+C, Ctrl+V), and text input. Can target a specific element or send to the focused element.',
+      'Simulate keyboard input on a web page. Sends key events (Enter, Tab, Escape, Ctrl+C, etc.) or key combinations. For typing text into form fields, prefer chrome_fill_or_select; this tool is best for keyboard shortcuts and special keys.',
+    annotations: {
+      destructiveHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -1305,7 +1377,10 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.HANDLE_DIALOG,
     description:
-      'Handle JavaScript dialogs (alert/confirm/prompt) via CDP on the target tab. Defaults to the active tab when tabId is omitted.',
+      'Handle JavaScript dialogs (alert/confirm/prompt) via CDP on the target tab. Defaults to the active tab when tabId is omitted. Only works when a dialog is currently showing; returns an error otherwise.',
+    annotations: {
+      destructiveHint: true,
+    },
     inputSchema: {
       type: 'object',
       properties: {
@@ -1330,7 +1405,10 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.GIF_RECORDER,
     description:
-      'Record browser tab activity as an animated GIF.\n\nModes:\n- Fixed FPS mode (action="start"): Captures frames at regular intervals. Good for animations/videos.\n- Auto-capture mode (action="auto_start"): Captures frames automatically when chrome_computer or chrome_navigate actions succeed. Better for interaction recordings with natural pacing.\n\nUse "stop" to end recording and save the GIF.',
+      'Record browser tab activity as an animated GIF.\n\nModes:\n- Fixed FPS mode (action="start"): Captures frames at regular intervals. Good for animations/videos.\n- Auto-capture mode (action="auto_start"): Captures frames automatically when chrome_computer or chrome_navigate actions succeed. Better for interaction recordings with natural pacing.\n\nUse "stop" to end recording and save the GIF.\nNote: Rapid start→stop sequences may produce "No recording in progress" errors due to initialization timing. Allow at least a few hundred milliseconds between start and stop.',
+    annotations: {
+      readOnlyHint: false,
+    },
     inputSchema: {
       type: 'object',
       properties: {

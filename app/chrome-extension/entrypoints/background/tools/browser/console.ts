@@ -181,11 +181,7 @@ class ConsoleTool extends BaseBrowserToolExecutor {
         // Navigate to the specified URL
         targetTab = await this.navigateToUrl(url, background === true, windowId);
       } else {
-        // Use current active tab
-        const [activeTab] =
-          typeof windowId === 'number'
-            ? await chrome.tabs.query({ active: true, windowId })
-            : await chrome.tabs.query({ active: true, currentWindow: true });
+        const activeTab = await this.getActiveTabInWindow(windowId);
         if (!activeTab?.id) {
           return createErrorResponse('No active tab found and no URL provided.');
         }

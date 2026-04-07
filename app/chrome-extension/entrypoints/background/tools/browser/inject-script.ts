@@ -66,15 +66,11 @@ class InjectScriptTool extends BaseBrowserToolExecutor {
           await new Promise((resolve) => setTimeout(resolve, 3000));
         }
       } else {
-        // Use active tab (prefer the specified window)
-        const tabs =
-          typeof windowId === 'number'
-            ? await chrome.tabs.query({ active: true, windowId })
-            : await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tabs[0]) {
+        const active = await this.getActiveTabInWindow(windowId);
+        if (!active) {
           return createErrorResponse('No active tab found');
         }
-        tab = tabs[0];
+        tab = active;
       }
 
       if (!tab.id) {

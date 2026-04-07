@@ -27,7 +27,7 @@ Chrome MCP Server is a Chrome extension-based **Model Context Protocol (MCP) ser
 
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md)
 - [CoPaw Integration Guide](docs/COPAW.md)
-- [Phase 0 Test Matrix](docs/PHASE0_TEST_MATRIX.md)
+- [Phase 0 Tool Validation Matrix](docs/PHASE0_TOOL_VALIDATION_MATRIX.md)
 
 ## ✨ Core Features
 
@@ -163,60 +163,76 @@ eg：config in augment:
 
 <img width="494" alt="截屏2025-06-22 22 11 25" src="https://github.com/user-attachments/assets/48eefc0c-a257-4d3b-8bbe-d7ff716de2bf" />
 
-## 🛠️ Available Tools
+## 🛠️ Available Tools (27+)
 
-Complete tool list: [Complete Tool List](docs/TOOLS.md)
+Complete tool list: [TOOLS API (EN)](docs/TOOLS.md) | [工具 API (中文)](docs/TOOLS_zh.md)
 
 <details>
-<summary><strong>📊 Browser Management (6 tools)</strong></summary>
+<summary><strong>📊 Browser Management (4 tools)</strong></summary>
 
 - `get_windows_and_tabs` - List all browser windows and tabs
-- `chrome_navigate` - Navigate to URLs and control viewport
+- `chrome_navigate` - Navigate to URLs, refresh, or go back/forward
 - `chrome_switch_tab` - Switch the current active tab
 - `chrome_close_tabs` - Close specific tabs or windows
-- `chrome_go_back_or_forward` - Browser navigation control
-- `chrome_inject_script` - Inject content scripts into web pages
-- `chrome_send_command_to_inject_script` - Send commands to injected content scripts
 </details>
 
 <details>
-<summary><strong>📸 Screenshots & Visual (1 tool)</strong></summary>
+<summary><strong>🖱️ Page Interaction (6 tools)</strong></summary>
 
-- `chrome_screenshot` - Advanced screenshot capture with element targeting, full-page support, and custom dimensions
+- `chrome_computer` - Mouse, keyboard, scroll, screenshot — unified interaction
+- `chrome_click_element` - Click elements via CSS/XPath/ref/coordinates
+- `chrome_fill_or_select` - Fill form inputs, selects, checkboxes
+- `chrome_keyboard` - Simulate keyboard shortcuts and special keys
+- `chrome_request_element_selection` - Human-in-the-loop element picker
+- `chrome_upload_file` - Upload files to file input elements
 </details>
 
 <details>
-<summary><strong>🌐 Network Monitoring (4 tools)</strong></summary>
+<summary><strong>🔍 Content Reading (4 tools)</strong></summary>
 
-- `chrome_network_capture_start/stop` - webRequest API network capture
-- `chrome_network_debugger_start/stop` - Debugger API with response bodies
-- `chrome_network_request` - Send custom HTTP requests
-</details>
-
-<details>
-<summary><strong>🔍 Content Analysis (4 tools)</strong></summary>
-
-- `search_tabs_content` - AI-powered semantic search across browser tabs
+- `chrome_read_page` - Accessibility tree of visible elements
 - `chrome_get_web_content` - Extract HTML/text content from pages
-- `chrome_get_interactive_elements` - Find clickable elements
-- `chrome_console` - Capture and retrieve console output from browser tabs
+- `chrome_get_interactive_elements` - Find clickable/interactive elements
+- `chrome_console` - Capture console output (snapshot or persistent buffer)
 </details>
 
 <details>
-<summary><strong>🎯 Interaction (3 tools)</strong></summary>
+<summary><strong>📸 Screenshots & Recording (3 tools)</strong></summary>
 
-- `chrome_click_element` - Click elements using CSS selectors
-- `chrome_fill_or_select` - Fill forms and select options
-- `chrome_keyboard` - Simulate keyboard input and shortcuts
+- `chrome_screenshot` - Advanced screenshot with element targeting and full-page
+- `chrome_gif_recorder` - Record browser activity as animated GIF
+- `chrome_handle_dialog` - Handle JS alert/confirm/prompt dialogs
 </details>
 
 <details>
-<summary><strong>📚 Data Management (5 tools)</strong></summary>
+<summary><strong>🌐 Network (3 tools)</strong></summary>
+
+- `chrome_network_capture` - Start/stop network traffic capture (webRequest or Debugger)
+- `chrome_network_request` - Send HTTP requests with browser cookies/session
+- `chrome_handle_download` - Wait for downloads and return file details
+</details>
+
+<details>
+<summary><strong>📈 Performance (3 tools)</strong></summary>
+
+- `performance_start_trace` - Start a performance trace recording
+- `performance_stop_trace` - Stop trace and optionally save to Downloads
+- `performance_analyze_insight` - Summarize the last recorded trace
+</details>
+
+<details>
+<summary><strong>📚 Data Management (4 tools)</strong></summary>
 
 - `chrome_history` - Search browser history with time filters
 - `chrome_bookmark_search` - Find bookmarks by keywords
 - `chrome_bookmark_add` - Add new bookmarks with folder support
 - `chrome_bookmark_delete` - Delete bookmarks
+</details>
+
+<details>
+<summary><strong>🔧 Advanced / JavaScript</strong></summary>
+
+- `chrome_javascript` - Execute JavaScript in a browser tab (CDP + fallback)
 </details>
 
 ## 🧪 Usage Examples
@@ -319,11 +335,24 @@ We have exciting plans for the future development of Chrome MCP Server:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 📚 More Documentation
+## 📚 Documentation
+
+### For Users
 
 - [Why mcp-chrome? (vs Playwright / browser-use)](docs/WHY_MCP_CHROME.md) — positioning and tradeoffs
-- [Architecture Design](docs/ARCHITECTURE.md) - Detailed technical architecture documentation
+- [Stable Quickstart](docs/STABLE_QUICKSTART.md) — install, verify, first success
+- [TOOLS API (EN)](docs/TOOLS.md) | [工具 API (中文)](docs/TOOLS_zh.md) — complete tool reference
 - [MCP transports (HTTP / SSE / stdio)](docs/TRANSPORT.md) — which mode to use
-- [TOOLS API](docs/TOOLS.md) - Complete tool API documentation
-- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issue solutions
+- [Troubleshooting](docs/TROUBLESHOOTING.md) — common issue solutions
+- [CoPaw Integration Guide](docs/COPAW.md) — use with CoPaw AI client
+
+### For AI Assistants
+
 - [AI assistant skill (portable)](skills/chrome_mcp_browser/SKILL.md) — playbook for any MCP client
+
+### For Developers & Contributors
+
+- [Architecture Design](docs/ARCHITECTURE.md) — detailed technical architecture
+- [Security Considerations](docs/SECURITY.md) — prompt injection risks, tool risk classification
+- [Contributing Guide](docs/CONTRIBUTING.md) — how to contribute
+- [Visual Editor](docs/VisualEditor.md) — visual editor for Claude Code & Codex
