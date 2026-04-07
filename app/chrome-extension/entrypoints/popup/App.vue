@@ -36,6 +36,56 @@
               </div>
             </div>
 
+            <!-- Connected MCP clients -->
+            <div
+              v-if="showMcpConfig && connectedClients.length > 0"
+              class="connected-clients-section"
+            >
+              <div class="connected-clients-header">
+                <p class="connected-clients-label"
+                  >已连接的客户端 ({{ connectedClients.length }})</p
+                >
+                <button
+                  class="refresh-status-button"
+                  @click="fetchConnectedClients"
+                  title="刷新客户端列表"
+                >
+                  <RefreshIcon className="icon-small" />
+                </button>
+              </div>
+              <div class="connected-clients-list">
+                <div
+                  v-for="client in connectedClients"
+                  :key="client.sessionId"
+                  class="connected-client-item"
+                >
+                  <div class="client-info">
+                    <span class="client-dot"></span>
+                    <span class="client-name">{{ client.clientName || '未知客户端' }}</span>
+                    <span class="client-meta"
+                      >{{ client.clientIp }} ·
+                      {{ client.kind === 'streamable-http' ? 'HTTP' : 'SSE' }}</span
+                    >
+                  </div>
+                  <div class="client-actions">
+                    <span class="client-time">{{ formatConnectedTime(client.connectedAt) }}</span>
+                    <button
+                      class="client-disconnect-btn"
+                      @click="disconnectClient(client.sessionId)"
+                      title="断开此客户端"
+                      >✕</button
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              v-else-if="showMcpConfig"
+              class="connected-clients-section connected-clients-empty"
+            >
+              <p class="connected-clients-label">暂无 MCP 客户端连接</p>
+            </div>
+
             <div v-if="showMcpConfig" class="mcp-config-section">
               <div class="mcp-config-header">
                 <p class="mcp-config-label">{{ getMessage('mcpServerConfigLabel') }}</p>
@@ -532,6 +582,55 @@ const serverStatus = ref<{
 const showMcpConfig = computed(() => {
   return nativeConnectionStatus.value === 'connected' && serverStatus.value.isRunning;
 });
+
+// ==================== Connected Clients ====================
+
+interface ConnectedClient {
+  sessionId: string;
+  kind: 'sse' | 'streamable-http';
+  clientIp: string;
+  clientName: string;
+  clientVersion: string;
+  connectedAt: number;
+}
+
+const connectedClients = ref<ConnectedClient[]>([]);
+
+function getServerBaseUrl(): string {
+  const port = serverStatus.value.port || nativeServerPort.value;
+  return `http://127.0.0.1:${port}`;
+}
+
+async function fetchConnectedClients(): Promise<void> {
+  if (!showMcpConfig.value) {
+    connectedClients.value = [];
+    return;
+  }
+  try {
+    const res = await fetch(`${getServerBaseUrl()}/status`);
+    if (!res.ok) return;
+    const json = await res.json();
+    connectedClients.value = json?.data?.transports?.clients ?? [];
+  } catch {
+    connectedClients.value = [];
+  }
+}
+
+async function disconnectClient(sessionId: string): Promise<void> {
+  try {
+    await fetch(`${getServerBaseUrl()}/status/sessions/${sessionId}`, { method: 'DELETE' });
+  } catch {
+    // best-effort
+  }
+  await fetchConnectedClients();
+}
+
+function formatConnectedTime(ts: number): string {
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  return `${Math.floor(diff / 3_600_000)} 小时前`;
+}
 
 const copyButtonText = ref(getMessage('copyConfigButton'));
 
@@ -1035,6 +1134,8 @@ const checkServerStatus = async () => {
     if (response?.connected !== undefined) {
       nativeConnectionStatus.value = response.connected ? 'connected' : 'disconnected';
     }
+
+    await fetchConnectedClients();
   } catch (error) {
     console.error('检测服务器状态失败:', error);
   }
@@ -1056,6 +1157,8 @@ const refreshServerStatus = async () => {
     if (response?.connected !== undefined) {
       nativeConnectionStatus.value = response.connected ? 'connected' : 'disconnected';
     }
+
+    await fetchConnectedClients();
   } catch (error) {
     console.error('刷新服务器状态失败:', error);
   }
@@ -2038,6 +2141,106 @@ onUnmounted(() => {
   border-radius: 10px;
   padding: 8px 10px;
   word-break: break-word;
+}
+
+/* Connected clients */
+.connected-clients-section {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
+}
+
+.connected-clients-section.connected-clients-empty {
+  padding-bottom: 4px;
+}
+
+.connected-clients-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.connected-clients-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  margin: 0;
+}
+
+.connected-clients-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.connected-client-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.client-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.client-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  flex-shrink: 0;
+}
+
+.client-name {
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+.client-meta {
+  color: #94a3b8;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.client-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.client-time {
+  color: #94a3b8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.client-disconnect-btn {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 1px 5px;
+  font-size: 11px;
+  line-height: 1;
+  transition: all 0.15s;
+}
+
+.client-disconnect-btn:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
 }
 
 .mcp-config-section {

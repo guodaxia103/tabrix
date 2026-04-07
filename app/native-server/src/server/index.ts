@@ -40,7 +40,14 @@ interface ExtensionRequestPayload {
   data?: unknown;
 }
 
-type ManagedTransport =
+interface TransportMeta {
+  clientIp: string;
+  clientName: string;
+  clientVersion: string;
+  connectedAt: number;
+}
+
+type ManagedTransport = (
   | {
       kind: 'sse';
       transport: SSEServerTransport;
@@ -50,7 +57,18 @@ type ManagedTransport =
       kind: 'streamable-http';
       transport: StreamableHTTPServerTransport;
       server: McpServer;
-    };
+    }
+) &
+  TransportMeta;
+
+interface ConnectedClient {
+  sessionId: string;
+  kind: 'sse' | 'streamable-http';
+  clientIp: string;
+  clientName: string;
+  clientVersion: string;
+  connectedAt: number;
+}
 
 interface ServerStatusSnapshot {
   isRunning: boolean;
@@ -62,6 +80,7 @@ interface ServerStatusSnapshot {
     sse: number;
     streamableHttp: number;
     sessionIds: string[];
+    clients: ConnectedClient[];
   };
   execution: {
     tasks: {
@@ -172,6 +191,21 @@ export class Server {
         data: this.getStatusSnapshot(),
       });
     });
+
+    this.fastify.delete(
+      '/status/sessions/:sessionId',
+      async (request: FastifyRequest<{ Params: { sessionId: string } }>, reply: FastifyReply) => {
+        const { sessionId } = request.params;
+        const removed = this.forceDisconnectSession(sessionId);
+        if (removed) {
+          reply.status(HTTP_STATUS.OK).send({ status: 'ok', message: 'Session disconnected' });
+        } else {
+          reply
+            .status(HTTP_STATUS.NOT_FOUND)
+            .send({ status: 'error', message: 'Session not found' });
+        }
+      },
+    );
   }
 
   // ============================================================
@@ -223,7 +257,7 @@ export class Server {
 
   private setupMcpRoutes(): void {
     // SSE endpoint
-    this.fastify.get('/sse', async (_, reply) => {
+    this.fastify.get('/sse', async (request, reply) => {
       try {
         reply.hijack();
         reply.raw.writeHead(HTTP_STATUS.OK, {
@@ -238,6 +272,10 @@ export class Server {
           kind: 'sse',
           transport,
           server,
+          clientIp: request.ip,
+          clientName: '',
+          clientVersion: '',
+          connectedAt: Date.now(),
         });
 
         reply.raw.on('close', () => {
@@ -266,6 +304,10 @@ export class Server {
           return;
         }
 
+        if (isInitializeRequest(req.body) && !entry.clientName) {
+          this.extractClientInfo(entry, req.body);
+        }
+
         await entry.transport.handlePostMessage(req.raw, reply.raw, req.body);
       } catch (error) {
         if (canWriteReply(reply)) {
@@ -286,6 +328,12 @@ export class Server {
       } else if (!sessionId && isInitializeRequest(request.body)) {
         const newSessionId = randomUUID();
         const server = createMcpServer();
+        const clientIp = request.ip;
+        const initBody = request.body as {
+          params?: { clientInfo?: { name?: string; version?: string } };
+        };
+        const clientName = initBody?.params?.clientInfo?.name ?? '';
+        const clientVersion = initBody?.params?.clientInfo?.version ?? '';
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => newSessionId,
           onsessioninitialized: (initializedSessionId) => {
@@ -294,6 +342,10 @@ export class Server {
                 kind: 'streamable-http',
                 transport,
                 server,
+                clientIp,
+                clientName,
+                clientVersion,
+                connectedAt: Date.now(),
               });
             }
           },
@@ -438,15 +490,24 @@ export class Server {
     const sessionIds = [...this.transportsMap.keys()];
     let sse = 0;
     let streamableHttp = 0;
+    const clients: ConnectedClient[] = [];
     const tasks = sessionManager.listTasks();
     const executionSessions = sessionManager.listSessions();
 
-    for (const entry of this.transportsMap.values()) {
+    for (const [sid, entry] of this.transportsMap.entries()) {
       if (entry.kind === 'sse') {
         sse += 1;
       } else {
         streamableHttp += 1;
       }
+      clients.push({
+        sessionId: sid,
+        kind: entry.kind,
+        clientIp: entry.clientIp,
+        clientName: entry.clientName,
+        clientVersion: entry.clientVersion,
+        connectedAt: entry.connectedAt,
+      });
     }
 
     return {
@@ -459,6 +520,7 @@ export class Server {
         sse,
         streamableHttp,
         sessionIds,
+        clients,
       },
       execution: {
         tasks: {
@@ -483,6 +545,25 @@ export class Server {
             : null,
       },
     };
+  }
+
+  private extractClientInfo(entry: ManagedTransport, body: unknown): void {
+    const msg = body as { params?: { clientInfo?: { name?: string; version?: string } } };
+    if (msg?.params?.clientInfo) {
+      entry.clientName = msg.params.clientInfo.name ?? '';
+      entry.clientVersion = msg.params.clientInfo.version ?? '';
+    }
+  }
+
+  /**
+   * Force-disconnect a session by ID.
+   * Used by the popup "kick" button via DELETE /status/sessions/:sessionId.
+   */
+  public forceDisconnectSession(sessionId: string): boolean {
+    const entry = this.transportsMap.get(sessionId);
+    if (!entry) return false;
+    this.removeManagedTransport(sessionId);
+    return true;
   }
 
   private removeManagedTransport(sessionId: string): void {
