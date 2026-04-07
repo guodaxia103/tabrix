@@ -950,6 +950,11 @@ export const TOOL_SCHEMAS: Tool[] = [
           type: 'number',
           description: 'Target tab ID. If omitted, uses the current active tab.',
         },
+        windowId: {
+          type: 'number',
+          description:
+            'When tabId is omitted, use the active tab in this window (default: current window).',
+        },
         timeoutMs: {
           type: 'number',
           description: 'Execution timeout in milliseconds (default: 15000).',
@@ -1334,6 +1339,11 @@ export const TOOL_SCHEMAS: Tool[] = [
           type: 'number',
           description:
             'Target tab ID (default: active tab). Used with "start"/"auto_start" for recording, and with "export" (download=false) for drag&drop upload target.',
+        },
+        windowId: {
+          type: 'number',
+          description:
+            'When tabId is omitted, use the active tab in this window (default: current window).',
         },
         fps: {
           type: 'number',

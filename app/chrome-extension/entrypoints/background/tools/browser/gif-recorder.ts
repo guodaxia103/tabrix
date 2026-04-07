@@ -64,6 +64,7 @@ type GifRecorderAction =
 interface GifRecorderParams {
   action: GifRecorderAction;
   tabId?: number;
+  windowId?: number;
   fps?: number;
   durationMs?: number;
   maxFrames?: number;
@@ -630,7 +631,7 @@ class GifRecorderTool extends BaseBrowserToolExecutor {
       switch (action) {
         case 'start': {
           // Fixed-FPS mode: captures frames at regular intervals
-          const tab = await this.resolveTargetTab(args.tabId);
+          const tab = await this.resolveTargetTab(args.tabId, args.windowId);
           if (!tab?.id) {
             return createErrorResponse(
               typeof args.tabId === 'number'
@@ -679,7 +680,7 @@ class GifRecorderTool extends BaseBrowserToolExecutor {
 
         case 'auto_start': {
           // Auto-capture mode: captures frames when tools succeed
-          const tab = await this.resolveTargetTab(args.tabId);
+          const tab = await this.resolveTargetTab(args.tabId, args.windowId);
           if (!tab?.id) {
             return createErrorResponse(
               typeof args.tabId === 'number'
@@ -752,7 +753,7 @@ class GifRecorderTool extends BaseBrowserToolExecutor {
 
         case 'capture': {
           // Manual frame capture in auto mode
-          const tab = await this.resolveTargetTab(args.tabId);
+          const tab = await this.resolveTargetTab(args.tabId, args.windowId);
           if (!tab?.id) {
             return createErrorResponse(
               typeof args.tabId === 'number'
@@ -1028,7 +1029,7 @@ class GifRecorderTool extends BaseBrowserToolExecutor {
             }
 
             // Resolve target tab
-            const tab = await this.resolveTargetTab(args.tabId);
+            const tab = await this.resolveTargetTab(args.tabId, args.windowId);
             if (!tab?.id) {
               return createErrorResponse(
                 typeof args.tabId === 'number'
@@ -1211,12 +1212,15 @@ class GifRecorderTool extends BaseBrowserToolExecutor {
     );
   }
 
-  private async resolveTargetTab(tabId?: number): Promise<chrome.tabs.Tab | null> {
+  private async resolveTargetTab(
+    tabId?: number,
+    windowId?: number,
+  ): Promise<chrome.tabs.Tab | null> {
     if (typeof tabId === 'number') {
       return this.tryGetTab(tabId);
     }
     try {
-      return await this.getActiveTabOrThrow();
+      return await this.getActiveTabOrThrowInWindow(windowId);
     } catch {
       return null;
     }
