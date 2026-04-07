@@ -782,7 +782,8 @@ export const TOOL_SCHEMAS: Tool[] = [
       properties: {
         url: {
           type: 'string',
-          description: 'URL to bookmark. If not provided, uses the current active tab URL.',
+          description:
+            'URL to bookmark. If not provided, uses the URL from the tab given by tabId/windowId, or the active tab.',
         },
         title: {
           type: 'string',
@@ -796,6 +797,16 @@ export const TOOL_SCHEMAS: Tool[] = [
         createFolder: {
           type: 'boolean',
           description: 'Whether to create the parent folder if it does not exist (default: false)',
+        },
+        tabId: {
+          type: 'number',
+          description:
+            'When url is omitted, bookmark this tab (default: active tab in current or specified window).',
+        },
+        windowId: {
+          type: 'number',
+          description:
+            'When url is omitted and tabId is omitted, use the active tab in this window.',
         },
       },
       required: [],
