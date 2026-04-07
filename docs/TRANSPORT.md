@@ -16,7 +16,28 @@
 - **SSE**：长连接，注意会话 ID 与断线重连。
 - **stdio**：标准输入输出承载 JSON-RPC；**父进程退出时子进程应随 stdin 关闭而退出**，避免僵尸进程。
 
+## 远程访问
+
+默认只监听 `127.0.0.1`。设置环境变量 `MCP_HTTP_HOST=0.0.0.0` 后，MCP 服务绑定到所有网络接口，允许其他机器或 Docker 容器通过局域网 IP 连接。
+
+远程客户端配置示例：
+
+```json
+{
+  "mcpServers": {
+    "chrome-mcp": {
+      "url": "http://<浏览器所在机器的局域网IP>:12306/mcp"
+    }
+  }
+}
+```
+
+连接后可在扩展 Popup「已连接的客户端」列表中查看远程 IP 并踢出不认识的会话。
+
+详见 [CLIENT_CONFIG_QUICKREF.md → 远程连接](./CLIENT_CONFIG_QUICKREF.md#远程连接跨机器--docker)。
+
 ## 推荐
 
 - 一般桌面 AI 客户端：优先 **Streamable HTTP** 指向本机 bridge。
+- 远程 / Docker 场景：设 `MCP_HTTP_HOST=0.0.0.0`，用宿主机 IP 连接。
 - 仅当客户端只支持 stdio 时使用 **`mcp-chrome-stdio`**，并确保 MCP 宿主进程正确管理子进程生命周期。
