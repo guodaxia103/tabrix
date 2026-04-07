@@ -9,6 +9,13 @@ interface NetworkDebuggerStartToolParams {
   maxCaptureTime?: number;
   inactivityTimeout?: number; // Inactivity timeout (milliseconds)
   includeStatic?: boolean; // if include static resources
+  tabId?: number;
+  windowId?: number;
+}
+
+interface NetworkDebuggerStopToolParams {
+  tabId?: number;
+  windowId?: number;
 }
 
 // Network request object interface
@@ -770,6 +777,8 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
       maxCaptureTime = DEFAULT_MAX_CAPTURE_TIME_MS,
       inactivityTimeout = DEFAULT_INACTIVITY_TIMEOUT_MS,
       includeStatic = false,
+      tabId: requestedTabId,
+      windowId,
     } = args;
 
     console.log(
@@ -795,11 +804,15 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
           await new Promise((resolve) => setTimeout(resolve, 500)); // Short delay
         }
       } else {
-        const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (activeTabs.length > 0 && activeTabs[0]?.id) {
-          tabToOperateOn = activeTabs[0];
+        const explicit = await this.tryGetTab(requestedTabId);
+        if (explicit) {
+          tabToOperateOn = explicit;
         } else {
-          return createErrorResponse('No active tab found and no URL provided.');
+          try {
+            tabToOperateOn = await this.getActiveTabOrThrowInWindow(windowId);
+          } catch {
+            return createErrorResponse('No target tab found and no URL provided.');
+          }
         }
       }
 
@@ -871,7 +884,7 @@ class NetworkDebuggerStopTool extends BaseBrowserToolExecutor {
     NetworkDebuggerStopTool.instance = this;
   }
 
-  async execute(): Promise<ToolResult> {
+  async execute(args?: NetworkDebuggerStopToolParams): Promise<ToolResult> {
     console.log(`NetworkDebuggerStopTool: Executing command.`);
 
     const startTool = NetworkDebuggerStartTool.instance;
@@ -891,31 +904,40 @@ class NetworkDebuggerStopTool extends BaseBrowserToolExecutor {
       return createErrorResponse('No active network captures found in any tab.');
     }
 
-    // Get current active tab
-    const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const activeTabId = activeTabs[0]?.id;
+    const requestedTabId = args?.tabId;
+    const windowId = args?.windowId;
+    const captureData = startTool['captureData'] as Map<number, unknown>;
 
-    // Determine the primary tab to stop
     let primaryTabId: number;
 
-    if (activeTabId && startTool['captureData'].has(activeTabId)) {
-      // If current active tab is capturing, prioritize stopping it
-      primaryTabId = activeTabId;
-      console.log(
-        `NetworkDebuggerStopTool: Active tab ${activeTabId} is capturing, will stop it first.`,
-      );
-    } else if (ongoingCaptures.length === 1) {
-      // If only one tab is capturing, stop it
-      primaryTabId = ongoingCaptures[0];
-      console.log(
-        `NetworkDebuggerStopTool: Only one tab ${primaryTabId} is capturing, stopping it.`,
-      );
+    if (typeof requestedTabId === 'number') {
+      if (!captureData.has(requestedTabId)) {
+        return createErrorResponse(
+          `No active network capture on tab ${requestedTabId}. Capturing tabs: ${ongoingCaptures.join(', ')}`,
+        );
+      }
+      primaryTabId = requestedTabId;
+      console.log(`NetworkDebuggerStopTool: Stopping explicitly requested tab ${primaryTabId}.`);
     } else {
-      // If multiple tabs are capturing but current active tab is not among them, stop the first one
-      primaryTabId = ongoingCaptures[0];
-      console.log(
-        `NetworkDebuggerStopTool: Multiple tabs capturing, active tab not among them. Stopping tab ${primaryTabId} first.`,
-      );
+      const activeTab = await this.getActiveTabInWindow(windowId);
+      const activeTabId = activeTab?.id;
+
+      if (activeTabId && captureData.has(activeTabId)) {
+        primaryTabId = activeTabId;
+        console.log(
+          `NetworkDebuggerStopTool: Active tab ${activeTabId} is capturing, will stop it first.`,
+        );
+      } else if (ongoingCaptures.length === 1) {
+        primaryTabId = ongoingCaptures[0];
+        console.log(
+          `NetworkDebuggerStopTool: Only one tab ${primaryTabId} is capturing, stopping it.`,
+        );
+      } else {
+        primaryTabId = ongoingCaptures[0];
+        console.log(
+          `NetworkDebuggerStopTool: Multiple tabs capturing, active tab not among them. Stopping tab ${primaryTabId} first.`,
+        );
+      }
     }
 
     // Stop capture for the primary tab

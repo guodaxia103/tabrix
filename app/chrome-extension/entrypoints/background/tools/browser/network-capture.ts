@@ -13,6 +13,8 @@ interface NetworkCaptureToolParams {
   maxCaptureTime?: number;
   inactivityTimeout?: number;
   includeStatic?: boolean;
+  tabId?: number;
+  windowId?: number;
 }
 
 /**
@@ -89,6 +91,13 @@ class NetworkCaptureTool extends BaseBrowserToolExecutor {
     return this.handleStop(args, debuggerActive, webActive);
   }
 
+  private pickStopArgs(args: NetworkCaptureToolParams): {
+    tabId?: number;
+    windowId?: number;
+  } {
+    return { tabId: args.tabId, windowId: args.windowId };
+  }
+
   private async handleStart(
     args: NetworkCaptureToolParams,
     wantBody: boolean,
@@ -111,6 +120,8 @@ class NetworkCaptureTool extends BaseBrowserToolExecutor {
       maxCaptureTime: args.maxCaptureTime,
       inactivityTimeout: args.inactivityTimeout,
       includeStatic: args.includeStatic,
+      tabId: args.tabId,
+      windowId: args.windowId,
     });
 
     return decorateJsonResult(result, { backend, needResponseBody: wantBody });
@@ -146,7 +157,7 @@ class NetworkCaptureTool extends BaseBrowserToolExecutor {
 
     const delegateStop =
       backendToStop === 'debugger' ? networkDebuggerStopTool : networkCaptureStopTool;
-    const result = await delegateStop.execute();
+    const result = await delegateStop.execute(this.pickStopArgs(args));
 
     return decorateJsonResult(result, {
       backend: backendToStop,

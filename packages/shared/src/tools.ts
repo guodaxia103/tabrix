@@ -691,6 +691,16 @@ export const TOOL_SCHEMAS: Tool[] = [
           type: 'boolean',
           description: 'Include static resources like images/scripts/styles (default: false)',
         },
+        tabId: {
+          type: 'number',
+          description:
+            'For action=start without url: capture on this tab. For action=stop: stop capture on this tab when it matches an active capture.',
+        },
+        windowId: {
+          type: 'number',
+          description:
+            'When tabId is omitted: for start without url, use active tab in this window; for stop, prefer stopping capture on that window active tab if it is capturing.',
+        },
       },
       required: ['action'],
     },
