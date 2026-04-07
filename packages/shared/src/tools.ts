@@ -118,6 +118,15 @@ export const TOOL_SCHEMAS: Tool[] = [
           type: 'number',
           description: 'Auto-stop duration in milliseconds when autoStop is true (default 5000).',
         },
+        tabId: {
+          type: 'number',
+          description:
+            'Record the trace on this tab. Defaults to the active tab in the current or specified window.',
+        },
+        windowId: {
+          type: 'number',
+          description: 'When tabId is omitted, use the active tab in this Chrome window.',
+        },
       },
       required: [],
     },
@@ -135,6 +144,15 @@ export const TOOL_SCHEMAS: Tool[] = [
         filenamePrefix: {
           type: 'string',
           description: 'Optional filename prefix for the downloaded trace JSON.',
+        },
+        tabId: {
+          type: 'number',
+          description:
+            'Stop the trace on this tab (must match where recording started). Defaults to active tab.',
+        },
+        windowId: {
+          type: 'number',
+          description: 'When tabId is omitted, use the active tab in this window.',
         },
       },
       required: [],
@@ -159,7 +177,12 @@ export const TOOL_SCHEMAS: Tool[] = [
         tabId: {
           type: 'number',
           description:
-            'Optional tab ID whose last recorded trace result should be analyzed. If omitted, uses the active tab and falls back to the most recent recorded trace.',
+            'Optional tab ID whose last recorded trace result should be analyzed. If omitted, uses the active tab (or windowId) and falls back to the most recent recorded trace.',
+        },
+        windowId: {
+          type: 'number',
+          description:
+            'When tabId is omitted, prefer the active tab in this window for last-result lookup.',
         },
         timeoutMs: {
           type: 'number',

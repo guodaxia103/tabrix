@@ -9,16 +9,21 @@ interface StartTraceParams {
   reload?: boolean; // whether to reload the page after starting trace
   autoStop?: boolean; // whether to auto stop after a short duration
   durationMs?: number; // custom duration when autoStop is true (default 5000)
+  tabId?: number;
+  windowId?: number;
 }
 
 interface StopTraceParams {
   saveToDownloads?: boolean; // save trace to Downloads as JSON (default true)
   filenamePrefix?: string; // filename prefix (default 'performance_trace')
+  tabId?: number;
+  windowId?: number;
 }
 
 interface AnalyzeInsightParams {
   insightName?: string; // placeholder for future deep insights
   tabId?: number; // optional explicit tab to analyze
+  windowId?: number;
 }
 
 type DebuggeeEvent = (source: chrome.debugger.Debuggee, method: string, params?: any) => void;
@@ -245,9 +250,10 @@ class PerformanceStartTraceTool extends BaseBrowserToolExecutor {
     const { reload = false, autoStop = false, durationMs = 5000 } = args || {};
 
     try {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const explicit = await this.tryGetTab(args.tabId);
+      const activeTab = explicit || (await this.getActiveTabOrThrowInWindow(args.windowId));
       if (!activeTab?.id) {
-        return createErrorResponse('No active tab found');
+        return createErrorResponse('No target tab found for performance trace');
       }
       const tabId = activeTab.id;
       const existed = sessions.get(tabId);
@@ -318,6 +324,7 @@ class PerformanceStartTraceTool extends BaseBrowserToolExecutor {
             text: JSON.stringify({
               success: true,
               message: 'Performance trace is recording. Use performance_stop_trace to stop it.',
+              tabId,
               reload,
               autoStop,
             }),
@@ -340,8 +347,10 @@ class PerformanceStopTraceTool extends BaseBrowserToolExecutor {
   async execute(args: StopTraceParams): Promise<ToolResult> {
     const { saveToDownloads = true, filenamePrefix } = args || {};
     try {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!activeTab?.id) return createErrorResponse('No active tab found');
+      const explicit = await this.tryGetTab(args.tabId);
+      const activeTab = explicit || (await this.getActiveTabOrThrowInWindow(args.windowId));
+      if (!activeTab?.id)
+        return createErrorResponse('No target tab found for performance_stop_trace');
       const tabId = activeTab.id;
       const session = sessions.get(tabId);
       if (!session) {
@@ -439,12 +448,12 @@ class PerformanceAnalyzeInsightTool extends BaseBrowserToolExecutor {
   name = TOOL_NAMES.BROWSER.PERFORMANCE_ANALYZE_INSIGHT;
 
   async execute(args: AnalyzeInsightParams & { timeoutMs?: number }): Promise<ToolResult> {
-    const { insightName, tabId: requestedTabId } = args || {};
+    const { insightName, tabId: requestedTabId, windowId } = args || {};
     try {
       let tabId: number | null = typeof requestedTabId === 'number' ? requestedTabId : null;
 
       if (tabId === null) {
-        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const activeTab = await this.getActiveTabInWindow(windowId);
         tabId = activeTab?.id ?? null;
       }
 
