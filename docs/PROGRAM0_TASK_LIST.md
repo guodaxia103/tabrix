@@ -1,0 +1,380 @@
+# Program 0 详细任务清单
+
+最后更新：`2026-04-07 Asia/Shanghai`（v2.1 — 增加任务闭环约定与 §十二手动测试清单）
+分支：`codex/phase0-stabilization`
+
+基于：当前分支 51 commits、上游 hangwin/mcp-chrome 173 个 Open Issues、PHASE0 系列文档、实际代码审查、**竞品调研（15+ 开源 / 8+ 商业产品）**。
+
+> **v2 变更摘要**（对照 `PRODUCT_STRATEGY.md`）：
+>
+> 1. C7（一键安装）从可选提升至第二批必做 — KCI 要求「安装到首次成功 < 5 分钟」
+> 2. 客户端验证范围扩大：新增 F8 OpenClaw、F9 Windsurf — 覆盖 5 大核心客户端
+> 3. AI Skill（I4）从第四批提升至第二批并行启动 — 「Skill 是核心产品」
+> 4. H5 敏感工具默认禁用从"低"提升为"中" — 真实浏览器安全是信任基础
+> 5. 新增 G8「竞品对比 Why mcp-chrome」— 开源产品获客关键
+
+状态说明：
+
+- `[x]` 已完成
+- `[~]` 进行中 / 部分完成
+- `[ ]` 未开始
+- `[!]` 阻塞 / 需要决策
+
+### 维护约定（任务闭环）
+
+1. **合并或验收一个任务时**：在本文件中把对应编号更新为 `[x]`，或写入 **「§ 会话落地」** 子节；若为部分完成，标 `[~]` 并在说明列写清剩余工作。
+2. **自动化能覆盖的**（单测、`mcp-chrome-bridge smoke`、CI）：在 PR/提交说明里引用命令与结果；**不能替代的**（干净机安装、多客户端、Mac、SSE 并行）必须落入 **「十二、手动测试清单」** 或该任务行的说明列，避免「以为已闭环」。
+3. **每次发版或里程碑结束前**：扫一遍本节与各表，更新 **「统计」** 与 **最后更新** 日期。
+
+---
+
+## 一、P0-A：MCP 传输层与 Session 生命周期
+
+> 最高优先级。对应上游 Issues: #321, #306, #9, #308, #37, #288, #300, #29
+
+### 已完成
+
+- `[x]` A1. 移除全局 MCP Server 单例（HTTP/SSE），每次 initialize 创建独立实例
+- `[x]` A3. 修复 `ERR_HTTP_HEADERS_SENT` 类响应生命周期问题
+- `[x]` A5. 修复 duplicate MCP error responses 问题
+- `[x]` A7. Transport 行为文档化（`docs/TRANSPORT.md`：HTTP / SSE / stdio）
+- `[x]` A8. stdio 模式僵尸进程修复（`mcp-server-stdio.ts` stdin 关闭与信号处理）
+
+### 待完成
+
+| 编号 | 任务                          | 关联 Issue | 难度 | 说明                                                                                                                         |
+| ---- | ----------------------------- | ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------------- |
+| A2   | Session Registry 独立模块抽取 | #321       | 中   | 当前 session 管理散落在 `server/index.ts`，需提取为独立 `session-registry.ts`，支持 session 枚举、超时清理、优雅关闭         |
+| A4   | SSE 并行 session 回归测试     | #9, #308   | 中   | 当前只有 HTTP repeated-initialize 测试（`server.test.ts`），缺少 SSE 传输的并行 session 创建/销毁覆盖。**见 §十二手动项 A4** |
+| A6   | Session ID 校验错误信息优化   | #308       | 低   | `Invalid or missing MCP session ID for SSE` 错误提示需附带诊断建议                                                           |
+| A9   | Chrome 升级后 MCP 请求兼容性  | #288       | 中   | Chrome 144+ 更新后出现 `Invalid MCP request or session`，需排查 extension manifest 或请求头变化                              |
+
+---
+
+## 二、P0-B：Native Host 与扩展启动稳定性
+
+> 对应上游 Issues: #29, #198, #237, #284, #298, #307, #199, #292
+
+### 已完成
+
+- `[x]` B1. Native Host 诊断增强
+- `[x]` B2. Popup 连接/刷新状态行为改善
+- `[x]` B3. Unpacked Extension ID 漂移修复（动态 `allowed_origins`）
+- `[x]` B5. 稳定本地扩展 key 生成（`ensure-extension-key.cjs`）
+- `[x]` B6. Popup Refresh 恢复 native server 状态
+
+### 待完成
+
+| 编号 | 任务                            | 关联 Issue                  | 难度 | 说明                                                                                                                                                              |
+| ---- | ------------------------------- | --------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B4   | "已连接，服务未启动" 状态机梳理 | #29, #198, #237, #284, #298 | 高   | `[~]` **部分**：popup `statusDetailText` 已补充 doctor/端口/重载提示（`App.vue`）。仍缺与 background `GET_SERVER_STATUS` 完全一致的显式状态机；**见 §十二 B4/B7** |
+| B7   | Chrome 重启后扩展持久化验证     | #198, #237                  | 中   | 在全新 profile 上完整验证"安装 → 重启 Chrome → 扩展仍在 → 自动连接"流程                                                                                           |
+| B8   | logs 目录自动创建               | #237                        | 低   | #237 明确指出缺 logs 文件夹导致启动失败。确认当前代码包含 `mkdirSync` 保护                                                                                        |
+| B9   | Mac 平台 Native Host 注册验证   | #284                        | 中   | 当前加固主要在 Windows，Mac 用户也有连接问题。需在 macOS 上验证 manifest 路径、权限                                                                               |
+| B10  | better-sqlite3 原生模块绑定问题 | #271                        | 中   | 部分环境（pnpm global）找不到 bindings file，需确认 `postinstall` 正确处理原生模块路径                                                                            |
+
+---
+
+## 三、P0-C：安装流程与环境适配
+
+> 对应上游 Issues: #274, #264, #199, #262, #292
+
+### 已完成
+
+- `[x]` C1. Windows 注册/管理员/构建流程加固
+- `[x]` C2. `postinstall` 权限检测对齐
+- `[x]` C3. 构建清理更健壮（EBUSY 处理）
+- `[x]` C7. CLI 子命令 `mcp-chrome-bridge setup`（`scripts/setup.ts` + `cli.ts`）
+
+### 待完成
+
+| 编号 | 任务                          | 关联 Issue    | 难度 | 说明                                                                                                                                              |
+| ---- | ----------------------------- | ------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C4   | npm global install 端到端验证 | #292, #199    | 高   | 从全新 Windows 机器执行 `npm install -g mcp-chrome-bridge` → `register` → 加载扩展 → 连接 → 跑通第一个工具，写成可复现 checklist。**见 §十二 C4** |
+| C5   | pnpm global install 兼容性    | README 已注明 | 中   | pnpm v7+ 默认禁用 postinstall，需验证 `enable-pre-post-scripts` 或手动 `register` 路径                                                            |
+| C6   | 开发环境依赖安装报错          | #274          | 低   | `pnpm install` 在某些 macOS 环境报错（`node-gyp` / native 模块），需记录已知依赖与前置条件                                                        |
+| C8   | npx 启动方式验证              | 社区常见      | 低   | 验证 `npx mcp-chrome-bridge doctor` 等是否可直接使用                                                                                              |
+
+---
+
+## 四、P0-D：诊断工具链完善
+
+### 已完成
+
+- `[x]` D1. `status` 命令
+- `[x]` D2. `doctor` 命令（manifest/registry/connectivity/MCP initialize/extension path）
+- `[x]` D3. `smoke` 命令（端到端浏览器冒烟测试）
+- `[x]` D4. `report` 基础版本
+- `[x]` D5. doctor 报告真实加载的 Chrome 扩展路径
+
+### 待完成
+
+| 编号 | 任务                           | 关联 Issue | 难度 | 说明                                                                                                                                                                 |
+| ---- | ------------------------------ | ---------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D6   | `report` 增强为可提交诊断包    | #315       | 中   | 需包含：环境摘要（OS/Node/npm/Chrome 版本）、manifest 内容、registry 内容、最近 50 行日志、`/status` 快照、`doctor` JSON。脱敏后可直接贴 Issue                       |
+| D7   | 统一错误码目录                 | ROADMAP    | 中   | 定义 `E001`–`E0xx` 错误码体系，每个码对应：原因、排查步骤、修复建议。`doctor`/`smoke`/工具失败时引用                                                                 |
+| D8   | `doctor --fix` 自动修复        | 新需求     | 中   | 常见问题（registry 缺失、manifest 路径错、logs 目录不存在）提供 `--fix` 自动修复                                                                                     |
+| D9   | `smoke` 稳定性加固             | 分支 [~]   | 中   | `[~]` 已在开发机连续 **3/3** 次 `mcp-chrome-bridge smoke` 全绿；目标 **5+** 次仍待补跑。`chrome_handle_dialog` 仍有「No dialog is showing」时序噪声。**见 §十二 D9** |
+| D10  | 扩展 error-page 运行时噪音清理 | 分支 [~]   | 低   | smoke/test 页面引发的 extension error-page 条目，需过滤或静默化                                                                                                      |
+
+---
+
+## 五、P0-E：工具验证与修复
+
+> 对应 PHASE0_TOOL_VALIDATION_MATRIX + 上游功能 Issues
+
+### 已通过验证（pass）— 无需操作
+
+- `get_windows_and_tabs`、`chrome_navigate`、`chrome_switch_tab`、`chrome_close_tabs`
+- `chrome_get_web_content`、`chrome_click_element`、`chrome_fill_or_select`、`chrome_computer`
+- `chrome_network_capture`、`chrome_network_request`、`chrome_console`、`chrome_javascript`
+- `chrome_upload_file`、`chrome_handle_download`
+- `chrome_history`、`chrome_bookmark_search`、`chrome_bookmark_add`、`chrome_bookmark_delete`
+- `performance_start_trace`、`performance_stop_trace`、`performance_analyze_insight`
+
+### 需修复或闭环的工具
+
+| 编号 | 工具                                | 当前状态      | 关联 Issue | 任务                                                                                                                                                                                |
+| ---- | ----------------------------------- | ------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E1   | `chrome_read_page`                  | warn (CoPaw)  | —          | CoPaw 下在 `chrome://` 和稀疏 localhost 页面降级。记录限制条件或添加降级提示                                                                                                        |
+| E2   | `chrome_keyboard`                   | warn (CoPaw)  | #200       | CoPaw 下表现为 key/chord 发送器而非文本输入。文档化：用 `chrome_fill_or_select` 做文本输入，`chrome_keyboard` 只用于快捷键                                                          |
+| E3   | `chrome_screenshot`                 | warn (CoPaw)  | —          | CoPaw 调用时 `image readback failed` 超时。排查是扩展侧 CDP 超时还是 CoPaw MCP 客户端超时                                                                                           |
+| E4   | `chrome_handle_dialog`              | warn          | #309       | 无活动 dialog 时返回 `No dialog is showing`（正确），但 debugger 已挂载时冲突。文档化限制                                                                                           |
+| E5   | `chrome_gif_recorder`               | warn          | —          | `start → stop` 偶发 `No recording in progress`。排查 recording 状态管理竞态                                                                                                         |
+| E6   | `chrome_request_element_selection`  | warn          | —          | 人工选择超时是预期行为，需在工具描述中明确 human-in-the-loop 特性                                                                                                                   |
+| E7   | `search_tabs_content`               | fail (未暴露) | —          | shared schema 存在但 `tools/list` 不返回。**决策：Phase 0 修复暴露 or 标记 Phase 1**                                                                                                |
+| E8   | `chrome_inject_script`              | fail (已禁用) | —          | bridge 返回 disabled。正式标记为安全限制并文档化                                                                                                                                    |
+| E9   | `chrome_userscript`                 | fail (未暴露) | —          | 同 E7，需正式分类                                                                                                                                                                   |
+| E10  | **tabId 被忽略**                    | bug           | #275       | `[~]` **`chrome_handle_dialog` / `chrome_network_request` 已支持 `tabId`/`windowId`**（`tools.ts` + background）。scroll/keyboard/JS 等若仍仅绑定活动标签，需继续 grep 扫表（#275） |
+| E11  | **chrome_get_web_content 内容不全** | bug           | #99        | 长页面或复杂 DOM 时内容截断。评估是 DOM 提取策略还是 Native Messaging 消息体大小限制                                                                                                |
+| E12  | **chrome_navigate 自动加 www**      | bug           | #270       | `https://192.168.0.1:4430` 变成 `https://www.192.168.0.1:4430`。确认 `navigate-patterns.test.ts` 是否覆盖                                                                           |
+| E13  | chrome_console 数据不完整           | bug           | #215       | 获取的是浅拷贝数据，无法获取深层对象                                                                                                                                                |
+| E14  | SVG 元素支持                        | 功能请求      | #293       | `chrome_get_web_content` 默认用 `[SVG Icon]` 替代，请求可选返回 SVG 原文                                                                                                            |
+
+---
+
+## 六、P0-F：客户端兼容矩阵
+
+> 对应 MASTER_TASK_ROADMAP §5.3
+
+### 已验证
+
+- `[x]` Chrome 扩展 popup 直接使用
+- `[x]` CoPaw（streamable HTTP）
+
+### 待验证
+
+| 编号 | 客户端                | 传输方式               | 关联 Issue       | 任务                                                                                                                                         |
+| ---- | --------------------- | ---------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1   | Claude Desktop        | streamableHttp         | —                | 验证连接、工具列表、基础操作，记录结果                                                                                                       |
+| F2   | Cursor                | streamableHttp / stdio | —                | 在 Cursor MCP 设置中配置并验证                                                                                                               |
+| F3   | Claude Code CLI       | stdio                  | #199, #299, #307 | 上游大量连接问题。确认 `mcp-chrome-stdio` 在 Windows 下的完整路径                                                                            |
+| F4   | CherryStudio          | streamableHttp         | README 示例      | 验证 README 配置是否直接可用                                                                                                                 |
+| F5   | Dify                  | streamableHttp?        | #262             | 社区尝试失败。评估是否在 Phase 0 支持                                                                                                        |
+| F6   | MCP Inspector / curl  | HTTP                   | —                | 用 curl 手动验证 `/mcp` 的 initialize → tool call 流程                                                                                       |
+| F7   | stdio 通用验证        | stdio                  | #319             | Windows 上 stdio 不稳定。需 stdio 冒烟测试脚本                                                                                               |
+| F8   | **OpenClaw 兼容验证** | MCP (streamableHttp)   | 新需求           | OpenClaw 是 2026 增长最快的开源个人 AI，天然需要浏览器能力。验证 `openclaw.json` MCP 配置 → 连接 → 工具调用 → 多渠道触发（Telegram/Discord） |
+| F9   | **Windsurf 兼容验证** | streamableHttp / stdio | 新需求           | Windsurf 是主流 AI IDE，有最强企业 MCP 管控。验证配置文件格式和工具发现                                                                      |
+
+### 产出物
+
+- 兼容矩阵表格（客户端 × 传输方式 × 状态 × 已知限制）
+- 每个客户端的推荐配置 JSON 片段
+
+---
+
+## 七、P0-G：安装/使用文档与小白体验
+
+### 已完成
+
+- `[x]` `STABLE_QUICKSTART.md`
+- `[x]` `COPAW.md`
+- `[x]` `DELIVERABLE_HANDOFF_zh.md`
+- `[x]` `WHY_MCP_CHROME.md`（竞品对比精简页）
+- `[x]` G8. README 已链入「Why mcp-chrome」竞品对比（与上条同一文档）
+
+### 待完成
+
+| 编号 | 任务                           | 难度 | 说明                                                                          |
+| ---- | ------------------------------ | ---- | ----------------------------------------------------------------------------- |
+| G1   | 统一 README 入口               | 中   | 当前文档散落多个 md。README.md 中清晰分层：用户 → 开发者 → 运维，每层一个链接 |
+| G2   | 中文 README 同步               | 中   | `README_zh.md` 与 phase0 分支新功能（doctor/status/smoke）未同步              |
+| G3   | "Popup 显示 X 该怎么办" 排障表 | 低   | popup 所有可能状态 → 原因 → 解决步骤                                          |
+| G4   | Windows 安装常见坑 FAQ         | 低   | 汇总上游高频问题：PATH、管理员权限、防火墙、pnpm postinstall                  |
+| G5   | "第一个成功任务" 引导流程      | 中   | 安装完成 → 打开浏览器 → 连接扩展 → AI 助手发指令 → 看到结果，完整步骤         |
+| G6   | MCP 客户端配置速查卡           | 低   | 一页纸：5 种常见客户端配置 JSON，复制即用                                     |
+| G7   | 视频/动图脚本大纲              | 低   | 5 分钟演示分镜脚本（可选，未来做）                                            |
+
+---
+
+## 八、P0-H：安全与治理
+
+> 对应上游 Issue #316, #169, #317
+
+### 已完成
+
+- `[x]` H1. `ENABLE_MCP_TOOLS` / `DISABLE_MCP_TOOLS` 环境变量过滤
+- `[x]` H2. 高危/只读工具的 MCP annotations
+
+### 待完成
+
+| 编号 | 任务                               | 关联 Issue | 难度     | 说明                                                                                                                                                                                    |
+| ---- | ---------------------------------- | ---------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H3   | Indirect Prompt Injection 风险文档 | #316       | 低       | 文档化：AI 使用已登录 Chrome session 的安全风险；建议不在 AI 可控浏览器中保持高敏感账号登录                                                                                             |
+| H4   | 工具 MCP annotations 补全          | #317       | 中       | 所有 37 个工具都应有 `readOnlyHint`/`destructiveHint` 标注，当前只有部分                                                                                                                |
+| H5   | **敏感工具默认禁用方案**           | #169       | **中 ↑** | 评估是否默认禁用 `chrome_inject_script`、`chrome_bookmark_delete` 等破坏性工具。**核心卖点「已登录浏览器」也是最大安全顾虑**，竞品参考：OpenTabs「默认全关 + 三级权限（Off/Ask/Auto）」 |
+
+---
+
+## 九、P0-I：工具 API 完整文档 + AI Skill 技能包
+
+> 产品交付的关键组成部分：面向人类开发者的 API 参考 + 面向 AI 助手的操作技能。
+
+### 现状
+
+| 资源                       | 位置                   | 问题                                                                                                                                                        |
+| -------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TOOLS.md` / `TOOLS_zh.md` | `docs/`                | 原版文档，缺少 phase0 新增/修改工具（`chrome_computer`、`chrome_read_page`、`performance_*`、`chrome_gif_recorder` 等）；部分工具缺少错误响应示例和边界说明 |
+| `tools.ts` TOOL_SCHEMAS    | `packages/shared/src/` | 运行时权威源，但开发者/AI 无法直接阅读 TypeScript 代码                                                                                                      |
+| `copaw-mcp-browser` SKILL  | 外部路径（不在仓库内） | 只适配 CoPaw；不随产品发布；不面向 Claude Desktop / Cursor / 通用 MCP 客户端                                                                                |
+
+### 已完成（I4 v1 初版）
+
+- `[x]` **I4 v1**：`skills/chrome_mcp_browser/SKILL.md` + `references/quick_ref.md`（仓库内随产品维护）
+
+### 待完成
+
+| 编号 | 任务                           | 难度 | 说明                                                                                                                                                                                          |
+| ---- | ------------------------------ | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I1   | **TOOLS_zh.md 全量同步**       | 中   | 对齐 `tools.ts` TOOL_SCHEMAS，确保每个当前公开工具都有：描述、完整参数表（类型/必填/默认值）、请求示例 JSON、成功响应示例、错误响应示例（至少 1 个）、已知限制/注意事项                       |
+| I2   | **TOOLS.md 英文版同步**        | 中   | 与 I1 同步更新英文版                                                                                                                                                                          |
+| I3   | **按工具分类整理调用场景**     | 低   | 在文档中增加"典型场景"列：如「打开页面并确认加载」对应 `chrome_navigate` + `get_windows_and_tabs`；「填写登录表单」对应 `chrome_read_page` + `chrome_fill_or_select` + `chrome_click_element` |
+| I4   | **新建仓库内 AI Skill 技能包** | 高   | 在 `skills/chrome_mcp_browser/` 下创建随产品发布的 `SKILL.md` + `references/*.md`，面向**所有 MCP 客户端 AI 助手**。参考 `lark-agent-bridge` 的 skill 结构，包含以下内容                      |
+| I4a  | — Skill 元数据与触发条件       | —    | 声明工具名称、描述、适用 AI 运行时、版本                                                                                                                                                      |
+| I4b  | — 最短成功路径                 | —    | AI 拿到 Skill 后的首选操作流：确认连接 → 获取标签 → 导航 → 读取 → 操作 → 验证                                                                                                                 |
+| I4c  | — 工具选择决策树               | —    | 什么场景用哪个工具；优先用结构化内容（`chrome_read_page` / `chrome_get_web_content`），截图只做保底确认                                                                                       |
+| I4d  | — 失败回退策略                 | —    | 连接断开怎么办、工具超时怎么办、元素找不到怎么办、权限不足怎么办                                                                                                                              |
+| I4e  | — 标准失败回复模板             | —    | AI 遇到各类错误时应如何向用户描述和建议（参考 `lark-agent-bridge` 的 `output_and_errors.md`）                                                                                                 |
+| I4f  | — 工具快速参考表               | —    | 一张表列出所有工具：名称、一句话说明、是否只读、是否破坏性、典型用途                                                                                                                          |
+| I4g  | — 多客户端适配说明             | —    | 不同 AI 客户端（CoPaw / Claude Desktop / Cursor / Claude Code）的配置差异和推荐用法                                                                                                           |
+| I5   | **Skill 验证**                 | 中   | 用至少 2 个不同 AI 客户端实际加载 Skill 并执行浏览器任务，验证 AI 能否正确按 playbook 操作                                                                                                    |
+
+---
+
+## 十、P0-J：功能请求（Phase 0 可选加分项）
+
+> 不是 Phase 0 必须项，改动小可顺手做
+
+| 编号 | 需求                    | 关联 Issue      | 评估                                                           |
+| ---- | ----------------------- | --------------- | -------------------------------------------------------------- |
+| J1   | 监听地址 `0.0.0.0` 支持 | #290, #74, #210 | 低风险高价值，改 Fastify listen 参数即可，需同时考虑安全提示   |
+| J2   | 截图自动保存            | #207            | 低优先级，Phase 1                                              |
+| J3   | 页面滚动 API 文档化     | #200            | `chrome_computer` 已支持 scroll action，确认文档清晰           |
+| J4   | 后台静默运行            | #178            | `chrome_navigate` 已有 `background` 参数，确认所有工具是否支持 |
+
+---
+
+## 十一、推荐执行顺序
+
+### 第一批：P0 阻塞性问题（1–2 周）
+
+> 不修这些，产品不可用。
+
+1. `A8` stdio 僵尸进程修复
+2. `B4` "已连接，服务未启动" 状态机梳理
+3. `E10` tabId 被忽略 bug 修复
+4. `C4` npm 全新安装端到端验证
+5. `D9` smoke 稳定性加固（跑 5+ 次全绿）
+6. `A4` SSE 并行 session 回归测试
+
+### 第二批：P0 质量关 + 产品差异化（1–2 周）
+
+> 修完第一批后，**稳定性和差异化双线并行**。
+> 战略调研结论：AI Skill + 安装体验 + 客户端覆盖是竞争力核心，不能推迟到收尾阶段。
+
+7. `C7` **一键安装 setup 命令** ↑ 从可选提升 — KCI「< 5 分钟首次成功」
+8. `I4` **AI Skill 技能包 v1 启动** ↑ 从第四批提升 — 「Skill 是核心产品」
+9. `D6` report 增强为诊断包
+10. `E11` chrome_get_web_content 内容不全
+11. `E12` chrome_navigate www 前缀问题
+12. `F1`–`F3` Claude Desktop / Cursor / Claude Code 兼容验证
+13. `B9` Mac 平台验证
+14. `G1`–`G2` README 统一入口 + 中文同步
+
+### 第三批：P0 收尾 + 安全加固（1 周）
+
+15. `A2` Session Registry 独立模块
+16. `D7` 统一错误码目录
+17. `H3`–`H5` 安全文档 + annotations 补全 + **敏感工具默认禁用** ↑
+18. `G3`–`G6` 排障表 / FAQ / 配置速查
+19. ~~`G8` 竞品对比页~~ → 已完成（`WHY_MCP_CHROME.md`）
+20. `F7` stdio 冒烟测试脚本
+21. 所有 warn 工具的修复或限制文档化
+
+### 第四批：完整文档 + 全客户端验证（1 周，与第三批可并行）
+
+22. `I1`–`I2` TOOLS 文档全量同步（中英文）
+23. `I3` 按工具分类的调用场景
+24. `I4` AI Skill 技能包定稿（基于第二批 v1 的实测反馈迭代）
+25. `I5` Skill 验证（至少 2 个 AI 客户端实测）
+26. `F8`–`F9` **OpenClaw / Windsurf 兼容验证** ← 新增，补齐 5 大客户端
+
+### 可选加分项
+
+27. `D8` doctor --fix 自动修复
+28. `J1` 0.0.0.0 监听支持
+29. ~~`A7` Transport 行为文档~~ → 已完成（见 `docs/TRANSPORT.md`）
+30. `G7` 视频/动图脚本大纲
+
+---
+
+## 十二、手动测试清单（自动化不可替代）
+
+> 以下项需在 **真人操作、第二台机器、或其它 MCP 客户端** 上完成；通过后在对应任务行或 § 会话落地 中记录日期与版本。
+
+| ID              | 场景                                  | 如何测                                                                                                                                            | 通过标准（摘要）                     |
+| --------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| **D9**          | smoke 稳定性                          | Chrome 打开扩展并 **连接**，`12306` 可达后执行 `mcp-chrome-bridge smoke`（或 `node dist/cli.js smoke`）                                           | **连续 ≥5 次** exit code 0           |
+| **C4**          | npm global 干净机                     | 新 Windows 用户或 VM：`npm i -g mcp-chrome-bridge` → `register --browser chrome` → 加载扩展 → 连接 → `doctor` + 一次 `smoke` 或 `chrome_navigate` | 无隐藏失败；doctor 无 ERROR          |
+| **A4**          | SSE 并行 session                      | 使用支持 MCP SSE 的客户端，对同一 bridge **并行建两个 session**，交替 `tools/list` / `tools/call` 后关闭                                          | 无串 session、无稳定崩溃             |
+| **B4/B7**       | 状态机 / 重启                         | 人为制造「已连但服务未起」、**完全退出 Chrome 再开**，观察 popup 与 CoPaw 连接                                                                    | 文案与真实状态一致；重连路径可理解   |
+| **B9**          | Mac                                   | 仅在 macOS：`register`、`doctor`、扩展路径与权限                                                                                                  | 与 Windows 行为对齐文档记录          |
+| **F1–F3**       | Claude Desktop / Cursor / Claude Code | 按各产品配置 `http://127.0.0.1:12306/mcp` 或 stdio                                                                                                | 能发现工具且至少一个 `chrome_*` 成功 |
+| **F4–F9**       | 其它客户端                            | CherryStudio、Dify、OpenClaw、Windsurf 等按官方 MCP 配置方式                                                                                      | 记录 pass/fail 与限制                |
+| **CoPaw E1–E3** | 工具告警                              | 在 CoPaw 内试 `chrome_read_page`（含 chrome://）、`chrome_screenshot`、`chrome_keyboard`                                                          | 记录复现步骤与 workaround            |
+
+**SSE 与 HTTP 路径**：以 `docs/TRANSPORT.md` 为准；若客户端只支持一种传输，在兼容矩阵中注明。
+
+---
+
+## 统计
+
+- 总维度：10 个（A–J）+ **维护约定** + **手动测试清单**
+- 总任务：约 68 个
+- 已完成：约 **28** 个（随 § 会话落地递增，需定期人工核对）
+- 待完成 / 部分完成：约 **40** 个（含 `[~]` 项）
+- 预估周期：5–6 周（第一 → 第四批排序执行，二/三/四批可交叉并行）
+
+## v2 变更追溯
+
+| 调整             | 原位置         | 新位置               | 原因                                                         |
+| ---------------- | -------------- | -------------------- | ------------------------------------------------------------ |
+| C7 一键安装      | 可选加分项 #23 | **第二批 #7**        | KCI「< 5 分钟首次成功」；竞品 OpenTabs/Playwright 均一行安装 |
+| I4 AI Skill v1   | 第四批 #21     | **第二批 #8**        | 战略决策「Skill 是核心产品的一部分」                         |
+| H5 敏感工具禁用  | 低优先级       | **中优先级，第三批** | 真实浏览器安全是信任基础；竞品 OpenTabs 默认全关             |
+| F8 OpenClaw 验证 | 不存在         | **第四批 #26 新增**  | 2026 增长最快的开源 AI 助手，核心目标客户端                  |
+| F9 Windsurf 验证 | 不存在         | **第四批 #26 新增**  | 主流 AI IDE，企业 MCP 管控最强                               |
+| G8 竞品对比页    | 不存在         | **第三批 #19 新增**  | 开源产品获客的关键转化页                                     |
+
+### 2026-04-07 会话落地（节选）
+
+- `[x]` **A8**：`mcp-server-stdio` 增加 stdin 关闭与 SIGTERM/SIGINT 处理，减轻父进程退出后僵尸进程问题（`mcp/mcp-server-stdio.ts`）。
+- `[x]` **C7**：新增 CLI 子命令 `mcp-chrome-bridge setup`（`scripts/setup.ts` + `cli.ts`）。
+- `[x]` **A7**：新增 `docs/TRANSPORT.md`（HTTP/SSE/stdio 说明）。
+- `[x]` **G8**：新增 `docs/WHY_MCP_CHROME.md`，README 已链入。
+- `[x]` **I4 v1**：新增 `skills/chrome_mcp_browser/SKILL.md` 与 `references/quick_ref.md`。
+- `[x]` **E12 回归**：`navigate-patterns.test.ts` 增加 `https://192.168.0.1:4430/` 用例。
+- `[x]` **E10（部分）**：`chrome_handle_dialog`、`chrome_network_request` 现已尊重 `tabId` / `windowId`（`packages/shared/src/tools.ts` + background 执行器）；与 #275 相关的其它工具若仍仅用活动标签，需另行 grep 扫表。
+- `[x]` **B4（部分）**：popup 在「已连接但服务未起」时的 `statusDetailText` 已补充 `mcp-chrome-bridge doctor`、端口/防火墙与重载扩展提示（`App.vue`）。
+- `[~]` **D9**：本机在扩展已连接、`12306` 可达时 **连续 3 次** `mcp-chrome-bridge smoke` 全绿（单次约 50s+）；清单原目标为 **5+ 次**，余下次数见 **§十二**。
+- **维护约定**：任务合并时请同步更新本文件状态，自动化无法覆盖项写入 **§十二**。详见文首 **「维护约定（任务闭环）」**。

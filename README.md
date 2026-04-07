@@ -85,6 +85,8 @@ pnpm install -g mcp-chrome-bridge
 mcp-chrome-bridge register
 ```
 
+**Guided setup (register + next steps):** after install, you can run `mcp-chrome-bridge setup` for the same registration flow plus a short checklist (extension load URL, `doctor`, `smoke`).
+
 > Note: pnpm v7+ disables postinstall scripts by default for security. The `enable-pre-post-scripts` setting controls whether pre/post install scripts run. If automatic registration fails, use the manual registration command above.
 
 3. **Load Chrome Extension**
@@ -319,6 +321,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📚 More Documentation
 
+- [Why mcp-chrome? (vs Playwright / browser-use)](docs/WHY_MCP_CHROME.md) — positioning and tradeoffs
 - [Architecture Design](docs/ARCHITECTURE.md) - Detailed technical architecture documentation
+- [MCP transports (HTTP / SSE / stdio)](docs/TRANSPORT.md) — which mode to use
 - [TOOLS API](docs/TOOLS.md) - Complete tool API documentation
 - [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issue solutions
+- [AI assistant skill (portable)](skills/chrome_mcp_browser/SKILL.md) — playbook for any MCP client

@@ -724,7 +724,7 @@ const statusDetailText = computed(() => {
     return `最近一次连接错误: ${lastNativeError.value}`;
   }
   if (nativeConnectionStatus.value === 'connected' && !serverStatus.value.isRunning) {
-    return 'Native host 已连接，但本地服务还没有成功启动。可先点刷新，若仍失败请在 chrome://extensions/ 重新加载扩展。';
+    return 'Native host 已连接，但本地 MCP 服务尚未就绪。可先点「刷新」；仍失败时在终端执行 mcp-chrome-bridge doctor，核对端口与防火墙，并在 chrome://extensions/ 重新加载本扩展。';
   }
   if (nativeConnectionStatus.value === 'disconnected') {
     return '点击连接后如果仍无法启动，请确认扩展已重新加载，且本地 native host manifest 已重新注册。';

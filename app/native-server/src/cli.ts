@@ -16,6 +16,7 @@ import { runDoctor } from './scripts/doctor';
 import { runReport } from './scripts/report';
 import { runStatus } from './scripts/status';
 import { runSmoke } from './scripts/smoke';
+import { runSetup } from './scripts/setup';
 
 function hasWindowsAdminRights(): boolean {
   if (process.platform !== 'win32') {
@@ -33,6 +34,15 @@ function hasWindowsAdminRights(): boolean {
 program
   .version(require('../package.json').version)
   .description('Mcp Chrome Bridge - Local service for communicating with Chrome extension');
+
+// Guided first-time setup (register + next steps)
+program
+  .command('setup')
+  .description('Register Native Messaging host and print extension / MCP next steps')
+  .action(async () => {
+    const code = await runSetup();
+    process.exit(code);
+  });
 
 // Register Native Messaging host
 program

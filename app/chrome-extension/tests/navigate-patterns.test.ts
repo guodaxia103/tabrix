@@ -16,6 +16,13 @@ describe('buildNavigateUrlPatterns', () => {
     expect(patterns).not.toContain('http://www.127.0.0.1:8080/*');
   });
 
+  it('does not add www variants for private IPv4 with high port (issue #270)', () => {
+    const patterns = buildNavigateUrlPatterns('https://192.168.0.1:4430/');
+
+    expect(patterns).toContain('https://192.168.0.1:4430/*');
+    expect(patterns).not.toContain('https://www.192.168.0.1:4430/*');
+  });
+
   it('does not add www variants for IPv6 hosts', () => {
     const patterns = buildNavigateUrlPatterns('http://[::1]:8080/demo');
 

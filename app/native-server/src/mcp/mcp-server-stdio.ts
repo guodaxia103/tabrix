@@ -114,7 +114,43 @@ const handleToolCall = async (name: string, args: any): Promise<CallToolResult> 
   }
 };
 
+let shuttingDown = false;
+
+async function shutdownGracefully(reason: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try {
+    if (mcpClient) {
+      await mcpClient.close();
+      mcpClient = null;
+    }
+  } catch {
+    // ignore close errors
+  }
+  // stderr only — stdout is MCP protocol stream
+  console.error(`[mcp-chrome-stdio] shutting down (${reason})`);
+  process.exit(0);
+}
+
+function installStdioLifecycleHooks(): void {
+  // When the parent MCP client exits, stdin closes; without this the Node process can become a zombie.
+  process.stdin.resume();
+  process.stdin.on('end', () => {
+    void shutdownGracefully('stdin end');
+  });
+  process.stdin.on('close', () => {
+    void shutdownGracefully('stdin close');
+  });
+  process.on('SIGTERM', () => {
+    void shutdownGracefully('SIGTERM');
+  });
+  process.on('SIGINT', () => {
+    void shutdownGracefully('SIGINT');
+  });
+}
+
 async function main() {
+  installStdioLifecycleHooks();
   const transport = new StdioServerTransport();
   await getStdioMcpServer().connect(transport);
 }

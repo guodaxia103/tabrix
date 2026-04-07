@@ -620,6 +620,16 @@ export const TOOL_SCHEMAS: Tool[] = [
           description:
             'Multipart/form-data descriptor. If provided, overrides body and builds FormData with optional file attachments. Shape: { fields?: Record<string,string|number|boolean>, files?: Array<{ name: string, fileUrl?: string, filePath?: string, base64Data?: string, filename?: string, contentType?: string }> }. Also supports a compact array form: [ [name, fileSpec, filename?], ... ] where fileSpec may be url:, file:, or base64:.',
         },
+        tabId: {
+          type: 'number',
+          description:
+            'Inject the helper into this tab and run the request from its content-script context (cookies/session). Defaults to active tab when omitted.',
+        },
+        windowId: {
+          type: 'number',
+          description:
+            'When tabId is omitted, use the active tab in this window (default: current window).',
+        },
       },
       required: ['url'],
     },
@@ -1235,7 +1245,8 @@ export const TOOL_SCHEMAS: Tool[] = [
   },
   {
     name: TOOL_NAMES.BROWSER.HANDLE_DIALOG,
-    description: 'Handle JavaScript dialogs (alert/confirm/prompt) via CDP',
+    description:
+      'Handle JavaScript dialogs (alert/confirm/prompt) via CDP on the target tab. Defaults to the active tab when tabId is omitted.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1243,6 +1254,15 @@ export const TOOL_SCHEMAS: Tool[] = [
         promptText: {
           type: 'string',
           description: 'Optional prompt text when accepting a prompt',
+        },
+        tabId: {
+          type: 'number',
+          description:
+            'Tab where the dialog is shown (default: active tab in current or specified window)',
+        },
+        windowId: {
+          type: 'number',
+          description: 'When tabId is omitted, use the active tab in this window',
         },
       },
       required: ['action'],

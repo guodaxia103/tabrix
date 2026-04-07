@@ -6,6 +6,8 @@ import { cdpSessionManager } from '@/utils/cdp-session-manager';
 interface HandleDialogParams {
   action: 'accept' | 'dismiss';
   promptText?: string;
+  tabId?: number;
+  windowId?: number;
 }
 
 /**
@@ -15,15 +17,21 @@ class HandleDialogTool extends BaseBrowserToolExecutor {
   name = TOOL_NAMES.BROWSER.HANDLE_DIALOG;
 
   async execute(args: HandleDialogParams): Promise<ToolResult> {
-    const { action, promptText } = args || ({} as HandleDialogParams);
+    const {
+      action,
+      promptText,
+      tabId: requestedTabId,
+      windowId,
+    } = args || ({} as HandleDialogParams);
     if (!action || (action !== 'accept' && action !== 'dismiss')) {
       return createErrorResponse('action must be "accept" or "dismiss"');
     }
 
     try {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!activeTab?.id) return createErrorResponse('No active tab found');
-      const tabId = activeTab.id!;
+      const explicit = await this.tryGetTab(requestedTabId);
+      const targetTab = explicit || (await this.getActiveTabOrThrowInWindow(windowId));
+      if (!targetTab?.id) return createErrorResponse('No target tab found for dialog handling');
+      const tabId = targetTab.id;
 
       // Use shared CDP session manager for safe attach/detach with refcount
       await cdpSessionManager.withSession(tabId, 'dialog', async () => {
