@@ -1183,14 +1183,12 @@
           chrome.runtime.sendMessage({ type: 'rr_recorder_event', payload }, (response) => {
             // Check for runtime error (e.g., no receiver)
             if (chrome.runtime.lastError) {
-              console.warn('Recorder: send failed', chrome.runtime.lastError.message);
               resolve(false);
               return;
             }
             resolve(response && response.ok);
           });
-        } catch (e) {
-          console.warn('Recorder: send exception', e);
+        } catch {
           resolve(false);
         }
       });

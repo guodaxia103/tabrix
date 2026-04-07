@@ -59,6 +59,9 @@ export const ERROR_MESSAGES = {
   SERVER_NOT_RUNNING: 'Server is not actively running.',
   REQUEST_TIMEOUT: 'Request to extension timed out.',
   INVALID_MCP_REQUEST: 'Invalid MCP request or session.',
+  STALE_MCP_SESSION:
+    'MCP session not found (possibly expired after server restart). ' +
+    'Send a new POST /mcp initialize request without mcp-session-id to create a fresh session.',
   INVALID_SESSION_ID: 'Invalid or missing MCP session ID.',
   INTERNAL_SERVER_ERROR: 'Internal Server Error',
   MCP_SESSION_DELETION_ERROR: 'Internal server error during MCP session deletion.',

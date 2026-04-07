@@ -22,9 +22,6 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
     allFrames: boolean = false,
     frameIds?: number[],
   ): Promise<void> {
-    console.log(`Injecting ${files.join(', ')} into tab ${tabId}`);
-
-    // check if script is already injected
     try {
       const pingFrameId = frameIds?.[0];
       const response = await Promise.race([
@@ -44,17 +41,10 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
       ]);
 
       if (response && response.status === 'pong') {
-        console.log(
-          `pong received for action '${this.name}' in tab ${tabId}. Assuming script is active.`,
-        );
         return;
-      } else {
-        console.warn(`Unexpected ping response in tab ${tabId}:`, response);
       }
-    } catch (error) {
-      console.error(
-        `ping content script failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+    } catch {
+      // Ping failure is expected when the script hasn't been injected yet.
     }
 
     try {
@@ -70,13 +60,9 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
         injectImmediately,
         world,
       } as any);
-      console.log(`'${files.join(', ')}' injection successful for tab ${tabId}`);
     } catch (injectionError) {
       const errorMessage =
         injectionError instanceof Error ? injectionError.message : String(injectionError);
-      console.error(
-        `Content script '${files.join(', ')}' injection failed for tab ${tabId}: ${errorMessage}`,
-      );
       throw new Error(
         `${ERROR_MESSAGES.TOOL_EXECUTION_FAILED}: Failed to inject content script in tab ${tabId}: ${errorMessage}`,
       );
@@ -87,28 +73,16 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
    * Send message to tab
    */
   protected async sendMessageToTab(tabId: number, message: any, frameId?: number): Promise<any> {
-    try {
-      const response =
-        typeof frameId === 'number'
-          ? await chrome.tabs.sendMessage(tabId, message, { frameId })
-          : await chrome.tabs.sendMessage(tabId, message);
+    const response =
+      typeof frameId === 'number'
+        ? await chrome.tabs.sendMessage(tabId, message, { frameId })
+        : await chrome.tabs.sendMessage(tabId, message);
 
-      if (response && response.error) {
-        throw new Error(String(response.error));
-      }
-
-      return response;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(
-        `Error sending message to tab ${tabId} for action ${message?.action || 'unknown'}: ${errorMessage}`,
-      );
-
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(errorMessage);
+    if (response && response.error) {
+      throw new Error(String(response.error));
     }
+
+    return response;
   }
 
   /**

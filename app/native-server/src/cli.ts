@@ -16,6 +16,7 @@ import { runDoctor } from './scripts/doctor';
 import { runReport } from './scripts/report';
 import { runStatus } from './scripts/status';
 import { runSmoke } from './scripts/smoke';
+import { runStdioSmoke } from './scripts/stdio-smoke';
 import { runSetup } from './scripts/setup';
 
 function hasWindowsAdminRights(): boolean {
@@ -276,6 +277,22 @@ program
       process.exit(exitCode);
     } catch (error: any) {
       console.error(colorText(`Smoke test failed: ${error.message}`, 'red'));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('stdio-smoke')
+  .description('Run a smoke test against the stdio MCP transport (no HTTP server needed)')
+  .option('--json', 'Output results as JSON')
+  .action(async (options) => {
+    try {
+      const exitCode = await runStdioSmoke({
+        json: Boolean(options.json),
+      });
+      process.exit(exitCode);
+    } catch (error: any) {
+      console.error(`Stdio smoke test failed: ${error.message}`);
       process.exit(1);
     }
   });

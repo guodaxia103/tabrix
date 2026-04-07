@@ -283,7 +283,10 @@ export class Server {
         managedEntry?.kind === 'streamable-http' ? managedEntry.transport : undefined;
 
       if (transport) {
-        // Transport found, proceed
+        // Existing session found, proceed.
+      } else if (sessionId && !transport) {
+        reply.code(HTTP_STATUS.BAD_REQUEST).send({ error: ERROR_MESSAGES.STALE_MCP_SESSION });
+        return;
       } else if (!sessionId && isInitializeRequest(request.body)) {
         const newSessionId = randomUUID();
         const server = createMcpServer();

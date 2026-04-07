@@ -57,8 +57,8 @@ async function ensureContextMenu() {
       title: '标注元素',
       contexts: ['all'],
     });
-  } catch (e) {
-    console.warn('ElementMarker: ensureContextMenu failed:', e);
+  } catch {
+    // Context menu creation can fail when contextMenus permission is missing.
   }
 }
 
@@ -92,16 +92,15 @@ async function injectMarkerHelper(tabId: number) {
         files: ['inject-scripts/element-marker.js'],
         world: 'ISOLATED',
       } as any);
-    } catch (e) {
-      // Script injection may fail on some pages (e.g., chrome:// URLs)
-      console.warn('ElementMarker: script injection failed:', e);
+    } catch {
+      // Injection fails on restricted pages (chrome://, edge://) — not actionable.
     }
   }
 
   try {
     await chrome.tabs.sendMessage(tabId, { action: 'element_marker_start' } as any);
-  } catch (e) {
-    console.warn('ElementMarker: start overlay failed:', e);
+  } catch {
+    // Tab may not have the content script loaded yet — silently ignore.
   }
 }
 
@@ -357,23 +356,11 @@ export function initElementMarkerListeners() {
                 }
               }
             } catch (e) {
-              console.warn('[ElementMarker] Validation failed before tool execution', e);
               base.tool = {
                 name: 'unknown',
                 ok: false,
                 error: String(e instanceof Error ? e.message : e),
               };
-            }
-
-            // Log tool failures for debugging
-            if (base.tool && base.tool.ok === false) {
-              console.warn('[ElementMarker] Tool validation failure', {
-                action,
-                toolName: base.tool.name,
-                error: base.tool.error,
-                selector,
-                selectorType,
-              });
             }
 
             return sendResponse(base);
@@ -401,8 +388,8 @@ export function initElementMarkerListeners() {
         if (info.menuItemId === CONTEXT_MENU_ID && tab?.id) {
           await injectMarkerHelper(tab.id);
         }
-      } catch (e) {
-        console.warn('ElementMarker: context menu click failed:', e);
+      } catch {
+        // Best-effort: menu click may fail if tab is restricted.
       }
     });
   }

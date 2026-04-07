@@ -1,6 +1,6 @@
 # Program 0 详细任务清单
 
-最后更新：`2026-04-07 Asia/Shanghai`（v2.8 — B4/A4 + SSE writeHead bug fix）
+最后更新：`2026-04-07 Asia/Shanghai`（v2.9 — A9/D10/F7 + E7/E9 Phase 1）
 分支：`codex/phase0-stabilization`
 
 基于：当前分支 51 commits、上游 hangwin/mcp-chrome 173 个 Open Issues、PHASE0 系列文档、实际代码审查、**竞品调研（15+ 开源 / 8+ 商业产品）**。
@@ -47,7 +47,7 @@
 | ---- | ----------------------------- | ---------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A2   | Session Registry 独立模块抽取 | #321       | 中   | `[x]` **已完成**：`server/session-registry.ts` — SessionRegistry 类封装 register/get/remove/disconnect/closeAll/snapshot/updateClientInfo；`index.ts` 所有 `transportsMap` 引用替换为 `this.sessions`；tsc + 11 测试通过                                                                  |
 | A4   | SSE 并行 session 回归测试     | #9, #308   | 中   | `[x]` **已完成**：streamable-http 并行 + 经典 SSE（`GET /sse` + `POST /messages`）均已自动化覆盖。新增 5 个 SSE 测试：SSE 流建立/session 注册、无效 sessionId 400、并行 SSE 计数、DELETE 踢出、连接关闭自动清理。同时修复 SSE handler 重复 `writeHead` 导致的 `ERR_HTTP_HEADERS_SENT` bug |
-| A9   | Chrome 升级后 MCP 请求兼容性  | #288       | 中   | Chrome 144+ 更新后出现 `Invalid MCP request or session`，需排查 extension manifest 或请求头变化                                                                                                                                                                                           |
+| A9   | Chrome 升级后 MCP 请求兼容性  | #288       | 中   | `[x]` **已完成**：1）`POST /mcp` 区分 stale session（带过期 sessionId）与 bad request，返回带恢复指引的 `STALE_MCP_SESSION` 错误；2）`wxt.config.ts` 新增 `minimum_chrome_version: '120'`；3）`constant/index.ts` 新增 `STALE_MCP_SESSION` 错误消息                                       |
 
 ---
 
@@ -109,13 +109,13 @@
 
 ### 待完成
 
-| 编号 | 任务                           | 关联 Issue | 难度 | 说明                                                                                                                                                                                         |
-| ---- | ------------------------------ | ---------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D6   | `report` 增强为可提交诊断包    | #315       | 中   | `[x]` **已完成**：动态端口（`getChromeMcpPort`）替代硬编码 12306；增加 MCP initialize + tools/list 连通测试；`fetchJsonWithTimeout` 支持 POST + SSE 解析；Markdown 报告中增加 MCP 工具数显示 |
-| D7   | 统一错误码目录                 | ROADMAP    | 中   | `[x]` **已完成**：`docs/ERROR_CODES.md` — 按 CONN*/MCP*/TOOL*/RR*/CLI*/HTTP* 前缀分类，汇总各层错误常量、Chrome 原生错误、超时常量、改进计划                                                 |
-| D8   | `doctor --fix` 自动修复        | 新需求     | 中   | `[x]` **已完成**：新增 `port` fix 步骤 — 自动修正 `stdio-config.json` 端口不一致；原有 logs/node_path/permissions/register 修复保持                                                          |
-| D9   | `smoke` 稳定性加固             | 分支 [~]   | 中   | `[x]` **已完成**：新增 `poll()` 工具函数替代 5 处固定 `sleep`（导航/点击/上传/对话框/tab查找）；对话框轮询从 2s 增至 6s + 去掉 `default` 宽松通过；MCP RPC 加 30s 超时保护                   |
-| D10  | 扩展 error-page 运行时噪音清理 | 分支 [~]   | 低   | smoke/test 页面引发的 extension error-page 条目，需过滤或静默化                                                                                                                              |
+| 编号 | 任务                           | 关联 Issue | 难度 | 说明                                                                                                                                                                                                                   |
+| ---- | ------------------------------ | ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D6   | `report` 增强为可提交诊断包    | #315       | 中   | `[x]` **已完成**：动态端口（`getChromeMcpPort`）替代硬编码 12306；增加 MCP initialize + tools/list 连通测试；`fetchJsonWithTimeout` 支持 POST + SSE 解析；Markdown 报告中增加 MCP 工具数显示                           |
+| D7   | 统一错误码目录                 | ROADMAP    | 中   | `[x]` **已完成**：`docs/ERROR_CODES.md` — 按 CONN*/MCP*/TOOL*/RR*/CLI*/HTTP* 前缀分类，汇总各层错误常量、Chrome 原生错误、超时常量、改进计划                                                                           |
+| D8   | `doctor --fix` 自动修复        | 新需求     | 中   | `[x]` **已完成**：新增 `port` fix 步骤 — 自动修正 `stdio-config.json` 端口不一致；原有 logs/node_path/permissions/register 修复保持                                                                                    |
+| D9   | `smoke` 稳定性加固             | 分支 [~]   | 中   | `[x]` **已完成**：新增 `poll()` 工具函数替代 5 处固定 `sleep`（导航/点击/上传/对话框/tab查找）；对话框轮询从 2s 增至 6s + 去掉 `default` 宽松通过；MCP RPC 加 30s 超时保护                                             |
+| D10  | 扩展 error-page 运行时噪音清理 | 分支 [~]   | 低   | `[x]` **已完成**：`base-browser.ts` 移除注入/ping 的 `console.error`/`console.log`（预期路径改为静默 catch）；`element-marker/index.ts` 注入/overlay/contextMenu 失败改为静默 catch；`recorder.js` 移除 `console.warn` |
 
 ---
 
@@ -144,10 +144,10 @@
 | E4   | `chrome_handle_dialog`              | warn           | #309       | 无活动 dialog 时返回 `No dialog is showing`（正确），但 debugger 已挂载时冲突。文档化限制                                                                                |
 | E5   | `chrome_gif_recorder`               | warn           | —          | `start → stop` 偶发 `No recording in progress`。排查 recording 状态管理竞态                                                                                              |
 | E6   | `chrome_request_element_selection`  | warn           | —          | 人工选择超时是预期行为，需在工具描述中明确 human-in-the-loop 特性                                                                                                        |
-| E7   | `search_tabs_content`               | fail (未暴露)  | —          | TOOL_NAMES 有定义、TOOL_SCHEMAS 被注释。实现存在（`vector-search.ts`）。**决策：Phase 0 暴露 or 标记 Phase 1**                                                           |
+| E7   | `search_tabs_content`               | fail (未暴露)  | —          | `[!]` **Phase 1**：TOOL_NAMES 有定义、TOOL_SCHEMAS 被注释。实现存在（`vector-search.ts`）。用户决策：Phase 0 暂不开放                                                    |
 | E7b  | `chrome_get_interactive_elements`   | `[x]` 已暴露   | —          | TOOL_SCHEMAS 已注册（readOnlyHint: true）。实现在 `web-fetcher.ts`                                                                                                       |
 | E8   | `chrome_inject_script`              | `[x]` 已文档化 | —          | TOOL_SCHEMAS 被注释；`docs/SECURITY.md` 已标记为 "Disabled by default for security"                                                                                      |
-| E9   | `chrome_userscript`                 | fail (未暴露)  | —          | 同 E7。TOOL_SCHEMAS 被注释；实现存在（`userscript.ts`）                                                                                                                  |
+| E9   | `chrome_userscript`                 | fail (未暴露)  | —          | `[!]` **Phase 1**：同 E7。TOOL_SCHEMAS 被注释；实现存在（`userscript.ts`）。用户决策：Phase 0 暂不开放                                                                   |
 | E10  | **tabId 被忽略**                    | bug `[x]`      | #275       | 所有暴露工具已尊重 `tabId`/`windowId`。`console` else 分支和 `inject_script` else 分支均改用 `getActiveTabInWindow`。#275 可 close                                       |
 | E11  | **chrome_get_web_content 内容不全** | bug            | #99        | `[x]` **已完成**：`maxTotalLength` 从 100K 提升到 500K；截断时追加 `[Content truncated]` 提示                                                                            |
 | E12  | **chrome_navigate 自动加 www**      | bug `[x]`      | #270       | `navigate-patterns.test.ts` 已覆盖 `192.168.0.1:4430` 不加 `www` 的回归用例；`shouldAddWwwVariant` 对 IP 和 IPv6 短路                                                    |
@@ -167,17 +167,17 @@
 
 ### 待验证
 
-| 编号 | 客户端                | 传输方式               | 关联 Issue       | 任务                                                                                                                                         |
-| ---- | --------------------- | ---------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1   | Claude Desktop        | streamableHttp         | —                | 验证连接、工具列表、基础操作，记录结果                                                                                                       |
-| F2   | Cursor                | streamableHttp / stdio | —                | 在 Cursor MCP 设置中配置并验证                                                                                                               |
-| F3   | Claude Code CLI       | stdio                  | #199, #299, #307 | 上游大量连接问题。确认 `mcp-chrome-stdio` 在 Windows 下的完整路径                                                                            |
-| F4   | CherryStudio          | streamableHttp         | README 示例      | 验证 README 配置是否直接可用                                                                                                                 |
-| F5   | Dify                  | streamableHttp?        | #262             | 社区尝试失败。评估是否在 Phase 0 支持                                                                                                        |
-| F6   | MCP Inspector / curl  | HTTP                   | —                | 用 curl 手动验证 `/mcp` 的 initialize → tool call 流程                                                                                       |
-| F7   | stdio 通用验证        | stdio                  | #319             | Windows 上 stdio 不稳定。需 stdio 冒烟测试脚本                                                                                               |
-| F8   | **OpenClaw 兼容验证** | MCP (streamableHttp)   | 新需求           | OpenClaw 是 2026 增长最快的开源个人 AI，天然需要浏览器能力。验证 `openclaw.json` MCP 配置 → 连接 → 工具调用 → 多渠道触发（Telegram/Discord） |
-| F9   | **Windsurf 兼容验证** | streamableHttp / stdio | 新需求           | Windsurf 是主流 AI IDE，有最强企业 MCP 管控。验证配置文件格式和工具发现                                                                      |
+| 编号 | 客户端                | 传输方式               | 关联 Issue       | 任务                                                                                                                                                                                                                                        |
+| ---- | --------------------- | ---------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1   | Claude Desktop        | streamableHttp         | —                | 验证连接、工具列表、基础操作，记录结果                                                                                                                                                                                                      |
+| F2   | Cursor                | streamableHttp / stdio | —                | 在 Cursor MCP 设置中配置并验证                                                                                                                                                                                                              |
+| F3   | Claude Code CLI       | stdio                  | #199, #299, #307 | 上游大量连接问题。确认 `mcp-chrome-stdio` 在 Windows 下的完整路径                                                                                                                                                                           |
+| F4   | CherryStudio          | streamableHttp         | README 示例      | 验证 README 配置是否直接可用                                                                                                                                                                                                                |
+| F5   | Dify                  | streamableHttp?        | #262             | 社区尝试失败。评估是否在 Phase 0 支持                                                                                                                                                                                                       |
+| F6   | MCP Inspector / curl  | HTTP                   | —                | 用 curl 手动验证 `/mcp` 的 initialize → tool call 流程                                                                                                                                                                                      |
+| F7   | stdio 通用验证        | stdio                  | #319             | `[x]` **已完成**：新增 `scripts/stdio-smoke.ts` — 使用 MCP SDK `StdioClientTransport` 启动子进程并验证 initialize → tools/list → resources/list → prompts/list → ping → clean close；CLI 新增 `mcp-chrome-bridge stdio-smoke [--json]` 命令 |
+| F8   | **OpenClaw 兼容验证** | MCP (streamableHttp)   | 新需求           | OpenClaw 是 2026 增长最快的开源个人 AI，天然需要浏览器能力。验证 `openclaw.json` MCP 配置 → 连接 → 工具调用 → 多渠道触发（Telegram/Discord）                                                                                                |
+| F9   | **Windsurf 兼容验证** | streamableHttp / stdio | 新需求           | Windsurf 是主流 AI IDE，有最强企业 MCP 管控。验证配置文件格式和工具发现                                                                                                                                                                     |
 
 ### 产出物
 
@@ -311,9 +311,9 @@
 17. ~~`H3`–`H4`~~ 安全文档 + annotations 补全 → 已完成；`H5` **敏感工具默认禁用** ↑ 待做
 18. ~~`G3`~~ 排障表 → 已完成；~~`G6`~~ 配置速查 → 已完成；`G4`–`G5` FAQ / 引导流程待做
 19. ~~`G8` 竞品对比页~~ → 已完成（`docs/WHY_MCP_CHROME.md`）
-20. `F7` stdio 冒烟测试脚本
+20. ~~`F7` stdio 冒烟测试脚本~~ → 已完成（`stdio-smoke.ts` + CLI `stdio-smoke` 命令）
 21. ~~所有 warn 工具的限制文档化（E1–E6）~~ → 已完成（tool description 中注明限制）
-22. ~~`E7b`~~ 已暴露；`E7`/`E9` 未暴露工具分类决策（Phase 0 or Phase 1）待做
+22. ~~`E7b`~~ 已暴露；~~`E7`/`E9`~~ → Phase 1（用户决策：暂不开放）
 
 ### 第四批：完整文档 + 全客户端验证（1 周，与第三批可并行）
 
@@ -357,9 +357,10 @@
 
 - 总维度：10 个（A–J）+ **维护约定** + **手动测试清单**
 - 总任务（编号项）：约 72 个（含 E7b、可选加分项 A6/A7/B8/G8 已完成归档）
-- 已完成 `[x]`：约 **66** 个（A1–A4/A5–A8, B1–B4/B5–B6/B8, C1–C3/C7, D1–D9, E7b/E8/E10–E14, G1–G6/G8/I1–I3/I4v1, H1–H5, J1, 会话落地项）
+- 已完成 `[x]`：约 **69** 个（+A9/D10/F7）
 - 部分完成 `[~]`：**0** 个
-- 待完成 `[ ]`：约 **5** 个
+- 待完成 `[ ]`：约 **2** 个（代码任务已清零，剩余为手动验证与文档迭代）
+- 决策延期 `[!]`：**2** 个（E7/E9 标记 Phase 1）
 - 预估周期：3–4 周（第一批基本收尾，二/三/四批可交叉并行）
 
 ## v2 变更追溯
@@ -441,3 +442,10 @@
 - `[x]` **A4（SSE 回归完整覆盖）**：新增 5 个经典 SSE 自动化测试（流建立/session 注册、无效 sessionId 400、并行 SSE /status 计数、DELETE 踢出、连接关闭自动清理）。
 - `[x]` **SSE writeHead bug fix**：修复 `GET /sse` handler 中重复调用 `writeHead` 导致 `ERR_HTTP_HEADERS_SENT`（`SSEServerTransport.start()` 已自动发送 headers，handler 中的手动 `writeHead` 冲突）。
 - `[x]` **远程连接文档**：`CLIENT_CONFIG_QUICKREF.md` 新增「已连接客户端管理」和「远程连接」章节；`TRANSPORT.md` 新增「远程访问」章节。
+
+### 2026-04-07 v2.9 Chrome 144 兼容 + 噪音清理 + stdio 冒烟
+
+- `[x]` **A9（Chrome 144+ 兼容性）**：`POST /mcp` 新增 stale session 分支 — 当 `mcp-session-id` 存在但 registry 中无对应会话时，返回 `STALE_MCP_SESSION` 错误（含恢复指引：重新发送不带 session-id 的 initialize）；`wxt.config.ts` 新增 `minimum_chrome_version: '120'`。
+- `[x]` **D10（error-page 噪音清理）**：`base-browser.ts` 移除注入/ping 相关 `console.error`/`console.log`/`console.warn`（ping 超时和注入失败是预期路径，改为静默 catch 或由 throw 传播）；`element-marker/index.ts` 注入失败、overlay 启动失败、contextMenu 失败改为静默 catch；`recorder.js` 移除 `console.warn`。
+- `[x]` **F7（stdio 冒烟测试）**：新增 `scripts/stdio-smoke.ts` — 使用 MCP SDK `StdioClientTransport` 启动子进程并验证 initialize → tools/list → resources/list → prompts/list → ping → clean close；CLI 注册 `mcp-chrome-bridge stdio-smoke [--json]` 命令。
+- `[!]` **E7/E9（暂不开放）**：`search_tabs_content` 和 `chrome_userscript` 标记为 Phase 1。用户决策：Phase 0 暂不开放。
