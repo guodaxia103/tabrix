@@ -222,11 +222,6 @@ function matchUrl(patterns: string[], url?: string): boolean {
   return false;
 }
 
-async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  return tabs[0] || null;
-}
-
 async function insertCssToTab(tabId: number, css: string, allFrames: boolean) {
   await chrome.scripting.insertCSS({ target: { tabId, allFrames }, css });
 }
@@ -681,7 +676,7 @@ class UserscriptTool extends BaseBrowserToolExecutor {
   }
 
   private async remove(args: any): Promise<ToolResult> {
-    const { id } = args || {};
+    const { id, tabId, windowId } = args || {};
     if (!id) return createErrorResponse('id is required');
     const all = await loadAllRecords();
     const rec = all[id];
@@ -689,8 +684,10 @@ class UserscriptTool extends BaseBrowserToolExecutor {
     delete all[id];
     await saveAllRecords(all);
 
-    // Attempt cleanup on active tab
-    const active = await getActiveTab();
+    // Attempt cleanup on explicit tab or active tab in optional window
+    let active: chrome.tabs.Tab | null =
+      typeof tabId === 'number' ? await this.tryGetTab(tabId) : null;
+    if (!active) active = await this.getActiveTabInWindow(windowId);
     if (active && active.id) {
       try {
         if (rec.sourceType === 'CSS') {

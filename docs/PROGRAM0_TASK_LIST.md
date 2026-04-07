@@ -134,22 +134,22 @@
 
 ### 需修复或闭环的工具
 
-| 编号 | 工具                                | 当前状态      | 关联 Issue | 任务                                                                                                                                                                         |
-| ---- | ----------------------------------- | ------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E1   | `chrome_read_page`                  | warn (CoPaw)  | —          | CoPaw 下在 `chrome://` 和稀疏 localhost 页面降级。记录限制条件或添加降级提示                                                                                                 |
-| E2   | `chrome_keyboard`                   | warn (CoPaw)  | #200       | CoPaw 下表现为 key/chord 发送器而非文本输入。文档化：用 `chrome_fill_or_select` 做文本输入，`chrome_keyboard` 只用于快捷键                                                   |
-| E3   | `chrome_screenshot`                 | warn (CoPaw)  | —          | CoPaw 调用时 `image readback failed` 超时。排查是扩展侧 CDP 超时还是 CoPaw MCP 客户端超时                                                                                    |
-| E4   | `chrome_handle_dialog`              | warn          | #309       | 无活动 dialog 时返回 `No dialog is showing`（正确），但 debugger 已挂载时冲突。文档化限制                                                                                    |
-| E5   | `chrome_gif_recorder`               | warn          | —          | `start → stop` 偶发 `No recording in progress`。排查 recording 状态管理竞态                                                                                                  |
-| E6   | `chrome_request_element_selection`  | warn          | —          | 人工选择超时是预期行为，需在工具描述中明确 human-in-the-loop 特性                                                                                                            |
-| E7   | `search_tabs_content`               | fail (未暴露) | —          | shared schema 存在但 `tools/list` 不返回。**决策：Phase 0 修复暴露 or 标记 Phase 1**                                                                                         |
-| E8   | `chrome_inject_script`              | fail (已禁用) | —          | bridge 返回 disabled。正式标记为安全限制并文档化                                                                                                                             |
-| E9   | `chrome_userscript`                 | fail (未暴露) | —          | 同 E7，需正式分类                                                                                                                                                            |
-| E10  | **tabId 被忽略**                    | bug           | #275       | `[~]` 含 **`chrome_network_capture`**（start/stop 与 webRequest/debugger 底层）、bookmark、interactive elements、userscript 等已支持 `tabId`/`windowId`。其它边缘工具见 #275 |
-| E11  | **chrome_get_web_content 内容不全** | bug           | #99        | 长页面或复杂 DOM 时内容截断。评估是 DOM 提取策略还是 Native Messaging 消息体大小限制                                                                                         |
-| E12  | **chrome_navigate 自动加 www**      | bug           | #270       | `https://192.168.0.1:4430` 变成 `https://www.192.168.0.1:4430`。确认 `navigate-patterns.test.ts` 是否覆盖                                                                    |
-| E13  | chrome_console 数据不完整           | bug           | #215       | 获取的是浅拷贝数据，无法获取深层对象                                                                                                                                         |
-| E14  | SVG 元素支持                        | 功能请求      | #293       | `chrome_get_web_content` 默认用 `[SVG Icon]` 替代，请求可选返回 SVG 原文                                                                                                     |
+| 编号 | 工具                                | 当前状态      | 关联 Issue | 任务                                                                                                                                                                                                                     |
+| ---- | ----------------------------------- | ------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| E1   | `chrome_read_page`                  | warn (CoPaw)  | —          | CoPaw 下在 `chrome://` 和稀疏 localhost 页面降级。记录限制条件或添加降级提示                                                                                                                                             |
+| E2   | `chrome_keyboard`                   | warn (CoPaw)  | #200       | CoPaw 下表现为 key/chord 发送器而非文本输入。文档化：用 `chrome_fill_or_select` 做文本输入，`chrome_keyboard` 只用于快捷键                                                                                               |
+| E3   | `chrome_screenshot`                 | warn (CoPaw)  | —          | CoPaw 调用时 `image readback failed` 超时。排查是扩展侧 CDP 超时还是 CoPaw MCP 客户端超时                                                                                                                                |
+| E4   | `chrome_handle_dialog`              | warn          | #309       | 无活动 dialog 时返回 `No dialog is showing`（正确），但 debugger 已挂载时冲突。文档化限制                                                                                                                                |
+| E5   | `chrome_gif_recorder`               | warn          | —          | `start → stop` 偶发 `No recording in progress`。排查 recording 状态管理竞态                                                                                                                                              |
+| E6   | `chrome_request_element_selection`  | warn          | —          | 人工选择超时是预期行为，需在工具描述中明确 human-in-the-loop 特性                                                                                                                                                        |
+| E7   | `search_tabs_content`               | fail (未暴露) | —          | shared schema 存在但 `tools/list` 不返回。**决策：Phase 0 修复暴露 or 标记 Phase 1**                                                                                                                                     |
+| E8   | `chrome_inject_script`              | fail (已禁用) | —          | bridge 返回 disabled。正式标记为安全限制并文档化                                                                                                                                                                         |
+| E9   | `chrome_userscript`                 | fail (未暴露) | —          | 同 E7，需正式分类                                                                                                                                                                                                        |
+| E10  | **tabId 被忽略**                    | bug           | #275       | `[~]` 含 **`chrome_network_capture`**、`chrome_close_tabs`（仅关「当前活动」时 `windowId`）、`chrome_send_command_to_inject_script`（无 tabId 时 `windowId`）、bookmark、interactive、userscript 等；#275 余量见边缘工具 |
+| E11  | **chrome_get_web_content 内容不全** | bug           | #99        | 长页面或复杂 DOM 时内容截断。评估是 DOM 提取策略还是 Native Messaging 消息体大小限制                                                                                                                                     |
+| E12  | **chrome_navigate 自动加 www**      | bug           | #270       | `https://192.168.0.1:4430` 变成 `https://www.192.168.0.1:4430`。确认 `navigate-patterns.test.ts` 是否覆盖                                                                                                                |
+| E13  | chrome_console 数据不完整           | bug           | #215       | 获取的是浅拷贝数据，无法获取深层对象                                                                                                                                                                                     |
+| E14  | SVG 元素支持                        | 功能请求      | #293       | `chrome_get_web_content` 默认用 `[SVG Icon]` 替代，请求可选返回 SVG 原文                                                                                                                                                 |
 
 ---
 
@@ -374,7 +374,7 @@
 - `[x]` **G8**：新增 `docs/WHY_MCP_CHROME.md`，README 已链入。
 - `[x]` **I4 v1**：新增 `skills/chrome_mcp_browser/SKILL.md` 与 `references/quick_ref.md`。
 - `[x]` **E12 回归**：`navigate-patterns.test.ts` 增加 `https://192.168.0.1:4430/` 用例。
-- `[~]` **E10（部分）**：dialog、network*request、chrome_network_capture（含底层 start/stop）、performance*\*、bookmark_add、get_interactive_elements、userscript 等已尊重 `tabId`/`windowId`（#275 余量见边缘工具）。
+- `[~]` **E10（部分）**：dialog、`chrome_network_request`、`chrome_network_capture`（含底层 start/stop）、performance 系列、bookmark_add、get_interactive_elements、close_tabs、send_command_to_inject_script、userscript（含 remove 清理）等已尊重 `tabId`/`windowId`（#275 余量见边缘工具）。
 - `[x]` **B4（部分）**：popup 在「已连接但服务未起」时的 `statusDetailText` 已补充 `mcp-chrome-bridge doctor`、端口/防火墙与重载扩展提示（`App.vue`）。
 - `[~]` **D9**：本机在扩展已连接、`12306` 可达时 **连续 3 次** `mcp-chrome-bridge smoke` 全绿（单次约 50s+）；清单原目标为 **5+ 次**，余下次数见 **§十二**。
 - **维护约定**：任务合并时请同步更新本文件状态，自动化无法覆盖项写入 **§十二**。详见文首 **「维护约定（任务闭环）」**。

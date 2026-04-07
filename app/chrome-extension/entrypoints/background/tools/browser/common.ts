@@ -465,6 +465,8 @@ export const navigateTool = new NavigateTool();
 interface CloseTabsToolParams {
   tabIds?: number[];
   url?: string;
+  /** When closing the "active" tab (no tabIds/url), resolve active tab in this window. */
+  windowId?: number;
 }
 
 /**
@@ -474,7 +476,7 @@ class CloseTabsTool extends BaseBrowserToolExecutor {
   name = TOOL_NAMES.BROWSER.CLOSE_TABS;
 
   async execute(args: CloseTabsToolParams): Promise<ToolResult> {
-    const { tabIds, url } = args;
+    const { tabIds, url, windowId } = args;
     let urlPattern = url;
     console.log(`Attempting to close tabs with options:`, args);
 
@@ -609,9 +611,9 @@ class CloseTabsTool extends BaseBrowserToolExecutor {
         };
       }
 
-      // If no tabIds or URL provided, close the current active tab
+      // If no tabIds or URL provided, close the current active tab (optionally scoped by window)
       console.log('No tabIds or URL provided, closing active tab');
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const activeTab = await this.getActiveTabInWindow(windowId);
 
       if (!activeTab || !activeTab.id) {
         return createErrorResponse('No active tab found');
