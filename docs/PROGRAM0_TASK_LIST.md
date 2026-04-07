@@ -1,6 +1,6 @@
 # Program 0 详细任务清单
 
-最后更新：`2026-04-07 Asia/Shanghai`（v2.1 — 增加任务闭环约定与 §十二手动测试清单）
+最后更新：`2026-04-07 Asia/Shanghai`（v2.2 — A4/A6/B8 状态同步，server 单测扩充）
 分支：`codex/phase0-stabilization`
 
 基于：当前分支 51 commits、上游 hangwin/mcp-chrome 173 个 Open Issues、PHASE0 系列文档、实际代码审查、**竞品调研（15+ 开源 / 8+ 商业产品）**。
@@ -39,15 +39,15 @@
 - `[x]` A5. 修复 duplicate MCP error responses 问题
 - `[x]` A7. Transport 行为文档化（`docs/TRANSPORT.md`：HTTP / SSE / stdio）
 - `[x]` A8. stdio 模式僵尸进程修复（`mcp-server-stdio.ts` stdin 关闭与信号处理）
+- `[x]` A6. GET `/mcp`（SSE 流）缺少 session 时的错误文案已含操作提示（先 `POST /mcp` initialize、或 `GET /sse`）（`constant/index.ts`）
 
 ### 待完成
 
-| 编号 | 任务                          | 关联 Issue | 难度 | 说明                                                                                                                         |
-| ---- | ----------------------------- | ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------------- |
-| A2   | Session Registry 独立模块抽取 | #321       | 中   | 当前 session 管理散落在 `server/index.ts`，需提取为独立 `session-registry.ts`，支持 session 枚举、超时清理、优雅关闭         |
-| A4   | SSE 并行 session 回归测试     | #9, #308   | 中   | 当前只有 HTTP repeated-initialize 测试（`server.test.ts`），缺少 SSE 传输的并行 session 创建/销毁覆盖。**见 §十二手动项 A4** |
-| A6   | Session ID 校验错误信息优化   | #308       | 低   | `Invalid or missing MCP session ID for SSE` 错误提示需附带诊断建议                                                           |
-| A9   | Chrome 升级后 MCP 请求兼容性  | #288       | 中   | Chrome 144+ 更新后出现 `Invalid MCP request or session`，需排查 extension manifest 或请求头变化                              |
+| 编号 | 任务                          | 关联 Issue | 难度 | 说明                                                                                                                                                                                                                |
+| ---- | ----------------------------- | ---------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A2   | Session Registry 独立模块抽取 | #321       | 中   | 当前 session 管理散落在 `server/index.ts`，需提取为独立 `session-registry.ts`，支持 session 枚举、超时清理、优雅关闭                                                                                                |
+| A4   | SSE 并行 session 回归测试     | #9, #308   | 中   | `[~]` **`server.test.ts` 已覆盖**：并行 streamable-http（`POST /mcp` initialize ×2 + `/status` 计数 + `DELETE`）、`GET /mcp` 无 `mcp-session-id` 的错误体。**仍建议手动**：长连接 `GET /sse` 双开客户端（§十二 A4） |
+| A9   | Chrome 升级后 MCP 请求兼容性  | #288       | 中   | Chrome 144+ 更新后出现 `Invalid MCP request or session`，需排查 extension manifest 或请求头变化                                                                                                                     |
 
 ---
 
@@ -62,6 +62,7 @@
 - `[x]` B3. Unpacked Extension ID 漂移修复（动态 `allowed_origins`）
 - `[x]` B5. 稳定本地扩展 key 生成（`ensure-extension-key.cjs`）
 - `[x]` B6. Popup Refresh 恢复 native server 状态
+- `[x]` B8. logs 目录：`doctor`（`mkdirSync`）、`setup`、`build` 与 `dist/logs` 均已具备创建逻辑（代码审查 #237）
 
 ### 待完成
 
@@ -69,7 +70,6 @@
 | ---- | ------------------------------- | --------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | B4   | "已连接，服务未启动" 状态机梳理 | #29, #198, #237, #284, #298 | 高   | `[~]` **部分**：popup `statusDetailText` 已补充 doctor/端口/重载提示（`App.vue`）。仍缺与 background `GET_SERVER_STATUS` 完全一致的显式状态机；**见 §十二 B4/B7** |
 | B7   | Chrome 重启后扩展持久化验证     | #198, #237                  | 中   | 在全新 profile 上完整验证"安装 → 重启 Chrome → 扩展仍在 → 自动连接"流程                                                                                           |
-| B8   | logs 目录自动创建               | #237                        | 低   | #237 明确指出缺 logs 文件夹导致启动失败。确认当前代码包含 `mkdirSync` 保护                                                                                        |
 | B9   | Mac 平台 Native Host 注册验证   | #284                        | 中   | 当前加固主要在 Windows，Mac 用户也有连接问题。需在 macOS 上验证 manifest 路径、权限                                                                               |
 | B10  | better-sqlite3 原生模块绑定问题 | #271                        | 中   | 部分环境（pnpm global）找不到 bindings file，需确认 `postinstall` 正确处理原生模块路径                                                                            |
 
@@ -332,16 +332,16 @@
 
 > 以下项需在 **真人操作、第二台机器、或其它 MCP 客户端** 上完成；通过后在对应任务行或 § 会话落地 中记录日期与版本。
 
-| ID              | 场景                                  | 如何测                                                                                                                                            | 通过标准（摘要）                     |
-| --------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| **D9**          | smoke 稳定性                          | Chrome 打开扩展并 **连接**，`12306` 可达后执行 `mcp-chrome-bridge smoke`（或 `node dist/cli.js smoke`）                                           | **连续 ≥5 次** exit code 0           |
-| **C4**          | npm global 干净机                     | 新 Windows 用户或 VM：`npm i -g mcp-chrome-bridge` → `register --browser chrome` → 加载扩展 → 连接 → `doctor` + 一次 `smoke` 或 `chrome_navigate` | 无隐藏失败；doctor 无 ERROR          |
-| **A4**          | SSE 并行 session                      | 使用支持 MCP SSE 的客户端，对同一 bridge **并行建两个 session**，交替 `tools/list` / `tools/call` 后关闭                                          | 无串 session、无稳定崩溃             |
-| **B4/B7**       | 状态机 / 重启                         | 人为制造「已连但服务未起」、**完全退出 Chrome 再开**，观察 popup 与 CoPaw 连接                                                                    | 文案与真实状态一致；重连路径可理解   |
-| **B9**          | Mac                                   | 仅在 macOS：`register`、`doctor`、扩展路径与权限                                                                                                  | 与 Windows 行为对齐文档记录          |
-| **F1–F3**       | Claude Desktop / Cursor / Claude Code | 按各产品配置 `http://127.0.0.1:12306/mcp` 或 stdio                                                                                                | 能发现工具且至少一个 `chrome_*` 成功 |
-| **F4–F9**       | 其它客户端                            | CherryStudio、Dify、OpenClaw、Windsurf 等按官方 MCP 配置方式                                                                                      | 记录 pass/fail 与限制                |
-| **CoPaw E1–E3** | 工具告警                              | 在 CoPaw 内试 `chrome_read_page`（含 chrome://）、`chrome_screenshot`、`chrome_keyboard`                                                          | 记录复现步骤与 workaround            |
+| ID              | 场景                                  | 如何测                                                                                                                                                   | 通过标准（摘要）                     |
+| --------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| **D9**          | smoke 稳定性                          | Chrome 打开扩展并 **连接**，`12306` 可达后执行 `mcp-chrome-bridge smoke`（或 `node dist/cli.js smoke`）                                                  | **连续 ≥5 次** exit code 0           |
+| **C4**          | npm global 干净机                     | 新 Windows 用户或 VM：`npm i -g mcp-chrome-bridge` → `register --browser chrome` → 加载扩展 → 连接 → `doctor` + 一次 `smoke` 或 `chrome_navigate`        | 无隐藏失败；doctor 无 ERROR          |
+| **A4**          | SSE / 并行 session                    | **已自动化**：`pnpm test` 中 `server.test.ts`（并行 streamable-http + `GET /mcp` 无 session 错误）。**可选手动**：两路 `GET /sse` 长连接或真实客户端并行 | 与 Jest 一致；手动无串 session       |
+| **B4/B7**       | 状态机 / 重启                         | 人为制造「已连但服务未起」、**完全退出 Chrome 再开**，观察 popup 与 CoPaw 连接                                                                           | 文案与真实状态一致；重连路径可理解   |
+| **B9**          | Mac                                   | 仅在 macOS：`register`、`doctor`、扩展路径与权限                                                                                                         | 与 Windows 行为对齐文档记录          |
+| **F1–F3**       | Claude Desktop / Cursor / Claude Code | 按各产品配置 `http://127.0.0.1:12306/mcp` 或 stdio                                                                                                       | 能发现工具且至少一个 `chrome_*` 成功 |
+| **F4–F9**       | 其它客户端                            | CherryStudio、Dify、OpenClaw、Windsurf 等按官方 MCP 配置方式                                                                                             | 记录 pass/fail 与限制                |
+| **CoPaw E1–E3** | 工具告警                              | 在 CoPaw 内试 `chrome_read_page`（含 chrome://）、`chrome_screenshot`、`chrome_keyboard`                                                                 | 记录复现步骤与 workaround            |
 
 **SSE 与 HTTP 路径**：以 `docs/TRANSPORT.md` 为准；若客户端只支持一种传输，在兼容矩阵中注明。
 
@@ -351,8 +351,8 @@
 
 - 总维度：10 个（A–J）+ **维护约定** + **手动测试清单**
 - 总任务：约 68 个
-- 已完成：约 **28** 个（随 § 会话落地递增，需定期人工核对）
-- 待完成 / 部分完成：约 **40** 个（含 `[~]` 项）
+- 已完成：约 **31** 个（随 § 会话落地递增，需定期人工核对）
+- 待完成 / 部分完成：约 **37** 个（含 `[~]` 项）
 - 预估周期：5–6 周（第一 → 第四批排序执行，二/三/四批可交叉并行）
 
 ## v2 变更追溯
@@ -378,3 +378,6 @@
 - `[x]` **B4（部分）**：popup 在「已连接但服务未起」时的 `statusDetailText` 已补充 `mcp-chrome-bridge doctor`、端口/防火墙与重载扩展提示（`App.vue`）。
 - `[~]` **D9**：本机在扩展已连接、`12306` 可达时 **连续 3 次** `mcp-chrome-bridge smoke` 全绿（单次约 50s+）；清单原目标为 **5+ 次**，余下次数见 **§十二**。
 - **维护约定**：任务合并时请同步更新本文件状态，自动化无法覆盖项写入 **§十二**。详见文首 **「维护约定（任务闭环）」**。
+- `[x]` **A6**：`INVALID_SSE_SESSION` 错误文案含 `POST /mcp` / `GET /sse` 提示（`constant/index.ts`）。
+- `[~]` **A4**：`server.test.ts` 增加并行 streamable-http、`GET /mcp` 无 session 断言；经典 `GET /sse` 长连接仍以 §十二 为准。
+- `[x]` **B8**：logs 目录创建逻辑已在 `doctor` / `setup` / `build` 核对并记入「二、已完成」。

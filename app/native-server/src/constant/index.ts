@@ -49,7 +49,11 @@ export const ERROR_MESSAGES = {
   INTERNAL_SERVER_ERROR: 'Internal Server Error',
   MCP_SESSION_DELETION_ERROR: 'Internal server error during MCP session deletion.',
   MCP_REQUEST_PROCESSING_ERROR: 'Internal server error during MCP request processing.',
-  INVALID_SSE_SESSION: 'Invalid or missing MCP session ID for SSE.',
+  /** Shown when GET /mcp is used without a valid streamable-http session (SSE stream). */
+  INVALID_SSE_SESSION:
+    'Invalid or missing MCP session ID for SSE (GET /mcp). ' +
+    'First POST /mcp with an initialize request and send the returned mcp-session-id on this GET. ' +
+    'Or use GET /sse for the classic MCP SSE transport.',
 } as const;
 
 // ============================================================
