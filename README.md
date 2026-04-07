@@ -343,6 +343,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md) — install, verify, first success
 - [TOOLS API (EN)](docs/TOOLS.md) | [工具 API (中文)](docs/TOOLS_zh.md) — complete tool reference
 - [MCP transports (HTTP / SSE / stdio)](docs/TRANSPORT.md) — which mode to use
+- [Client Configuration Quick Reference](docs/CLIENT_CONFIG_QUICKREF.md) — copy-paste configs for 7 MCP clients
+- [Popup Troubleshooting](docs/POPUP_TROUBLESHOOTING.md) — status dot meanings and fixes
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — common issue solutions
 - [CoPaw Integration Guide](docs/COPAW.md) — use with CoPaw AI client
 
@@ -354,5 +356,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Architecture Design](docs/ARCHITECTURE.md) — detailed technical architecture
 - [Security Considerations](docs/SECURITY.md) — prompt injection risks, tool risk classification
+- [Error Codes Directory](docs/ERROR_CODES.md) — unified error code reference
 - [Contributing Guide](docs/CONTRIBUTING.md) — how to contribute
 - [Visual Editor](docs/VisualEditor.md) — visual editor for Claude Code & Codex

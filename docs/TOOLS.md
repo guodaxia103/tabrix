@@ -5,11 +5,13 @@ Complete reference for all available tools and their parameters.
 ## 📋 Table of Contents
 
 - [Browser Management](#browser-management)
-- [Screenshots & Visual](#screenshots--visual)
-- [Network Monitoring](#network-monitoring)
-- [Content Analysis](#content-analysis)
-- [Interaction](#interaction)
+- [Page Reading & Content](#page-reading--content)
+- [Page Interaction](#page-interaction)
+- [Screenshots & Recording](#screenshots--recording)
+- [Network](#network)
+- [Performance](#performance)
 - [Data Management](#data-management)
+- [Advanced / JavaScript](#advanced--javascript)
 - [Response Format](#response-format)
 
 ## 📊 Browser Management
@@ -44,16 +46,18 @@ List all currently open browser windows and tabs.
 
 ### `chrome_navigate`
 
-Navigate to a URL with optional viewport control.
+Navigate to a URL, refresh the current tab, or move in browser history (back/forward).
 
 **Parameters**:
 
-- `url` (string, optional): URL to navigate to (omit when `refresh=true`)
-- `newWindow` (boolean, optional): Create new window (default: false)
-- `tabId` (number, optional): Target an existing tab by ID (navigate/refresh that tab)
-- `background` (boolean, optional): Do not activate the tab or focus the window (default: false)
-- `width` (number, optional): Viewport width in pixels (default: 1280)
-- `height` (number, optional): Viewport height in pixels (default: 720)
+- `url` (string, optional): URL to navigate to. Use the special values `"back"` or `"forward"` to navigate history in the target tab (replaces the old `chrome_go_back_or_forward` tool).
+- `refresh` (boolean, optional): When `true`, refresh the current tab instead of navigating; `url` is ignored. Default: `false`.
+- `newWindow` (boolean, optional): Create a new window (default: `false`).
+- `tabId` (number, optional): Target tab for navigate, refresh, back, or forward (default: active tab).
+- `windowId` (number, optional): Window to use when picking the active tab or when creating a tab in an existing window.
+- `background` (boolean, optional): Do not activate the tab or focus the window (default: `false`).
+- `width` (number, optional): Window width in pixels (default: 1280). If `width` or `height` is set, a new window may be created per implementation.
+- `height` (number, optional): Window height in pixels (default: 720).
 
 **Example**:
 
@@ -66,21 +70,44 @@ Navigate to a URL with optional viewport control.
 }
 ```
 
+**History navigation** (replaces `chrome_go_back_or_forward`):
+
+```json
+{ "url": "back" }
+```
+
+```json
+{ "url": "forward", "tabId": 123 }
+```
+
+**Refresh**:
+
+```json
+{ "refresh": true }
+```
+
 ### `chrome_close_tabs`
 
-Close specific tabs or windows.
+Close one or more browser tabs.
 
 **Parameters**:
 
-- `tabIds` (array, optional): Array of tab IDs to close
-- `windowIds` (array, optional): Array of window IDs to close
+- `tabIds` (array of numbers, optional): Tab IDs to close. If omitted with no `url`, behavior targets the active tab (see `windowId`).
+- `url` (string, optional): Close tabs whose URL matches this value (alternative to `tabIds`).
+- `windowId` (number, optional): When neither `tabIds` nor `url` is set, close the active tab in this window (default: current window).
 
 **Example**:
 
 ```json
 {
-  "tabIds": [123, 456],
-  "windowIds": [789]
+  "tabIds": [123, 456]
+}
+```
+
+```json
+{
+  "url": "https://example.com/legacy",
+  "windowId": 789
 }
 ```
 
@@ -102,263 +129,132 @@ Switch to a specific browser tab.
 }
 ```
 
-### `chrome_go_back_or_forward`
-
-Navigate browser history.
-
-**Parameters**:
-
-- `direction` (string, required): "back" or "forward"
-- `tabId` (number, optional): Specific tab ID (default: active tab)
-
-**Example**:
-
-```json
-{
-  "direction": "back",
-  "tabId": 123
-}
-```
-
-## 📸 Screenshots & Visual
-
-### `chrome_screenshot`
-
-Take advanced screenshots with various options.
-
-**Parameters**:
-
-- `name` (string, optional): Screenshot filename
-- `selector` (string, optional): CSS selector for element screenshot
-- `tabId` (number, optional): Target tab to capture (default: active tab)
-- `background` (boolean, optional): Attempt capture without bringing tab/window to foreground (viewport-only uses CDP)
-- `width` (number, optional): Width in pixels (default: 800)
-- `height` (number, optional): Height in pixels (default: 600)
-- `storeBase64` (boolean, optional): Return base64 data (default: false)
-- `fullPage` (boolean, optional): Capture full page (default: true)
-
-**Example**:
-
-```json
-{
-  "selector": ".main-content",
-  "fullPage": true,
-  "storeBase64": true,
-  "width": 1920,
-  "height": 1080
-}
-```
-
-**Response**:
-
-```json
-{
-  "success": true,
-  "base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
-  "dimensions": {
-    "width": 1920,
-    "height": 1080
-  }
-}
-```
-
-## 🌐 Network Monitoring
-
-### `chrome_network_capture_start`
-
-Start capturing network requests using webRequest API.
-
-**Parameters**:
-
-- `url` (string, optional): URL to navigate to and capture
-- `maxCaptureTime` (number, optional): Maximum capture time in ms (default: 30000)
-- `inactivityTimeout` (number, optional): Stop after inactivity in ms (default: 3000)
-- `includeStatic` (boolean, optional): Include static resources (default: false)
-
-**Example**:
-
-```json
-{
-  "url": "https://api.example.com",
-  "maxCaptureTime": 60000,
-  "includeStatic": false
-}
-```
-
-### `chrome_network_capture_stop`
-
-Stop network capture and return collected data.
-
-**Parameters**: None
-
-**Response**:
-
-```json
-{
-  "success": true,
-  "capturedRequests": [
-    {
-      "url": "https://api.example.com/data",
-      "method": "GET",
-      "status": 200,
-      "requestHeaders": {...},
-      "responseHeaders": {...},
-      "responseTime": 150
-    }
-  ],
-  "summary": {
-    "totalRequests": 15,
-    "captureTime": 5000
-  }
-}
-```
-
-### `chrome_network_debugger_start`
-
-Start capturing with Chrome Debugger API (includes response bodies).
-
-**Parameters**:
-
-- `url` (string, optional): URL to navigate to and capture
-
-### `chrome_network_debugger_stop`
-
-Stop debugger capture and return data with response bodies.
-
-### `chrome_network_request`
-
-Send custom HTTP requests.
-
-**Parameters**:
-
-- `url` (string, required): Request URL
-- `method` (string, optional): HTTP method (default: "GET")
-- `headers` (object, optional): Request headers
-- `body` (string, optional): Request body
-
-**Example**:
-
-```json
-{
-  "url": "https://api.example.com/data",
-  "method": "POST",
-  "headers": {
-    "Content-Type": "application/json"
-  },
-  "body": "{\"key\": \"value\"}"
-}
-```
-
-## 🔍 Content Analysis
+## 📄 Page Reading & Content
 
 ### `chrome_read_page`
 
-Build an accessibility-like tree of the current page (visible viewport by default) with stable `ref_*` identifiers and viewport info. Useful for semantic element discovery or agent planning.
-
-Parameters:
-
-- `filter` (string, optional): `interactive` to only include interactive elements; default includes structural and labeled nodes.
-- `tabId` (number, optional): Target an existing tab by ID (default: active tab).
-
-Example:
-
-```json
-{
-  "filter": "interactive"
-}
-```
-
-Response contains `pageContent` (text tree), `viewport`, and a `refMapCount` summary. Use `chrome_get_interactive_elements` or your own logic to act on returned refs.
-
-### `search_tabs_content`
-
-AI-powered semantic search across browser tabs.
+Get an accessibility tree of visible elements in the viewport, with stable `ref_*` identifiers. Optionally focus on interactive nodes or a subtree. Does not work on `chrome://` pages; localhost may return sparse output.
 
 **Parameters**:
 
-- `query` (string, required): Search query
+- `filter` (string, optional): Use `"interactive"` for buttons, links, inputs, etc.; default includes visible structural/labeled nodes.
+- `depth` (number, optional): Maximum DOM depth to traverse (integer ≥ 0); lower values reduce output size.
+- `refId` (string, optional): Subtree root ref (e.g. `"ref_12"`) from a recent `chrome_read_page` in the same tab; refs may expire.
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window used when `tabId` is omitted.
 
 **Example**:
 
 ```json
 {
-  "query": "machine learning tutorials"
+  "filter": "interactive",
+  "depth": 12
 }
 ```
 
-**Response**:
-
-```json
-{
-  "success": true,
-  "totalTabsSearched": 10,
-  "matchedTabsCount": 3,
-  "vectorSearchEnabled": true,
-  "indexStats": {
-    "totalDocuments": 150,
-    "totalTabs": 10,
-    "semanticEngineReady": true
-  },
-  "matchedTabs": [
-    {
-      "tabId": 123,
-      "url": "https://example.com/ml-tutorial",
-      "title": "Machine Learning Tutorial",
-      "semanticScore": 0.85,
-      "matchedSnippets": ["Introduction to machine learning..."],
-      "chunkSource": "content"
-    }
-  ]
-}
-```
+**Response**: Includes `pageContent`, viewport info, and ref summaries. Use refs with `chrome_click_element`, `chrome_fill_or_select`, or `chrome_computer`.
 
 ### `chrome_get_web_content`
 
-Extract HTML or text content from web pages.
+Fetch visible HTML or text from a page (current tab or a URL).
 
 **Parameters**:
 
-- `format` (string, optional): "html" or "text" (default: "text")
-- `selector` (string, optional): CSS selector for specific elements
-- `tabId` (number, optional): Specific tab ID (default: active tab)
-- `background` (boolean, optional): Do not activate tab/focus window while fetching (default: false)
+- `url` (string, optional): Page to load; if omitted, uses the active tab.
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window for active tab or new-tab creation when `url` is used.
+- `background` (boolean, optional): Avoid focusing tab/window (default: `false`).
+- `htmlContent` (boolean, optional): Return visible HTML; when `true`, text-oriented options are ignored (default: `false`).
+- `textContent` (boolean, optional): Return visible text with metadata (default: `true` unless `htmlContent` is `true`).
+- `selector` (string, optional): Limit content to this CSS selector.
 
 **Example**:
 
 ```json
 {
-  "format": "text",
+  "textContent": true,
   "selector": ".article-content"
 }
 ```
 
-### `chrome_get_interactive_elements` (deprecated)
+### `chrome_console`
 
-Replaced by `chrome_read_page` as the primary discovery tool. The `read_page` implementation will automatically fallback to the interactive-elements logic when the accessibility tree is unavailable or too sparse. This tool is no longer listed via ListTools and is kept only for backward compatibility.
+Capture console output from a tab: **snapshot** mode (default, ~2s wait) or **buffer** mode (persistent per-tab buffer, read/clear without waiting).
 
-## 🎯 Interaction
+**Parameters**:
+
+- `url` (string, optional): Navigate here first; if omitted, uses the active tab.
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+- `background` (boolean, optional): Do not activate tab/window for CDP capture (default: `false`).
+- `includeExceptions` (boolean, optional): Include uncaught exceptions (default: `true`).
+- `maxMessages` (number, optional): Max messages in snapshot mode (default: `100`). Superseded by `limit` when provided.
+- `mode` (string, optional): `"snapshot"` | `"buffer"`.
+- `buffer` (boolean, optional): Alias for `mode="buffer"` (default: `false`).
+- `clear` (boolean, optional): Buffer mode: clear buffer before read (default: `false`).
+- `clearAfterRead` (boolean, optional): Buffer mode: clear after read to avoid duplicates (default: `false`).
+- `pattern` (string, optional): Regex filter on message/exception text; supports `/pattern/flags`.
+- `onlyErrors` (boolean, optional): Only error-level messages (and exceptions if included) (default: `false`).
+- `limit` (number, optional): In snapshot mode, alias for `maxMessages`; in buffer mode, limits returned rows.
+
+**Example**:
+
+```json
+{
+  "mode": "snapshot",
+  "maxMessages": 50,
+  "onlyErrors": true
+}
+```
+
+### `chrome_get_interactive_elements`
+
+List interactive elements (buttons, links, inputs, selects, etc.) with text, type, coordinates, and attributes.
+
+**Parameters**:
+
+- `textQuery` (string, optional): Fuzzy match on visible text or `aria-label`.
+- `selector` (string, optional): CSS selector filter.
+- `includeCoordinates` (boolean, optional): Include coordinates (default: `true`).
+- `types` (array of strings, optional): e.g. `"button"`, `"link"`, `"input"`; default all types.
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+
+**Example**:
+
+```json
+{
+  "textQuery": "Submit",
+  "types": ["button", "link"]
+}
+```
+
+## 🎯 Page Interaction
 
 ### `chrome_computer`
 
-Unified advanced interaction tool that prioritizes high-level DOM actions with CDP fallback. Supports hover, click, drag, scroll, typing, key chords, fill, wait and screenshot. If a recent screenshot was taken via `chrome_screenshot`, coordinates are auto-scaled from screenshot space to viewport space.
+Mouse, keyboard, and screenshot automation with CDP-oriented behavior. Prefer `ref` from `chrome_read_page` before clicking icons or small targets. Coordinates may align with recent `chrome_screenshot` / screenshot action space.
 
-Parameters:
+**Parameters**:
 
-- `action` (string, required): `left_click` | `right_click` | `double_click` | `triple_click` | `left_click_drag` | `scroll` | `type` | `key` | `fill` | `hover` | `wait` | `screenshot`
-- `tabId` (number, optional): Target an existing tab by ID (default: active tab)
-- `background` (boolean, optional): Avoid focusing/activating tab/window for certain operations (best-effort)
-- `ref` (string, optional): element ref from `chrome_read_page` (preferred). Used for click/scroll/type/key and as drag end when provided
-- `coordinates` (object, optional): `{ "x": 100, "y": 200 }` for click/scroll or drag end
-- `startRef` (string, optional): element ref for drag start
-- `startCoordinates` (object, optional): for `left_click_drag` when no `startRef`
-- `scrollDirection` (string, optional): `up` | `down` | `left` | `right`
-- `scrollAmount` (number, optional): ticks 1–10 (default 3)
-- `text` (string, optional): for `type` (raw text) or `key` (space-separated chords/keys like `"cmd+a Enter"`)
-- `duration` (number, optional): seconds for `wait` (max 30)
-- `selector` (string, optional): for `fill` when no `ref`
-- `value` (string, optional): for `fill` value
+- `action` (string, required): `left_click` | `right_click` | `double_click` | `triple_click` | `left_click_drag` | `scroll` | `scroll_to` | `type` | `key` | `fill` | `fill_form` | `hover` | `wait` | `resize_page` | `zoom` | `screenshot`
+- `tabId` (number, optional): Target tab (default: active tab).
+- `background` (boolean, optional): Best-effort avoid focusing tab/window (default: `false`).
+- `ref` (string, optional): Element ref from `chrome_read_page` (precedence over coordinates for many actions).
+- `coordinates` (object, optional): `{ "x", "y" }` — viewport or screenshot space if a recent screenshot context exists.
+- `startCoordinates` / `startRef` (optional): Drag start for `left_click_drag`.
+- `scrollDirection` (string, optional): `up` | `down` | `left` | `right`.
+- `scrollAmount` (number, optional): Ticks 1–10 (default: 3).
+- `text` (string, optional): For `type` or `key` (space-separated chords, e.g. `"Backspace Enter"`, `"cmd+a"`).
+- `repeat` (number, optional): For `key`, repeat count 1–100 (default: 1).
+- `modifiers` (object, optional): `altKey`, `ctrlKey`, `metaKey`, `shiftKey` for click actions.
+- `region` (object, optional): For `zoom`, rectangle `x0,y0,x1,y1`.
+- `selector` / `value` (optional): For `fill` (value may be string | boolean | number).
+- `elements` (array, optional): For `fill_form`, list of `{ ref, value }`.
+- `width` / `height` (optional): For `resize_page`.
+- `appear`, `timeout`, `duration` (optional): For `wait` (text vs timed wait; see schema defaults).
 
-Examples:
+**Examples**:
 
 ```json
 { "action": "left_click", "coordinates": { "x": 420, "y": 260 } }
@@ -368,30 +264,30 @@ Examples:
 { "action": "key", "text": "cmd+a Backspace" }
 ```
 
-````json
+```json
 { "action": "fill", "ref": "ref_7", "value": "user@example.com" }
-
-```json
-{ "action": "hover", "ref": "ref_12", "duration": 0.6 }
-````
-
-````
-
-```json
-{ "action": "left_click_drag", "startRef": "ref_10", "ref": "ref_15" }
-````
+```
 
 ### `chrome_click_element`
 
-Click elements using a ref, selector, or coordinates.
+Click via ref, CSS/XPath selector, or coordinates. Supports iframe `frameId`.
 
 **Parameters**:
 
-- `ref` (string, optional): Element ref from `chrome_read_page` (preferred when available)
-- `selector` (string, optional): CSS selector for target element
-- `coordinates` (object, optional): `{ "x": 120, "y": 240 }` viewport coordinates
+- `selector` (string, optional): CSS or XPath (see `selectorType`).
+- `selectorType` (string, optional): `css` | `xpath` (default: `css`).
+- `ref` (string, optional): Ref from `chrome_read_page` (wins over `selector`).
+- `coordinates` (object, optional): `{ "x", "y" }` required when using coordinate targeting.
+- `double` (boolean, optional): Double-click (default: `false`).
+- `button` (string, optional): `left` | `right` | `middle` (default: `left`).
+- `modifiers` (object, optional): `altKey`, `ctrlKey`, `metaKey`, `shiftKey`.
+- `waitForNavigation` (boolean, optional): Wait for navigation after click (default: `false`).
+- `timeout` (number, optional): Wait timeout in ms (default: `5000`).
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+- `frameId` (number, optional): Target frame for iframes.
 
-At least one of `ref`, `selector`, or `coordinates` must be provided.
+Provide at least one of `ref`, `selector`, or `coordinates`.
 
 **Example**:
 
@@ -403,13 +299,17 @@ At least one of `ref`, `selector`, or `coordinates` must be provided.
 
 ### `chrome_fill_or_select`
 
-Fill form fields or select options.
+Fill inputs, textareas, or select options; supports checkboxes and radios.
 
 **Parameters**:
 
-- `ref` (string, optional): Element ref from `chrome_read_page`
-- `selector` (string, optional): CSS selector for target element
-- `value` (string, required): Value to fill or select
+- `value` (string | number | boolean, required): Value to set.
+- `selector` (string, optional): CSS or XPath.
+- `selectorType` (string, optional): `css` | `xpath` (default: `css`).
+- `ref` (string, optional): Ref from `chrome_read_page`.
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+- `frameId` (number, optional): Target frame for iframes.
 
 Provide `ref` or `selector` to identify the element.
 
@@ -424,13 +324,17 @@ Provide `ref` or `selector` to identify the element.
 
 ### `chrome_keyboard`
 
-Simulate keyboard input and shortcuts.
+Send key events or chords to the page (shortcuts, special keys). For long text into fields, prefer `chrome_fill_or_select`.
 
 **Parameters**:
 
-- `keys` (string, required): Key combination (e.g., "Ctrl+C", "Enter")
-- `selector` (string, optional): Target element selector
-- `delay` (number, optional): Delay between keystrokes in ms (default: 0)
+- `keys` (string, required): e.g. `"Enter"`, `"Ctrl+C"`, `"Hello World"`.
+- `selector` (string, optional): Focus target (CSS or XPath per `selectorType`).
+- `selectorType` (string, optional): `css` | `xpath` (default: `css`).
+- `delay` (number, optional): Delay between keystrokes in ms (default: `50`).
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+- `frameId` (number, optional): Target frame for iframes.
 
 **Example**:
 
@@ -442,19 +346,300 @@ Simulate keyboard input and shortcuts.
 }
 ```
 
+### `chrome_request_element_selection`
+
+Human-in-the-loop element picker: the user must click elements in the browser; expect seconds to minutes. Use after repeated failed location via `chrome_read_page` + click/fill/computer. Returns refs compatible with click/fill (including iframe `frameId` when applicable).
+
+**Parameters**:
+
+- `requests` (array, required): Each item `{ id?, name (required), description? }` — one picked element per request.
+- `timeoutMs` (number, optional): Default `180000` (max `600000`).
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+
+**Example**:
+
+```json
+{
+  "requests": [{ "name": "Login button", "description": "Primary login in the header" }],
+  "timeoutMs": 120000
+}
+```
+
+### `chrome_upload_file`
+
+Upload files to `<input type="file">` via Chrome DevTools Protocol.
+
+**Parameters**:
+
+- `selector` (string, required): CSS selector for the file input.
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+- `filePath` (string, optional): Local path.
+- `fileUrl` (string, optional): Download then upload.
+- `base64Data` (string, optional): Raw bytes as base64.
+- `fileName` (string, optional): Filename for URL/base64 (default: `"uploaded-file"`).
+- `multiple` (boolean, optional): Multi-file input (default: `false`).
+
+**Example**:
+
+```json
+{
+  "selector": "input#resume",
+  "filePath": "/path/to/resume.pdf"
+}
+```
+
+## 📸 Screenshots & Recording
+
+### `chrome_screenshot`
+
+Advanced full-page or element screenshots. Prefer `chrome_read_page` for structure and `chrome_computer` with `action="screenshot"` for new flows; use this when you need these specific options. Large full-page captures may time out on heavy pages.
+
+**Parameters**:
+
+- `name` (string, optional): Filename when saving PNG.
+- `selector` (string, optional): Element to capture.
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+- `background` (boolean, optional): Best-effort capture without foreground focus (default: `false`).
+- `width` (number, optional): Width in pixels (default: `800`).
+- `height` (number, optional): Height in pixels (default: `600`).
+- `storeBase64` (boolean, optional): Include base64 image in the response (default: `false`).
+- `fullPage` (boolean, optional): Capture full scrollable page (default: `true`).
+- `savePng` (boolean, optional): Save PNG to disk (default: `true`); for inline viewing, often pair `savePng: false` with `storeBase64: true`.
+
+**Example**:
+
+```json
+{
+  "selector": ".main-content",
+  "fullPage": true,
+  "storeBase64": true,
+  "savePng": false,
+  "width": 1920,
+  "height": 1080
+}
+```
+
+**Response** (illustrative):
+
+```json
+{
+  "success": true,
+  "base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+  "dimensions": {
+    "width": 1920,
+    "height": 1080
+  }
+}
+```
+
+### `chrome_handle_dialog`
+
+Accept or dismiss JavaScript `alert` / `confirm` / `prompt` via CDP. Only works while a dialog is visible on the target tab.
+
+**Parameters**:
+
+- `action` (string, required): `accept` | `dismiss`.
+- `promptText` (string, optional): Text for `prompt` when accepting.
+- `tabId` (number, optional): Tab showing the dialog (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+
+**Example**:
+
+```json
+{
+  "action": "accept",
+  "promptText": "yes"
+}
+```
+
+### `chrome_gif_recorder`
+
+Record tab activity as an animated GIF. Modes include fixed-FPS `start`, action-triggered `auto_start`, `stop`, `status`, `capture`, `clear`, and `export`. Allow a short delay between `start` and `stop` to avoid race errors.
+
+**Parameters**:
+
+- `action` (string, required): `start` | `stop` | `status` | `auto_start` | `capture` | `clear` | `export`.
+- `tabId` (number, optional): Recording/export target tab (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+- `fps` (number, optional): Fixed-FPS mode, 1–30 (default: `5`).
+- `durationMs` (number, optional): Max duration for fixed-FPS (default: `5000`, max: `60000`).
+- `maxFrames` (number, optional): Frame cap (defaults differ by mode; max `300`).
+- `width` / `height` (number, optional): Output size (defaults `800×600`, max `1920×1080`).
+- `maxColors` (number, optional): Palette size (default: `256`).
+- `filename` (string, optional): Base name without extension.
+- `captureDelayMs` (number, optional): Auto mode: delay after action before frame (default: `150`).
+- `frameDelayCs` (number, optional): Auto mode: centiseconds per frame (default: `20`).
+- `annotation` (string, optional): With `capture` in auto mode, label on frame.
+- `download` (boolean, optional): For `export`, `true` downloads, `false` drag-and-drop upload (default: `true`).
+- `coordinates` / `ref` / `selector` (optional): For `export` with `download=false`, drop target.
+- `enhancedRendering` (boolean | object, optional): Auto mode overlays (click indicators, drag paths, labels); `true` enables defaults.
+
+**Example**:
+
+```json
+{
+  "action": "start",
+  "fps": 8,
+  "durationMs": 10000,
+  "filename": "demo-flow"
+}
+```
+
+## 🌐 Network
+
+### `chrome_network_capture`
+
+Unified capture: `action="start"` begins, `action="stop"` ends and returns results. Default path uses the webRequest API (lightweight; no response bodies). Set `needResponseBody=true` to use the Debugger API (response bodies; may conflict with DevTools).
+
+**Parameters**:
+
+- `action` (string, required): `start` | `stop`.
+- `needResponseBody` (boolean, optional): Use Debugger API for bodies (default: `false`).
+- `url` (string, optional): For `start`, open/navigate; if omitted, uses the active tab.
+- `maxCaptureTime` (number, optional): Max capture duration in ms (default: `180000`).
+- `inactivityTimeout` (number, optional): Stop after quiet period in ms (default: `60000`; `0` disables).
+- `includeStatic` (boolean, optional): Include images/scripts/styles (default: `false`).
+- `tabId` (number, optional): Tab to attach to for `start` / `stop`.
+- `windowId` (number, optional): Window when `tabId` is omitted.
+
+**Example**:
+
+```json
+{ "action": "start", "includeStatic": false }
+```
+
+```json
+{ "action": "stop" }
+```
+
+### `chrome_network_request`
+
+Issue an HTTP request with the browser’s cookies and context (often via a content script in a tab).
+
+**Parameters**:
+
+- `url` (string, required): Request URL.
+- `method` (string, optional): HTTP method (default: `GET`).
+- `headers` (object, optional): Request headers.
+- `body` (string, optional): Raw body for methods that need it.
+- `timeout` (number, optional): Timeout in ms (default: `30000`).
+- `formData` (object, optional): Multipart form descriptor with optional file parts (see schema for shape).
+- `tabId` (number, optional): Tab whose context runs the helper (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+
+**Example**:
+
+```json
+{
+  "url": "https://api.example.com/data",
+  "method": "POST",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": "{\"key\": \"value\"}"
+}
+```
+
+### `chrome_handle_download`
+
+Wait for a browser download and return metadata (id, filename, url, state, size).
+
+**Parameters**:
+
+- `filenameContains` (string, optional): Substring filter on filename or URL.
+- `timeoutMs` (number, optional): Wait timeout (default: `60000`, max: `300000`).
+- `waitForComplete` (boolean, optional): Wait until finished (default: `true`).
+
+**Example**:
+
+```json
+{
+  "filenameContains": "report",
+  "timeoutMs": 120000,
+  "waitForComplete": true
+}
+```
+
+## ⚡ Performance
+
+### `performance_start_trace`
+
+Start a performance trace on the page; optionally reload and/or auto-stop after a duration.
+
+**Parameters**:
+
+- `reload` (boolean, optional): After trace starts, reload ignoring cache.
+- `autoStop` (boolean, optional): Auto-stop trace (default: `false`).
+- `durationMs` (number, optional): Duration when `autoStop` is true (default: `5000`).
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+
+**Example**:
+
+```json
+{
+  "reload": true,
+  "autoStop": true,
+  "durationMs": 8000
+}
+```
+
+### `performance_stop_trace`
+
+Stop the active trace on the tab where recording started.
+
+**Parameters**:
+
+- `saveToDownloads` (boolean, optional): Save trace JSON to Downloads (default: `true`).
+- `filenamePrefix` (string, optional): Filename prefix for the trace file.
+- `tabId` (number, optional): Must match the tab that started the trace (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+
+**Example**:
+
+```json
+{
+  "saveToDownloads": true,
+  "filenamePrefix": "trace-run-1"
+}
+```
+
+### `performance_analyze_insight`
+
+Lightweight summary of the last recorded trace on a tab (deeper analysis may require native DevTools integration).
+
+**Parameters**:
+
+- `insightName` (string, optional): Placeholder for future named insights (e.g. `"DocumentLatency"`).
+- `tabId` (number, optional): Tab whose last trace to analyze (default: active / most recent).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+- `timeoutMs` (number, optional): Native analysis timeout (default: `60000`).
+
+**Example**:
+
+```json
+{
+  "insightName": "DocumentLatency",
+  "timeoutMs": 90000
+}
+```
+
 ## 📚 Data Management
 
 ### `chrome_history`
 
-Search browser history with filters.
+Search browsing history with flexible time strings.
 
 **Parameters**:
 
-- `text` (string, optional): Search text in URL/title
-- `startTime` (string, optional): Start date (ISO format)
-- `endTime` (string, optional): End date (ISO format)
-- `maxResults` (number, optional): Maximum results (default: 100)
-- `excludeCurrentTabs` (boolean, optional): Exclude current tabs (default: true)
+- `text` (string, optional): Filter URL/title; empty returns entries in the time window.
+- `startTime` (string, optional): ISO, relative phrases, or keywords like `today` (default: ~24 hours ago).
+- `endTime` (string, optional): End bound (default: now).
+- `maxResults` (number, optional): Cap results (default: `100`).
+- `excludeCurrentTabs` (boolean, optional): Exclude URLs open in any tab (default: `false`).
 
 **Example**:
 
@@ -468,13 +653,13 @@ Search browser history with filters.
 
 ### `chrome_bookmark_search`
 
-Search bookmarks by keywords.
+Search bookmarks by title/URL.
 
 **Parameters**:
 
-- `query` (string, optional): Search keywords
-- `maxResults` (number, optional): Maximum results (default: 100)
-- `folderPath` (string, optional): Search within specific folder
+- `query` (string, optional): Match text; empty returns up to `maxResults` bookmarks.
+- `maxResults` (number, optional): Default `50`.
+- `folderPath` (string, optional): Limit to a folder path or folder ID.
 
 **Example**:
 
@@ -488,14 +673,16 @@ Search bookmarks by keywords.
 
 ### `chrome_bookmark_add`
 
-Add new bookmarks with folder support.
+Add a bookmark, optionally creating folders.
 
 **Parameters**:
 
-- `url` (string, optional): URL to bookmark (default: current tab)
-- `title` (string, optional): Bookmark title (default: page title)
-- `parentId` (string, optional): Parent folder ID or path
-- `createFolder` (boolean, optional): Create folder if not exists (default: false)
+- `url` (string, optional): Page URL; if omitted, uses `tabId` / `windowId` / active tab.
+- `title` (string, optional): Bookmark title (default: page title).
+- `parentId` (string, optional): Folder path or ID (default: Bookmarks Bar).
+- `createFolder` (boolean, optional): Create missing parent folders (default: `false`).
+- `tabId` (number, optional): Tab to bookmark when `url` is omitted.
+- `windowId` (number, optional): Window when `url` and `tabId` are omitted.
 
 **Example**:
 
@@ -510,18 +697,42 @@ Add new bookmarks with folder support.
 
 ### `chrome_bookmark_delete`
 
-Delete bookmarks by ID or URL.
+Delete a bookmark by id or URL.
 
 **Parameters**:
 
-- `bookmarkId` (string, optional): Bookmark ID to delete
-- `url` (string, optional): URL to find and delete
+- `bookmarkId` (string, optional): Direct bookmark id.
+- `url` (string, optional): Match by URL if id not given.
+- `title` (string, optional): Disambiguate when deleting by URL.
 
 **Example**:
 
 ```json
 {
   "url": "https://example.com"
+}
+```
+
+## 🧪 Advanced / JavaScript
+
+### `chrome_javascript`
+
+Execute JavaScript in the page via CDP `Runtime.evaluate` (with `awaitPromise` / `returnByValue`), falling back to `chrome.scripting` if the debugger is busy. Output is sanitized and size-limited.
+
+**Parameters**:
+
+- `code` (string, required): Runs inside an async function body; supports top-level `await` and `return`.
+- `tabId` (number, optional): Target tab (default: active tab).
+- `windowId` (number, optional): Window when `tabId` is omitted.
+- `timeoutMs` (number, optional): Execution timeout (default: `15000`).
+- `maxOutputBytes` (number, optional): Max serialized output after sanitization (default: `51200`).
+
+**Example**:
+
+```json
+{
+  "code": "return document.title",
+  "timeoutMs": 5000
 }
 ```
 
@@ -572,7 +783,8 @@ const screenshot = await callTool('chrome_screenshot', {
 });
 
 // 3. Start network monitoring
-await callTool('chrome_network_capture_start', {
+await callTool('chrome_network_capture', {
+  action: 'start',
   maxCaptureTime: 30000,
 });
 
@@ -581,19 +793,16 @@ await callTool('chrome_click_element', {
   selector: '#load-data-button',
 });
 
-// 5. Search content semantically
-const searchResults = await callTool('search_tabs_content', {
-  query: 'user data analysis',
+// 5. Stop capture and inspect traffic
+const networkData = await callTool('chrome_network_capture', {
+  action: 'stop',
 });
 
-// 6. Stop network capture
-const networkData = await callTool('chrome_network_capture_stop');
-
-// 7. Save bookmark
+// 6. Save bookmark
 await callTool('chrome_bookmark_add', {
   title: 'Data Analysis Page',
   parentId: 'Work/Analytics',
 });
 ```
 
-This API provides comprehensive browser automation capabilities with AI-enhanced content analysis and semantic search features.
+This API provides browser automation, performance tooling, media capture, and unified network inspection for agent workflows.

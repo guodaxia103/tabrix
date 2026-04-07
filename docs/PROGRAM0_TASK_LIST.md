@@ -1,6 +1,6 @@
 # Program 0 详细任务清单
 
-最后更新：`2026-04-07 Asia/Shanghai`（v2.4 — E10 彻底闭环、H4 annotations 补全、E7b 暴露、G1/G2 README 重构、H3 安全文档、E1–E6 限制文档化）
+最后更新：`2026-04-07 Asia/Shanghai`（v2.5 — I1/I2 TOOLS 文档全量同步 28 工具、G3 排障表、G6 配置速查卡、D7 错误码目录）
 分支：`codex/phase0-stabilization`
 
 基于：当前分支 51 commits、上游 hangwin/mcp-chrome 173 个 Open Issues、PHASE0 系列文档、实际代码审查、**竞品调研（15+ 开源 / 8+ 商业产品）**。
@@ -112,7 +112,7 @@
 | 编号 | 任务                           | 关联 Issue | 难度 | 说明                                                                                                                                                                 |
 | ---- | ------------------------------ | ---------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | D6   | `report` 增强为可提交诊断包    | #315       | 中   | 需包含：环境摘要（OS/Node/npm/Chrome 版本）、manifest 内容、registry 内容、最近 50 行日志、`/status` 快照、`doctor` JSON。脱敏后可直接贴 Issue                       |
-| D7   | 统一错误码目录                 | ROADMAP    | 中   | 定义 `E001`–`E0xx` 错误码体系，每个码对应：原因、排查步骤、修复建议。`doctor`/`smoke`/工具失败时引用                                                                 |
+| D7   | 统一错误码目录                 | ROADMAP    | 中   | `[x]` **已完成**：`docs/ERROR_CODES.md` — 按 CONN*/MCP*/TOOL*/RR*/CLI*/HTTP* 前缀分类，汇总各层错误常量、Chrome 原生错误、超时常量、改进计划                         |
 | D8   | `doctor --fix` 自动修复        | 新需求     | 中   | 常见问题（registry 缺失、manifest 路径错、logs 目录不存在）提供 `--fix` 自动修复                                                                                     |
 | D9   | `smoke` 稳定性加固             | 分支 [~]   | 中   | `[~]` 已在开发机连续 **3/3** 次 `mcp-chrome-bridge smoke` 全绿；目标 **5+** 次仍待补跑。`chrome_handle_dialog` 仍有「No dialog is showing」时序噪声。**见 §十二 D9** |
 | D10  | 扩展 error-page 运行时噪音清理 | 分支 [~]   | 低   | smoke/test 页面引发的 extension error-page 条目，需过滤或静默化                                                                                                      |
@@ -132,7 +132,7 @@
 - `chrome_history`、`chrome_bookmark_search`、`chrome_bookmark_add`、`chrome_bookmark_delete`
 - `performance_start_trace`、`performance_stop_trace`、`performance_analyze_insight`
 
-> **注**：`chrome_get_interactive_elements` 实现存在但 **TOOL_SCHEMAS 未暴露**（同 E7/E9 类别），不计入 pass。
+> **注**：`chrome_get_interactive_elements` 已在 TOOL_SCHEMAS 暴露（E7b），计入 pass 总计 28 工具。
 
 ### 需修复或闭环的工具
 
@@ -200,13 +200,13 @@
 
 ### 待完成
 
-| 编号 | 任务                           | 难度 | 说明                                                                  |
-| ---- | ------------------------------ | ---- | --------------------------------------------------------------------- |
-| G3   | "Popup 显示 X 该怎么办" 排障表 | 低   | popup 所有可能状态 → 原因 → 解决步骤                                  |
-| G4   | Windows 安装常见坑 FAQ         | 低   | 汇总上游高频问题：PATH、管理员权限、防火墙、pnpm postinstall          |
-| G5   | "第一个成功任务" 引导流程      | 中   | 安装完成 → 打开浏览器 → 连接扩展 → AI 助手发指令 → 看到结果，完整步骤 |
-| G6   | MCP 客户端配置速查卡           | 低   | 一页纸：5 种常见客户端配置 JSON，复制即用                             |
-| G7   | 视频/动图脚本大纲              | 低   | 5 分钟演示分镜脚本（可选，未来做）                                    |
+| 编号 | 任务                           | 难度 | 说明                                                                                                                                                                           |
+| ---- | ------------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| G3   | "Popup 显示 X 该怎么办" 排障表 | 低   | `[x]` **已完成**：`docs/POPUP_TROUBLESHOOTING.md` — 绿/黄/红/灰四状态排障、通用诊断命令、连接错误对照表                                                                        |
+| G4   | Windows 安装常见坑 FAQ         | 低   | 汇总上游高频问题：PATH、管理员权限、防火墙、pnpm postinstall                                                                                                                   |
+| G5   | "第一个成功任务" 引导流程      | 中   | 安装完成 → 打开浏览器 → 连接扩展 → AI 助手发指令 → 看到结果，完整步骤                                                                                                          |
+| G6   | MCP 客户端配置速查卡           | 低   | `[x]` **已完成**：`docs/CLIENT_CONFIG_QUICKREF.md` — 覆盖 Claude Desktop/Cursor/Claude Code/Codex/CherryStudio/Windsurf/Dify 7 个客户端 + SSE/stdio 备选 + 环境变量 + 常见问题 |
+| G7   | 视频/动图脚本大纲              | 低   | 5 分钟演示分镜脚本（可选，未来做）                                                                                                                                             |
 
 ---
 
@@ -247,20 +247,20 @@
 
 ### 待完成
 
-| 编号 | 任务                           | 难度 | 说明                                                                                                                                                                                          |
-| ---- | ------------------------------ | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| I1   | **TOOLS_zh.md 全量同步**       | 中   | 对齐 `tools.ts` TOOL_SCHEMAS，确保每个当前公开工具都有：描述、完整参数表（类型/必填/默认值）、请求示例 JSON、成功响应示例、错误响应示例（至少 1 个）、已知限制/注意事项                       |
-| I2   | **TOOLS.md 英文版同步**        | 中   | 与 I1 同步更新英文版                                                                                                                                                                          |
-| I3   | **按工具分类整理调用场景**     | 低   | 在文档中增加"典型场景"列：如「打开页面并确认加载」对应 `chrome_navigate` + `get_windows_and_tabs`；「填写登录表单」对应 `chrome_read_page` + `chrome_fill_or_select` + `chrome_click_element` |
-| I4   | **新建仓库内 AI Skill 技能包** | 高   | 在 `skills/chrome_mcp_browser/` 下创建随产品发布的 `SKILL.md` + `references/*.md`，面向**所有 MCP 客户端 AI 助手**。参考 `lark-agent-bridge` 的 skill 结构，包含以下内容                      |
-| I4a  | — Skill 元数据与触发条件       | —    | 声明工具名称、描述、适用 AI 运行时、版本                                                                                                                                                      |
-| I4b  | — 最短成功路径                 | —    | AI 拿到 Skill 后的首选操作流：确认连接 → 获取标签 → 导航 → 读取 → 操作 → 验证                                                                                                                 |
-| I4c  | — 工具选择决策树               | —    | 什么场景用哪个工具；优先用结构化内容（`chrome_read_page` / `chrome_get_web_content`），截图只做保底确认                                                                                       |
-| I4d  | — 失败回退策略                 | —    | 连接断开怎么办、工具超时怎么办、元素找不到怎么办、权限不足怎么办                                                                                                                              |
-| I4e  | — 标准失败回复模板             | —    | AI 遇到各类错误时应如何向用户描述和建议（参考 `lark-agent-bridge` 的 `output_and_errors.md`）                                                                                                 |
-| I4f  | — 工具快速参考表               | —    | 一张表列出所有工具：名称、一句话说明、是否只读、是否破坏性、典型用途                                                                                                                          |
-| I4g  | — 多客户端适配说明             | —    | 不同 AI 客户端（CoPaw / Claude Desktop / Cursor / Claude Code）的配置差异和推荐用法                                                                                                           |
-| I5   | **Skill 验证**                 | 中   | 用至少 2 个不同 AI 客户端实际加载 Skill 并执行浏览器任务，验证 AI 能否正确按 playbook 操作                                                                                                    |
+| 编号 | 任务                           | 难度 | 说明                                                                                                                                                                                                   |
+| ---- | ------------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| I1   | **TOOLS_zh.md 全量同步**       | 中   | `[x]` **已完成**：28 工具全量对齐 TOOL_SCHEMAS；移除 6 个过时工具名（go_back_or_forward/capture_start\|stop/debugger_start\|stop/search_tabs_content）；更新 navigate/close_tabs 参数；新增 9 分类目录 |
+| I2   | **TOOLS.md 英文版同步**        | 中   | `[x]` **已完成**：同 I1 结构，英文版 28 工具同步                                                                                                                                                       |
+| I3   | **按工具分类整理调用场景**     | 低   | 在文档中增加"典型场景"列：如「打开页面并确认加载」对应 `chrome_navigate` + `get_windows_and_tabs`；「填写登录表单」对应 `chrome_read_page` + `chrome_fill_or_select` + `chrome_click_element`          |
+| I4   | **新建仓库内 AI Skill 技能包** | 高   | 在 `skills/chrome_mcp_browser/` 下创建随产品发布的 `SKILL.md` + `references/*.md`，面向**所有 MCP 客户端 AI 助手**。参考 `lark-agent-bridge` 的 skill 结构，包含以下内容                               |
+| I4a  | — Skill 元数据与触发条件       | —    | 声明工具名称、描述、适用 AI 运行时、版本                                                                                                                                                               |
+| I4b  | — 最短成功路径                 | —    | AI 拿到 Skill 后的首选操作流：确认连接 → 获取标签 → 导航 → 读取 → 操作 → 验证                                                                                                                          |
+| I4c  | — 工具选择决策树               | —    | 什么场景用哪个工具；优先用结构化内容（`chrome_read_page` / `chrome_get_web_content`），截图只做保底确认                                                                                                |
+| I4d  | — 失败回退策略                 | —    | 连接断开怎么办、工具超时怎么办、元素找不到怎么办、权限不足怎么办                                                                                                                                       |
+| I4e  | — 标准失败回复模板             | —    | AI 遇到各类错误时应如何向用户描述和建议（参考 `lark-agent-bridge` 的 `output_and_errors.md`）                                                                                                          |
+| I4f  | — 工具快速参考表               | —    | 一张表列出所有工具：名称、一句话说明、是否只读、是否破坏性、典型用途                                                                                                                                   |
+| I4g  | — 多客户端适配说明             | —    | 不同 AI 客户端（CoPaw / Claude Desktop / Cursor / Claude Code）的配置差异和推荐用法                                                                                                                    |
+| I5   | **Skill 验证**                 | 中   | 用至少 2 个不同 AI 客户端实际加载 Skill 并执行浏览器任务，验证 AI 能否正确按 playbook 操作                                                                                                             |
 
 ---
 
@@ -307,9 +307,9 @@
 ### 第三批：P0 收尾 + 安全加固（1 周）
 
 15. `A2` Session Registry 独立模块
-16. `D7` 统一错误码目录
+16. ~~`D7` 统一错误码目录~~ → 已完成（`docs/ERROR_CODES.md`）
 17. ~~`H3`–`H4`~~ 安全文档 + annotations 补全 → 已完成；`H5` **敏感工具默认禁用** ↑ 待做
-18. `G3`–`G6` 排障表 / FAQ / 配置速查
+18. ~~`G3`~~ 排障表 → 已完成；~~`G6`~~ 配置速查 → 已完成；`G4`–`G5` FAQ / 引导流程待做
 19. ~~`G8` 竞品对比页~~ → 已完成（`docs/WHY_MCP_CHROME.md`）
 20. `F7` stdio 冒烟测试脚本
 21. ~~所有 warn 工具的限制文档化（E1–E6）~~ → 已完成（tool description 中注明限制）
@@ -317,7 +317,7 @@
 
 ### 第四批：完整文档 + 全客户端验证（1 周，与第三批可并行）
 
-22. `I1`–`I2` TOOLS 文档全量同步（中英文）
+22. ~~`I1`–`I2` TOOLS 文档全量同步（中英文）~~ → 已完成（28 工具对齐）
 23. `I3` 按工具分类的调用场景
 24. `I4` AI Skill 技能包定稿（基于第二批 v1 的实测反馈迭代）
 25. `I5` Skill 验证（至少 2 个 AI 客户端实测）
@@ -357,9 +357,9 @@
 
 - 总维度：10 个（A–J）+ **维护约定** + **手动测试清单**
 - 总任务（编号项）：约 72 个（含 E7b、可选加分项 A6/A7/B8/G8 已完成归档）
-- 已完成 `[x]`：约 **47** 个（A1/A3/A5–A8, B1–B3/B5–B6/B8, C1–C3/C7, D1–D5, E7b/E8/E10/E12, G1/G2/G8/I4v1, H1–H4, 会话落地项）
+- 已完成 `[x]`：约 **52** 个（A1/A3/A5–A8, B1–B3/B5–B6/B8, C1–C3/C7, D1–D5/D7, E7b/E8/E10/E12, G1–G3/G6/G8/I1/I2/I4v1, H1–H4, 会话落地项）
 - 部分完成 `[~]`：约 **3** 个（A4, B4, D9）
-- 待完成 `[ ]`：约 **22** 个
+- 待完成 `[ ]`：约 **17** 个
 - 预估周期：3–4 周（第一批基本收尾，二/三/四批可交叉并行）
 
 ## v2 变更追溯
@@ -408,3 +408,11 @@
 - `[x]` **A6**：`INVALID_SSE_SESSION` 错误文案含 `POST /mcp` / `GET /sse` 提示（`constant/index.ts`）。
 - `[~]` **A4**：`server.test.ts` 增加并行 streamable-http、`GET /mcp` 无 session 断言；经典 `GET /sse` 长连接仍以 §十二 为准。
 - `[x]` **B8**：logs 目录创建逻辑已在 `doctor` / `setup` / `build` 核对并记入「二、已完成」。
+
+### 2026-04-07 v2.5 文档批量推进
+
+- `[x]` **I1（TOOLS_zh.md 全量同步）**：28 工具全量对齐 TOOL_SCHEMAS；移除 6 个过时工具名；更新目录为 9 分类。
+- `[x]` **I2（TOOLS.md 英文版同步）**：同 I1 结构，英文版 28 工具同步。
+- `[x]` **G3（Popup 排障表）**：新建 `docs/POPUP_TROUBLESHOOTING.md` — 绿/黄/红/灰四状态速查、通用诊断命令、连接错误对照表。
+- `[x]` **G6（MCP 客户端配置速查卡）**：新建 `docs/CLIENT_CONFIG_QUICKREF.md` — 覆盖 7 个客户端（Claude Desktop/Cursor/Claude Code/Codex/CherryStudio/Windsurf/Dify）+ SSE/stdio 备选 + 环境变量 + 常见问题。
+- `[x]` **D7（统一错误码目录）**：新建 `docs/ERROR_CODES.md` — 按 CONN*/MCP*/TOOL*/RR*/CLI*/HTTP* 前缀分类汇总各层错误常量和 Chrome 原生错误。

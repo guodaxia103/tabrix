@@ -340,6 +340,8 @@ https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
 - [快速入门](docs/STABLE_QUICKSTART.md) — 安装、验证、首次成功
 - [工具 API (中文)](docs/TOOLS_zh.md) | [TOOLS API (EN)](docs/TOOLS.md) — 完整工具参考
 - [MCP 传输方式 (HTTP / SSE / stdio)](docs/TRANSPORT.md) — 选择哪种模式
+- [客户端配置速查卡](docs/CLIENT_CONFIG_QUICKREF.md) — 7 种 MCP 客户端配置，复制即用
+- [Popup 状态排障表](docs/POPUP_TROUBLESHOOTING.md) — 状态圆点含义与修复方法
 - [故障排除](docs/TROUBLESHOOTING_zh.md) — 常见问题解决方案
 - [CoPaw 集成指南](docs/COPAW.md) — 与 CoPaw AI 客户端配合使用
 
@@ -351,6 +353,7 @@ https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
 
 - [架构设计](docs/ARCHITECTURE_zh.md) — 详细技术架构说明
 - [安全考量](docs/SECURITY.md) — Prompt Injection 风险、工具风险分类
+- [错误码目录](docs/ERROR_CODES.md) — 统一错误码参考
 - [贡献指南](docs/CONTRIBUTING_zh.md) — 如何参与贡献
 - [可视化编辑器](docs/VisualEditor_zh.md) — Claude Code & Codex 可视化编辑器
 
