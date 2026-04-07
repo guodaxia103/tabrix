@@ -18,15 +18,29 @@ export const TIMEOUTS = {
 } as const;
 
 // Server configuration
+export const MCP_HTTP_HOST_ENV = 'MCP_HTTP_HOST';
+
+function resolveListenHost(): string {
+  const raw = process.env[MCP_HTTP_HOST_ENV];
+  if (!raw) return '127.0.0.1';
+  const allowed = ['127.0.0.1', '0.0.0.0', 'localhost', '::'];
+  return allowed.includes(raw) ? raw : '127.0.0.1';
+}
+
 export const SERVER_CONFIG = {
-  HOST: '127.0.0.1',
+  get HOST() {
+    return resolveListenHost();
+  },
   /**
    * CORS origin whitelist - only allow Chrome/Firefox extensions and local debugging.
    * Use RegExp patterns for extension origins, string for exact match.
    */
-  CORS_ORIGIN: [/^chrome-extension:\/\//, /^moz-extension:\/\//, 'http://127.0.0.1'] as const,
+  CORS_ORIGIN: [/^chrome-extension:\/\//, /^moz-extension:\/\//, 'http://127.0.0.1'] as (
+    | RegExp
+    | string
+  )[],
   LOGGER_ENABLED: false,
-} as const;
+};
 
 // HTTP Status codes
 export const HTTP_STATUS = {
@@ -79,8 +93,11 @@ export function getChromeMcpPort(): number {
 
 /**
  * Get the full URL to the local Chrome MCP HTTP endpoint.
- * This URL is used by Claude/Codex agents to connect to the MCP server.
+ * When listening on 0.0.0.0 / ::, the advertised URL still uses 127.0.0.1
+ * so that local MCP clients can connect.
  */
 export function getChromeMcpUrl(): string {
-  return `http://${SERVER_CONFIG.HOST}:${getChromeMcpPort()}/mcp`;
+  const host = SERVER_CONFIG.HOST;
+  const clientHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+  return `http://${clientHost}:${getChromeMcpPort()}/mcp`;
 }

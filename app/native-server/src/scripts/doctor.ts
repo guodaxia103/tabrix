@@ -632,6 +632,23 @@ async function attemptFixes(
     }
   });
 
+  const stdioConfigFixPath = path.resolve(distDir, 'mcp', 'stdio-config.json');
+  if (fs.existsSync(stdioConfigFixPath)) {
+    await attempt('port', 'Fix stdio-config.json port to match NATIVE_SERVER_PORT', async () => {
+      const raw = fs.readFileSync(stdioConfigFixPath, 'utf8');
+      const cfg = JSON.parse(raw);
+      if (cfg.url) {
+        const url = new URL(cfg.url);
+        const expected = String(NATIVE_SERVER_PORT);
+        if (url.port !== expected) {
+          url.port = expected;
+          cfg.url = url.toString();
+          fs.writeFileSync(stdioConfigFixPath, JSON.stringify(cfg, null, 4), 'utf8');
+        }
+      }
+    });
+  }
+
   return fixes;
 }
 

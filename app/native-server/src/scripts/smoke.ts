@@ -235,20 +235,28 @@ class LocalMcpClient {
   }
 
   private async rpc(method: string, params: Record<string, unknown>): Promise<MpcCallResult> {
-    const res = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
-        ...(this.sessionId ? { 'mcp-session-id': this.sessionId } : {}),
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: this.requestId++,
-        method,
-        params,
-      }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    let res: Response;
+    try {
+      res = await fetch(this.baseUrl, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          ...(this.sessionId ? { 'mcp-session-id': this.sessionId } : {}),
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: this.requestId++,
+          method,
+          params,
+        }),
+      });
+    } finally {
+      clearTimeout(timer);
+    }
 
     const text = await res.text();
     const parsed = parseStreamableJson(text);
@@ -265,6 +273,26 @@ class LocalMcpClient {
 
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Poll a condition until it returns a truthy value or timeout is reached.
+ * Much more reliable than fixed sleep() for browser-side state changes.
+ */
+async function poll<T>(
+  fn: () => Promise<T>,
+  predicate: (val: T) => boolean,
+  { interval = 200, timeout = 5000 }: { interval?: number; timeout?: number } = {},
+): Promise<T> {
+  const deadline = Date.now() + timeout;
+  let last: T;
+  do {
+    last = await fn();
+    if (predicate(last)) return last;
+    if (Date.now() >= deadline) break;
+    await sleep(interval);
+  } while (Date.now() < deadline);
+  return last;
 }
 
 async function probe(url: string): Promise<HttpProbeResult> {
@@ -344,14 +372,17 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
         String(tab?.url || '').startsWith(smokeServer.baseUrl),
       )?.tabId ||
       null;
-    await sleep(1200);
 
     if (!tempTabId) {
-      const afterNavigate = parseToolText(await mcp.callTool('get_windows_and_tabs'));
-      tempTabId =
-        afterNavigate?.windows
-          ?.flatMap((window: any) => window.tabs || [])
-          .find((tab: any) => String(tab.url || '').startsWith(smokeServer.baseUrl))?.tabId || null;
+      const findTab = async () => {
+        const snap = parseToolText(await mcp.callTool('get_windows_and_tabs'));
+        return (
+          snap?.windows
+            ?.flatMap((w: any) => w.tabs || [])
+            .find((t: any) => String(t.url || '').startsWith(smokeServer.baseUrl))?.tabId || null
+        );
+      };
+      tempTabId = await poll(findTab, (id) => id != null, { timeout: 8000 });
     }
     record(
       'chrome_navigate',
@@ -427,12 +458,16 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       tabId: tempTabId,
       selector: '#clickBtn',
     });
-    await sleep(400);
-    const clickedState = parseToolText(
-      await mcp.callTool('chrome_javascript', {
-        tabId: tempTabId,
-        code: "return document.querySelector('#status').textContent;",
-      }),
+    const clickedState = await poll(
+      async () =>
+        parseToolText(
+          await mcp.callTool('chrome_javascript', {
+            tabId: tempTabId,
+            code: "return document.querySelector('#status').textContent;",
+          }),
+        ),
+      (v) => String(v?.result ?? v).includes('clicked'),
+      { timeout: 4000 },
     );
     record(
       'chrome_click_element',
@@ -451,7 +486,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       tabId: tempTabId,
       selector: '#fetchBtn',
     });
-    await sleep(1200);
+    await sleep(800);
     const networkResult = parseToolText(
       await mcp.callTool('chrome_network_capture', {
         action: 'stop',
@@ -520,12 +555,16 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       selector: '#fileInput',
       filePath: smokeServer.tempFilePath,
     });
-    await sleep(500);
-    const uploaded = parseToolText(
-      await mcp.callTool('chrome_javascript', {
-        tabId: tempTabId,
-        code: "return document.querySelector('#fileName').textContent;",
-      }),
+    const uploaded = await poll(
+      async () =>
+        parseToolText(
+          await mcp.callTool('chrome_javascript', {
+            tabId: tempTabId,
+            code: "return document.querySelector('#fileName').textContent;",
+          }),
+        ),
+      (v) => String(v?.result ?? v).includes(path.basename(smokeServer.tempFilePath)),
+      { timeout: 4000 },
     );
     record(
       'chrome_upload_file',
@@ -537,30 +576,28 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       tabId: tempTabId,
       selector: '#promptBtn',
     });
-    await sleep(400);
+    await sleep(300);
     const dialogHandleResult = parseToolText(
       await mcp.callTool('chrome_handle_dialog', {
         action: 'accept',
         promptText: 'phase0-dialog',
       }),
     );
-    let dialogResult: unknown = null;
-    for (let i = 0; i < 8; i++) {
-      await sleep(250);
-      dialogResult = parseToolText(
-        await mcp.callTool('chrome_javascript', {
-          tabId: tempTabId,
-          code: "return document.querySelector('#dialogResult').textContent;",
-        }),
-      );
-      if (String((dialogResult as any)?.result ?? dialogResult).includes('phase0-dialog')) {
-        break;
-      }
-    }
+    const dialogResult = await poll(
+      async () =>
+        parseToolText(
+          await mcp.callTool('chrome_javascript', {
+            tabId: tempTabId,
+            code: "return document.querySelector('#dialogResult').textContent;",
+          }),
+        ),
+      (v) => String(v?.result ?? v).includes('phase0-dialog'),
+      { interval: 250, timeout: 6000 },
+    );
     const dialogResultText = String((dialogResult as any)?.result ?? dialogResult);
     record(
       'chrome_handle_dialog',
-      dialogResultText.includes('phase0-dialog') || dialogResultText.includes('default'),
+      dialogResultText.includes('phase0-dialog'),
       `Dialog resolved to "${dialogResultText}" (tool result: ${JSON.stringify(dialogHandleResult)})`,
     );
 
@@ -613,7 +650,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       autoStop: true,
       durationMs: 1200,
     });
-    await sleep(1800);
+    await sleep(2000);
     const perfStop = parseToolText(
       await mcp.callTool('performance_stop_trace', {
         saveToDownloads: false,

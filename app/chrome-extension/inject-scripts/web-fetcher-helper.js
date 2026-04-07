@@ -2669,7 +2669,7 @@ if (window.__WEB_FETCHER_HELPER_INITIALIZED__) {
       '.comments',
     ],
     minTextLength: 20,
-    maxTotalLength: 100000,
+    maxTotalLength: 500000,
     minParagraphLength: 2,
   };
 
@@ -2923,11 +2923,19 @@ if (window.__WEB_FETCHER_HELPER_INITIALIZED__) {
    * @returns {string} - Cleaned text
    */
   function cleanContent(text) {
-    return text
+    const cleaned = text
       .replace(/\s+/g, ' ')
       .replace(/\n\s*\n/g, '\n\n')
-      .trim()
-      .substring(0, config.maxTotalLength);
+      .trim();
+    if (cleaned.length > config.maxTotalLength) {
+      return (
+        cleaned.substring(0, config.maxTotalLength) +
+        '\n\n[Content truncated at ' +
+        config.maxTotalLength +
+        ' characters]'
+      );
+    }
+    return cleaned;
   }
 
   /**
@@ -2970,16 +2978,30 @@ if (window.__WEB_FETCHER_HELPER_INITIALIZED__) {
       }
     });
 
-    // Replace all SVG elements with placeholders
+    // Replace decorative SVG elements with placeholders.
+    // Keep SVGs that have semantic meaning (role, aria-label, title child).
     const svgElements = doc.querySelectorAll('svg');
     svgElements.forEach((element) => {
-      if (element.parentNode) {
-        // Create a placeholder element
+      if (!element.parentNode) return;
+      const hasRole =
+        element.getAttribute('role') && element.getAttribute('role') !== 'presentation';
+      const hasAriaLabel =
+        element.getAttribute('aria-label') || element.getAttribute('aria-labelledby');
+      const hasTitle = element.querySelector('title');
+      if (hasRole || hasAriaLabel || hasTitle) {
+        // Semantic SVG — keep a compact representation
+        const label =
+          element.getAttribute('aria-label') ||
+          (hasTitle ? hasTitle.textContent : '') ||
+          element.getAttribute('role');
+        const placeholder = doc.createElement('span');
+        placeholder.textContent = '[SVG: ' + (label || 'icon') + ']';
+        placeholder.setAttribute('data-placeholder', 'svg-semantic');
+        element.parentNode.replaceChild(placeholder, element);
+      } else {
         const placeholder = doc.createElement('span');
         placeholder.textContent = '[SVG Icon]';
         placeholder.setAttribute('data-placeholder', 'svg-icon');
-
-        // Replace SVG element
         element.parentNode.replaceChild(placeholder, element);
       }
     });

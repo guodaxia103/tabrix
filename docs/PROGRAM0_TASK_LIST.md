@@ -1,6 +1,6 @@
 # Program 0 详细任务清单
 
-最后更新：`2026-04-07 Asia/Shanghai`（v2.6 — A2 Session Registry 抽取、G4 FAQ、G5 引导、I3 场景）
+最后更新：`2026-04-07 Asia/Shanghai`（v2.7 — D6/D8/D9/E11/E13/E14/J1）
 分支：`codex/phase0-stabilization`
 
 基于：当前分支 51 commits、上游 hangwin/mcp-chrome 173 个 Open Issues、PHASE0 系列文档、实际代码审查、**竞品调研（15+ 开源 / 8+ 商业产品）**。
@@ -109,13 +109,13 @@
 
 ### 待完成
 
-| 编号 | 任务                           | 关联 Issue | 难度 | 说明                                                                                                                                                                 |
-| ---- | ------------------------------ | ---------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D6   | `report` 增强为可提交诊断包    | #315       | 中   | 需包含：环境摘要（OS/Node/npm/Chrome 版本）、manifest 内容、registry 内容、最近 50 行日志、`/status` 快照、`doctor` JSON。脱敏后可直接贴 Issue                       |
-| D7   | 统一错误码目录                 | ROADMAP    | 中   | `[x]` **已完成**：`docs/ERROR_CODES.md` — 按 CONN*/MCP*/TOOL*/RR*/CLI*/HTTP* 前缀分类，汇总各层错误常量、Chrome 原生错误、超时常量、改进计划                         |
-| D8   | `doctor --fix` 自动修复        | 新需求     | 中   | 常见问题（registry 缺失、manifest 路径错、logs 目录不存在）提供 `--fix` 自动修复                                                                                     |
-| D9   | `smoke` 稳定性加固             | 分支 [~]   | 中   | `[~]` 已在开发机连续 **3/3** 次 `mcp-chrome-bridge smoke` 全绿；目标 **5+** 次仍待补跑。`chrome_handle_dialog` 仍有「No dialog is showing」时序噪声。**见 §十二 D9** |
-| D10  | 扩展 error-page 运行时噪音清理 | 分支 [~]   | 低   | smoke/test 页面引发的 extension error-page 条目，需过滤或静默化                                                                                                      |
+| 编号 | 任务                           | 关联 Issue | 难度 | 说明                                                                                                                                                                                         |
+| ---- | ------------------------------ | ---------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D6   | `report` 增强为可提交诊断包    | #315       | 中   | `[x]` **已完成**：动态端口（`getChromeMcpPort`）替代硬编码 12306；增加 MCP initialize + tools/list 连通测试；`fetchJsonWithTimeout` 支持 POST + SSE 解析；Markdown 报告中增加 MCP 工具数显示 |
+| D7   | 统一错误码目录                 | ROADMAP    | 中   | `[x]` **已完成**：`docs/ERROR_CODES.md` — 按 CONN*/MCP*/TOOL*/RR*/CLI*/HTTP* 前缀分类，汇总各层错误常量、Chrome 原生错误、超时常量、改进计划                                                 |
+| D8   | `doctor --fix` 自动修复        | 新需求     | 中   | `[x]` **已完成**：新增 `port` fix 步骤 — 自动修正 `stdio-config.json` 端口不一致；原有 logs/node_path/permissions/register 修复保持                                                          |
+| D9   | `smoke` 稳定性加固             | 分支 [~]   | 中   | `[x]` **已完成**：新增 `poll()` 工具函数替代 5 处固定 `sleep`（导航/点击/上传/对话框/tab查找）；对话框轮询从 2s 增至 6s + 去掉 `default` 宽松通过；MCP RPC 加 30s 超时保护                   |
+| D10  | 扩展 error-page 运行时噪音清理 | 分支 [~]   | 低   | smoke/test 页面引发的 extension error-page 条目，需过滤或静默化                                                                                                                              |
 
 ---
 
@@ -136,23 +136,23 @@
 
 ### 需修复或闭环的工具
 
-| 编号 | 工具                                | 当前状态       | 关联 Issue | 任务                                                                                                                               |
-| ---- | ----------------------------------- | -------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| E1   | `chrome_read_page`                  | warn (CoPaw)   | —          | CoPaw 下在 `chrome://` 和稀疏 localhost 页面降级。记录限制条件或添加降级提示                                                       |
-| E2   | `chrome_keyboard`                   | warn (CoPaw)   | #200       | CoPaw 下表现为 key/chord 发送器而非文本输入。文档化：用 `chrome_fill_or_select` 做文本输入，`chrome_keyboard` 只用于快捷键         |
-| E3   | `chrome_screenshot`                 | warn (CoPaw)   | —          | CoPaw 调用时 `image readback failed` 超时。排查是扩展侧 CDP 超时还是 CoPaw MCP 客户端超时                                          |
-| E4   | `chrome_handle_dialog`              | warn           | #309       | 无活动 dialog 时返回 `No dialog is showing`（正确），但 debugger 已挂载时冲突。文档化限制                                          |
-| E5   | `chrome_gif_recorder`               | warn           | —          | `start → stop` 偶发 `No recording in progress`。排查 recording 状态管理竞态                                                        |
-| E6   | `chrome_request_element_selection`  | warn           | —          | 人工选择超时是预期行为，需在工具描述中明确 human-in-the-loop 特性                                                                  |
-| E7   | `search_tabs_content`               | fail (未暴露)  | —          | TOOL_NAMES 有定义、TOOL_SCHEMAS 被注释。实现存在（`vector-search.ts`）。**决策：Phase 0 暴露 or 标记 Phase 1**                     |
-| E7b  | `chrome_get_interactive_elements`   | `[x]` 已暴露   | —          | TOOL_SCHEMAS 已注册（readOnlyHint: true）。实现在 `web-fetcher.ts`                                                                 |
-| E8   | `chrome_inject_script`              | `[x]` 已文档化 | —          | TOOL_SCHEMAS 被注释；`docs/SECURITY.md` 已标记为 "Disabled by default for security"                                                |
-| E9   | `chrome_userscript`                 | fail (未暴露)  | —          | 同 E7。TOOL_SCHEMAS 被注释；实现存在（`userscript.ts`）                                                                            |
-| E10  | **tabId 被忽略**                    | bug `[x]`      | #275       | 所有暴露工具已尊重 `tabId`/`windowId`。`console` else 分支和 `inject_script` else 分支均改用 `getActiveTabInWindow`。#275 可 close |
-| E11  | **chrome_get_web_content 内容不全** | bug            | #99        | 长页面或复杂 DOM 时内容截断。评估是 DOM 提取策略还是 Native Messaging 消息体大小限制                                               |
-| E12  | **chrome_navigate 自动加 www**      | bug `[x]`      | #270       | `navigate-patterns.test.ts` 已覆盖 `192.168.0.1:4430` 不加 `www` 的回归用例；`shouldAddWwwVariant` 对 IP 和 IPv6 短路              |
-| E13  | chrome_console 数据不完整           | bug            | #215       | 获取的是浅拷贝数据，无法获取深层对象                                                                                               |
-| E14  | SVG 元素支持                        | 功能请求       | #293       | `chrome_get_web_content` 默认用 `[SVG Icon]` 替代，请求可选返回 SVG 原文                                                           |
+| 编号 | 工具                                | 当前状态       | 关联 Issue | 任务                                                                                                                                                                     |
+| ---- | ----------------------------------- | -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| E1   | `chrome_read_page`                  | warn (CoPaw)   | —          | CoPaw 下在 `chrome://` 和稀疏 localhost 页面降级。记录限制条件或添加降级提示                                                                                             |
+| E2   | `chrome_keyboard`                   | warn (CoPaw)   | #200       | CoPaw 下表现为 key/chord 发送器而非文本输入。文档化：用 `chrome_fill_or_select` 做文本输入，`chrome_keyboard` 只用于快捷键                                               |
+| E3   | `chrome_screenshot`                 | warn (CoPaw)   | —          | CoPaw 调用时 `image readback failed` 超时。排查是扩展侧 CDP 超时还是 CoPaw MCP 客户端超时                                                                                |
+| E4   | `chrome_handle_dialog`              | warn           | #309       | 无活动 dialog 时返回 `No dialog is showing`（正确），但 debugger 已挂载时冲突。文档化限制                                                                                |
+| E5   | `chrome_gif_recorder`               | warn           | —          | `start → stop` 偶发 `No recording in progress`。排查 recording 状态管理竞态                                                                                              |
+| E6   | `chrome_request_element_selection`  | warn           | —          | 人工选择超时是预期行为，需在工具描述中明确 human-in-the-loop 特性                                                                                                        |
+| E7   | `search_tabs_content`               | fail (未暴露)  | —          | TOOL_NAMES 有定义、TOOL_SCHEMAS 被注释。实现存在（`vector-search.ts`）。**决策：Phase 0 暴露 or 标记 Phase 1**                                                           |
+| E7b  | `chrome_get_interactive_elements`   | `[x]` 已暴露   | —          | TOOL_SCHEMAS 已注册（readOnlyHint: true）。实现在 `web-fetcher.ts`                                                                                                       |
+| E8   | `chrome_inject_script`              | `[x]` 已文档化 | —          | TOOL_SCHEMAS 被注释；`docs/SECURITY.md` 已标记为 "Disabled by default for security"                                                                                      |
+| E9   | `chrome_userscript`                 | fail (未暴露)  | —          | 同 E7。TOOL_SCHEMAS 被注释；实现存在（`userscript.ts`）                                                                                                                  |
+| E10  | **tabId 被忽略**                    | bug `[x]`      | #275       | 所有暴露工具已尊重 `tabId`/`windowId`。`console` else 分支和 `inject_script` else 分支均改用 `getActiveTabInWindow`。#275 可 close                                       |
+| E11  | **chrome_get_web_content 内容不全** | bug            | #99        | `[x]` **已完成**：`maxTotalLength` 从 100K 提升到 500K；截断时追加 `[Content truncated]` 提示                                                                            |
+| E12  | **chrome_navigate 自动加 www**      | bug `[x]`      | #270       | `navigate-patterns.test.ts` 已覆盖 `192.168.0.1:4430` 不加 `www` 的回归用例；`shouldAddWwwVariant` 对 IP 和 IPv6 短路                                                    |
+| E13  | chrome_console 数据不完整           | bug            | #215       | `[x]` **已完成**：snapshot 模式从固定 2s 改为自适应等待（最长 3s，空闲 500ms 即停）；减少遗漏已产生但未到达的日志                                                        |
+| E14  | SVG 元素支持                        | 功能请求       | #293       | `[x]` **已完成**：语义 SVG（有 role/aria-label/title）保留为 `[SVG: label]`；`interactive-elements-helper` 新增 `svg[role=button]`/`svg[tabindex]`/`svg[onclick]` 选择器 |
 
 ---
 
@@ -268,12 +268,12 @@
 
 > 不是 Phase 0 必须项，改动小可顺手做
 
-| 编号 | 需求                    | 关联 Issue      | 评估                                                           |
-| ---- | ----------------------- | --------------- | -------------------------------------------------------------- |
-| J1   | 监听地址 `0.0.0.0` 支持 | #290, #74, #210 | 低风险高价值，改 Fastify listen 参数即可，需同时考虑安全提示   |
-| J2   | 截图自动保存            | #207            | 低优先级，Phase 1                                              |
-| J3   | 页面滚动 API 文档化     | #200            | `chrome_computer` 已支持 scroll action，确认文档清晰           |
-| J4   | 后台静默运行            | #178            | `chrome_navigate` 已有 `background` 参数，确认所有工具是否支持 |
+| 编号 | 需求                    | 关联 Issue      | 评估                                                                                                                                        |
+| ---- | ----------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| J1   | 监听地址 `0.0.0.0` 支持 | #290, #74, #210 | `[x]` **已完成**：`MCP_HTTP_HOST` 环境变量（允许 127.0.0.1/0.0.0.0/localhost/::）；`getChromeMcpUrl` 在 0.0.0.0 时自动用 127.0.0.1 给客户端 |
+| J2   | 截图自动保存            | #207            | 低优先级，Phase 1                                                                                                                           |
+| J3   | 页面滚动 API 文档化     | #200            | `chrome_computer` 已支持 scroll action，确认文档清晰                                                                                        |
+| J4   | 后台静默运行            | #178            | `chrome_navigate` 已有 `background` 参数，确认所有工具是否支持                                                                              |
 
 ---
 
@@ -357,9 +357,9 @@
 
 - 总维度：10 个（A–J）+ **维护约定** + **手动测试清单**
 - 总任务（编号项）：约 72 个（含 E7b、可选加分项 A6/A7/B8/G8 已完成归档）
-- 已完成 `[x]`：约 **57** 个（A1–A2/A3/A5–A8, B1–B3/B5–B6/B8, C1–C3/C7, D1–D5/D7, E7b/E8/E10/E12, G1–G6/G8/I1–I3/I4v1, H1–H5, 会话落地项）
-- 部分完成 `[~]`：约 **3** 个（A4, B4, D9）
-- 待完成 `[ ]`：约 **12** 个
+- 已完成 `[x]`：约 **64** 个（A1–A2/A3/A5–A8, B1–B3/B5–B6/B8, C1–C3/C7, D1–D9, E7b/E8/E10–E14, G1–G6/G8/I1–I3/I4v1, H1–H5, J1, 会话落地项）
+- 部分完成 `[~]`：约 **2** 个（A4, B4）
+- 待完成 `[ ]`：约 **5** 个
 - 预估周期：3–4 周（第一批基本收尾，二/三/四批可交叉并行）
 
 ## v2 变更追溯
@@ -424,3 +424,13 @@
 - `[x]` **G5（首次成功引导）**：新建 `docs/FIRST_SUCCESS_GUIDE.md` — 5 步引导从安装到 AI 控制浏览器。
 - `[x]` **I3（调用场景）**：TOOLS.md + TOOLS_zh.md 末尾新增「典型调用场景」5 类表格。
 - `[x]` **H5（敏感工具默认禁用）**：`SENSITIVE_TOOL_NAMES` 常量 + `MCP_DISABLE_SENSITIVE_TOOLS` 环境变量 + 4 个测试 + 文档更新。
+
+### 2026-04-07 v2.7 稳定性 + 工具修复 + 功能
+
+- `[x]` **J1（0.0.0.0 监听支持）**：`MCP_HTTP_HOST` 环境变量（允许 127.0.0.1/0.0.0.0/localhost/::）；`getChromeMcpUrl` 在 0.0.0.0 时广告 127.0.0.1。
+- `[x]` **D9（smoke 稳定性加固）**：新增 `poll()` 工具函数替代 5 处固定 `sleep`；对话框轮询窗口从 2s 增至 6s 并去掉 `default` 宽松；MCP RPC 加 30s AbortController 超时。
+- `[x]` **D8（doctor --fix 增强）**：新增 `port` 修复步骤 — 自动修正 `stdio-config.json` 端口不一致。
+- `[x]` **D6（report 增强）**：动态端口 + MCP initialize/tools 连通测试 + SSE 解析支持 + Markdown 报告中 MCP 工具数显示。
+- `[x]` **E11（web_content 截断）**：`maxTotalLength` 100K → 500K；截断时追加提示文本。
+- `[x]` **E13（console 数据不完整）**：snapshot 模式从固定 2s 改为自适应等待（最长 3s，空闲 500ms 即停）。
+- `[x]` **E14（SVG 支持）**：语义 SVG 保留为 `[SVG: label]`；`interactive-elements-helper` 新增 svg[role=button]/svg[tabindex]/svg[onclick] 选择器。

@@ -20,6 +20,7 @@ import {
 } from './browser-config';
 import { getLogDir } from './utils';
 import { collectDoctorReport, DoctorReport } from './doctor';
+import { getChromeMcpPort, SERVER_CONFIG } from '../constant';
 
 const REPORT_SCHEMA_VERSION = 1;
 const DEFAULT_LOG_LINES = 200;
@@ -98,6 +99,11 @@ interface RuntimeSnapshot {
     ok: boolean;
     status?: number;
     body?: unknown;
+    error?: string;
+  };
+  mcpInitialize?: {
+    ok: boolean;
+    toolCount?: number;
     error?: string;
   };
 }
@@ -228,7 +234,8 @@ function resolveFetch(): FetchFn | null {
 async function fetchJsonWithTimeout(
   url: string,
   timeoutMs: number,
-): Promise<{ ok: boolean; status?: number; body?: unknown; error?: string }> {
+  opts?: { method?: string; headers?: Record<string, string>; body?: string },
+): Promise<{ ok: boolean; status?: number; body?: any; error?: string; headers?: any }> {
   const fetchFn = resolveFetch();
   if (!fetchFn) {
     return { ok: false, error: 'fetch is not available' };
@@ -242,21 +249,30 @@ async function fetchJsonWithTimeout(
 
   try {
     const response = await fetchFn(url, {
-      method: 'GET',
+      method: opts?.method ?? 'GET',
       signal: controller.signal,
+      ...(opts?.headers ? { headers: opts.headers } : {}),
+      ...(opts?.body ? { body: opts.body } : {}),
     });
 
     let body: unknown;
+    const text = await response.text();
     try {
-      body = await response.json();
+      const lines = text
+        .trim()
+        .split(/\r?\n/)
+        .filter((l: string) => l.startsWith('data:'));
+      const jsonStr = lines.length > 0 ? lines[lines.length - 1].slice(5).trim() : text;
+      body = JSON.parse(jsonStr);
     } catch {
-      body = await response.text();
+      body = text;
     }
 
     return {
       ok: response.ok,
       status: response.status,
       body,
+      headers: response.headers,
       ...(response.ok ? {} : { error: `HTTP ${response.status}` }),
     };
   } catch (e) {
@@ -267,17 +283,60 @@ async function fetchJsonWithTimeout(
 }
 
 async function collectRuntimeSnapshot(): Promise<RuntimeSnapshot> {
-  const baseUrl = 'http://127.0.0.1:12306';
+  const host = SERVER_CONFIG.HOST;
+  const clientHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+  const baseUrl = `http://${clientHost}:${getChromeMcpPort()}`;
   const [ping, status] = await Promise.all([
     fetchJsonWithTimeout(`${baseUrl}/ping`, 1500),
     fetchJsonWithTimeout(`${baseUrl}/status`, 1500),
   ]);
 
-  return {
-    baseUrl,
-    ping,
-    status,
-  };
+  let mcpInitialize: RuntimeSnapshot['mcpInitialize'];
+  if (ping.ok) {
+    try {
+      const initRes = await fetchJsonWithTimeout(`${baseUrl}/mcp`, 3000, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            capabilities: {},
+            clientInfo: { name: 'mcp-chrome-report', version: '1.0.0' },
+          },
+        }),
+      });
+      const sid = initRes.headers?.get?.('mcp-session-id');
+      if (sid) {
+        const listRes = await fetchJsonWithTimeout(`${baseUrl}/mcp`, 3000, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json, text/event-stream',
+            'mcp-session-id': sid,
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
+        });
+        const toolCount = listRes.body?.result?.tools?.length ?? 0;
+        mcpInitialize = { ok: true, toolCount };
+        // Clean up session
+        fetch(`${baseUrl}/mcp`, { method: 'DELETE', headers: { 'mcp-session-id': sid } }).catch(
+          () => {},
+        );
+      } else {
+        mcpInitialize = { ok: false, error: 'No mcp-session-id header' };
+      }
+    } catch (e) {
+      mcpInitialize = { ok: false, error: stringifyError(e) };
+    }
+  }
+
+  return { baseUrl, ping, status, mcpInitialize };
 }
 
 function resolveBrowsers(browserArg: string | undefined): BrowserType[] {
@@ -704,6 +763,11 @@ function renderMarkdown(report: DiagnosticReport): string {
     lines.push(JSON.stringify(report.runtime.status.body, null, 2));
     lines.push('```');
     lines.push('</details>');
+  }
+  if (report.runtime.mcpInitialize) {
+    const mcp = report.runtime.mcpInitialize;
+    lines.push(`- **MCP Initialize:** ${mcp.ok ? `ok (${mcp.toolCount} tools)` : 'failed'}`);
+    if (mcp.error) lines.push(`  - Error: ${mcp.error}`);
   }
   lines.push('');
 

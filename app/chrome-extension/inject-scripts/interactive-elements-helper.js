@@ -28,7 +28,8 @@
    * Now more comprehensive with common ARIA roles.
    */
   const ELEMENT_CONFIG = {
-    button: 'button, input[type="button"], input[type="submit"], [role="button"]',
+    button:
+      'button, input[type="button"], input[type="submit"], [role="button"], svg[role="button"]',
     link: 'a[href], [role="link"]',
     input:
       'input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"])',
@@ -38,8 +39,8 @@
     select: 'select, [role="combobox"]',
     tab: '[role="tab"]',
     // Generic interactive elements: combines tabindex, common roles, and explicit handlers.
-    // This is the key to finding custom-built interactive components.
-    interactive: `[onclick], [tabindex]:not([tabindex^="-"]), [role="menuitem"], [role="slider"], [role="option"], [role="treeitem"], [role="switch"]`,
+    // Includes SVG elements with interactive attributes.
+    interactive: `[onclick], [tabindex]:not([tabindex^="-"]), [role="menuitem"], [role="slider"], [role="option"], [role="treeitem"], [role="switch"], svg[onclick], svg[tabindex]:not([tabindex^="-"])`,
   };
 
   // A combined selector for ANY interactive element, used in the fallback logic.

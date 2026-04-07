@@ -434,8 +434,21 @@ class ConsoleTool extends BaseBrowserToolExecutor {
         // Also enable Log domain to capture other log entries
         await cdpSessionManager.sendCommand(tabId, 'Log.enable');
 
-        // Wait for all messages to be flushed
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        // Wait for messages to arrive; stop early if no new messages after 500ms idle.
+        const maxWait = 3000;
+        const idleThreshold = 500;
+        const waitStart = Date.now();
+        let lastCount = 0;
+        let lastChange = waitStart;
+        while (Date.now() - waitStart < maxWait) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const currentCount = messages.length + collectedExceptions.length;
+          if (currentCount !== lastCount) {
+            lastCount = currentCount;
+            lastChange = Date.now();
+          }
+          if (Date.now() - lastChange >= idleThreshold) break;
+        }
 
         // Process collected messages
         // Helper to deeply serialize console arguments when possible
