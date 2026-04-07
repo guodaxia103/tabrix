@@ -6,12 +6,7 @@ import { ref, computed, onUnmounted } from 'vue';
 import { NativeMessageType } from 'chrome-mcp-shared';
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import type { AgentEngineInfo, RealtimeEvent } from 'chrome-mcp-shared';
-
-interface ServerStatus {
-  isRunning: boolean;
-  port?: number;
-  lastUpdated: number;
-}
+import type { ServerStatus } from '@/common/connection-state';
 
 export interface UseAgentServerOptions {
   /**

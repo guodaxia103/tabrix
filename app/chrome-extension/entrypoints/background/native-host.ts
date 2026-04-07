@@ -27,14 +27,7 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
 let manualDisconnect = false;
 
-/**
- * Server status management interface
- */
-interface ServerStatus {
-  isRunning: boolean;
-  port?: number;
-  lastUpdated: number;
-}
+import type { ServerStatus } from '../../common/connection-state';
 
 let lastNativeError: string | null = null;
 
@@ -117,6 +110,7 @@ function broadcastServerStatusChange(status: ServerStatus): void {
     .sendMessage({
       type: BACKGROUND_MESSAGE_TYPES.SERVER_STATUS_CHANGED,
       payload: status,
+      connected: nativePort !== null,
     })
     .catch(() => {
       // Ignore errors if no listeners are present

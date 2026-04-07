@@ -226,12 +226,9 @@ export class Server {
     this.fastify.get('/sse', async (request, reply) => {
       try {
         reply.hijack();
-        reply.raw.writeHead(HTTP_STATUS.OK, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-        });
-
+        // SSEServerTransport.start() (called by server.connect) sends
+        // writeHead + endpoint event itself — do NOT call writeHead here
+        // to avoid ERR_HTTP_HEADERS_SENT.
         const transport = new SSEServerTransport('/messages', reply.raw);
         const server = createMcpServer();
         this.sessions.register(transport.sessionId, {
@@ -249,10 +246,6 @@ export class Server {
         });
 
         await server.connect(transport);
-
-        if (!reply.raw.writableEnded) {
-          reply.raw.write(':\n\n');
-        }
       } catch (error) {
         if (!reply.raw.writableEnded) {
           reply.raw.end(ERROR_MESSAGES.INTERNAL_SERVER_ERROR);

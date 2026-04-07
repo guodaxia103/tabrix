@@ -1,6 +1,6 @@
 # Program 0 详细任务清单
 
-最后更新：`2026-04-07 Asia/Shanghai`（v2.7 — D6/D8/D9/E11/E13/E14/J1）
+最后更新：`2026-04-07 Asia/Shanghai`（v2.8 — B4/A4 + SSE writeHead bug fix）
 分支：`codex/phase0-stabilization`
 
 基于：当前分支 51 commits、上游 hangwin/mcp-chrome 173 个 Open Issues、PHASE0 系列文档、实际代码审查、**竞品调研（15+ 开源 / 8+ 商业产品）**。
@@ -43,11 +43,11 @@
 
 ### 待完成
 
-| 编号 | 任务                          | 关联 Issue | 难度 | 说明                                                                                                                                                                                                                     |
-| ---- | ----------------------------- | ---------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| A2   | Session Registry 独立模块抽取 | #321       | 中   | `[x]` **已完成**：`server/session-registry.ts` — SessionRegistry 类封装 register/get/remove/disconnect/closeAll/snapshot/updateClientInfo；`index.ts` 所有 `transportsMap` 引用替换为 `this.sessions`；tsc + 11 测试通过 |
-| A4   | SSE 并行 session 回归测试     | #9, #308   | 中   | `[~]` **`server.test.ts` 已覆盖**：并行 streamable-http（`POST /mcp` initialize ×2 + `/status` 计数 + `DELETE`）、`GET /mcp` 无 `mcp-session-id` 的错误体。**仍建议手动**：长连接 `GET /sse` 双开客户端（§十二 A4）      |
-| A9   | Chrome 升级后 MCP 请求兼容性  | #288       | 中   | Chrome 144+ 更新后出现 `Invalid MCP request or session`，需排查 extension manifest 或请求头变化                                                                                                                          |
+| 编号 | 任务                          | 关联 Issue | 难度 | 说明                                                                                                                                                                                                                                                                                      |
+| ---- | ----------------------------- | ---------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A2   | Session Registry 独立模块抽取 | #321       | 中   | `[x]` **已完成**：`server/session-registry.ts` — SessionRegistry 类封装 register/get/remove/disconnect/closeAll/snapshot/updateClientInfo；`index.ts` 所有 `transportsMap` 引用替换为 `this.sessions`；tsc + 11 测试通过                                                                  |
+| A4   | SSE 并行 session 回归测试     | #9, #308   | 中   | `[x]` **已完成**：streamable-http 并行 + 经典 SSE（`GET /sse` + `POST /messages`）均已自动化覆盖。新增 5 个 SSE 测试：SSE 流建立/session 注册、无效 sessionId 400、并行 SSE 计数、DELETE 踢出、连接关闭自动清理。同时修复 SSE handler 重复 `writeHead` 导致的 `ERR_HTTP_HEADERS_SENT` bug |
+| A9   | Chrome 升级后 MCP 请求兼容性  | #288       | 中   | Chrome 144+ 更新后出现 `Invalid MCP request or session`，需排查 extension manifest 或请求头变化                                                                                                                                                                                           |
 
 ---
 
@@ -66,12 +66,12 @@
 
 ### 待完成
 
-| 编号 | 任务                            | 关联 Issue                  | 难度 | 说明                                                                                                                                                              |
-| ---- | ------------------------------- | --------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B4   | "已连接，服务未启动" 状态机梳理 | #29, #198, #237, #284, #298 | 高   | `[~]` **部分**：popup `statusDetailText` 已补充 doctor/端口/重载提示（`App.vue`）。仍缺与 background `GET_SERVER_STATUS` 完全一致的显式状态机；**见 §十二 B4/B7** |
-| B7   | Chrome 重启后扩展持久化验证     | #198, #237                  | 中   | 在全新 profile 上完整验证"安装 → 重启 Chrome → 扩展仍在 → 自动连接"流程                                                                                           |
-| B9   | Mac 平台 Native Host 注册验证   | #284                        | 中   | 当前加固主要在 Windows，Mac 用户也有连接问题。需在 macOS 上验证 manifest 路径、权限                                                                               |
-| B10  | better-sqlite3 原生模块绑定问题 | #271                        | 中   | 部分环境（pnpm global）找不到 bindings file，需确认 `postinstall` 正确处理原生模块路径                                                                            |
+| 编号 | 任务                            | 关联 Issue                  | 难度 | 说明                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---- | ------------------------------- | --------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B4   | "已连接，服务未启动" 状态机梳理 | #29, #198, #237, #284, #298 | 高   | `[x]` **已完成**：新建 `common/connection-state.ts` 共享类型模块（`ServerStatus` 接口 + `ConnectionState` 枚举 + `resolveConnectionState` 纯函数 + `stateToStatusClass` 映射）；popup `App.vue` 引入 `connectionState` computed 作为单一状态源重构 `getStatusText`/`getStatusClass`/`statusDetailText`；`SERVER_STATUS_CHANGED` 广播增加 `connected` 字段同步 `nativeConnectionStatus`；background + sidepanel 消除重复 `ServerStatus` 定义 |
+| B7   | Chrome 重启后扩展持久化验证     | #198, #237                  | 中   | 在全新 profile 上完整验证"安装 → 重启 Chrome → 扩展仍在 → 自动连接"流程                                                                                                                                                                                                                                                                                                                                                                     |
+| B9   | Mac 平台 Native Host 注册验证   | #284                        | 中   | 当前加固主要在 Windows，Mac 用户也有连接问题。需在 macOS 上验证 manifest 路径、权限                                                                                                                                                                                                                                                                                                                                                         |
+| B10  | better-sqlite3 原生模块绑定问题 | #271                        | 中   | 部分环境（pnpm global）找不到 bindings file，需确认 `postinstall` 正确处理原生模块路径                                                                                                                                                                                                                                                                                                                                                      |
 
 ---
 
@@ -284,11 +284,11 @@
 > 不修这些，产品不可用。
 
 1. ~~`A8` stdio 僵尸进程修复~~ → 已完成
-2. `B4` "已连接，服务未启动" 状态机梳理 `[~]` popup 文案已补，状态机待完善
+2. ~~`B4` "已连接，服务未启动" 状态机梳理~~ → 已完成（显式 ConnectionState 枚举 + resolveConnectionState + SERVER_STATUS_CHANGED 同步 connected）
 3. ~~`E10` tabId 被忽略 bug 修复~~ → 已完成（console/inject_script else 分支均已改用 `getActiveTabInWindow`）
 4. `C4` npm 全新安装端到端验证
-5. `D9` smoke 稳定性加固（跑 5+ 次全绿）`[~]` 已 3/5
-6. ~~`A4` SSE 并行 session 回归测试~~ → 自动化已覆盖（`server.test.ts`）
+5. ~~`D9` smoke 稳定性加固~~ → 已完成（poll 函数 + 超时保护）
+6. ~~`A4` SSE 并行 session 回归测试~~ → 已完成（streamable-http + 经典 SSE 全自动化 + writeHead bug fix）
 
 ### 第二批：P0 质量关 + 产品差异化（1–2 周）
 
@@ -357,8 +357,8 @@
 
 - 总维度：10 个（A–J）+ **维护约定** + **手动测试清单**
 - 总任务（编号项）：约 72 个（含 E7b、可选加分项 A6/A7/B8/G8 已完成归档）
-- 已完成 `[x]`：约 **64** 个（A1–A2/A3/A5–A8, B1–B3/B5–B6/B8, C1–C3/C7, D1–D9, E7b/E8/E10–E14, G1–G6/G8/I1–I3/I4v1, H1–H5, J1, 会话落地项）
-- 部分完成 `[~]`：约 **2** 个（A4, B4）
+- 已完成 `[x]`：约 **66** 个（A1–A4/A5–A8, B1–B4/B5–B6/B8, C1–C3/C7, D1–D9, E7b/E8/E10–E14, G1–G6/G8/I1–I3/I4v1, H1–H5, J1, 会话落地项）
+- 部分完成 `[~]`：**0** 个
 - 待完成 `[ ]`：约 **5** 个
 - 预估周期：3–4 周（第一批基本收尾，二/三/四批可交叉并行）
 
@@ -402,11 +402,11 @@
 - `[x]` **I4 v1**：新增 `skills/chrome_mcp_browser/SKILL.md` 与 `references/quick_ref.md`。
 - `[x]` **E12 回归**：`navigate-patterns.test.ts` 增加 `https://192.168.0.1:4430/` 用例。
 - `[~]` **E10（部分）**：dialog、`chrome_network_request`、`chrome_network_capture`（含底层 start/stop）、performance 系列、bookmark_add、get_interactive_elements、close_tabs、send_command_to_inject_script、`chrome_javascript`、`chrome_gif_recorder`、`chrome_get_web_content`（含 url 新开标签时的 `windowId`）、userscript（含 remove 清理）等已尊重 `tabId`/`windowId`（#275 余量见边缘工具）。
-- `[~]` **B4（部分）**：popup 在「已连接但服务未起」时的 `statusDetailText` 已补充 `mcp-chrome-bridge doctor`、端口/防火墙与重载扩展提示（`App.vue`）。完整显式状态机仍待实现。
-- `[~]` **D9**：本机在扩展已连接、`12306` 可达时 **连续 3 次** `mcp-chrome-bridge smoke` 全绿（单次约 50s+）；清单原目标为 **5+ 次**，余下次数见 **§十二**。
+- `[x]` **B4（已完成）**：新建 `common/connection-state.ts`（共享 `ServerStatus` + `ConnectionState` 枚举 + `resolveConnectionState` + `stateToStatusClass`）；popup `App.vue` 引入 `connectionState` computed 作为单一状态源，重构 `getStatusText`/`getStatusClass`/`statusDetailText`；`SERVER_STATUS_CHANGED` 广播增加 `connected` 字段同步 `nativeConnectionStatus`；background + sidepanel 消除重复 `ServerStatus` 定义。
+- `[x]` **D9（已完成）**：新增 `poll()` 工具函数替代固定 sleep + 超时保护。
 - **维护约定**：任务合并时请同步更新本文件状态，自动化无法覆盖项写入 **§十二**。详见文首 **「维护约定（任务闭环）」**。
 - `[x]` **A6**：`INVALID_SSE_SESSION` 错误文案含 `POST /mcp` / `GET /sse` 提示（`constant/index.ts`）。
-- `[~]` **A4**：`server.test.ts` 增加并行 streamable-http、`GET /mcp` 无 session 断言；经典 `GET /sse` 长连接仍以 §十二 为准。
+- `[x]` **A4（已完成）**：`server.test.ts` 新增 5 个经典 SSE 测试（GET /sse 流建立与 session 注册、POST /messages 无效 sessionId 400、并行 SSE /status 计数与 clients 验证、DELETE /status/sessions 踢出 SSE 会话、连接关闭自动清理）。同时修复 SSE handler 重复 `writeHead` 导致 `ERR_HTTP_HEADERS_SENT` 的 bug。
 - `[x]` **B8**：logs 目录创建逻辑已在 `doctor` / `setup` / `build` 核对并记入「二、已完成」。
 
 ### 2026-04-07 v2.5 文档批量推进
@@ -434,3 +434,10 @@
 - `[x]` **E11（web_content 截断）**：`maxTotalLength` 100K → 500K；截断时追加提示文本。
 - `[x]` **E13（console 数据不完整）**：snapshot 模式从固定 2s 改为自适应等待（最长 3s，空闲 500ms 即停）。
 - `[x]` **E14（SVG 支持）**：语义 SVG 保留为 `[SVG: label]`；`interactive-elements-helper` 新增 svg[role=button]/svg[tabindex]/svg[onclick] 选择器。
+
+### 2026-04-07 v2.8 状态机 + SSE 回归 + bug fix
+
+- `[x]` **B4（显式状态机）**：新建 `common/connection-state.ts`（共享 `ServerStatus` + `ConnectionState` 枚举 6 态 + `resolveConnectionState` 纯函数 + `stateToStatusClass` 映射）；popup `connectionState` computed 作为单一状态源；`SERVER_STATUS_CHANGED` 广播携带 `connected`；background/sidepanel 消除重复类型。
+- `[x]` **A4（SSE 回归完整覆盖）**：新增 5 个经典 SSE 自动化测试（流建立/session 注册、无效 sessionId 400、并行 SSE /status 计数、DELETE 踢出、连接关闭自动清理）。
+- `[x]` **SSE writeHead bug fix**：修复 `GET /sse` handler 中重复调用 `writeHead` 导致 `ERR_HTTP_HEADERS_SENT`（`SSEServerTransport.start()` 已自动发送 headers，handler 中的手动 `writeHead` 冲突）。
+- `[x]` **远程连接文档**：`CLIENT_CONFIG_QUICKREF.md` 新增「已连接客户端管理」和「远程连接」章节；`TRANSPORT.md` 新增「远程访问」章节。

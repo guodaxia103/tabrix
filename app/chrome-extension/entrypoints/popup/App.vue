@@ -396,6 +396,12 @@ import {
 } from '@/utils/semantic-similarity-engine';
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import { LINKS } from '@/common/constants';
+import {
+  ConnectionState,
+  resolveConnectionState,
+  stateToStatusClass,
+  type ServerStatus,
+} from '@/common/connection-state';
 import { getMessage } from '@/utils/i18n';
 import { useAgentTheme, type AgentThemeId } from '../sidepanel/composables/useAgentTheme';
 
@@ -570,11 +576,7 @@ const isConnecting = ref(false);
 const nativeServerPort = ref<number>(12306);
 const lastNativeError = ref<string | null>(null);
 
-const serverStatus = ref<{
-  isRunning: boolean;
-  port?: number;
-  lastUpdated: number;
-}>({
+const serverStatus = ref<ServerStatus>({
   isRunning: false,
   lastUpdated: Date.now(),
 });
@@ -582,6 +584,15 @@ const serverStatus = ref<{
 const showMcpConfig = computed(() => {
   return nativeConnectionStatus.value === 'connected' && serverStatus.value.isRunning;
 });
+
+const connectionState = computed(() =>
+  resolveConnectionState(
+    nativeConnectionStatus.value,
+    serverStatus.value.isRunning,
+    isConnecting.value,
+    lastNativeError.value,
+  ),
+);
 
 // ==================== Connected Clients ====================
 
@@ -701,19 +712,7 @@ const availableModels = computed(() => {
   }));
 });
 
-const getStatusClass = () => {
-  if (nativeConnectionStatus.value === 'connected') {
-    if (serverStatus.value.isRunning) {
-      return 'bg-emerald-500';
-    } else {
-      return 'bg-yellow-500';
-    }
-  } else if (nativeConnectionStatus.value === 'disconnected') {
-    return 'bg-red-500';
-  } else {
-    return 'bg-gray-500';
-  }
-};
+const getStatusClass = () => stateToStatusClass(connectionState.value);
 
 // Open sidepanel and close popup
 async function openSidepanelAndClose(tab: string) {
@@ -803,29 +802,33 @@ function openBuilderWindow(flowId?: string, focusNodeId?: string) {
 }
 
 const getStatusText = () => {
-  if (nativeConnectionStatus.value === 'connected') {
-    if (serverStatus.value.isRunning) {
+  switch (connectionState.value) {
+    case ConnectionState.RUNNING:
       return getMessage('serviceRunningStatus', [
         (serverStatus.value.port || 'Unknown').toString(),
       ]);
-    } else {
+    case ConnectionState.CONNECTED:
       return getMessage('connectedServiceNotStartedStatus');
-    }
-  } else if (nativeConnectionStatus.value === 'disconnected') {
-    return getMessage('serviceNotConnectedStatus');
-  } else {
-    return getMessage('detectingStatus');
+    case ConnectionState.CONNECTING:
+      return getMessage('detectingStatus');
+    case ConnectionState.ERROR:
+    case ConnectionState.DISCONNECTED:
+      return getMessage('serviceNotConnectedStatus');
+    case ConnectionState.UNKNOWN:
+    default:
+      return getMessage('detectingStatus');
   }
 };
 
 const statusDetailText = computed(() => {
-  if (lastNativeError.value) {
+  const state = connectionState.value;
+  if (state === ConnectionState.ERROR && lastNativeError.value) {
     return `最近一次连接错误: ${lastNativeError.value}`;
   }
-  if (nativeConnectionStatus.value === 'connected' && !serverStatus.value.isRunning) {
+  if (state === ConnectionState.CONNECTED) {
     return 'Native host 已连接，但本地 MCP 服务尚未就绪。可先点「刷新」；仍失败时在终端执行 mcp-chrome-bridge doctor，核对端口与防火墙，并在 chrome://extensions/ 重新加载本扩展。';
   }
-  if (nativeConnectionStatus.value === 'disconnected') {
+  if (state === ConnectionState.DISCONNECTED) {
     return '点击连接后如果仍无法启动，请确认扩展已重新加载，且本地 native host manifest 已重新注册。';
   }
   return '';
@@ -1625,11 +1628,12 @@ const switchModel = async (newModel: ModelPreset) => {
 
 const setupServerStatusListener = () => {
   // eslint-disable-next-line no-undef
-  const onMessage = (message: { type?: string; payload?: unknown }) => {
-    // Server status changes
+  const onMessage = (message: { type?: string; payload?: unknown; connected?: boolean }) => {
     if (message.type === BACKGROUND_MESSAGE_TYPES.SERVER_STATUS_CHANGED && message.payload) {
-      serverStatus.value = message.payload as any;
-      console.log('Server status updated:', message.payload);
+      serverStatus.value = message.payload as ServerStatus;
+      if (message.connected !== undefined) {
+        nativeConnectionStatus.value = message.connected ? 'connected' : 'disconnected';
+      }
     }
     // Flows changed - refresh list (IndexedDB-based notification)
     if (message.type === BACKGROUND_MESSAGE_TYPES.RR_FLOWS_CHANGED) {
