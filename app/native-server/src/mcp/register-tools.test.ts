@@ -8,6 +8,7 @@ describe('handleToolCall execution wrapper', () => {
     sessionManager.reset();
     delete process.env.ENABLE_MCP_TOOLS;
     delete process.env.DISABLE_MCP_TOOLS;
+    delete process.env.MCP_DISABLE_SENSITIVE_TOOLS;
   });
 
   it('tracks a successful tool call as a completed execution session', async () => {
@@ -50,5 +51,40 @@ describe('handleToolCall execution wrapper', () => {
     expect(sessions[0].status).toBe('failed');
     expect(sessions[0].steps[0].errorCode).toBe('tool_not_available');
     expect(sessionManager.listTasks()[0].status).toBe('failed');
+  });
+
+  it('blocks sensitive tools when MCP_DISABLE_SENSITIVE_TOOLS is set', async () => {
+    process.env.MCP_DISABLE_SENSITIVE_TOOLS = 'true';
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValue({
+      status: 'success',
+      items: [],
+    } as never);
+
+    const result = await handleToolCall('chrome_javascript', { code: 'alert(1)' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('disabled'),
+    });
+  });
+
+  it('allows non-sensitive tools when MCP_DISABLE_SENSITIVE_TOOLS is set', async () => {
+    process.env.MCP_DISABLE_SENSITIVE_TOOLS = 'true';
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      items: [],
+    } as never);
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      data: {
+        content: [{ type: 'text', text: 'ok' }],
+        isError: false,
+      },
+    } as never);
+
+    const result = await handleToolCall('chrome_read_page', { tabId: 1 });
+
+    expect(result.isError).toBe(false);
   });
 });

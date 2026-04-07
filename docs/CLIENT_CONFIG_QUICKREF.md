@@ -176,11 +176,14 @@ pnpm list -g mcp-chrome-bridge
 
 ## 环境变量
 
-| 变量名                       | 说明                        | 默认值       |
-| ---------------------------- | --------------------------- | ------------ |
-| `MCP_HTTP_PORT`              | MCP HTTP 端口               | `12306`      |
-| `MCP_ALLOWED_WORKSPACE_BASE` | 额外允许的工作目录          | （无）       |
-| `CHROME_MCP_NODE_PATH`       | 覆盖 Node.js 可执行文件路径 | （自动检测） |
+| 变量名                        | 说明                                                                                             | 默认值       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ | ------------ |
+| `MCP_HTTP_PORT`               | MCP HTTP 端口                                                                                    | `12306`      |
+| `MCP_ALLOWED_WORKSPACE_BASE`  | 额外允许的工作目录                                                                               | （无）       |
+| `CHROME_MCP_NODE_PATH`        | 覆盖 Node.js 可执行文件路径                                                                      | （自动检测） |
+| `ENABLE_MCP_TOOLS`            | 白名单模式：只暴露指定工具（逗号分隔）                                                           | （全部）     |
+| `DISABLE_MCP_TOOLS`           | 黑名单模式：隐藏指定工具（逗号分隔）                                                             | （无）       |
+| `MCP_DISABLE_SENSITIVE_TOOLS` | 设为 `true` 禁用高风险工具 (`chrome_javascript`, `chrome_bookmark_delete`, `chrome_upload_file`) | `false`      |
 
 ---
 

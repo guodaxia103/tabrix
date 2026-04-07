@@ -10,6 +10,17 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 
+/**
+ * Tools with elevated risk: arbitrary JS execution, data deletion, file system
+ * interaction. When MCP_DISABLE_SENSITIVE_TOOLS=true, these are hidden from
+ * the tool list unless explicitly allowed via ENABLE_MCP_TOOLS.
+ */
+export const SENSITIVE_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'chrome_javascript',
+  'chrome_bookmark_delete',
+  'chrome_upload_file',
+]);
+
 function parseToolList(value?: string): Set<string> {
   return new Set(
     (value || '')
@@ -29,6 +40,10 @@ function filterToolsByEnvironment(tools: Tool[]): Tool[] {
 
   if (disabledTools.size > 0) {
     return tools.filter((tool) => !disabledTools.has(tool.name));
+  }
+
+  if (process.env.MCP_DISABLE_SENSITIVE_TOOLS === 'true') {
+    return tools.filter((tool) => !SENSITIVE_TOOL_NAMES.has(tool.name));
   }
 
   return tools;
