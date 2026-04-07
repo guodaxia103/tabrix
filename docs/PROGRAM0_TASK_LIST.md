@@ -1,6 +1,6 @@
 # Program 0 详细任务清单
 
-最后更新：`2026-04-07 Asia/Shanghai`（v2.5 — I1/I2 TOOLS 文档全量同步 28 工具、G3 排障表、G6 配置速查卡、D7 错误码目录）
+最后更新：`2026-04-07 Asia/Shanghai`（v2.6 — A2 Session Registry 抽取、G4 FAQ、G5 引导、I3 场景）
 分支：`codex/phase0-stabilization`
 
 基于：当前分支 51 commits、上游 hangwin/mcp-chrome 173 个 Open Issues、PHASE0 系列文档、实际代码审查、**竞品调研（15+ 开源 / 8+ 商业产品）**。
@@ -43,11 +43,11 @@
 
 ### 待完成
 
-| 编号 | 任务                          | 关联 Issue | 难度 | 说明                                                                                                                                                                                                                |
-| ---- | ----------------------------- | ---------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A2   | Session Registry 独立模块抽取 | #321       | 中   | 当前 session 管理散落在 `server/index.ts`，需提取为独立 `session-registry.ts`，支持 session 枚举、超时清理、优雅关闭                                                                                                |
-| A4   | SSE 并行 session 回归测试     | #9, #308   | 中   | `[~]` **`server.test.ts` 已覆盖**：并行 streamable-http（`POST /mcp` initialize ×2 + `/status` 计数 + `DELETE`）、`GET /mcp` 无 `mcp-session-id` 的错误体。**仍建议手动**：长连接 `GET /sse` 双开客户端（§十二 A4） |
-| A9   | Chrome 升级后 MCP 请求兼容性  | #288       | 中   | Chrome 144+ 更新后出现 `Invalid MCP request or session`，需排查 extension manifest 或请求头变化                                                                                                                     |
+| 编号 | 任务                          | 关联 Issue | 难度 | 说明                                                                                                                                                                                                                     |
+| ---- | ----------------------------- | ---------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A2   | Session Registry 独立模块抽取 | #321       | 中   | `[x]` **已完成**：`server/session-registry.ts` — SessionRegistry 类封装 register/get/remove/disconnect/closeAll/snapshot/updateClientInfo；`index.ts` 所有 `transportsMap` 引用替换为 `this.sessions`；tsc + 11 测试通过 |
+| A4   | SSE 并行 session 回归测试     | #9, #308   | 中   | `[~]` **`server.test.ts` 已覆盖**：并行 streamable-http（`POST /mcp` initialize ×2 + `/status` 计数 + `DELETE`）、`GET /mcp` 无 `mcp-session-id` 的错误体。**仍建议手动**：长连接 `GET /sse` 双开客户端（§十二 A4）      |
+| A9   | Chrome 升级后 MCP 请求兼容性  | #288       | 中   | Chrome 144+ 更新后出现 `Invalid MCP request or session`，需排查 extension manifest 或请求头变化                                                                                                                          |
 
 ---
 
@@ -203,8 +203,8 @@
 | 编号 | 任务                           | 难度 | 说明                                                                                                                                                                           |
 | ---- | ------------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | G3   | "Popup 显示 X 该怎么办" 排障表 | 低   | `[x]` **已完成**：`docs/POPUP_TROUBLESHOOTING.md` — 绿/黄/红/灰四状态排障、通用诊断命令、连接错误对照表                                                                        |
-| G4   | Windows 安装常见坑 FAQ         | 低   | 汇总上游高频问题：PATH、管理员权限、防火墙、pnpm postinstall                                                                                                                   |
-| G5   | "第一个成功任务" 引导流程      | 中   | 安装完成 → 打开浏览器 → 连接扩展 → AI 助手发指令 → 看到结果，完整步骤                                                                                                          |
+| G4   | Windows 安装常见坑 FAQ         | 低   | `[x]` **已完成**：`docs/WINDOWS_FAQ.md` — 10 个常见问题 + 快速诊断清单                                                                                                         |
+| G5   | "第一个成功任务" 引导流程      | 中   | `[x]` **已完成**：`docs/FIRST_SUCCESS_GUIDE.md` — 5 步引导（安装→扩展→连接→配置→首个任务）                                                                                     |
 | G6   | MCP 客户端配置速查卡           | 低   | `[x]` **已完成**：`docs/CLIENT_CONFIG_QUICKREF.md` — 覆盖 Claude Desktop/Cursor/Claude Code/Codex/CherryStudio/Windsurf/Dify 7 个客户端 + SSE/stdio 备选 + 环境变量 + 常见问题 |
 | G7   | 视频/动图脚本大纲              | 低   | 5 分钟演示分镜脚本（可选，未来做）                                                                                                                                             |
 
@@ -251,7 +251,7 @@
 | ---- | ------------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | I1   | **TOOLS_zh.md 全量同步**       | 中   | `[x]` **已完成**：28 工具全量对齐 TOOL_SCHEMAS；移除 6 个过时工具名（go_back_or_forward/capture_start\|stop/debugger_start\|stop/search_tabs_content）；更新 navigate/close_tabs 参数；新增 9 分类目录 |
 | I2   | **TOOLS.md 英文版同步**        | 中   | `[x]` **已完成**：同 I1 结构，英文版 28 工具同步                                                                                                                                                       |
-| I3   | **按工具分类整理调用场景**     | 低   | 在文档中增加"典型场景"列：如「打开页面并确认加载」对应 `chrome_navigate` + `get_windows_and_tabs`；「填写登录表单」对应 `chrome_read_page` + `chrome_fill_or_select` + `chrome_click_element`          |
+| I3   | **按工具分类整理调用场景**     | 低   | `[x]` **已完成**：TOOLS.md + TOOLS_zh.md 末尾新增「典型调用场景」5 类表格（信息获取/页面操作/导航管理/调试性能/截图录制）                                                                              |
 | I4   | **新建仓库内 AI Skill 技能包** | 高   | 在 `skills/chrome_mcp_browser/` 下创建随产品发布的 `SKILL.md` + `references/*.md`，面向**所有 MCP 客户端 AI 助手**。参考 `lark-agent-bridge` 的 skill 结构，包含以下内容                               |
 | I4a  | — Skill 元数据与触发条件       | —    | 声明工具名称、描述、适用 AI 运行时、版本                                                                                                                                                               |
 | I4b  | — 最短成功路径                 | —    | AI 拿到 Skill 后的首选操作流：确认连接 → 获取标签 → 导航 → 读取 → 操作 → 验证                                                                                                                          |
@@ -306,7 +306,7 @@
 
 ### 第三批：P0 收尾 + 安全加固（1 周）
 
-15. `A2` Session Registry 独立模块
+15. ~~`A2` Session Registry 独立模块~~ → 已完成（`session-registry.ts`）
 16. ~~`D7` 统一错误码目录~~ → 已完成（`docs/ERROR_CODES.md`）
 17. ~~`H3`–`H4`~~ 安全文档 + annotations 补全 → 已完成；`H5` **敏感工具默认禁用** ↑ 待做
 18. ~~`G3`~~ 排障表 → 已完成；~~`G6`~~ 配置速查 → 已完成；`G4`–`G5` FAQ / 引导流程待做
@@ -318,7 +318,7 @@
 ### 第四批：完整文档 + 全客户端验证（1 周，与第三批可并行）
 
 22. ~~`I1`–`I2` TOOLS 文档全量同步（中英文）~~ → 已完成（28 工具对齐）
-23. `I3` 按工具分类的调用场景
+23. ~~`I3` 按工具分类的调用场景~~ → 已完成
 24. `I4` AI Skill 技能包定稿（基于第二批 v1 的实测反馈迭代）
 25. `I5` Skill 验证（至少 2 个 AI 客户端实测）
 26. `F8`–`F9` **OpenClaw / Windsurf 兼容验证** ← 新增，补齐 5 大客户端
@@ -357,9 +357,9 @@
 
 - 总维度：10 个（A–J）+ **维护约定** + **手动测试清单**
 - 总任务（编号项）：约 72 个（含 E7b、可选加分项 A6/A7/B8/G8 已完成归档）
-- 已完成 `[x]`：约 **52** 个（A1/A3/A5–A8, B1–B3/B5–B6/B8, C1–C3/C7, D1–D5/D7, E7b/E8/E10/E12, G1–G3/G6/G8/I1/I2/I4v1, H1–H4, 会话落地项）
+- 已完成 `[x]`：约 **56** 个（A1–A2/A3/A5–A8, B1–B3/B5–B6/B8, C1–C3/C7, D1–D5/D7, E7b/E8/E10/E12, G1–G6/G8/I1–I3/I4v1, H1–H4, 会话落地项）
 - 部分完成 `[~]`：约 **3** 个（A4, B4, D9）
-- 待完成 `[ ]`：约 **17** 个
+- 待完成 `[ ]`：约 **13** 个
 - 预估周期：3–4 周（第一批基本收尾，二/三/四批可交叉并行）
 
 ## v2 变更追溯
@@ -416,3 +416,10 @@
 - `[x]` **G3（Popup 排障表）**：新建 `docs/POPUP_TROUBLESHOOTING.md` — 绿/黄/红/灰四状态速查、通用诊断命令、连接错误对照表。
 - `[x]` **G6（MCP 客户端配置速查卡）**：新建 `docs/CLIENT_CONFIG_QUICKREF.md` — 覆盖 7 个客户端（Claude Desktop/Cursor/Claude Code/Codex/CherryStudio/Windsurf/Dify）+ SSE/stdio 备选 + 环境变量 + 常见问题。
 - `[x]` **D7（统一错误码目录）**：新建 `docs/ERROR_CODES.md` — 按 CONN*/MCP*/TOOL*/RR*/CLI*/HTTP* 前缀分类汇总各层错误常量和 Chrome 原生错误。
+
+### 2026-04-07 v2.6 代码重构 + 文档收尾
+
+- `[x]` **A2（Session Registry 抽取）**：新建 `server/session-registry.ts`，封装 `register/get/remove/disconnect/closeAll/snapshot/updateClientInfo`；`index.ts` 所有 `transportsMap` 引用替换为 `this.sessions`；tsc 通过 + 全部 11 个测试通过。
+- `[x]` **G4（Windows FAQ）**：新建 `docs/WINDOWS_FAQ.md` — 10 个常见 Windows 安装问题 + 快速诊断清单。
+- `[x]` **G5（首次成功引导）**：新建 `docs/FIRST_SUCCESS_GUIDE.md` — 5 步引导从安装到 AI 控制浏览器。
+- `[x]` **I3（调用场景）**：TOOLS.md + TOOLS_zh.md 末尾新增「典型调用场景」5 类表格。

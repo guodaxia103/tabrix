@@ -805,4 +805,62 @@ await callTool('chrome_bookmark_add', {
 });
 ```
 
+---
+
+## 📋 典型调用场景
+
+按任务目标列出推荐的工具组合，帮助 AI 助手选择正确的工具链。
+
+### 信息获取类
+
+| 场景                   | 工具组合                                                                 | 说明                                              |
+| ---------------------- | ------------------------------------------------------------------------ | ------------------------------------------------- |
+| 读取页面内容并总结     | `chrome_read_page` → `chrome_get_web_content`                            | 先用 accessibility tree 了解结构，再提取文本/HTML |
+| 查找页面上的按钮和链接 | `chrome_get_interactive_elements`                                        | 直接获取可交互元素列表，含坐标                    |
+| 查看控制台错误         | `chrome_console` (mode: snapshot, onlyErrors: true)                      | 快照模式获取当前错误                              |
+| 持续监控控制台输出     | `chrome_console` (mode: buffer) → 等待 → `chrome_console` (buffer: read) | 缓冲模式收集一段时间的日志                        |
+| 搜索浏览历史           | `chrome_history`                                                         | 支持关键词和时间范围筛选                          |
+| 查找书签               | `chrome_bookmark_search`                                                 | 按关键词搜索所有书签                              |
+
+### 页面操作类
+
+| 场景               | 工具组合                                                                  | 说明                                   |
+| ------------------ | ------------------------------------------------------------------------- | -------------------------------------- |
+| 填写并提交登录表单 | `chrome_read_page` → `chrome_fill_or_select` × N → `chrome_click_element` | 先读取表单结构，逐个填写，最后点击提交 |
+| 在搜索框输入并搜索 | `chrome_fill_or_select` → `chrome_keyboard` (key: Enter)                  | 填入文本后按回车                       |
+| 选择下拉菜单选项   | `chrome_fill_or_select` (selector, value)                                 | 直接设置 select 元素的值               |
+| 上传文件           | `chrome_upload_file` (selector, filePath)                                 | 通过 CDP 直接设置 file input           |
+| 处理弹窗对话框     | `chrome_handle_dialog` (action: accept/dismiss)                           | 需在对话框弹出后调用                   |
+| 人工辅助选择元素   | `chrome_request_element_selection`                                        | 等待用户在页面上物理点击               |
+
+### 导航与标签管理
+
+| 场景                 | 工具组合                                         | 说明                        |
+| -------------------- | ------------------------------------------------ | --------------------------- |
+| 打开新页面并等待加载 | `chrome_navigate` (url) → `get_windows_and_tabs` | 导航后确认页面加载完成      |
+| 在新窗口打开         | `chrome_navigate` (url, newWindow: true)         | 不影响当前窗口              |
+| 后台打开多个页面     | `chrome_navigate` (url, background: true) × N    | 批量打开不抢焦点            |
+| 浏览器前进/后退      | `chrome_navigate` (url: "back"/"forward")        | 替代旧的 go_back_or_forward |
+| 关闭指定标签         | `chrome_close_tabs` (tabIds)                     | 按 ID 精确关闭              |
+| 切换到指定标签       | `chrome_switch_tab` (tabId)                      | 切换焦点                    |
+
+### 调试与性能分析
+
+| 场景                 | 工具组合                                                                                    | 说明                                 |
+| -------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------ |
+| 捕获网络请求         | `chrome_network_capture` (start) → 操作 → `chrome_network_capture` (stop)                   | 先开始捕获，执行操作，再停止获取结果 |
+| 获取完整响应体       | `chrome_network_capture` (start, needResponseBody: true) → ... → stop                       | 使用 Debugger API 抓取响应内容       |
+| 发送自定义 HTTP 请求 | `chrome_network_request` (url, method, headers, body)                                       | 携带浏览器 cookies 发请求            |
+| 性能分析             | `performance_start_trace` → 操作 → `performance_stop_trace` → `performance_analyze_insight` | 完整的性能追踪流程                   |
+| 等待下载完成         | `chrome_handle_download`                                                                    | 监听浏览器下载事件                   |
+
+### 截图与录制
+
+| 场景            | 工具组合                                                            | 说明                         |
+| --------------- | ------------------------------------------------------------------- | ---------------------------- |
+| 截取当前页面    | `chrome_screenshot`                                                 | 默认全页面截图               |
+| 截取特定元素    | `chrome_screenshot` (selector)                                      | CSS 选择器定位元素           |
+| 录制操作过程    | `chrome_gif_recorder` (start) → 操作 → `chrome_gif_recorder` (stop) | 录制为 GIF 动图              |
+| 执行 JavaScript | `chrome_javascript` (code)                                          | 在页面上下文中运行自定义脚本 |
+
 本文档与 `TOOL_SCHEMAS` 中当前暴露的 **28** 个工具保持一致；已合并或不再对外暴露的工具（如 `chrome_go_back_or_forward`、拆分的网络捕获/调试器启停、`search_tabs_content`）请以上述替代用法为准。

@@ -29,8 +29,8 @@ import { CodexEngine } from '../agent/engines/codex';
 import { ClaudeEngine } from '../agent/engines/claude';
 import { closeDb } from '../agent/db';
 import { registerAgentRoutes } from './routes';
-import { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
 import { sessionManager } from '../execution/session-manager';
+import { SessionRegistry, type ConnectedClient, type TransportsSnapshot } from './session-registry';
 
 // ============================================================
 // Types
@@ -40,48 +40,12 @@ interface ExtensionRequestPayload {
   data?: unknown;
 }
 
-interface TransportMeta {
-  clientIp: string;
-  clientName: string;
-  clientVersion: string;
-  connectedAt: number;
-}
-
-type ManagedTransport = (
-  | {
-      kind: 'sse';
-      transport: SSEServerTransport;
-      server: McpServer;
-    }
-  | {
-      kind: 'streamable-http';
-      transport: StreamableHTTPServerTransport;
-      server: McpServer;
-    }
-) &
-  TransportMeta;
-
-interface ConnectedClient {
-  sessionId: string;
-  kind: 'sse' | 'streamable-http';
-  clientIp: string;
-  clientName: string;
-  clientVersion: string;
-  connectedAt: number;
-}
-
 interface ServerStatusSnapshot {
   isRunning: boolean;
   host: string;
   port: number | null;
   nativeHostAttached: boolean;
-  transports: {
-    total: number;
-    sse: number;
-    streamableHttp: number;
-    sessionIds: string[];
-    clients: ConnectedClient[];
-  };
+  transports: TransportsSnapshot;
   execution: {
     tasks: {
       total: number;
@@ -103,6 +67,8 @@ interface ServerStatusSnapshot {
   };
 }
 
+export type { ConnectedClient };
+
 function canWriteReply(reply: FastifyReply): boolean {
   return !reply.sent && !reply.raw.writableEnded && !reply.raw.headersSent;
 }
@@ -115,7 +81,7 @@ export class Server {
   private fastify: FastifyInstance;
   public isRunning = false;
   private nativeHost: NativeMessagingHost | null = null;
-  private transportsMap: Map<string, ManagedTransport> = new Map();
+  private sessions = new SessionRegistry();
   private listeningPort: number | null = null;
   private agentStreamManager: AgentStreamManager;
   private agentChatService: AgentChatService;
@@ -268,7 +234,7 @@ export class Server {
 
         const transport = new SSEServerTransport('/messages', reply.raw);
         const server = createMcpServer();
-        this.transportsMap.set(transport.sessionId, {
+        this.sessions.register(transport.sessionId, {
           kind: 'sse',
           transport,
           server,
@@ -279,7 +245,7 @@ export class Server {
         });
 
         reply.raw.on('close', () => {
-          this.removeManagedTransport(transport.sessionId);
+          this.sessions.remove(transport.sessionId);
         });
 
         await server.connect(transport);
@@ -298,14 +264,14 @@ export class Server {
     this.fastify.post('/messages', async (req, reply) => {
       try {
         const { sessionId } = req.query as { sessionId?: string };
-        const entry = this.transportsMap.get(sessionId || '');
+        const entry = this.sessions.get(sessionId || '');
         if (!sessionId || !entry || entry.kind !== 'sse') {
           reply.code(HTTP_STATUS.BAD_REQUEST).send('No transport found for sessionId');
           return;
         }
 
         if (isInitializeRequest(req.body) && !entry.clientName) {
-          this.extractClientInfo(entry, req.body);
+          this.sessions.updateClientInfo(sessionId, req.body);
         }
 
         await entry.transport.handlePostMessage(req.raw, reply.raw, req.body);
@@ -319,9 +285,9 @@ export class Server {
     // MCP POST endpoint
     this.fastify.post('/mcp', async (request, reply) => {
       const sessionId = request.headers['mcp-session-id'] as string | undefined;
-      const managedTransport = sessionId ? this.transportsMap.get(sessionId) : undefined;
+      const managedEntry = sessionId ? this.sessions.get(sessionId) : undefined;
       let transport: StreamableHTTPServerTransport | undefined =
-        managedTransport?.kind === 'streamable-http' ? managedTransport.transport : undefined;
+        managedEntry?.kind === 'streamable-http' ? managedEntry.transport : undefined;
 
       if (transport) {
         // Transport found, proceed
@@ -338,7 +304,7 @@ export class Server {
           sessionIdGenerator: () => newSessionId,
           onsessioninitialized: (initializedSessionId) => {
             if (transport && initializedSessionId === newSessionId) {
-              this.transportsMap.set(initializedSessionId, {
+              this.sessions.register(initializedSessionId, {
                 kind: 'streamable-http',
                 transport,
                 server,
@@ -353,7 +319,7 @@ export class Server {
 
         transport.onclose = () => {
           if (transport?.sessionId) {
-            this.removeManagedTransport(transport.sessionId);
+            this.sessions.remove(transport.sessionId);
           }
         };
         await server.connect(transport);
@@ -376,8 +342,8 @@ export class Server {
     // MCP GET endpoint (SSE stream)
     this.fastify.get('/mcp', async (request, reply) => {
       const sessionId = request.headers['mcp-session-id'] as string | undefined;
-      const entry = sessionId ? this.transportsMap.get(sessionId) : undefined;
-      const transport = entry?.kind === 'streamable-http' ? entry.transport : undefined;
+      const sseEntry = sessionId ? this.sessions.get(sessionId) : undefined;
+      const transport = sseEntry?.kind === 'streamable-http' ? sseEntry.transport : undefined;
 
       if (!transport) {
         reply.code(HTTP_STATUS.BAD_REQUEST).send({ error: ERROR_MESSAGES.INVALID_SSE_SESSION });
@@ -409,8 +375,8 @@ export class Server {
     // MCP DELETE endpoint
     this.fastify.delete('/mcp', async (request, reply) => {
       const sessionId = request.headers['mcp-session-id'] as string | undefined;
-      const entry = sessionId ? this.transportsMap.get(sessionId) : undefined;
-      const transport = entry?.kind === 'streamable-http' ? entry.transport : undefined;
+      const delEntry = sessionId ? this.sessions.get(sessionId) : undefined;
+      const transport = delEntry?.kind === 'streamable-http' ? delEntry.transport : undefined;
 
       if (!transport) {
         reply.code(HTTP_STATUS.BAD_REQUEST).send({ error: ERROR_MESSAGES.INVALID_SESSION_ID });
@@ -469,7 +435,7 @@ export class Server {
     }
 
     try {
-      await this.closeManagedTransports();
+      await this.sessions.closeAll();
       await this.fastify.close();
       closeDb();
       this.listeningPort = null;
@@ -487,41 +453,15 @@ export class Server {
   }
 
   public getStatusSnapshot(): ServerStatusSnapshot {
-    const sessionIds = [...this.transportsMap.keys()];
-    let sse = 0;
-    let streamableHttp = 0;
-    const clients: ConnectedClient[] = [];
     const tasks = sessionManager.listTasks();
     const executionSessions = sessionManager.listSessions();
-
-    for (const [sid, entry] of this.transportsMap.entries()) {
-      if (entry.kind === 'sse') {
-        sse += 1;
-      } else {
-        streamableHttp += 1;
-      }
-      clients.push({
-        sessionId: sid,
-        kind: entry.kind,
-        clientIp: entry.clientIp,
-        clientName: entry.clientName,
-        clientVersion: entry.clientVersion,
-        connectedAt: entry.connectedAt,
-      });
-    }
 
     return {
       isRunning: this.isRunning,
       host: SERVER_CONFIG.HOST,
       port: this.listeningPort,
       nativeHostAttached: this.nativeHost !== null,
-      transports: {
-        total: sessionIds.length,
-        sse,
-        streamableHttp,
-        sessionIds,
-        clients,
-      },
+      transports: this.sessions.snapshot(),
       execution: {
         tasks: {
           total: tasks.length,
@@ -547,41 +487,12 @@ export class Server {
     };
   }
 
-  private extractClientInfo(entry: ManagedTransport, body: unknown): void {
-    const msg = body as { params?: { clientInfo?: { name?: string; version?: string } } };
-    if (msg?.params?.clientInfo) {
-      entry.clientName = msg.params.clientInfo.name ?? '';
-      entry.clientVersion = msg.params.clientInfo.version ?? '';
-    }
-  }
-
   /**
    * Force-disconnect a session by ID.
    * Used by the popup "kick" button via DELETE /status/sessions/:sessionId.
    */
   public forceDisconnectSession(sessionId: string): boolean {
-    const entry = this.transportsMap.get(sessionId);
-    if (!entry) return false;
-    this.removeManagedTransport(sessionId);
-    return true;
-  }
-
-  private removeManagedTransport(sessionId: string): void {
-    const entry = this.transportsMap.get(sessionId);
-    if (!entry) {
-      return;
-    }
-
-    this.transportsMap.delete(sessionId);
-    void entry.server.close().catch(() => {
-      // Ignore cleanup failures during disconnect/teardown.
-    });
-  }
-
-  private async closeManagedTransports(): Promise<void> {
-    const entries = [...this.transportsMap.entries()];
-    this.transportsMap.clear();
-    await Promise.allSettled(entries.map(([, entry]) => entry.server.close()));
+    return this.sessions.disconnect(sessionId);
   }
 }
 

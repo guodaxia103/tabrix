@@ -805,4 +805,62 @@ await callTool('chrome_bookmark_add', {
 });
 ```
 
+---
+
+## 📋 Typical Usage Scenarios
+
+Recommended tool combinations by task goal.
+
+### Information Retrieval
+
+| Scenario                  | Tools                                                                    | Notes                                            |
+| ------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------ |
+| Read and summarize page   | `chrome_read_page` → `chrome_get_web_content`                            | Accessibility tree first, then extract text/HTML |
+| Find buttons and links    | `chrome_get_interactive_elements`                                        | Returns interactive elements with coordinates    |
+| Check console errors      | `chrome_console` (mode: snapshot, onlyErrors: true)                      | Snapshot of current errors                       |
+| Monitor console over time | `chrome_console` (mode: buffer) → wait → `chrome_console` (buffer: read) | Persistent collection                            |
+| Search browsing history   | `chrome_history`                                                         | Supports keywords and time range                 |
+| Find bookmarks            | `chrome_bookmark_search`                                                 | Search all bookmarks by keyword                  |
+
+### Page Interaction
+
+| Scenario                    | Tools                                                                     | Notes                                          |
+| --------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------- |
+| Fill and submit login form  | `chrome_read_page` → `chrome_fill_or_select` × N → `chrome_click_element` | Read form structure, fill fields, click submit |
+| Search box input            | `chrome_fill_or_select` → `chrome_keyboard` (key: Enter)                  | Type text then press Enter                     |
+| Select dropdown option      | `chrome_fill_or_select` (selector, value)                                 | Set select element value directly              |
+| Upload a file               | `chrome_upload_file` (selector, filePath)                                 | Set file input via CDP                         |
+| Handle alert/confirm dialog | `chrome_handle_dialog` (action: accept/dismiss)                           | Must call while dialog is showing              |
+| User-assisted element pick  | `chrome_request_element_selection`                                        | Wait for user to physically click              |
+
+### Navigation & Tab Management
+
+| Scenario                       | Tools                                            | Notes                             |
+| ------------------------------ | ------------------------------------------------ | --------------------------------- |
+| Open page and verify load      | `chrome_navigate` (url) → `get_windows_and_tabs` | Navigate then confirm page loaded |
+| Open in new window             | `chrome_navigate` (url, newWindow: true)         | Doesn't affect current window     |
+| Batch open pages in background | `chrome_navigate` (url, background: true) × N    | Opens without stealing focus      |
+| Browser back/forward           | `chrome_navigate` (url: "back"/"forward")        | Replaces old go_back_or_forward   |
+| Close specific tabs            | `chrome_close_tabs` (tabIds)                     | Close by ID                       |
+| Switch to a tab                | `chrome_switch_tab` (tabId)                      | Focus a specific tab              |
+
+### Debugging & Performance
+
+| Scenario                 | Tools                                                                                          | Notes                                     |
+| ------------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Capture network traffic  | `chrome_network_capture` (start) → actions → `chrome_network_capture` (stop)                   | Start, interact, then stop to get results |
+| Get response bodies      | `chrome_network_capture` (start, needResponseBody: true) → ... → stop                          | Uses Debugger API                         |
+| Send custom HTTP request | `chrome_network_request` (url, method, headers, body)                                          | With browser cookies                      |
+| Performance analysis     | `performance_start_trace` → actions → `performance_stop_trace` → `performance_analyze_insight` | Full trace workflow                       |
+| Wait for download        | `chrome_handle_download`                                                                       | Monitor browser download events           |
+
+### Screenshots & Recording
+
+| Scenario                    | Tools                                                                  | Notes                           |
+| --------------------------- | ---------------------------------------------------------------------- | ------------------------------- |
+| Screenshot current page     | `chrome_screenshot`                                                    | Full page by default            |
+| Screenshot specific element | `chrome_screenshot` (selector)                                         | Target by CSS selector          |
+| Record browser activity     | `chrome_gif_recorder` (start) → actions → `chrome_gif_recorder` (stop) | Records as animated GIF         |
+| Execute JavaScript          | `chrome_javascript` (code)                                             | Run custom code in page context |
+
 This API provides browser automation, performance tooling, media capture, and unified network inspection for agent workflows.
