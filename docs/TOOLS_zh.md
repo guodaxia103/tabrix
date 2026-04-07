@@ -172,15 +172,34 @@
 - `appear` (布尔值，可选)：`wait` 带文本时等待出现（true，默认）或消失（false）。
 - `timeout` (数字，可选)：`wait` 带文本时超时毫秒（默认 10000，最大 120000）。
 - `duration` (数字，可选)：`wait` 时等待秒数（最大 30s）。
+- `saveToDownloads` (布尔值，可选)：`action=screenshot` 时同时将 PNG 保存到浏览器下载目录（默认 false，仅返回 base64）。
+
+**滚动操作说明**：
+
+- **`scroll`** — 在指定位置按方向滚动。需提供 `ref` 或 `coordinates` 指定滚动位置，配合 `scrollDirection`（`up`/`down`/`left`/`right`）和 `scrollAmount`（刻度 1–10，默认 3）。
+- **`scroll_to`** — 将元素滚动到可视区域。只需 `ref`（来自 `chrome_read_page`），无需坐标或方向。
 
 **示例**：
 
 ```json
+{ "action": "left_click", "ref": "ref_12", "tabId": 456 }
+```
+
+```json
+{ "action": "scroll", "ref": "ref_3", "scrollDirection": "down", "scrollAmount": 5 }
+```
+
+```json
 {
-  "action": "left_click",
-  "ref": "ref_12",
-  "tabId": 456
+  "action": "scroll",
+  "coordinates": { "x": 640, "y": 400 },
+  "scrollDirection": "up",
+  "scrollAmount": 3
 }
+```
+
+```json
+{ "action": "scroll_to", "ref": "ref_42" }
 ```
 
 ### `chrome_console`
@@ -862,5 +881,19 @@ await callTool('chrome_bookmark_add', {
 | 截取特定元素    | `chrome_screenshot` (selector)                                      | CSS 选择器定位元素           |
 | 录制操作过程    | `chrome_gif_recorder` (start) → 操作 → `chrome_gif_recorder` (stop) | 录制为 GIF 动图              |
 | 执行 JavaScript | `chrome_javascript` (code)                                          | 在页面上下文中运行自定义脚本 |
+
+### 后台静默模式 (`background: true`)
+
+部分工具支持 `background` 参数，避免抢占窗口焦点或激活目标标签页。适用于不打扰用户的自动化场景。
+
+| 工具                 | 支持 | 说明                                                                                                                 |
+| -------------------- | ---- | -------------------------------------------------------------------------------------------------------------------- |
+| `chrome_navigate`    | 是   | 打开/导航标签时不激活标签、不聚焦窗口。                                                                              |
+| `chrome_computer`    | 是   | CDP 操作（click/scroll/type/key/hover/drag）通过调试协议执行，无需 tab focus。`screenshot` 在后台模式使用 CDP 截图。 |
+| `chrome_screenshot`  | 是   | 视口截图走 CDP `Page.captureScreenshot`；全页面和选择器截图仍需标签可见。                                            |
+| `chrome_console`     | 是   | CDP 控制台采集，不激活标签。                                                                                         |
+| `chrome_web_fetcher` | 是   | 抓取页面内容时不聚焦。                                                                                               |
+
+**未列出的工具**（如 `chrome_switch_tab`、`chrome_network_capture`、`chrome_gif_recorder`）始终在前台操作。
 
 本文档与 `TOOL_SCHEMAS` 中当前暴露的 **28** 个工具保持一致；已合并或不再对外暴露的工具（如 `chrome_go_back_or_forward`、拆分的网络捕获/调试器启停、`search_tabs_content`）请以上述替代用法为准。

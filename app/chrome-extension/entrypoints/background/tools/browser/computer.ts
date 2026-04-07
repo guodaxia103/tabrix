@@ -75,6 +75,7 @@ interface ComputerParams {
   tabId?: number; // target existing tab id
   windowId?: number;
   background?: boolean; // avoid focusing/activating
+  saveToDownloads?: boolean; // screenshot: also save PNG to downloads
 }
 
 // Minimal CDP helper encapsulated here to avoid scattering CDP code
@@ -1278,13 +1279,23 @@ class ComputerTool extends BaseBrowserToolExecutor {
         }
       }
       case 'screenshot': {
-        // Reuse existing screenshot tool; it already supports base64 save option
-        const result = await screenshotTool.execute({
+        if (params.saveToDownloads) {
+          return await screenshotTool.execute({
+            name: 'computer',
+            tabId: tab.id,
+            background: params.background,
+            storeBase64: false,
+            savePng: true,
+            fullPage: false,
+          });
+        }
+        return await screenshotTool.execute({
           name: 'computer',
+          tabId: tab.id,
+          background: params.background,
           storeBase64: true,
           fullPage: false,
         });
-        return result;
       }
       default:
         return createErrorResponse(`Unsupported action: ${params.action}`);

@@ -1,6 +1,6 @@
 # Program 0 详细任务清单
 
-最后更新：`2026-04-07 Asia/Shanghai`（v2.9 — A9/D10/F7 + E7/E9 Phase 1）
+最后更新：`2026-04-07 Asia/Shanghai`（v2.10 — J2/J3/J4 功能请求）
 分支：`codex/phase0-stabilization`
 
 基于：当前分支 51 commits、上游 hangwin/mcp-chrome 173 个 Open Issues、PHASE0 系列文档、实际代码审查、**竞品调研（15+ 开源 / 8+ 商业产品）**。
@@ -268,12 +268,12 @@
 
 > 不是 Phase 0 必须项，改动小可顺手做
 
-| 编号 | 需求                    | 关联 Issue      | 评估                                                                                                                                        |
-| ---- | ----------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| J1   | 监听地址 `0.0.0.0` 支持 | #290, #74, #210 | `[x]` **已完成**：`MCP_HTTP_HOST` 环境变量（允许 127.0.0.1/0.0.0.0/localhost/::）；`getChromeMcpUrl` 在 0.0.0.0 时自动用 127.0.0.1 给客户端 |
-| J2   | 截图自动保存            | #207            | 低优先级，Phase 1                                                                                                                           |
-| J3   | 页面滚动 API 文档化     | #200            | `chrome_computer` 已支持 scroll action，确认文档清晰                                                                                        |
-| J4   | 后台静默运行            | #178            | `chrome_navigate` 已有 `background` 参数，确认所有工具是否支持                                                                              |
+| 编号 | 需求                    | 关联 Issue      | 评估                                                                                                                                                                                                  |
+| ---- | ----------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| J1   | 监听地址 `0.0.0.0` 支持 | #290, #74, #210 | `[x]` **已完成**：`MCP_HTTP_HOST` 环境变量（允许 127.0.0.1/0.0.0.0/localhost/::）；`getChromeMcpUrl` 在 0.0.0.0 时自动用 127.0.0.1 给客户端                                                           |
+| J2   | 截图自动保存            | #207            | `[x]` **已完成**：`chrome_computer` 的 `screenshot` action 新增 `saveToDownloads` 参数，为 true 时通过 `chrome.downloads.download` 保存 PNG 到下载目录；schema + 中英文文档已更新                     |
+| J3   | 页面滚动 API 文档化     | #200            | `[x]` **已完成**：TOOLS.md + TOOLS_zh.md 新增 `scroll` vs `scroll_to` 区别说明、参数组合规则、3 个滚动示例 JSON                                                                                       |
+| J4   | 后台静默运行            | #178            | `[x]` **已完成**：`chrome_computer` 的 `screenshot` action 传递 `background` 参数到 screenshotTool（CDP 截图路径）；TOOLS.md + TOOLS_zh.md 新增「Background Mode」参考表格（5 个支持工具 + 限制说明） |
 
 ---
 
@@ -357,9 +357,9 @@
 
 - 总维度：10 个（A–J）+ **维护约定** + **手动测试清单**
 - 总任务（编号项）：约 72 个（含 E7b、可选加分项 A6/A7/B8/G8 已完成归档）
-- 已完成 `[x]`：约 **69** 个（+A9/D10/F7）
+- 已完成 `[x]`：约 **72** 个（+J2/J3/J4）
 - 部分完成 `[~]`：**0** 个
-- 待完成 `[ ]`：约 **2** 个（代码任务已清零，剩余为手动验证与文档迭代）
+- 待完成 `[ ]`：约 **0** 个（编号代码任务已全部清零，剩余为手动验证与文档迭代）
 - 决策延期 `[!]`：**2** 个（E7/E9 标记 Phase 1）
 - 预估周期：3–4 周（第一批基本收尾，二/三/四批可交叉并行）
 
@@ -449,3 +449,9 @@
 - `[x]` **D10（error-page 噪音清理）**：`base-browser.ts` 移除注入/ping 相关 `console.error`/`console.log`/`console.warn`（ping 超时和注入失败是预期路径，改为静默 catch 或由 throw 传播）；`element-marker/index.ts` 注入失败、overlay 启动失败、contextMenu 失败改为静默 catch；`recorder.js` 移除 `console.warn`。
 - `[x]` **F7（stdio 冒烟测试）**：新增 `scripts/stdio-smoke.ts` — 使用 MCP SDK `StdioClientTransport` 启动子进程并验证 initialize → tools/list → resources/list → prompts/list → ping → clean close；CLI 注册 `mcp-chrome-bridge stdio-smoke [--json]` 命令。
 - `[!]` **E7/E9（暂不开放）**：`search_tabs_content` 和 `chrome_userscript` 标记为 Phase 1。用户决策：Phase 0 暂不开放。
+
+### 2026-04-07 v2.10 功能请求（J2/J3/J4）
+
+- `[x]` **J2（截图自动保存）**：`chrome_computer` schema 新增 `saveToDownloads` 参数；`computer.ts` screenshot action 在 `saveToDownloads: true` 时委托 screenshotTool 执行 `savePng: true` 路径（`chrome.downloads.download` 保存 PNG 到下载目录）。
+- `[x]` **J3（页面滚动文档）**：TOOLS.md + TOOLS_zh.md 新增 `scroll` vs `scroll_to` 区别说明（scroll 需 ref/coordinates + direction；scroll_to 只需 ref）；补充 3 个滚动示例 JSON。
+- `[x]` **J4（后台静默运行）**：`chrome_computer` 的 screenshot action 传递 `background` 参数到 screenshotTool（启用 CDP `Page.captureScreenshot` 路径）；TOOLS.md + TOOLS_zh.md 新增「Background Mode」参考表格，覆盖 5 个支持工具（navigate/computer/screenshot/console/web_fetcher）及其限制。

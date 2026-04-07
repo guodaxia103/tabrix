@@ -253,11 +253,34 @@ Mouse, keyboard, and screenshot automation with CDP-oriented behavior. Prefer `r
 - `elements` (array, optional): For `fill_form`, list of `{ ref, value }`.
 - `width` / `height` (optional): For `resize_page`.
 - `appear`, `timeout`, `duration` (optional): For `wait` (text vs timed wait; see schema defaults).
+- `saveToDownloads` (boolean, optional): For `screenshot`, also save the PNG file to the browser downloads folder (default: `false` — returns base64 only).
+
+**Scroll actions**:
+
+- **`scroll`** — Scroll by a given amount at a specific position. Requires `ref` or `coordinates` to indicate where to scroll. Use `scrollDirection` (`up`/`down`/`left`/`right`) and `scrollAmount` (ticks 1–10, default 3).
+- **`scroll_to`** — Scroll an element into view. Requires `ref` (from `chrome_read_page`). No coordinates or direction needed.
 
 **Examples**:
 
 ```json
 { "action": "left_click", "coordinates": { "x": 420, "y": 260 } }
+```
+
+```json
+{ "action": "scroll", "ref": "ref_3", "scrollDirection": "down", "scrollAmount": 5 }
+```
+
+```json
+{
+  "action": "scroll",
+  "coordinates": { "x": 640, "y": 400 },
+  "scrollDirection": "up",
+  "scrollAmount": 3
+}
+```
+
+```json
+{ "action": "scroll_to", "ref": "ref_42" }
 ```
 
 ```json
@@ -862,5 +885,19 @@ Recommended tool combinations by task goal.
 | Screenshot specific element | `chrome_screenshot` (selector)                                         | Target by CSS selector          |
 | Record browser activity     | `chrome_gif_recorder` (start) → actions → `chrome_gif_recorder` (stop) | Records as animated GIF         |
 | Execute JavaScript          | `chrome_javascript` (code)                                             | Run custom code in page context |
+
+### Background Mode (`background: true`)
+
+Some tools support a `background` parameter that avoids stealing window focus or activating the target tab. This is useful for automated workflows that should not interrupt the user.
+
+| Tool                 | `background` | How it works                                                                                                                                                                          |
+| -------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chrome_navigate`    | Yes          | Opens / navigates tabs without activating or focusing the window.                                                                                                                     |
+| `chrome_computer`    | Yes          | CDP-based actions (click, scroll, type, key, hover, drag) operate via the debugger protocol — no tab focus needed. `screenshot` uses CDP `Page.captureScreenshot` in background mode. |
+| `chrome_screenshot`  | Yes          | Viewport capture via CDP instead of `captureVisibleTab`; full-page and selector captures still need the tab visible.                                                                  |
+| `chrome_console`     | Yes          | CDP console capture without activating the tab.                                                                                                                                       |
+| `chrome_web_fetcher` | Yes          | Fetches page content without focusing.                                                                                                                                                |
+
+Tools **not** listed above (e.g. `chrome_switch_tab`, `chrome_network_capture`, `chrome_gif_recorder`) always operate in the foreground.
 
 This API provides browser automation, performance tooling, media capture, and unified network inspection for agent workflows.

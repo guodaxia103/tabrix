@@ -361,6 +361,11 @@ export const TOOL_SCHEMAS: Tool[] = [
           type: 'number',
           description: 'Seconds to wait for action=wait (max 30s)',
         },
+        saveToDownloads: {
+          type: 'boolean',
+          description:
+            'For action=screenshot: save the screenshot as a PNG file to the browser downloads folder (default: false — returns base64 only).',
+        },
       },
       required: ['action'],
     },
