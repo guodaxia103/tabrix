@@ -521,6 +521,25 @@ export class Server {
     return this.fastify;
   }
 
+  public getListeningPort(): number | null {
+    return this.listeningPort;
+  }
+
+  public async restart(port?: number, nativeHost?: NativeMessagingHost): Promise<void> {
+    const restartPort = port ?? this.listeningPort ?? NATIVE_SERVER_PORT;
+    const restartHost = nativeHost ?? this.nativeHost ?? undefined;
+
+    if (this.isRunning) {
+      await this.stop();
+    }
+
+    this.fastify = Fastify({ logger: SERVER_CONFIG.LOGGER_ENABLED });
+    this.setupPlugins();
+    this.setupRoutes();
+
+    await this.start(restartPort, restartHost);
+  }
+
   public getStatusSnapshot(): ServerStatusSnapshot {
     const tasks = sessionManager.listTasks();
     const executionSessions = sessionManager.listSessions();

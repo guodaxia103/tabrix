@@ -130,6 +130,17 @@ mcp-chrome-bridge daemon remove-autostart
 
 > **注意**：守护进程模式下，浏览器相关的工具（如 `chrome_screenshot`）在 Chrome 未打开时不可用，但非浏览器工具正常可用。打开 Chrome 后扩展会自动补全浏览器通道。守护进程日志保存在 `~/.mcp-chrome/daemon.log`。
 
+### 远程访问（可选）
+
+允许局域网内其他机器或 Docker 容器连接本机 MCP 服务：
+
+1. 打开扩展弹窗 → **远程** 选项卡 → 打开**远程访问开关**。服务会立即在 `0.0.0.0` 上重启监听，无需重启浏览器。偏好持久化到 `~/.mcp-chrome/config.json`，断开重连或重启浏览器后保持不变。
+2. 首次开启时会自动生成 Token（保存在 `~/.mcp-chrome/auth-token.json`）。弹窗会展示包含 `Authorization` 头的完整配置。
+3. 放行防火墙端口（Windows 示例）：`netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow protocol=tcp localport=12306`
+4. 将弹窗中显示的配置复制到远程机器即可使用。
+
+> **高级用户**：也可通过设置系统环境变量 `MCP_HTTP_HOST=0.0.0.0` 来覆盖配置文件（适用于守护进程模式）。Token 默认 7 天过期，可通过 `MCP_AUTH_TOKEN_TTL` 配置。本机请求不需要 Token。
+
 ### 在支持MCP协议的客户端中使用
 
 #### 使用streamable http的方式连接（👍🏻推荐）

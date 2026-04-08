@@ -183,7 +183,7 @@ pnpm list -g mcp-chrome-bridge
 | 变量名                        | 说明                                                                                             | 默认值       |
 | ----------------------------- | ------------------------------------------------------------------------------------------------ | ------------ |
 | `MCP_HTTP_PORT`               | MCP HTTP 端口                                                                                    | `12306`      |
-| `MCP_HTTP_HOST`               | 监听地址（`127.0.0.1` / `0.0.0.0` / `localhost` / `::`）                                         | `127.0.0.1`  |
+| `MCP_HTTP_HOST`               | 监听地址覆盖（优先级高于 `~/.mcp-chrome/config.json`；推荐用扩展开关代替）                       | `127.0.0.1`  |
 | `MCP_AUTH_TOKEN`              | 远程访问 Bearer Token（可选，不设则自动生成并存到 `~/.mcp-chrome/auth-token.json`）              | （自动生成） |
 | `MCP_AUTH_TOKEN_TTL`          | Token 过期天数（`0` = 永不过期）                                                                 | `7`          |
 | `MCP_ALLOWED_WORKSPACE_BASE`  | 额外允许的工作目录                                                                               | （无）       |
@@ -230,14 +230,11 @@ mcp-chrome-bridge smoke
 
 默认情况下 MCP 服务只监听 `127.0.0.1`（仅本机可访问）。若需要从其他机器或 Docker 容器中连接：
 
-**第一步：启用 0.0.0.0 监听**
+**第一步：启用远程监听**
 
-```bash
-# 设置环境变量后启动
-MCP_HTTP_HOST=0.0.0.0 mcp-chrome-bridge
-```
+**推荐**：打开扩展弹窗 → **远程** 选项卡 → 打开**远程访问开关**。服务立即重启在 `0.0.0.0`，无需重启浏览器。偏好持久化到 `~/.mcp-chrome/config.json`。
 
-或在全局环境中设置：
+高级 / 守护进程场景也可通过环境变量覆盖（优先级高于配置文件）：
 
 ```bash
 # Linux/macOS
@@ -247,9 +244,9 @@ export MCP_HTTP_HOST=0.0.0.0
 $env:MCP_HTTP_HOST = "0.0.0.0"
 ```
 
-**第二步：设置 Token 认证**（强烈推荐）
+**第二步：确认 Token 认证**
 
-启用 `0.0.0.0` 监听后，服务端首次启动会**自动生成 Token** 并持久化。打开扩展 Popup 的「远程」Tab 即可查看并复制 Token。
+开启远程后，服务端会**自动生成 Token** 并持久化到 `~/.mcp-chrome/auth-token.json`。扩展 Popup 的「远程」Tab 会自动显示包含 `Authorization` 头的完整配置。
 
 也可通过环境变量手动指定：
 
@@ -307,13 +304,13 @@ netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow
 
 ## 常见问题
 
-| 症状                | 原因                     | 解决方案                                                        |
-| ------------------- | ------------------------ | --------------------------------------------------------------- |
-| Connection refused  | 服务未启动               | 打开扩展 popup 点击 Connect                                     |
-| Tools not appearing | 配置文件 JSON 语法错误   | 用 JSON 校验器检查配置                                          |
-| Port conflict       | 12306 端口被占用         | 在扩展设置中修改端口，然后更新客户端配置                        |
-| Docker 容器无法连接 | 127.0.0.1 指向容器内部   | 设 `MCP_HTTP_HOST=0.0.0.0`，用宿主 IP 或 `host.docker.internal` |
-| 远程连接被拒绝      | 默认只监听 127.0.0.1     | 设 `MCP_HTTP_HOST=0.0.0.0` 并检查防火墙                         |
-| 远程连接返回 401    | Token 缺失/不匹配/已过期 | 从 Popup 远程 Tab 复制最新 Token；过期则点"重新生成"            |
-| Popup 显示未知 IP   | 不认识的远程客户端       | 点击 ✕ 踢出该会话                                               |
-| Windows 路径问题    | `\` 未转义               | JSON 中用 `\\` 或 `/`                                           |
+| 症状                | 原因                     | 解决方案                                                                        |
+| ------------------- | ------------------------ | ------------------------------------------------------------------------------- |
+| Connection refused  | 服务未启动               | 打开扩展 popup 点击 Connect                                                     |
+| Tools not appearing | 配置文件 JSON 语法错误   | 用 JSON 校验器检查配置                                                          |
+| Port conflict       | 12306 端口被占用         | 在扩展设置中修改端口，然后更新客户端配置                                        |
+| Docker 容器无法连接 | 127.0.0.1 指向容器内部   | 用扩展远程开关或设 `MCP_HTTP_HOST=0.0.0.0`，用宿主 IP 或 `host.docker.internal` |
+| 远程连接被拒绝      | 默认只监听 127.0.0.1     | 用扩展远程开关开启，或设 `MCP_HTTP_HOST=0.0.0.0` 并检查防火墙                   |
+| 远程连接返回 401    | Token 缺失/不匹配/已过期 | 从 Popup 远程 Tab 复制最新 Token；过期则点"重新生成"                            |
+| Popup 显示未知 IP   | 不认识的远程客户端       | 点击 ✕ 踢出该会话                                                               |
+| Windows 路径问题    | `\` 未转义               | JSON 中用 `\\` 或 `/`                                                           |

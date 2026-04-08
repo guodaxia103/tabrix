@@ -2,7 +2,8 @@ import { stdin, stdout } from 'process';
 import { Server } from './server';
 import { v4 as uuidv4 } from 'uuid';
 import { NativeMessageType } from 'chrome-mcp-shared';
-import { TIMEOUTS, NATIVE_SERVER_PORT } from './constant';
+import { TIMEOUTS, NATIVE_SERVER_PORT, MCP_HTTP_HOST_ENV } from './constant';
+import { setPersistedHost } from './host-config';
 import fileHandler from './file-handler';
 
 interface PendingRequest {
@@ -130,6 +131,9 @@ export class NativeMessagingHost {
         // Keep ping/pong for simple liveness detection, but this differs from request-response pattern
         case 'ping_from_extension':
           this.sendMessage({ type: 'pong_to_extension' });
+          break;
+        case NativeMessageType.SET_REMOTE_ACCESS:
+          await this.handleSetRemoteAccess(message.payload?.enable ?? false);
           break;
         case 'file_operation':
           await this.handleFileOperation(message);
@@ -282,6 +286,39 @@ export class NativeMessagingHost {
       this.sendMessage({ type: NativeMessageType.SERVER_STOPPED }); // Distinguish from previous 'stopped'
     } catch (error: any) {
       this.sendError(`Failed to stop server: ${error.message}`);
+    }
+  }
+
+  /**
+   * Toggle remote access: stop server → change env → restart on same port.
+   */
+  private async handleSetRemoteAccess(enable: boolean): Promise<void> {
+    if (!this.associatedServer) {
+      this.sendError('Internal error: server instance not set');
+      return;
+    }
+
+    const newHost = enable ? '0.0.0.0' : '127.0.0.1';
+
+    try {
+      setPersistedHost(newHost);
+      process.env[MCP_HTTP_HOST_ENV] = newHost;
+
+      await this.associatedServer.restart(undefined, this);
+
+      const snapshot = this.associatedServer.getStatusSnapshot();
+      this.sendMessage({
+        type: NativeMessageType.REMOTE_ACCESS_CHANGED,
+        payload: {
+          enabled: enable,
+          host: snapshot.host,
+          port: snapshot.port,
+          networkAddresses: snapshot.networkAddresses,
+          authEnabled: snapshot.authEnabled,
+        },
+      });
+    } catch (error: any) {
+      this.sendError(`Failed to toggle remote access: ${error.message}`);
     }
   }
 

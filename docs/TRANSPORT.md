@@ -47,27 +47,32 @@ AI 客户端 ↔ stdin/stdout ↔ mcp-chrome-bridge-stdio ↔ HTTP 127.0.0.1:123
 
 ## 远程访问
 
-默认只监听 `127.0.0.1`。设置环境变量 `MCP_HTTP_HOST=0.0.0.0` 后，MCP 服务绑定到所有网络接口，允许其他机器或 Docker 容器通过局域网 IP 连接。
+默认只监听 `127.0.0.1`。开启远程后，MCP 服务绑定到所有网络接口（`0.0.0.0`），允许其他机器或 Docker 容器通过局域网 IP 连接。
 
-### 配置步骤
+### 开启方式
 
-1. **设置环境变量**并完全重启 Chrome：
+**方式一（推荐）：扩展 Popup 开关**
+
+打开扩展弹窗 → **远程** 选项卡 → 打开**远程访问开关**。服务立即重启在 `0.0.0.0`，无需重启浏览器。偏好持久化到 `~/.mcp-chrome/config.json`，断开重连或重启浏览器后保持不变。
+
+**方式二（高级 / 守护进程）：环境变量覆盖**
+
+设置系统环境变量 `MCP_HTTP_HOST=0.0.0.0`（优先级高于配置文件）：
 
 ```powershell
 # Windows PowerShell（系统级，重启后生效）
 [Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")
-
-# 或临时设置（当前会话）
-$env:MCP_HTTP_HOST = "0.0.0.0"
 ```
 
-2. **开放防火墙**（Windows 需管理员权限）：
+### 开放防火墙
+
+Windows 需管理员权限：
 
 ```powershell
 netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow protocol=tcp localport=12306
 ```
 
-3. **确认监听状态**：
+### 确认监听状态
 
 ```powershell
 netstat -ano | findstr :12306
@@ -76,7 +81,7 @@ netstat -ano | findstr :12306
 
 ### Popup 自动识别 LAN IP
 
-监听 `0.0.0.0` 时，扩展 Popup 的配置模板会自动显示本机的实际局域网 IP（优先 WLAN/Ethernet，过滤 VPN/虚拟网卡），无需手动查找 IP。
+监听 `0.0.0.0` 时，扩展 Popup 的远程配置会自动显示本机的实际局域网 IP（优先 WLAN/Ethernet，过滤 VPN/虚拟网卡），无需手动查找 IP。
 
 ### Token 认证
 
@@ -119,5 +124,5 @@ Token 管理端点（仅本机可用）：
 ## 推荐
 
 - 一般桌面 AI 客户端：优先 **Streamable HTTP** 指向本机 bridge。
-- 远程 / Docker 场景：设 `MCP_HTTP_HOST=0.0.0.0`，用宿主机 IP 连接。
+- 远程 / Docker 场景：用扩展开关或设 `MCP_HTTP_HOST=0.0.0.0`，用宿主机 IP 连接。
 - 仅当客户端只支持 stdio 时使用 **`mcp-chrome-stdio`**，并确保 MCP 宿主进程正确管理子进程生命周期。

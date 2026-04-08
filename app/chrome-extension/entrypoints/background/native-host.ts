@@ -536,6 +536,20 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         await saveServerStatus(currentServerStatus);
         broadcastServerStatusChange(currentServerStatus);
         console.log(SUCCESS_MESSAGES.SERVER_STOPPED);
+      } else if (message.type === 'remote_access_changed') {
+        currentServerStatus = {
+          isRunning: true,
+          port: message.payload?.port,
+          host: message.payload?.host,
+          networkAddresses: message.payload?.networkAddresses,
+          authEnabled: message.payload?.authEnabled ?? false,
+          lastUpdated: Date.now(),
+        };
+        await saveServerStatus(currentServerStatus);
+        broadcastServerStatusChange(currentServerStatus);
+        console.log(
+          `[NativeHost] Remote access ${message.payload?.enabled ? 'enabled' : 'disabled'}, host=${message.payload?.host}`,
+        );
       } else if (message.type === NativeMessageType.ERROR_FROM_NATIVE_HOST) {
         const nativeError = message.payload?.message || 'Unknown error';
         console.error('Error from native host:', nativeError);
@@ -717,6 +731,20 @@ export const initNativeHostListener = () => {
     if (msgType === NativeMessageType.PING_NATIVE) {
       const connected = nativePort !== null;
       sendResponse({ connected, autoConnectEnabled });
+      return true;
+    }
+
+    if (msgType === 'set_remote_access') {
+      const enable = typeof message === 'object' ? !!message.enable : false;
+      if (!nativePort) {
+        sendResponse({ success: false, error: 'Native host not connected' });
+        return true;
+      }
+      nativePort.postMessage({
+        type: 'set_remote_access',
+        payload: { enable },
+      });
+      sendResponse({ success: true });
       return true;
     }
 

@@ -184,7 +184,7 @@ robocopy .\app\chrome-extension\.output\chrome-mv3 C:\stable-ext /MIR
 
 ## 11. 远程连接后 Popup 配置中 IP 不正确
 
-**原因**：设置 `MCP_HTTP_HOST=0.0.0.0` 后，Popup 自动选择本机网卡 IP 显示在配置模板中。如果机器上有 VPN 或虚拟网卡，可能选中了非预期的 IP。
+**原因**：开启远程访问（通过扩展开关或 `MCP_HTTP_HOST=0.0.0.0`）后，Popup 自动选择本机网卡 IP 显示在配置模板中。如果机器上有 VPN 或虚拟网卡，可能选中了非预期的 IP。
 
 **说明**：Popup 按优先级排序本机网卡：WLAN/Wi-Fi > Ethernet > 其他物理网卡 > 虚拟网卡/VPN。`192.168.x.x` 和 `10.x.x.x` 段获得额外加权。
 

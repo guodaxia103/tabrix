@@ -21,11 +21,21 @@ export const TIMEOUTS = {
 export const MCP_HTTP_HOST_ENV = 'MCP_HTTP_HOST';
 export const MCP_AUTH_TOKEN_ENV = 'MCP_AUTH_TOKEN';
 
+import { getPersistedHost } from '../host-config';
+
+/**
+ * Resolve listen host with priority:
+ *   1. MCP_HTTP_HOST env var (explicit override for advanced users / daemon)
+ *   2. ~/.mcp-chrome/config.json "host" (persisted user preference from extension toggle)
+ *   3. Default: '127.0.0.1'
+ */
 function resolveListenHost(): string {
-  const raw = process.env[MCP_HTTP_HOST_ENV];
-  if (!raw) return '127.0.0.1';
-  const allowed = ['127.0.0.1', '0.0.0.0', 'localhost', '::'];
-  return allowed.includes(raw) ? raw : '127.0.0.1';
+  const envHost = process.env[MCP_HTTP_HOST_ENV];
+  if (envHost) {
+    const allowed = ['127.0.0.1', '0.0.0.0', 'localhost', '::'];
+    if (allowed.includes(envHost)) return envHost;
+  }
+  return getPersistedHost() || '127.0.0.1';
 }
 
 export const SERVER_CONFIG = {

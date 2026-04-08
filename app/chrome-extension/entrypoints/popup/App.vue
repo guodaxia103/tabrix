@@ -119,50 +119,49 @@
               </div>
               <div v-if="activeConfigTab === 'remote'" class="remote-toggle-card">
                 <div class="remote-toggle-header">
-                  <span class="remote-toggle-title">远程访问开关</span>
-                  <span :class="['remote-toggle-state', remoteAccessEnabled ? 'on' : 'off']">
-                    {{ remoteAccessEnabled ? '已开启' : '未开启' }}
-                  </span>
+                  <span class="remote-toggle-title">远程访问</span>
+                  <label class="remote-switch" :class="{ disabled: remoteToggling }">
+                    <input
+                      type="checkbox"
+                      :checked="remoteAccessEnabled"
+                      :disabled="remoteToggling || connectionState !== ConnectionState.RUNNING"
+                      @change="toggleRemoteAccess"
+                    />
+                    <span class="remote-switch-slider"></span>
+                  </label>
                 </div>
                 <div class="remote-toggle-desc">
                   {{
-                    remoteAccessEnabled
-                      ? '当前监听地址为 0.0.0.0 / ::，允许局域网设备访问。'
-                      : '当前仅本机访问（127.0.0.1）。开启后可在局域网中访问。'
+                    connectionState !== ConnectionState.RUNNING
+                      ? '需先连接并启动服务后才能切换远程访问。'
+                      : remoteAccessEnabled
+                        ? '当前监听 0.0.0.0，允许局域网设备访问。'
+                        : '当前仅本机访问（127.0.0.1）。开启后可在局域网中访问。'
                   }}
-                </div>
-                <div class="remote-toggle-actions">
-                  <button
-                    class="remote-toggle-btn primary"
-                    @click="copyRemoteToggleCommand(!remoteAccessEnabled)"
-                  >
-                    {{ remoteAccessEnabled ? '复制关闭远程命令' : '复制开启远程命令' }}
-                  </button>
-                  <button class="remote-toggle-btn" @click="copyRemoteToggleCommand(false)">
-                    复制恢复本地命令
-                  </button>
                 </div>
                 <div v-if="remoteToggleCopiedText" class="remote-toggle-copied">
                   {{ remoteToggleCopiedText }}
                 </div>
               </div>
-              <div v-if="remoteRestartHint" class="mcp-restart-hint">
-                {{ remoteRestartHint }}
-              </div>
               <div v-if="remoteSecurityWarning" class="mcp-security-warning">
                 {{ remoteSecurityWarning }}
               </div>
-              <div class="mcp-config-content">
-                <pre class="mcp-config-json">{{ activeConfigJson }}</pre>
-              </div>
-              <div class="mcp-network-info">
-                <span class="network-label">本机：</span>
-                <span class="network-ip">127.0.0.1:{{ serverPort }}</span>
-                <template v-if="lanIpAddress">
-                  <span class="network-sep">|</span>
-                  <span class="network-label">局域网：</span>
-                  <span class="network-ip">{{ lanIpAddress }}:{{ serverPort }}</span>
-                </template>
+              <template v-if="activeConfigTab !== 'remote' || remoteAccessEnabled">
+                <div class="mcp-config-content">
+                  <pre class="mcp-config-json">{{ activeConfigJson }}</pre>
+                </div>
+                <div class="mcp-network-info">
+                  <span class="network-label">本机：</span>
+                  <span class="network-ip">127.0.0.1:{{ serverPort }}</span>
+                  <template v-if="lanIpAddress">
+                    <span class="network-sep">|</span>
+                    <span class="network-label">局域网：</span>
+                    <span class="network-ip">{{ lanIpAddress }}:{{ serverPort }}</span>
+                  </template>
+                </div>
+              </template>
+              <div v-else class="remote-disabled-hint">
+                开启远程访问后将显示可供远程客户端使用的 MCP 配置。
               </div>
             </div>
             <div class="port-section">
@@ -952,17 +951,10 @@ const activeConfigTabHint = computed(() => {
     case 'stdio':
       return '适用于 Claude Code CLI 等（需先 npm i -g mcp-chrome-bridge）';
     case 'remote':
-      return isWildcardHost.value
-        ? '远程机器或 Docker 通过局域网 IP 连接'
-        : '需先设置环境变量 MCP_HTTP_HOST=0.0.0.0 并重启 Chrome';
+      return '远程机器或 Docker 通过局域网 IP 连接';
     default:
       return '';
   }
-});
-
-const remoteRestartHint = computed(() => {
-  if (activeConfigTab.value !== 'remote') return '';
-  return '提示：切换远程监听后，请完全退出并重启 Chrome，再点击 Connect 使配置生效。';
 });
 
 const activeConfigJson = computed(() => {
@@ -1249,11 +1241,11 @@ const troubleshootingCommands = computed(() => {
   pushCommand('register-force', '强制重注册 Native host', 'mcp-chrome-bridge register --force');
   pushCommand(
     'remote-mode',
-    '启用远程模式（局域网访问）',
+    '持久化远程模式（守护进程/环境变量）',
     navigator.platform?.startsWith('Win')
       ? '[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")'
       : 'export MCP_HTTP_HOST=0.0.0.0',
-    '设置后需完全重启 Chrome 生效。',
+    '建议直接使用"远程"选项卡中的开关。此命令仅在需要守护进程持久远程时使用。',
   );
 
   return items;
@@ -1757,24 +1749,43 @@ const copyTroubleshootingScript = async () => {
   }
 };
 
-const copyRemoteToggleCommand = async (enable: boolean) => {
-  const command = enable
-    ? '[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")'
-    : '[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "127.0.0.1", "User")';
+const remoteToggling = ref(false);
+
+const toggleRemoteAccess = async () => {
+  if (remoteToggling.value) return;
+  const enable = !remoteAccessEnabled.value;
+  remoteToggling.value = true;
+  remoteToggleCopiedText.value = enable ? '正在开启远程访问…' : '正在关闭远程访问…';
+
   try {
-    await navigator.clipboard.writeText(command);
-    remoteToggleCopiedText.value = enable
-      ? '✅ 已复制开启远程命令（执行后重启 Chrome）'
-      : '✅ 已复制恢复本地命令（执行后重启 Chrome）';
+    const response = await chrome.runtime.sendMessage({
+      type: 'set_remote_access',
+      enable,
+    });
+    if (!response?.success) {
+      remoteToggleCopiedText.value = `❌ 切换失败: ${response?.error || '未知错误'}`;
+      setTimeout(() => {
+        remoteToggleCopiedText.value = '';
+      }, 3000);
+      return;
+    }
+
+    await new Promise((r) => setTimeout(r, 800));
+    await refreshServerStatus();
+    if (enable) await fetchTokenInfo();
+
+    remoteToggleCopiedText.value = enable ? '✅ 远程访问已开启' : '✅ 已恢复仅本机访问';
     setTimeout(() => {
       remoteToggleCopiedText.value = '';
-    }, 2200);
+    }, 2500);
   } catch (error) {
-    console.error('复制远程切换命令失败:', error);
-    remoteToggleCopiedText.value = '❌ 复制失败，请手动复制命令';
+    console.error('切换远程访问失败:', error);
+    remoteToggleCopiedText.value = `❌ 切换失败: ${error instanceof Error ? error.message : String(error)}`;
     setTimeout(() => {
       remoteToggleCopiedText.value = '';
-    }, 2200);
+    }, 3000);
+  } finally {
+    remoteToggling.value = false;
   }
 };
 
@@ -3104,50 +3115,65 @@ onUnmounted(() => {
   color: #1f2937;
 }
 
-.remote-toggle-state {
-  font-size: 11px;
-  font-weight: 600;
-  border-radius: 999px;
-  padding: 2px 8px;
-}
-
-.remote-toggle-state.on {
-  color: #166534;
-  background: #dcfce7;
-}
-
-.remote-toggle-state.off {
-  color: #9a3412;
-  background: #ffedd5;
-}
-
 .remote-toggle-desc {
   font-size: 11px;
   color: #475569;
   line-height: 1.4;
 }
 
-.remote-toggle-actions {
-  margin-top: 8px;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+.remote-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
-.remote-toggle-btn {
-  font-size: 11px;
-  border-radius: 6px;
-  border: 1px solid #bfdbfe;
-  color: #1d4ed8;
-  background: #eff6ff;
-  padding: 4px 8px;
+.remote-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.remote-switch-slider {
+  position: absolute;
   cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #cbd5e1;
+  border-radius: 20px;
+  transition: background 0.25s;
 }
 
-.remote-toggle-btn.primary {
-  border-color: #1d4ed8;
+.remote-switch-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  bottom: 2px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.25s;
+}
+
+.remote-switch input:checked + .remote-switch-slider {
   background: #1d4ed8;
-  color: #fff;
+}
+
+.remote-switch input:checked + .remote-switch-slider::before {
+  transform: translateX(16px);
+}
+
+.remote-switch input:disabled + .remote-switch-slider {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.remote-switch.disabled {
+  pointer-events: none;
 }
 
 .remote-toggle-copied {
@@ -3156,15 +3182,14 @@ onUnmounted(() => {
   color: #0369a1;
 }
 
-.mcp-restart-hint {
+.remote-disabled-hint {
   font-size: 11px;
-  line-height: 1.4;
-  color: #1d4ed8;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: #64748b;
+  text-align: center;
+  padding: 16px 8px;
+  background: #f8fafc;
   border-radius: 6px;
-  padding: 6px 8px;
-  margin-bottom: 6px;
+  border: 1px dashed #cbd5e1;
 }
 
 .mcp-network-info {

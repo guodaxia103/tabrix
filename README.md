@@ -131,6 +131,16 @@ mcp-chrome-bridge daemon remove-autostart
 
 > **Note**: In daemon mode, browser-specific tools (like `chrome_screenshot`) are unavailable until Chrome opens and the extension connects. Non-browser tools work normally. Daemon logs are saved to `~/.mcp-chrome/daemon.log`.
 
+### Remote Access (optional)
+
+To allow LAN machines or Docker containers to connect:
+
+1. Open the extension popup → **Remote** tab → toggle the **remote access switch** ON. The server immediately restarts on `0.0.0.0` — no browser restart needed. The preference is saved to `~/.mcp-chrome/config.json` and persists across reconnects and browser restarts.
+2. A Token is auto-generated on first enable (saved to `~/.mcp-chrome/auth-token.json`). The popup displays the full MCP config including the `Authorization` header.
+3. Allow the port through your firewall, then copy the config to the remote machine.
+
+> **Advanced**: Set `MCP_HTTP_HOST=0.0.0.0` as an OS env var to override the config file (useful for daemon mode). Token expires in 7 days by default (`MCP_AUTH_TOKEN_TTL`). Localhost requests bypass token auth.
+
 ### Usage with MCP Protocol Clients
 
 #### Using Streamable HTTP Connection (👍🏻 Recommended)

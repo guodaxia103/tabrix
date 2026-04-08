@@ -157,15 +157,13 @@ mcp-chrome-bridge daemon stop
 
 ## 7. 远程访问验证
 
-```powershell
-# 设置远程模式
-[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")
-# 完全重启 Chrome，重新连接扩展
-```
+打开扩展弹窗 → **远程** 选项卡 → 打开**远程访问开关**（无需重启 Chrome）。
 
 通过标准：
 
-- 扩展 Popup 远程 Tab 显示 Token 和局域网 IP
+- 开关切换后服务立即重启在 `0.0.0.0`，Popup 远程 Tab 显示 Token、局域网 IP 和完整配置
+- 关闭开关 → 断开重连 → 重启浏览器，远程保持关闭（偏好持久化到 `~/.mcp-chrome/config.json`）
+- 开启开关 → 断开重连 → 重启浏览器，远程保持开启
 - 从同一局域网的另一台设备/容器能访问 `http://<LAN-IP>:12306/ping`
 - 携带 `Authorization: Bearer <token>` 请求 `/mcp` 能成功 `initialize`
 - 不带 Token 的远程请求返回 `401`

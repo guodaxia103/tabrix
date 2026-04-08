@@ -18,6 +18,8 @@ export enum NativeMessageType {
   ENSURE_NATIVE = 'ensure_native',
   PING_NATIVE = 'ping_native',
   DISCONNECT_NATIVE = 'disconnect_native',
+  SET_REMOTE_ACCESS = 'set_remote_access',
+  REMOTE_ACCESS_CHANGED = 'remote_access_changed',
 }
 
 export interface NativeMessage<P = any, E = any> {

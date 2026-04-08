@@ -124,25 +124,19 @@ Set the `CHROME_MCP_PORT` environment variable to override the default port for 
 
 ## 6. Remote access (optional)
 
-To allow other machines or Docker containers to connect:
+To allow other machines or Docker containers to connect via LAN:
 
-1. Set environment variable `MCP_HTTP_HOST=0.0.0.0` and fully restart Chrome
+1. Open the extension popup → **Remote** tab → toggle the **remote access switch** to ON. The server immediately restarts on `0.0.0.0` — no browser restart needed. The preference is saved to `~/.mcp-chrome/config.json` and survives reconnects / browser restarts.
 
-```powershell
-# Windows PowerShell (persistent)
-[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")
-```
+2. A Token is **auto-generated** on first remote enable and saved to `~/.mcp-chrome/auth-token.json`. The popup will show the full MCP config (including `Authorization` header) once remote is enabled.
 
-2. On first startup, a Token is **auto-generated** and saved to `~/.mcp-chrome/auth-token.json`. Open the extension popup → Remote tab to see it. You may also set `MCP_AUTH_TOKEN` manually if preferred.
-
-3. Allow port 12306 through Windows Firewall:
+3. Allow the port through your firewall (Windows example):
 
 ```powershell
 netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow protocol=tcp localport=12306
 ```
 
-4. The extension popup will auto-detect your LAN IP and display it in the config snippet
-5. On the remote machine, configure:
+4. The popup auto-detects your LAN IP. Copy the displayed config to the remote machine:
 
 ```json
 {
@@ -150,16 +144,16 @@ netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow
     "chrome-mcp": {
       "url": "http://<your-lan-ip>:12306/mcp",
       "headers": {
-        "Authorization": "Bearer your-secret-token"
+        "Authorization": "Bearer <token-from-popup>"
       }
     }
   }
 }
 ```
 
-6. Check the popup's "Connected clients" list to verify the remote connection
+5. Check the popup's "Connected clients" list to verify the remote connection
 
-> Token auto-expires in 7 days (configure via `MCP_AUTH_TOKEN_TTL`). Use popup's "Remote" tab to view, copy, or refresh the token. Localhost requests bypass token auth.
+> **Advanced**: You can also set `MCP_HTTP_HOST=0.0.0.0` as an OS environment variable to override the config file (useful for daemon mode). Token auto-expires in 7 days (configure via `MCP_AUTH_TOKEN_TTL`). Localhost requests bypass token auth.
 
 ## 7. Troubleshooting order
 
