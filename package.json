@@ -9,7 +9,7 @@
     "build:native": "pnpm --filter mcp-chrome-bridge build",
     "build:extension": "pnpm --filter chrome-mcp-server build",
     "build:wasm": "pnpm --filter @chrome-mcp/wasm-simd build && pnpm run copy:wasm",
-    "build": "pnpm -r --filter='!@chrome-mcp/wasm-simd' build",
+    "build": "pnpm -r --filter=!@chrome-mcp/wasm-simd build",
     "copy:wasm": "node ./scripts/copy-wasm.mjs",
     "dev:shared": "pnpm --filter chrome-mcp-shared dev",
     "dev:native": "pnpm --filter mcp-chrome-bridge dev",
