@@ -31,8 +31,11 @@ interface InstalledContextMenuTrigger {
 
 const MENU_ITEM_PREFIX = 'rr_v3_';
 
-// Default context types if not specified
-const DEFAULT_CONTEXTS: chrome.contextMenus.ContextType[] = ['page'];
+// Default context types if not specified. Resolve lazily so tests can run with partial chrome mocks.
+function getDefaultContexts(): chrome.contextMenus.ContextType[] {
+  const pageContext = chrome?.contextMenus?.ContextType?.PAGE;
+  return (pageContext ? [pageContext] : ['page']) as chrome.contextMenus.ContextType[];
+}
 
 // ==================== Handler Implementation ====================
 
@@ -122,7 +125,7 @@ export function createContextMenuTriggerHandler(
     contexts: ReadonlyArray<string> | undefined,
   ): chrome.contextMenus.ContextType[] {
     if (!contexts || contexts.length === 0) {
-      return DEFAULT_CONTEXTS;
+      return getDefaultContexts();
     }
     return contexts as chrome.contextMenus.ContextType[];
   }
