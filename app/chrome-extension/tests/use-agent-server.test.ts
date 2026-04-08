@@ -199,4 +199,33 @@ describe('useAgentServer SSE recovery', () => {
     expect(agentServer.connecting.value).toBe(false);
     expect(agentServer.connectionState.value).toBe('ready');
   });
+
+  it('tracks last native error from background status responses', async () => {
+    const sendMessage = vi.fn(async (message: { type: string }) => {
+      if (message.type === 'ping_native') {
+        return { connected: false };
+      }
+      if (message.type === 'ensure_native') {
+        return { connected: false, lastError: 'Native host manifest missing' };
+      }
+      if (message.type === 'get_server_status') {
+        return {
+          connected: false,
+          lastError: 'Native host manifest missing',
+          serverStatus: { isRunning: false, port: undefined },
+        };
+      }
+      return {};
+    });
+    (globalThis as any).chrome = createChromeMock(sendMessage);
+
+    const { useAgentServer } = await import('@/entrypoints/sidepanel/composables/useAgentServer');
+    const agentServer = useAgentServer();
+
+    const ready = await agentServer.ensureNativeServer();
+
+    expect(ready).toBe(false);
+    expect(agentServer.lastError.value).toBe('Native host manifest missing');
+    expect(agentServer.connectionState.value).toBe('disconnected');
+  });
 });

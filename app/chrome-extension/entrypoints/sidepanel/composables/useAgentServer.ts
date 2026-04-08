@@ -24,6 +24,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
   const nativeConnected = ref(false);
   const serverStatus = ref<ServerStatus | null>(null);
   const connecting = ref(false);
+  const lastError = ref<string | null>(null);
   const engines = ref<AgentEngineInfo[]>([]);
   const eventSource = ref<EventSource | null>(null);
 
@@ -71,6 +72,9 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
       const response = await chrome.runtime.sendMessage({
         type: forceConnect ? NativeMessageType.CONNECT_NATIVE : NativeMessageType.ENSURE_NATIVE,
       });
+      if (typeof response?.lastError === 'string' || response?.lastError === null) {
+        lastError.value = response.lastError ?? null;
+      }
       // Handle both response formats: { connected: boolean } and { success: boolean }
       nativeConnected.value =
         typeof response?.connected === 'boolean'
@@ -92,6 +96,9 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
       });
       if (response?.serverStatus) {
         serverStatus.value = response.serverStatus;
+        if (typeof response?.lastError === 'string' || response?.lastError === null) {
+          lastError.value = response.lastError ?? null;
+        }
         if (response.serverStatus.port) {
           serverPort.value = response.serverStatus.port;
         }
@@ -279,6 +286,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
     nativeConnected,
     serverStatus,
     connecting,
+    lastError,
     engines,
     eventSource,
 

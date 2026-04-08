@@ -32,6 +32,7 @@
             :project-label="projectLabel"
             :session-label="sessionLabel"
             :connection-state="connectionState"
+            :connection-detail="connectionDetail"
             :show-back-button="true"
             :brand-label="engineDisplayName"
             @toggle:project-menu="toggleProjectMenu"
@@ -381,6 +382,20 @@ const sessionLabel = computed(() => {
 
 const connectionState = computed(() => {
   return server.connectionState.value;
+});
+
+const connectionDetail = computed(() => {
+  if (connectionState.value === 'ready') {
+    return 'Agent server connected';
+  }
+  if (connectionState.value === 'connecting') {
+    return server.lastError.value
+      ? `Recovering from: ${server.lastError.value}`
+      : 'Starting native host and agent server...';
+  }
+  return server.lastError.value
+    ? `Disconnected: ${server.lastError.value}`
+    : 'Agent server disconnected';
 });
 
 // Computed values for AgentComposer

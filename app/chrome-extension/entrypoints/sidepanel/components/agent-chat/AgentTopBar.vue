@@ -97,7 +97,7 @@
     <!-- Connection / Status / Settings -->
     <div class="flex items-center gap-3">
       <!-- Connection Indicator -->
-      <div class="flex items-center gap-1.5" :title="connectionText">
+      <div class="flex items-center gap-1.5" :title="connectionDetail || connectionText">
         <span
           class="w-2 h-2 rounded-full"
           :style="{
@@ -166,6 +166,7 @@ const props = defineProps<{
   projectLabel: string;
   sessionLabel: string;
   connectionState: ConnectionState;
+  connectionDetail?: string;
   /** Whether to show back button (for returning to sessions list) */
   showBackButton?: boolean;
   /** Brand label to display (e.g., "Claude Code", "Codex") */
