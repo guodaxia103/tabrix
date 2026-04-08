@@ -132,12 +132,16 @@
               />
             </div>
 
-            <button class="connect-button" :disabled="isConnecting" @click="testNativeConnection">
+            <button
+              class="connect-button"
+              :disabled="connectActionState.busy"
+              @click="testNativeConnection"
+            >
               <BoltIcon />
               <span>{{
-                isConnecting
+                connectActionState.busy
                   ? getMessage('connectingStatus')
-                  : nativeConnectionStatus === 'connected'
+                  : connectActionState.action === 'disconnect'
                     ? getMessage('disconnectButton')
                     : getMessage('connectButton')
               }}</span>
@@ -463,6 +467,7 @@ import {
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import { LINKS } from '@/common/constants';
 import { ConnectionState, stateToStatusClass, type ServerStatus } from '@/common/connection-state';
+import { resolvePopupConnectAction } from '@/common/popup-connect-action';
 import { shouldApplyConnectedClientsResponse } from '@/common/popup-connected-clients';
 import { createDisconnectedPopupSnapshot } from '@/common/popup-connection-state';
 import { resolvePopupConnectionState } from '@/common/popup-status-phase';
@@ -659,6 +664,9 @@ const connectionState = computed(() =>
     lastError: lastNativeError.value,
     isBootstrapping: isBootstrappingStatus.value,
   }),
+);
+const connectActionState = computed(() =>
+  resolvePopupConnectAction(connectionState.value, isConnecting.value, isBootstrappingStatus.value),
 );
 
 // ==================== Connected Clients ====================
