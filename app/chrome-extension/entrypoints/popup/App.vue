@@ -462,14 +462,10 @@ import {
 } from '@/utils/semantic-similarity-engine';
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import { LINKS } from '@/common/constants';
-import {
-  ConnectionState,
-  resolveConnectionState,
-  stateToStatusClass,
-  type ServerStatus,
-} from '@/common/connection-state';
+import { ConnectionState, stateToStatusClass, type ServerStatus } from '@/common/connection-state';
 import { shouldApplyConnectedClientsResponse } from '@/common/popup-connected-clients';
 import { createDisconnectedPopupSnapshot } from '@/common/popup-connection-state';
+import { resolvePopupConnectionState } from '@/common/popup-status-phase';
 import { getMessage } from '@/utils/i18n';
 import { useAgentTheme, type AgentThemeId } from '../sidepanel/composables/useAgentTheme';
 
@@ -642,6 +638,7 @@ const runFlow = async (flowId: string) => {
 
 const nativeConnectionStatus = ref<'unknown' | 'connected' | 'disconnected'>('unknown');
 const isConnecting = ref(false);
+const isBootstrappingStatus = ref(true);
 const nativeServerPort = ref<number>(12306);
 const lastNativeError = ref<string | null>(null);
 
@@ -655,12 +652,13 @@ const showMcpConfig = computed(() => {
 });
 
 const connectionState = computed(() =>
-  resolveConnectionState(
-    nativeConnectionStatus.value,
-    serverStatus.value.isRunning,
-    isConnecting.value,
-    lastNativeError.value,
-  ),
+  resolvePopupConnectionState({
+    nativeStatus: nativeConnectionStatus.value,
+    serverRunning: serverStatus.value.isRunning,
+    isConnecting: isConnecting.value,
+    lastError: lastNativeError.value,
+    isBootstrapping: isBootstrappingStatus.value,
+  }),
 );
 
 // ==================== Connected Clients ====================
@@ -1853,33 +1851,37 @@ const setupServerStatusListener = () => {
 };
 
 onMounted(async () => {
-  // 初始化主题
-  await initTheme();
-  await loadPortPreference();
-  await loadModelPreference();
-  await checkNativeConnection();
-  await checkServerStatus();
-  await refreshStorageStats();
-  await loadCacheStats();
-  await loadFlows();
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    currentTabUrl.value = tab?.url || '';
-  } catch {}
+    // 初始化主题
+    await initTheme();
+    await loadPortPreference();
+    await loadModelPreference();
+    await checkNativeConnection();
+    await checkServerStatus();
+    await refreshStorageStats();
+    await loadCacheStats();
+    await loadFlows();
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      currentTabUrl.value = tab?.url || '';
+    } catch {}
 
-  await checkSemanticEngineStatus();
-  setupServerStatusListener();
-  // Auto-refresh workflows list when storage rr_flows changes
-  try {
-    const onChanged = (changes: any, area: string) => {
-      try {
-        if (area !== 'local') return;
-        if (Object.prototype.hasOwnProperty.call(changes || {}, 'rr_flows')) loadFlows();
-      } catch {}
-    };
-    chrome.storage.onChanged.addListener(onChanged);
-    (window as any).__rr_popup_onChanged = onChanged;
-  } catch {}
+    await checkSemanticEngineStatus();
+    setupServerStatusListener();
+    // Auto-refresh workflows list when storage rr_flows changes
+    try {
+      const onChanged = (changes: any, area: string) => {
+        try {
+          if (area !== 'local') return;
+          if (Object.prototype.hasOwnProperty.call(changes || {}, 'rr_flows')) loadFlows();
+        } catch {}
+      };
+      chrome.storage.onChanged.addListener(onChanged);
+      (window as any).__rr_popup_onChanged = onChanged;
+    } catch {}
+  } finally {
+    isBootstrappingStatus.value = false;
+  }
 });
 
 onUnmounted(() => {
