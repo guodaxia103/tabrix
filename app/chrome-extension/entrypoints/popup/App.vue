@@ -1796,11 +1796,24 @@ const switchModel = async (newModel: ModelPreset) => {
 };
 
 const setupServerStatusListener = () => {
-  const onMessage = (message: { type?: string; payload?: unknown; connected?: boolean }) => {
+  const onMessage = (message: {
+    type?: string;
+    payload?: unknown;
+    connected?: boolean;
+    lastError?: string | null;
+  }) => {
     if (message.type === BACKGROUND_MESSAGE_TYPES.SERVER_STATUS_CHANGED && message.payload) {
       serverStatus.value = message.payload as ServerStatus;
       if (message.connected !== undefined) {
         nativeConnectionStatus.value = message.connected ? 'connected' : 'disconnected';
+      }
+      if (typeof message.lastError === 'string' || message.lastError === null) {
+        lastNativeError.value = message.lastError ?? null;
+      }
+      if (message.connected && (message.payload as ServerStatus).isRunning) {
+        void fetchConnectedClients();
+      } else {
+        connectedClients.value = [];
       }
     }
     // Flows changed - refresh list (IndexedDB-based notification)

@@ -192,6 +192,13 @@ describe('native host reconnect behavior', () => {
     expect(statusAfterDisconnect.connected).toBe(false);
     expect(statusAfterDisconnect.lastError).toBe('Native host crashed');
     expect(statusAfterDisconnect.serverStatus.isRunning).toBe(false);
+    expect(harness.chromeMock.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: BACKGROUND_MESSAGE_TYPES.SERVER_STATUS_CHANGED,
+        connected: false,
+        lastError: 'Native host crashed',
+      }),
+    );
 
     await vi.advanceTimersByTimeAsync(400);
     await flushMicrotasks();
@@ -238,6 +245,13 @@ describe('native host reconnect behavior', () => {
     expect(statusAfterManualDisconnect.connected).toBe(false);
     expect(statusAfterManualDisconnect.lastError).toBe(null);
     expect(statusAfterManualDisconnect.serverStatus.isRunning).toBe(false);
+    expect(harness.chromeMock.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: BACKGROUND_MESSAGE_TYPES.SERVER_STATUS_CHANGED,
+        connected: false,
+        lastError: null,
+      }),
+    );
 
     await vi.advanceTimersByTimeAsync(1000);
     await flushMicrotasks();

@@ -111,6 +111,7 @@ function broadcastServerStatusChange(status: ServerStatus): void {
       type: BACKGROUND_MESSAGE_TYPES.SERVER_STATUS_CHANGED,
       payload: status,
       connected: nativePort !== null,
+      lastError: lastNativeError,
     })
     .catch(() => {
       // Ignore errors if no listeners are present
@@ -526,11 +527,13 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
 
       console.warn(ERROR_MESSAGES.NATIVE_DISCONNECTED, chrome.runtime.lastError);
 
+      if (lastError) {
+        lastNativeError = lastError;
+        void saveLastNativeError(lastError);
+      }
+
       // Mark server as stopped since native host disconnection means server is down
       void markServerStopped('native_port_disconnected');
-      if (lastError) {
-        void setLastNativeError(lastError);
-      }
 
       // Handle reconnection based on disconnect reason
       if (!autoConnectEnabled) return;
@@ -688,10 +691,10 @@ export const initNativeHostListener = () => {
           }
           nativePort = null;
         }
+        await clearLastNativeError();
         await markServerStopped('manual_disconnect');
       })()
         .then(() => {
-          void clearLastNativeError();
           sendResponse({ success: true, lastError: null });
         })
         .catch((e) => {
