@@ -31,6 +31,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 5;
   const BASE_RECONNECT_DELAY = 1000;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Track which sessionId the current SSE connection is subscribed to
   let currentStreamSessionId: string | null = null;
@@ -161,6 +162,37 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
     return eventSource.value !== null && eventSource.value.readyState === EventSource.OPEN;
   }
 
+  function clearReconnectTimer(): void {
+    if (!reconnectTimer) return;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  function scheduleEventSourceReconnect(): void {
+    if (reconnectTimer) return;
+
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      options.onError?.('SSE connection failed after multiple attempts');
+      return;
+    }
+
+    const delay = BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts);
+    reconnectAttempts++;
+    console.log(`[AgentServer] Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
+
+    reconnectTimer = setTimeout(async () => {
+      reconnectTimer = null;
+
+      const ready = await ensureNativeServer();
+      if (ready) {
+        openEventSource();
+        return;
+      }
+
+      scheduleEventSourceReconnect();
+    }, delay);
+  }
+
   // Open SSE connection (skip if already connected to same session)
   function openEventSource(): void {
     const targetSessionId = options.getSessionId?.()?.trim() ?? '';
@@ -182,6 +214,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
     es.onopen = () => {
       console.log('[AgentServer] SSE connection opened');
       reconnectAttempts = 0;
+      clearReconnectTimer();
     };
 
     es.onmessage = (event) => {
@@ -197,20 +230,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
       console.error('[AgentServer] SSE error:', error);
       es.close();
       eventSource.value = null;
-
-      // Attempt reconnection with exponential backoff
-      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-        const delay = BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts);
-        reconnectAttempts++;
-        console.log(`[AgentServer] Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
-        setTimeout(() => {
-          if (isServerReady.value) {
-            openEventSource();
-          }
-        }, delay);
-      } else {
-        options.onError?.('SSE connection failed after multiple attempts');
-      }
+      scheduleEventSourceReconnect();
     };
 
     eventSource.value = es;
@@ -218,6 +238,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
 
   // Close SSE connection
   function closeEventSource(): void {
+    clearReconnectTimer();
     if (eventSource.value) {
       eventSource.value.close();
       eventSource.value = null;
