@@ -178,9 +178,10 @@ export default defineConfig({
       sourcemap: env.mode !== 'production',
       // 禁用gzip 压缩大小报告，因为压缩大型文件可能会很慢
       reportCompressedSize: false,
-      // chunk大小超过1500kb是触发警告
+      // chunk大小超过1500kb时触发警告
       chunkSizeWarningLimit: 1500,
-      minify: false,
+      // Keep dev bundles readable while shrinking production output.
+      minify: env.mode === 'production' ? 'esbuild' : false,
     },
   }),
 });
