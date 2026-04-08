@@ -24,6 +24,9 @@
 export interface ServerStatus {
   isRunning: boolean;
   port?: number;
+  host?: string;
+  networkAddresses?: string[];
+  authEnabled?: boolean;
   lastUpdated: number;
 }
 

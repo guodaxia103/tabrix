@@ -88,13 +88,37 @@
 
             <div v-if="showMcpConfig" class="mcp-config-section">
               <div class="mcp-config-header">
-                <p class="mcp-config-label">{{ getMessage('mcpServerConfigLabel') }}</p>
+                <p class="mcp-config-label">MCP 配置</p>
                 <button class="copy-config-button" @click="copyMcpConfig">
                   {{ copyButtonText }}
                 </button>
               </div>
+              <div class="mcp-config-tabs">
+                <button
+                  v-for="tab in configTabs"
+                  :key="tab.id"
+                  :class="['mcp-tab', { active: activeConfigTab === tab.id }]"
+                  @click="activeConfigTab = tab.id"
+                  >{{ tab.label }}</button
+                >
+              </div>
+              <div v-if="activeConfigTabHint" class="mcp-config-hint">
+                {{ activeConfigTabHint }}
+              </div>
+              <div v-if="remoteSecurityWarning" class="mcp-security-warning">
+                {{ remoteSecurityWarning }}
+              </div>
               <div class="mcp-config-content">
-                <pre class="mcp-config-json">{{ mcpConfigJson }}</pre>
+                <pre class="mcp-config-json">{{ activeConfigJson }}</pre>
+              </div>
+              <div class="mcp-network-info">
+                <span class="network-label">本机：</span>
+                <span class="network-ip">127.0.0.1:{{ serverPort }}</span>
+                <template v-if="lanIpAddress">
+                  <span class="network-sep">|</span>
+                  <span class="network-label">局域网：</span>
+                  <span class="network-ip">{{ lanIpAddress }}:{{ serverPort }}</span>
+                </template>
               </div>
             </div>
             <div class="port-section">
@@ -282,6 +306,39 @@
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
               </svg>
             </button>
+            <button class="entry-item" @click="currentView = 'token-management'">
+              <div class="entry-icon token">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                  />
+                </svg>
+              </div>
+              <div class="entry-content">
+                <span class="entry-title">Token 管理</span>
+                <span class="entry-desc">远程认证、刷新与有效期</span>
+              </div>
+              <svg
+                class="entry-arrow"
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -316,6 +373,15 @@
     </div>
 
     <!-- 本地模型二级页面 -->
+    <TokenManagementPage
+      v-show="currentView === 'token-management'"
+      :base-url="serverBaseUrl"
+      :server-port="serverPort"
+      :lan-ip="lanIpAddress"
+      @back="currentView = 'home'"
+      @token-changed="fetchTokenInfo"
+    />
+
     <LocalModelPage
       v-show="currentView === 'local-model'"
       :semantic-engine-status="semanticEngineStatus"
@@ -385,7 +451,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import {
   PREDEFINED_MODELS,
   type ModelPreset,
@@ -409,6 +475,7 @@ import ConfirmDialog from './components/ConfirmDialog.vue';
 import ProgressIndicator from './components/ProgressIndicator.vue';
 import ModelCacheManagement from './components/ModelCacheManagement.vue';
 import LocalModelPage from './components/LocalModelPage.vue';
+import TokenManagementPage from './components/TokenManagementPage.vue';
 import {
   DocumentIcon,
   DatabaseIcon,
@@ -428,8 +495,8 @@ import {
 // AgentChat theme - 从preload中获取，保持与sidepanel一致
 const { theme: agentTheme, initTheme } = useAgentTheme();
 
-// 当前视图状态：首页 or 本地模型页
-const currentView = ref<'home' | 'local-model'>('home');
+// 当前视图状态：首页 / 本地模型 / Token 管理
+const currentView = ref<'home' | 'local-model' | 'token-management'>('home');
 
 // Coming Soon Toast
 const comingSoonToast = ref<{ show: boolean; feature: string }>({ show: false, feature: '' });
@@ -612,6 +679,8 @@ function getServerBaseUrl(): string {
   return `http://127.0.0.1:${port}`;
 }
 
+const serverBaseUrl = computed(() => getServerBaseUrl());
+
 async function fetchConnectedClients(): Promise<void> {
   if (!showMcpConfig.value) {
     connectedClients.value = [];
@@ -645,17 +714,126 @@ function formatConnectedTime(ts: number): string {
 
 const copyButtonText = ref(getMessage('copyConfigButton'));
 
-const mcpConfigJson = computed(() => {
-  const port = serverStatus.value.port || nativeServerPort.value;
-  const config = {
-    mcpServers: {
-      'streamable-mcp-server': {
-        type: 'streamable-http',
-        url: `http://127.0.0.1:${port}/mcp`,
-      },
-    },
-  };
-  return JSON.stringify(config, null, 2);
+type ConfigTabId = 'local' | 'stdio' | 'remote';
+
+const activeConfigTab = ref<ConfigTabId>('local');
+
+const serverPort = computed(() => serverStatus.value.port || nativeServerPort.value);
+
+const isWildcardHost = computed(() => {
+  const host = serverStatus.value.host;
+  return host === '0.0.0.0' || host === '::';
+});
+
+const lanIpAddress = computed(() => {
+  return isWildcardHost.value ? serverStatus.value.networkAddresses?.[0] || null : null;
+});
+
+const authEnabled = computed(() => serverStatus.value.authEnabled === true);
+
+const remoteSecurityWarning = computed(() => {
+  if (activeConfigTab.value !== 'remote') return '';
+  if (isWildcardHost.value && !authEnabled.value && !tokenInfo.value) {
+    return '远程访问已开启但未设置 Token，局域网内任何设备可无认证控制浏览器。';
+  }
+  return '';
+});
+
+interface TokenInfo {
+  token: string;
+  createdAt: number;
+  expiresAt: number | null;
+  fromEnv: boolean;
+  ttlDays?: number | null;
+}
+
+const tokenInfo = ref<TokenInfo | null>(null);
+
+async function fetchTokenInfo(): Promise<void> {
+  try {
+    const res = await fetch(`${getServerBaseUrl()}/auth/token`);
+    if (!res.ok) return;
+    const json = await res.json();
+    tokenInfo.value = json?.data ?? null;
+  } catch {
+    tokenInfo.value = null;
+  }
+}
+
+const configTabs: Array<{ id: ConfigTabId; label: string }> = [
+  { id: 'local', label: '本机' },
+  { id: 'stdio', label: 'stdio' },
+  { id: 'remote', label: '远程' },
+];
+
+watch(activeConfigTab, (tab) => {
+  if (tab === 'remote') fetchTokenInfo();
+});
+
+const activeConfigTabHint = computed(() => {
+  switch (activeConfigTab.value) {
+    case 'local':
+      return 'Cursor / Claude Desktop / CherryStudio / Windsurf 等本地客户端';
+    case 'stdio':
+      return '适用于 Claude Code CLI 等（需先 npm i -g mcp-chrome-bridge）';
+    case 'remote':
+      return isWildcardHost.value
+        ? '远程机器或 Docker 通过局域网 IP 连接'
+        : '需先设置环境变量 MCP_HTTP_HOST=0.0.0.0 并重启 Chrome';
+    default:
+      return '';
+  }
+});
+
+const activeConfigJson = computed(() => {
+  const port = serverPort.value;
+  const lanIp = lanIpAddress.value;
+
+  switch (activeConfigTab.value) {
+    case 'local':
+      return JSON.stringify(
+        {
+          mcpServers: {
+            'chrome-mcp': {
+              url: `http://127.0.0.1:${port}/mcp`,
+            },
+          },
+        },
+        null,
+        2,
+      );
+    case 'stdio':
+      return JSON.stringify(
+        {
+          mcpServers: {
+            'chrome-mcp': {
+              command: 'mcp-chrome-stdio',
+            },
+          },
+        },
+        null,
+        2,
+      );
+    case 'remote': {
+      const remoteHost = lanIp || '<局域网IP>';
+      const config: any = {
+        mcpServers: {
+          'chrome-mcp': {
+            url: `http://${remoteHost}:${port}/mcp`,
+          },
+        },
+      };
+      const tok = tokenInfo.value?.token;
+      if (tok) {
+        config.mcpServers['chrome-mcp'].headers = {
+          Authorization: `Bearer ${tok}`,
+        };
+      }
+      return JSON.stringify(config, null, 2);
+    }
+    default:
+      return '';
+  }
 });
 
 const currentModel = ref<ModelPreset | null>(null);
@@ -1169,7 +1347,7 @@ const refreshServerStatus = async () => {
 
 const copyMcpConfig = async () => {
   try {
-    await navigator.clipboard.writeText(mcpConfigJson.value);
+    await navigator.clipboard.writeText(activeConfigJson.value);
     copyButtonText.value = '✅' + getMessage('configCopiedNotification');
 
     setTimeout(() => {
@@ -2249,13 +2427,104 @@ onUnmounted(() => {
 
 .mcp-config-section {
   border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
 }
 
 .mcp-config-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+}
+
+.mcp-config-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.mcp-tab {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.mcp-tab:hover {
+  color: #374151;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.mcp-tab.active {
+  color: #1e293b;
+  background: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
+
+.mcp-config-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.mcp-network-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+  flex-wrap: wrap;
+}
+
+.network-label {
+  color: #94a3b8;
+}
+
+.network-ip {
+  font-family: 'Monaco', 'Menlo', monospace;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.network-sep {
+  color: #cbd5e1;
+  margin: 0 2px;
+}
+
+.network-link {
+  color: #3b82f6;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 0.15s;
+}
+
+.network-link:hover {
+  text-decoration-color: #3b82f6;
+}
+
+.mcp-security-warning {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
 }
 
 .mcp-config-label {
@@ -2831,6 +3100,11 @@ onUnmounted(() => {
 .entry-icon.model {
   background: rgba(139, 92, 246, 0.12);
   color: #8b5cf6;
+}
+
+.entry-icon.token {
+  background: rgba(234, 88, 12, 0.12);
+  color: #ea580c;
 }
 
 .entry-content {

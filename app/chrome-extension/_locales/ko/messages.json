@@ -86,8 +86,8 @@
     "description": "연결되었지만 서비스가 시작되지 않은 상태"
   },
   "mcpServerConfigLabel": {
-    "message": "MCP 서버 설정",
-    "description": "MCP 서버 설정 섹션 레이블"
+    "message": "MCP 설정",
+    "description": "MCP 설정 섹션 레이블"
   },
   "connectionPortLabel": {
     "message": "연결 포트",

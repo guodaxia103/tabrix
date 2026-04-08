@@ -86,8 +86,8 @@
     "description": "已连接但服务未启动状态"
   },
   "mcpServerConfigLabel": {
-    "message": "MCP 服务器配置",
-    "description": "MCP 服务器配置节标签"
+    "message": "MCP 配置",
+    "description": "MCP 配置节标签"
   },
   "connectionPortLabel": {
     "message": "连接端口",

@@ -466,6 +466,9 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         currentServerStatus = {
           isRunning: true,
           port: port,
+          host: message.payload?.host,
+          networkAddresses: message.payload?.networkAddresses,
+          authEnabled: message.payload?.authEnabled ?? false,
           lastUpdated: Date.now(),
         };
         await clearLastNativeError();

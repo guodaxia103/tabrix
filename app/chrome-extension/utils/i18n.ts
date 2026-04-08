@@ -36,7 +36,7 @@ const fallbackMessages: Record<string, string> = {
   connectedServiceNotStartedStatus: 'Connected, Service Not Started',
 
   // Configuration labels
-  mcpServerConfigLabel: 'MCP Server Configuration',
+  mcpServerConfigLabel: 'MCP Configuration',
   connectionPortLabel: 'Connection Port',
   refreshStatusButton: 'Refresh Status',
   copyConfigButton: 'Copy Configuration',

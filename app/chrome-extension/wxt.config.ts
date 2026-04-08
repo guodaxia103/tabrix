@@ -124,6 +124,19 @@ export default defineConfig({
   },
   vite: (env) => ({
     plugins: [
+      // @protobufjs/inquire uses eval("require") which violates Chrome MV3 CSP.
+      // Strip the eval call at build time so the function just returns null.
+      {
+        name: 'strip-protobufjs-eval',
+        transform(code, id) {
+          if (id.includes('inquire') || code.includes('eval("quire".replace')) {
+            return code.replace(
+              /eval\("quire"\.replace\(\/\^\/,\s*"re"\)\)/g,
+              '(function(){return null})',
+            );
+          }
+        },
+      },
       // TailwindCSS v4 Vite plugin – no PostCSS config required
       tailwindcss(),
       // Auto-register SVG icons as Vue components; all icons are bundled locally

@@ -9,6 +9,10 @@
       <div class="dialog-body">
         <p class="dialog-message">{{ message }}</p>
 
+        <div v-if="slots.extra" class="dialog-extra">
+          <slot name="extra" />
+        </div>
+
         <ul v-if="items && items.length > 0" class="dialog-list">
           <li v-for="item in items" :key="item">{{ item }}</li>
         </ul>
@@ -35,7 +39,11 @@
 </template>
 
 <script lang="ts" setup>
+import { useSlots } from 'vue';
 import { getMessage } from '@/utils/i18n';
+
+const slots = useSlots();
+
 interface Props {
   visible: boolean;
   title: string;
@@ -142,6 +150,10 @@ defineEmits<Emits>();
   color: #4a5568;
   margin: 0 0 16px 0;
   line-height: 1.6;
+}
+
+.dialog-extra {
+  margin: 0 0 16px 0;
 }
 
 .dialog-list {
