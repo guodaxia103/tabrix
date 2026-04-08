@@ -9,6 +9,11 @@ vi.mock('vue', async () => {
 });
 
 type SendMessageMock = ReturnType<typeof vi.fn>;
+type RuntimeMessageListener = (
+  message: any,
+  sender?: any,
+  sendResponse?: (response?: any) => void,
+) => void;
 
 class MockEventSource {
   static OPEN = 1;
@@ -41,9 +46,26 @@ class MockEventSource {
 }
 
 function createChromeMock(sendMessage: SendMessageMock) {
+  const runtimeMessageListeners: RuntimeMessageListener[] = [];
   return {
     runtime: {
       sendMessage,
+      onMessage: {
+        addListener: vi.fn((listener: RuntimeMessageListener) => {
+          runtimeMessageListeners.push(listener);
+        }),
+        removeListener: vi.fn((listener: RuntimeMessageListener) => {
+          const index = runtimeMessageListeners.indexOf(listener);
+          if (index >= 0) {
+            runtimeMessageListeners.splice(index, 1);
+          }
+        }),
+      },
+    },
+    emitRuntimeMessage(message: any) {
+      for (const listener of runtimeMessageListeners) {
+        listener(message, {}, () => {});
+      }
     },
   };
 }
@@ -259,6 +281,53 @@ describe('useAgentServer SSE recovery', () => {
 
     expect(ready).toBe(true);
     expect(agentServer.connectionState.value).toBe('ready');
+    expect(agentServer.lastError.value).toBe(null);
+  });
+
+  it('updates sidepanel state immediately from background server status broadcasts', async () => {
+    const sendMessage = vi.fn().mockResolvedValue({});
+    const chromeMock = createChromeMock(sendMessage);
+    (globalThis as any).chrome = chromeMock;
+
+    const { useAgentServer } = await import('@/entrypoints/sidepanel/composables/useAgentServer');
+    const agentServer = useAgentServer({
+      getSessionId: () => 'session-1',
+    });
+
+    agentServer.nativeConnected.value = true;
+    agentServer.serverPort.value = 12306;
+    agentServer.serverStatus.value = { isRunning: true, port: 12306 };
+    agentServer.lastError.value = 'Old disconnect error';
+
+    chromeMock.emitRuntimeMessage({
+      type: 'server_status_changed',
+      payload: {
+        isRunning: false,
+        port: 12306,
+        lastUpdated: Date.now(),
+      },
+      connected: false,
+      lastError: 'Native host disconnected',
+    });
+
+    expect(agentServer.connectionState.value).toBe('disconnected');
+    expect(agentServer.nativeConnected.value).toBe(false);
+    expect(agentServer.lastError.value).toBe('Native host disconnected');
+
+    chromeMock.emitRuntimeMessage({
+      type: 'server_status_changed',
+      payload: {
+        isRunning: true,
+        port: 12307,
+        lastUpdated: Date.now(),
+      },
+      connected: true,
+      lastError: 'Transient error should clear',
+    });
+
+    expect(agentServer.connectionState.value).toBe('ready');
+    expect(agentServer.nativeConnected.value).toBe(true);
+    expect(agentServer.serverPort.value).toBe(12307);
     expect(agentServer.lastError.value).toBe(null);
   });
 });

@@ -18,6 +18,13 @@ export interface UseAgentServerOptions {
   onError?: (error: string) => void;
 }
 
+interface BackgroundServerStatusMessage {
+  type: string;
+  payload?: ServerStatus;
+  connected?: boolean;
+  lastError?: string | null;
+}
+
 export function useAgentServer(options: UseAgentServerOptions = {}) {
   // State
   const serverPort = ref<number | null>(null);
@@ -46,6 +53,37 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
     if (connecting.value || nativeConnected.value) return 'connecting';
     return 'disconnected';
   });
+
+  function applyBackgroundServerStatus(message: BackgroundServerStatusMessage): void {
+    if (message.type !== BACKGROUND_MESSAGE_TYPES.SERVER_STATUS_CHANGED || !message.payload) {
+      return;
+    }
+
+    serverStatus.value = message.payload;
+
+    if (message.payload.port) {
+      serverPort.value = message.payload.port;
+    }
+
+    if (typeof message.connected === 'boolean') {
+      nativeConnected.value = message.connected;
+    }
+
+    if (nativeConnected.value && message.payload.isRunning) {
+      lastError.value = null;
+      return;
+    }
+
+    if (typeof message.lastError === 'string' || message.lastError === null) {
+      lastError.value = message.lastError ?? null;
+    }
+  }
+
+  const handleRuntimeMessage = (message: BackgroundServerStatusMessage) => {
+    applyBackgroundServerStatus(message);
+  };
+
+  chrome.runtime.onMessage.addListener(handleRuntimeMessage);
 
   // Check native host connection using existing message type
   async function checkNativeHost(): Promise<boolean> {
@@ -280,6 +318,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
 
   // Cleanup on unmount
   onUnmounted(() => {
+    chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
     closeEventSource();
   });
 
