@@ -192,7 +192,7 @@ const refreshConfirmMessage =
   '旧 Token 将立即失效，其他设备上的 MCP 客户端需更新配置中的 Authorization。请在下方设置新 Token 的有效天数。';
 
 const expiryStatusText = computed(() => {
-  tick.value;
+  void tick.value;
   const info = tokenInfo.value;
   if (!info) return '';
   if (info.expiresAt === null) return '永不过期';

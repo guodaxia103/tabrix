@@ -20,9 +20,10 @@
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
-    "lint": "npx eslint 'src/**/*.{js,ts}'",
-    "lint:fix": "npx eslint 'src/**/*.{js,ts}' --fix",
-    "format": "prettier --write 'src/**/*.{js,ts,json}'"
+    "lint": "npx eslint src",
+    "lint:fix": "npx eslint src --fix",
+    "format": "prettier --write \"src/**/*.{js,ts,json}\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "files": [
     "dist"

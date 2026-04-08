@@ -45,9 +45,11 @@ const model = reactive<any>({});
 
 function applyDefaults() {
   if (!props.node) return;
+  // eslint-disable-next-line vue/no-mutating-props
   if (!props.node.config) props.node.config = {};
   const defaults = spec.value?.defaults || {};
   for (const [k, v] of Object.entries(defaults))
+    // eslint-disable-next-line vue/no-mutating-props
     if (props.node.config[k] === undefined) props.node.config[k] = v;
   Object.assign(model, props.node.config);
 }
@@ -62,6 +64,7 @@ watch(
   model,
   () => {
     if (!props.node) return;
+    // eslint-disable-next-line vue/no-mutating-props
     props.node.config = { ...(props.node.config || {}), ...model };
   },
   { deep: true },

@@ -15,6 +15,7 @@
     "zip:firefox": "wxt zip -b firefox",
     "compile": "vue-tsc --noEmit",
     "compile:app": "vue-tsc --noEmit -p tsconfig.typecheck-app.json",
+    "typecheck": "pnpm run compile:app",
     "postinstall": "wxt prepare",
     "lint": "npx eslint .",
     "lint:fix": "npx eslint . --fix",

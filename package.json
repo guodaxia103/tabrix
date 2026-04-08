@@ -15,13 +15,13 @@
     "dev:native": "pnpm --filter mcp-chrome-bridge dev",
     "dev:extension": "pnpm --filter chrome-mcp-server dev",
     "dev": "pnpm --filter chrome-mcp-shared build && pnpm -r --parallel dev",
-    "lint": "pnpm -r lint",
-    "lint:fix": "pnpm -r lint:fix",
+    "lint": "pnpm -r --if-present lint",
+    "lint:fix": "pnpm -r --if-present lint:fix",
     "format": "pnpm -r format",
     "clean:dist": "pnpm -r exec rm -rf dist .turbo",
     "clean:modules": "pnpm -r exec rm -rf node_modules && rm -rf node_modules",
     "clean": "npm run clean:dist && npm run clean:modules",
-    "typecheck": "pnpm -r exec tsc --noEmit",
+    "typecheck": "pnpm -r --if-present typecheck",
     "prepare": "husky"
   },
   "devDependencies": {

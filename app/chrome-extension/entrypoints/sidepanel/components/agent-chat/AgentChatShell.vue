@@ -163,7 +163,7 @@ function handleScroll(): void {
 /**
  * Scroll to bottom of content area
  */
-function scrollToBottom(behavior: ScrollBehavior = 'smooth'): void {
+function scrollToBottom(behavior: 'auto' | 'smooth' = 'smooth'): void {
   if (!contentRef.value) return;
   contentRef.value.scrollTo({
     top: contentRef.value.scrollHeight,
