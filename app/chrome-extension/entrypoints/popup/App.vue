@@ -468,6 +468,7 @@ import {
   stateToStatusClass,
   type ServerStatus,
 } from '@/common/connection-state';
+import { shouldApplyConnectedClientsResponse } from '@/common/popup-connected-clients';
 import { createDisconnectedPopupSnapshot } from '@/common/popup-connection-state';
 import { getMessage } from '@/utils/i18n';
 import { useAgentTheme, type AgentThemeId } from '../sidepanel/composables/useAgentTheme';
@@ -694,10 +695,24 @@ async function fetchConnectedClients(): Promise<void> {
     connectedClients.value = [];
     return;
   }
+  const requestedBaseUrl = getServerBaseUrl();
   try {
-    const res = await fetch(`${getServerBaseUrl()}/status`);
-    if (!res.ok) return;
+    const res = await fetch(`${requestedBaseUrl}/status`);
+    if (!res.ok) {
+      connectedClients.value = [];
+      return;
+    }
     const json = await res.json();
+    if (
+      !shouldApplyConnectedClientsResponse({
+        requestedBaseUrl,
+        currentBaseUrl: getServerBaseUrl(),
+        showMcpConfig: showMcpConfig.value,
+      })
+    ) {
+      connectedClients.value = [];
+      return;
+    }
     connectedClients.value = json?.data?.transports?.clients ?? [];
   } catch {
     connectedClients.value = [];
