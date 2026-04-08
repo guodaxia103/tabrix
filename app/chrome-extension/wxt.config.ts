@@ -137,6 +137,19 @@ export default defineConfig({
           }
         },
       },
+      {
+        name: 'sanitize-markstream-deep-selectors',
+        transform(code, id) {
+          if (!id.includes('markstream-vue') || !id.endsWith('.css') || !code.includes(':deep(')) {
+            return;
+          }
+
+          // markstream-vue ships one global CSS rule that still contains Vue-only :deep()
+          // syntax. Unwrap it during bundling so Lightning CSS can minify production builds
+          // without warning, while preserving the intended descendant selectors.
+          return code.replace(/:deep\(([^()]+)\)/g, '$1');
+        },
+      },
       // TailwindCSS v4 Vite plugin – no PostCSS config required
       tailwindcss(),
       // Auto-register SVG icons as Vue components; all icons are bundled locally
