@@ -17,7 +17,7 @@ const IS_DEV = process.env.NODE_ENV !== 'production' && process.env.MODE !== 'pr
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   modules: ['@wxt-dev/module-vue'],
-  runner: {
+  webExt: {
     // 方案1: 禁用自动启动（推荐）
     disabled: true,
 
@@ -172,8 +172,8 @@ export default defineConfig({
       }) as any,
     ],
     build: {
-      // 我们的构建产物需要兼容到es6
-      target: 'es2015',
+      // Chrome 120+ fully supports BigInt and modern syntax used by bundled deps.
+      target: 'es2022',
       // 非生产环境下生成sourcemap
       sourcemap: env.mode !== 'production',
       // 禁用gzip 压缩大小报告，因为压缩大型文件可能会很慢
