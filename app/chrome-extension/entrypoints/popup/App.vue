@@ -1207,8 +1207,11 @@ const repairCommandText = computed(() => {
   if (state === ConnectionState.ERROR && lastNativeError.value) {
     return getPopupRepairCommand(lastNativeError.value);
   }
-  if (state === ConnectionState.CONNECTED || state === ConnectionState.DISCONNECTED) {
-    return 'mcp-chrome-bridge doctor; if ($?) { mcp-chrome-bridge doctor --fix }';
+  if (state === ConnectionState.CONNECTED) {
+    return 'mcp-chrome-bridge status';
+  }
+  if (state === ConnectionState.DISCONNECTED) {
+    return 'mcp-chrome-bridge doctor --fix && mcp-chrome-bridge register --force';
   }
   return null;
 });
@@ -1229,7 +1232,7 @@ const troubleshootingCommands = computed(() => {
   pushCommand(
     'doctor-fix',
     '基础诊断与自动修复',
-    'mcp-chrome-bridge doctor; if ($?) { mcp-chrome-bridge doctor --fix }',
+    'mcp-chrome-bridge doctor && mcp-chrome-bridge doctor --fix',
   );
   if (!daemonReachable.value) {
     pushCommand(
@@ -1239,7 +1242,7 @@ const troubleshootingCommands = computed(() => {
     );
     pushCommand(
       'daemon-autostart',
-      '安装守护进程开机自启（Windows）',
+      '安装守护进程开机自启',
       'mcp-chrome-bridge daemon install-autostart',
     );
   }
@@ -1247,7 +1250,9 @@ const troubleshootingCommands = computed(() => {
   pushCommand(
     'remote-mode',
     '启用远程模式（局域网访问）',
-    '[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")',
+    navigator.platform?.startsWith('Win')
+      ? '[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")'
+      : 'export MCP_HTTP_HOST=0.0.0.0',
     '设置后需完全重启 Chrome 生效。',
   );
 
@@ -1256,8 +1261,7 @@ const troubleshootingCommands = computed(() => {
 
 const troubleshootingScript = computed(() => {
   const lines = [
-    '# MCP Chrome 快速排障脚本',
-    '$ErrorActionPreference = "Continue"',
+    '# MCP Chrome 快速排障脚本（适用于 bash / zsh / PowerShell）',
     '',
     '# 1) 基础诊断',
     'mcp-chrome-bridge doctor',
@@ -1283,8 +1287,9 @@ const troubleshootingScript = computed(() => {
 
   lines.push(
     '',
-    `# ${step}) 如需局域网访问，取消下一行注释：`,
-    '# [Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")',
+    `# ${step}) 如需局域网访问：`,
+    '#   Windows PowerShell:  [Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")',
+    '#   macOS / Linux:       export MCP_HTTP_HOST=0.0.0.0',
     '',
     `# ${step + 1}) 执行后请完全重启 Chrome，并在 chrome://extensions/ 重新加载扩展`,
   );

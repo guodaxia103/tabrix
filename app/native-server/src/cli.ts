@@ -322,8 +322,10 @@ program
         }
         case 'stop': {
           const result = await daemonStop();
-          if (result.stopped) {
-            console.log(colorText(`Daemon stopped (pid=${result.pid})`, 'green'));
+          if (result.stopped && result.graceful) {
+            console.log(colorText(`Daemon stopped gracefully (pid=${result.pid})`, 'green'));
+          } else if (result.stopped) {
+            console.log(colorText(`Daemon force-killed (pid=${result.pid})`, 'yellow'));
           } else {
             console.log(colorText('Daemon is not running', 'yellow'));
           }

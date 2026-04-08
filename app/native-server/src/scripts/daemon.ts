@@ -113,39 +113,170 @@ export async function daemonStart(): Promise<{ started: boolean; pid: number }> 
   return { started: true, pid: child.pid };
 }
 
-export async function daemonStop(): Promise<{ stopped: boolean; pid: number | null }> {
+export async function daemonStop(): Promise<{
+  stopped: boolean;
+  pid: number | null;
+  graceful: boolean;
+}> {
   const pid = readPid();
   if (!pid) {
-    return { stopped: false, pid: null };
+    return { stopped: false, pid: null, graceful: false };
   }
   if (!isProcessAlive(pid)) {
     clearPid();
-    return { stopped: false, pid };
+    return { stopped: false, pid, graceful: false };
   }
-  process.kill(pid);
+
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    clearPid();
+    return { stopped: false, pid, graceful: false };
+  }
+
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) {
+      clearPid();
+      return { stopped: true, pid, graceful: true };
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    // already dead
+  }
+
+  await new Promise((r) => setTimeout(r, 300));
+  const stillAlive = isProcessAlive(pid);
   clearPid();
-  return { stopped: true, pid };
+  return { stopped: !stillAlive, pid, graceful: false };
+}
+
+const LAUNCHD_LABEL = 'com.mcp-chrome-bridge.daemon';
+
+function getLaunchdPlistPath(): string {
+  return path.join(os.homedir(), 'Library', 'LaunchAgents', `${LAUNCHD_LABEL}.plist`);
+}
+
+function getSystemdUnitPath(): string {
+  const configDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+  return path.join(configDir, 'systemd', 'user', 'mcp-chrome-bridge.service');
+}
+
+function buildLaunchdPlist(nodePath: string, cliPath: string): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+    '<plist version="1.0">',
+    '<dict>',
+    `  <key>Label</key><string>${LAUNCHD_LABEL}</string>`,
+    '  <key>ProgramArguments</key>',
+    '  <array>',
+    `    <string>${nodePath}</string>`,
+    `    <string>${cliPath}</string>`,
+    '    <string>daemon</string>',
+    '    <string>start</string>',
+    '  </array>',
+    '  <key>RunAtLoad</key><true/>',
+    '  <key>KeepAlive</key><false/>',
+    `  <key>StandardOutPath</key><string>${path.join(PID_DIR, 'daemon.log')}</string>`,
+    `  <key>StandardErrorPath</key><string>${path.join(PID_DIR, 'daemon.log')}</string>`,
+    '</dict>',
+    '</plist>',
+    '',
+  ].join('\n');
+}
+
+function buildSystemdUnit(nodePath: string, cliPath: string): string {
+  return [
+    '[Unit]',
+    'Description=MCP Chrome Bridge Daemon',
+    'After=network.target',
+    '',
+    '[Service]',
+    'Type=forking',
+    `ExecStart=${nodePath} ${cliPath} daemon start`,
+    `ExecStop=${nodePath} ${cliPath} daemon stop`,
+    `PIDFile=${PID_FILE}`,
+    'Restart=on-failure',
+    'RestartSec=5',
+    '',
+    '[Install]',
+    'WantedBy=default.target',
+    '',
+  ].join('\n');
 }
 
 export function installDaemonAutostart(): void {
-  if (process.platform !== 'win32') {
-    throw new Error('Autostart installation is currently supported on Windows only.');
-  }
   const cliPath = path.resolve(resolveDistDir(), 'cli.js');
-  const command = `"${process.execPath}" "${cliPath}" daemon start`;
-  execFileSync(
-    'schtasks',
-    ['/create', '/tn', TASK_NAME, '/sc', 'onlogon', '/rl', 'LIMITED', '/tr', command, '/f'],
-    { stdio: 'pipe', windowsHide: true },
-  );
+  const nodePath = process.execPath;
+
+  if (process.platform === 'win32') {
+    const command = `"${nodePath}" "${cliPath}" daemon start`;
+    execFileSync(
+      'schtasks',
+      ['/create', '/tn', TASK_NAME, '/sc', 'onlogon', '/rl', 'LIMITED', '/tr', command, '/f'],
+      { stdio: 'pipe', windowsHide: true },
+    );
+    return;
+  }
+
+  if (process.platform === 'darwin') {
+    const plistPath = getLaunchdPlistPath();
+    fs.mkdirSync(path.dirname(plistPath), { recursive: true });
+    fs.writeFileSync(plistPath, buildLaunchdPlist(nodePath, cliPath), 'utf8');
+    execFileSync('launchctl', ['load', '-w', plistPath], { stdio: 'pipe' });
+    return;
+  }
+
+  const unitPath = getSystemdUnitPath();
+  fs.mkdirSync(path.dirname(unitPath), { recursive: true });
+  fs.writeFileSync(unitPath, buildSystemdUnit(nodePath, cliPath), 'utf8');
+  execFileSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'pipe' });
+  execFileSync('systemctl', ['--user', 'enable', 'mcp-chrome-bridge.service'], {
+    stdio: 'pipe',
+  });
 }
 
 export function removeDaemonAutostart(): void {
-  if (process.platform !== 'win32') {
-    throw new Error('Autostart removal is currently supported on Windows only.');
+  if (process.platform === 'win32') {
+    execFileSync('schtasks', ['/delete', '/tn', TASK_NAME, '/f'], {
+      stdio: 'pipe',
+      windowsHide: true,
+    });
+    return;
   }
-  execFileSync('schtasks', ['/delete', '/tn', TASK_NAME, '/f'], {
-    stdio: 'pipe',
-    windowsHide: true,
-  });
+
+  if (process.platform === 'darwin') {
+    const plistPath = getLaunchdPlistPath();
+    if (fs.existsSync(plistPath)) {
+      try {
+        execFileSync('launchctl', ['unload', '-w', plistPath], { stdio: 'pipe' });
+      } catch {
+        // may not be loaded
+      }
+      fs.unlinkSync(plistPath);
+    }
+    return;
+  }
+
+  try {
+    execFileSync('systemctl', ['--user', 'disable', 'mcp-chrome-bridge.service'], {
+      stdio: 'pipe',
+    });
+  } catch {
+    // may not be enabled
+  }
+  const unitPath = getSystemdUnitPath();
+  if (fs.existsSync(unitPath)) {
+    fs.unlinkSync(unitPath);
+    try {
+      execFileSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'pipe' });
+    } catch {
+      // best effort
+    }
+  }
 }

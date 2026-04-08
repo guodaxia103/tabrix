@@ -22,7 +22,9 @@ export function classifyPopupNativeError(error: string): PopupNativeErrorCategor
     lower.includes('unauthorized') ||
     lower.includes('401') ||
     lower.includes('invalid token') ||
-    lower.includes('token')
+    lower.includes('token expired') ||
+    lower.includes('token mismatch') ||
+    lower.includes('missing authorization')
   ) {
     return 'auth';
   }
@@ -60,14 +62,17 @@ export function getPopupNativeErrorGuidance(error: string): string | null {
     ].join(' ');
   }
 
-  return null;
+  return [
+    `最近一次连接错误: ${normalized}`,
+    '建议：执行 mcp-chrome-bridge doctor --fix 进行自动修复；仍失败时执行 mcp-chrome-bridge register --force，然后完全重启 Chrome。',
+  ].join(' ');
 }
 
 export function getPopupRepairCommand(error: string | null): string | null {
   if (!error) return null;
   const category = classifyPopupNativeError(error);
   if (category === 'forbidden' || category === 'host-missing' || category === 'unknown') {
-    return 'mcp-chrome-bridge doctor --fix; if ($?) { mcp-chrome-bridge register --force }';
+    return 'mcp-chrome-bridge doctor --fix && mcp-chrome-bridge register --force';
   }
   if (category === 'auth') {
     return null;

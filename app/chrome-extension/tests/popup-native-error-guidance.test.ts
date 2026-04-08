@@ -26,8 +26,10 @@ describe('getPopupNativeErrorGuidance', () => {
     expect(text).toContain('Authorization');
   });
 
-  it('returns null for unknown errors', () => {
-    expect(getPopupNativeErrorGuidance('some random network glitch')).toBeNull();
+  it('returns fallback guidance for unknown errors', () => {
+    const text = getPopupNativeErrorGuidance('some random network glitch');
+    expect(text).toContain('some random network glitch');
+    expect(text).toContain('mcp-chrome-bridge doctor --fix');
   });
 
   it('classifies forbidden errors and returns repair command', () => {
@@ -41,5 +43,16 @@ describe('getPopupNativeErrorGuidance', () => {
 
   it('returns null repair command for token errors', () => {
     expect(getPopupRepairCommand('401 Unauthorized')).toBeNull();
+  });
+
+  it('does not classify bare "token" as auth (narrowed matching)', () => {
+    expect(classifyPopupNativeError('Connection reset by token ring adapter')).toBe('unknown');
+  });
+
+  it('classifies precise token errors as auth', () => {
+    expect(classifyPopupNativeError('invalid token')).toBe('auth');
+    expect(classifyPopupNativeError('token expired')).toBe('auth');
+    expect(classifyPopupNativeError('token mismatch')).toBe('auth');
+    expect(classifyPopupNativeError('missing authorization header')).toBe('auth');
   });
 });

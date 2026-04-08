@@ -1521,9 +1521,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     });
     if (!daemon.running) {
       nextSteps.push(`${COMMAND_NAME} daemon start`);
-      if (process.platform === 'win32') {
-        nextSteps.push(`${COMMAND_NAME} daemon install-autostart`);
-      }
+      nextSteps.push(`${COMMAND_NAME} daemon install-autostart`);
     }
   } catch (e) {
     checks.push({
