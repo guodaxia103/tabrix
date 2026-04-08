@@ -18,6 +18,13 @@ import { runStatus } from './scripts/status';
 import { runSmoke } from './scripts/smoke';
 import { runStdioSmoke } from './scripts/stdio-smoke';
 import { runSetup } from './scripts/setup';
+import {
+  daemonStart,
+  daemonStatus,
+  daemonStop,
+  installDaemonAutostart,
+  removeDaemonAutostart,
+} from './scripts/daemon';
 
 function hasWindowsAdminRights(): boolean {
   if (process.platform !== 'win32') {
@@ -293,6 +300,68 @@ program
       process.exit(exitCode);
     } catch (error: any) {
       console.error(`Stdio smoke test failed: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('daemon')
+  .description('Manage standalone MCP daemon process')
+  .argument('<action>', 'start | stop | status | install-autostart | remove-autostart')
+  .action(async (action: string) => {
+    try {
+      switch (action) {
+        case 'start': {
+          const result = await daemonStart();
+          if (result.started) {
+            console.log(colorText(`Daemon started (pid=${result.pid})`, 'green'));
+          } else {
+            console.log(colorText(`Daemon already running (pid=${result.pid})`, 'blue'));
+          }
+          break;
+        }
+        case 'stop': {
+          const result = await daemonStop();
+          if (result.stopped) {
+            console.log(colorText(`Daemon stopped (pid=${result.pid})`, 'green'));
+          } else {
+            console.log(colorText('Daemon is not running', 'yellow'));
+          }
+          break;
+        }
+        case 'status': {
+          const result = await daemonStatus();
+          const state = result.running ? 'running' : 'stopped';
+          const health = result.healthy ? 'healthy' : 'unhealthy';
+          console.log(
+            colorText(`Daemon ${state} (${health})`, result.running ? 'green' : 'yellow'),
+          );
+          if (result.pid) {
+            console.log(colorText(`PID: ${result.pid}`, 'blue'));
+          }
+          break;
+        }
+        case 'install-autostart': {
+          installDaemonAutostart();
+          console.log(colorText('Installed daemon autostart task', 'green'));
+          break;
+        }
+        case 'remove-autostart': {
+          removeDaemonAutostart();
+          console.log(colorText('Removed daemon autostart task', 'green'));
+          break;
+        }
+        default:
+          console.error(
+            colorText(
+              `Invalid daemon action: ${action}. Use start|stop|status|install-autostart|remove-autostart`,
+              'red',
+            ),
+          );
+          process.exit(1);
+      }
+    } catch (error: any) {
+      console.error(colorText(`Daemon command failed: ${error.message}`, 'red'));
       process.exit(1);
     }
   });

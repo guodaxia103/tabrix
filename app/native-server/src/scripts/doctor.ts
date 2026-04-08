@@ -25,7 +25,14 @@ import {
   getLogDir,
   discoverLoadedExtensionOrigins,
 } from './utils';
-import { HTTP_STATUS, NATIVE_SERVER_PORT, SERVER_CONFIG, MCP_AUTH_TOKEN_ENV } from '../constant';
+import { daemonStatus } from './daemon';
+import {
+  HTTP_STATUS,
+  NATIVE_SERVER_PORT,
+  SERVER_CONFIG,
+  MCP_AUTH_TOKEN_ENV,
+  MCP_HTTP_HOST_ENV,
+} from '../constant';
 
 const EXPECTED_PORT = 12306;
 const SCHEMA_VERSION = 1;
@@ -202,6 +209,22 @@ function expandWindowsEnvVars(input: string): string {
       process.env[key] ?? process.env[key.toUpperCase()] ?? process.env[key.toLowerCase()] ?? _match
     );
   });
+}
+
+function isWildcardHost(host: string | null | undefined): boolean {
+  return host === '0.0.0.0' || host === '::';
+}
+
+function getSnapshotHost(snapshot: Record<string, unknown> | undefined): string | null {
+  if (!snapshot) return null;
+  return typeof snapshot.host === 'string' ? snapshot.host : null;
+}
+
+function getSnapshotNetworkAddresses(snapshot: Record<string, unknown> | undefined): string[] {
+  if (!snapshot) return [];
+  const raw = snapshot.networkAddresses;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
 }
 
 function parseVersionFromDirName(dirName: string): number[] | null {
@@ -875,6 +898,36 @@ function computeSummary(checks: DoctorCheckResult[]): { ok: number; warn: number
   return { ok, warn, error };
 }
 
+function getCheckPriority(id: string): number {
+  if (id === 'installation') return 10;
+  if (id === 'host.files') return 20;
+  if (id === 'node') return 30;
+  if (id.startsWith('manifest.')) return 40;
+  if (id.startsWith('active-origin.')) return 45;
+  if (id.startsWith('registry.')) return 50;
+  if (id.startsWith('extension-path.')) return 60;
+  if (id === 'port.config' || id === 'port.constant') return 70;
+  if (id === 'connectivity') return 80;
+  if (id === 'runtime.status') return 90;
+  if (id === 'daemon.status') return 93;
+  if (id === 'remote.lan') return 95;
+  if (id === 'mcp.initialize') return 100;
+  if (id === 'security.auth') return 110;
+  if (id === 'logs') return 120;
+  return 1000;
+}
+
+function sortChecks(checks: DoctorCheckResult[]): DoctorCheckResult[] {
+  return checks
+    .map((check, index) => ({ check, index }))
+    .sort((a, b) => {
+      const priorityDelta = getCheckPriority(a.check.id) - getCheckPriority(b.check.id);
+      if (priorityDelta !== 0) return priorityDelta;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.check);
+}
+
 function statusBadge(status: DoctorStatus): string {
   if (status === 'ok') return colorText('[OK]', 'green');
   if (status === 'warn') return colorText('[WARN]', 'yellow');
@@ -916,6 +969,11 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
 
   const checks: DoctorCheckResult[] = [];
   const nextSteps: string[] = [];
+  const manifestOriginsByBrowser = new Map<
+    BrowserType,
+    { path: string; origins: string[]; issues: string[] }
+  >();
+  let runtimeSnapshot: Record<string, unknown> | undefined;
 
   // Check 1: Installation info
   checks.push({
@@ -1127,6 +1185,11 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     if (missingOrigins.length > 0) {
       issues.push(`allowed_origins missing ${missingOrigins.join(', ')}`);
     }
+    manifestOriginsByBrowser.set(browser, {
+      path: found,
+      origins: manifestOrigins,
+      issues,
+    });
 
     checks.push({
       id: `manifest.${browser}`,
@@ -1144,6 +1207,62 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
       },
     });
     if (issues.length > 0) nextSteps.push(`${COMMAND_NAME} register --browser ${browser}`);
+  }
+
+  // Check 5.1: Active extension ID origin alignment
+  for (const browser of browsersToCheck) {
+    const config = getBrowserConfig(browser);
+    const loaded = discoveredOrigins.detected.find((entry) => entry.browser === browser);
+    const manifestInfo = manifestOriginsByBrowser.get(browser);
+
+    if (!loaded) {
+      checks.push({
+        id: `active-origin.${browser}`,
+        title: `${config.displayName} active extension origin`,
+        status: 'warn',
+        message: 'Unable to detect currently loaded extension ID',
+        details: {
+          hint: 'Load/reload unpacked extension in chrome://extensions/, then re-run doctor.',
+        },
+      });
+      continue;
+    }
+
+    if (!manifestInfo) {
+      const loadedOrigin = `chrome-extension://${loaded.id}/`;
+      checks.push({
+        id: `active-origin.${browser}`,
+        title: `${config.displayName} active extension origin`,
+        status: 'error',
+        message: 'Manifest could not be validated, cannot confirm active origin authorization',
+        details: {
+          loadedExtensionId: loaded.id,
+          loadedOrigin,
+          fix: [`${COMMAND_NAME} register --browser ${browser}`],
+        },
+      });
+      nextSteps.push(`${COMMAND_NAME} register --browser ${browser}`);
+      continue;
+    }
+
+    const loadedOrigin = `chrome-extension://${loaded.id}/`;
+    const currentOriginAllowed = manifestInfo.origins.includes(loadedOrigin);
+    checks.push({
+      id: `active-origin.${browser}`,
+      title: `${config.displayName} active extension origin`,
+      status: currentOriginAllowed ? 'ok' : 'error',
+      message: currentOriginAllowed
+        ? `Loaded origin is authorized: ${loadedOrigin}`
+        : `Loaded origin is missing in allowed_origins: ${loadedOrigin}`,
+      details: {
+        loadedExtensionId: loaded.id,
+        loadedOrigin,
+        manifestPath: manifestInfo.path,
+        manifestOrigins: manifestInfo.origins,
+        fix: currentOriginAllowed ? undefined : [`${COMMAND_NAME} register --browser ${browser}`],
+      },
+    });
+    if (!currentOriginAllowed) nextSteps.push(`${COMMAND_NAME} register --browser ${browser}`);
   }
 
   // Check 6: Windows registry (Windows only)
@@ -1334,6 +1453,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
         if (!ping.ok) nextSteps.push('Click "Connect" in the extension, then re-run doctor');
 
         const runtimeStatus = await checkRuntimeStatus(url);
+        runtimeSnapshot = runtimeStatus.snapshot;
         checks.push({
           id: 'runtime.status',
           title: 'Runtime status',
@@ -1381,7 +1501,41 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     }
   }
 
-  // Check 9: Logs directory
+  // Check 9: Standalone daemon status
+  try {
+    const daemon = await daemonStatus();
+    checks.push({
+      id: 'daemon.status',
+      title: 'Standalone daemon',
+      status: daemon.running ? (daemon.healthy ? 'ok' : 'warn') : 'warn',
+      message: daemon.running
+        ? `running (pid=${daemon.pid ?? 'unknown'}, ${daemon.healthy ? 'healthy' : 'unhealthy'})`
+        : 'stopped',
+      details: {
+        pid: daemon.pid,
+        healthy: daemon.healthy,
+        fix: daemon.running
+          ? undefined
+          : [`${COMMAND_NAME} daemon start`, `${COMMAND_NAME} daemon install-autostart`],
+      },
+    });
+    if (!daemon.running) {
+      nextSteps.push(`${COMMAND_NAME} daemon start`);
+      if (process.platform === 'win32') {
+        nextSteps.push(`${COMMAND_NAME} daemon install-autostart`);
+      }
+    }
+  } catch (e) {
+    checks.push({
+      id: 'daemon.status',
+      title: 'Standalone daemon',
+      status: 'warn',
+      message: `Unable to query daemon status (${stringifyError(e)})`,
+      details: { fix: [`${COMMAND_NAME} daemon status`] },
+    });
+  }
+
+  // Check 10: Logs directory
   checks.push({
     id: 'logs',
     title: 'Logs',
@@ -1392,7 +1546,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     },
   });
 
-  // Check 10: Remote access security
+  // Check 11: Remote access security
   const isRemoteListening = SERVER_CONFIG.HOST === '0.0.0.0' || SERVER_CONFIG.HOST === '::';
   const hasAuthToken = !!process.env[MCP_AUTH_TOKEN_ENV];
   if (isRemoteListening && !hasAuthToken) {
@@ -1428,8 +1582,67 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     });
   }
 
+  // Check 11: Remote LAN readiness (host/networkAddresses)
+  const runtimeHost = getSnapshotHost(runtimeSnapshot);
+  const runtimeNetworkAddresses = getSnapshotNetworkAddresses(runtimeSnapshot);
+  const envHost = process.env[MCP_HTTP_HOST_ENV];
+
+  if (runtimeHost) {
+    if (isWildcardHost(runtimeHost)) {
+      if (runtimeNetworkAddresses.length > 0) {
+        checks.push({
+          id: 'remote.lan',
+          title: 'Remote LAN readiness',
+          status: 'ok',
+          message: `Remote host listening on ${runtimeHost}; detected LAN IP ${runtimeNetworkAddresses[0]}`,
+          details: {
+            host: runtimeHost,
+            networkAddresses: runtimeNetworkAddresses,
+          },
+        });
+      } else {
+        checks.push({
+          id: 'remote.lan',
+          title: 'Remote LAN readiness',
+          status: 'warn',
+          message: `Runtime host is ${runtimeHost} but no LAN IPv4 was detected`,
+          details: {
+            host: runtimeHost,
+            networkAddresses: runtimeNetworkAddresses,
+            fix: ['Use ipconfig/ifconfig to pick a reachable LAN IP manually in client config'],
+          },
+        });
+      }
+    } else {
+      checks.push({
+        id: 'remote.lan',
+        title: 'Remote LAN readiness',
+        status: 'ok',
+        message: `Runtime host is ${runtimeHost} (local-only mode)`,
+        details: {
+          host: runtimeHost,
+          hint: `Set ${MCP_HTTP_HOST_ENV}=0.0.0.0 and restart Chrome to enable LAN clients`,
+          fix: [
+            `Set ${MCP_HTTP_HOST_ENV}=0.0.0.0, restart Chrome, then re-run ${COMMAND_NAME} status`,
+          ],
+        },
+      });
+    }
+  } else if (envHost && isWildcardHost(envHost)) {
+    checks.push({
+      id: 'remote.lan',
+      title: 'Remote LAN readiness',
+      status: 'warn',
+      message: `${MCP_HTTP_HOST_ENV}=${envHost}, but runtime status is unavailable`,
+      details: {
+        hint: 'Start/reconnect extension first, then re-run doctor to confirm LAN IP detection.',
+      },
+    });
+  }
+
   // Compute summary
-  const summary = computeSummary(checks);
+  const orderedChecks = sortChecks(checks);
+  const summary = computeSummary(orderedChecks);
   const ok = summary.error === 0;
 
   const report: DoctorReport = {
@@ -1446,7 +1659,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
       nativeHost: { hostName: HOST_NAME, expectedPort: EXPECTED_PORT },
     },
     fixes,
-    checks,
+    checks: orderedChecks,
     nextSteps: Array.from(new Set(nextSteps)).slice(0, 10),
   };
 

@@ -32,7 +32,19 @@
                 {{ new Date(serverStatus.lastUpdated).toLocaleTimeString() }}
               </div>
               <div v-if="statusDetailText" class="status-detail">
-                {{ statusDetailText }}
+                <div>{{ statusDetailText }}</div>
+                <div class="status-detail-actions">
+                  <button
+                    v-if="repairCommandText"
+                    class="repair-command-button"
+                    @click="copyRepairCommand"
+                  >
+                    {{ repairCommandButtonText }}
+                  </button>
+                  <button class="repair-guide-button" @click="showTroubleshootingDialog = true">
+                    打开排查向导
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -104,6 +116,38 @@
               </div>
               <div v-if="activeConfigTabHint" class="mcp-config-hint">
                 {{ activeConfigTabHint }}
+              </div>
+              <div v-if="activeConfigTab === 'remote'" class="remote-toggle-card">
+                <div class="remote-toggle-header">
+                  <span class="remote-toggle-title">远程访问开关</span>
+                  <span :class="['remote-toggle-state', remoteAccessEnabled ? 'on' : 'off']">
+                    {{ remoteAccessEnabled ? '已开启' : '未开启' }}
+                  </span>
+                </div>
+                <div class="remote-toggle-desc">
+                  {{
+                    remoteAccessEnabled
+                      ? '当前监听地址为 0.0.0.0 / ::，允许局域网设备访问。'
+                      : '当前仅本机访问（127.0.0.1）。开启后可在局域网中访问。'
+                  }}
+                </div>
+                <div class="remote-toggle-actions">
+                  <button
+                    class="remote-toggle-btn primary"
+                    @click="copyRemoteToggleCommand(!remoteAccessEnabled)"
+                  >
+                    {{ remoteAccessEnabled ? '复制关闭远程命令' : '复制开启远程命令' }}
+                  </button>
+                  <button class="remote-toggle-btn" @click="copyRemoteToggleCommand(false)">
+                    复制恢复本地命令
+                  </button>
+                </div>
+                <div v-if="remoteToggleCopiedText" class="remote-toggle-copied">
+                  {{ remoteToggleCopiedText }}
+                </div>
+              </div>
+              <div v-if="remoteRestartHint" class="mcp-restart-hint">
+                {{ remoteRestartHint }}
               </div>
               <div v-if="remoteSecurityWarning" class="mcp-security-warning">
                 {{ remoteSecurityWarning }}
@@ -372,6 +416,17 @@
             </svg>
             Docs
           </button>
+          <button class="footer-link" @click="showTroubleshootingDialog = true" title="Quick Fix">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 10V3L4 14h7v7l9-11h-7z"
+              />
+            </svg>
+            Fix
+          </button>
         </div>
         <p class="footer-text">chrome mcp server for ai</p>
       </div>
@@ -434,6 +489,45 @@
       @cancel="hideClearDataConfirmation"
     />
 
+    <div
+      v-if="showTroubleshootingDialog"
+      class="troubleshooting-dialog"
+      @click.self="showTroubleshootingDialog = false"
+    >
+      <div class="troubleshooting-content">
+        <div class="troubleshooting-header">
+          <h3>故障排查向导</h3>
+          <button class="troubleshooting-close" @click="showTroubleshootingDialog = false"
+            >✕</button
+          >
+        </div>
+        <p class="troubleshooting-desc">
+          推荐按顺序执行以下命令。执行后请完全重启 Chrome，并在 chrome://extensions/ 重新加载扩展。
+        </p>
+        <div class="troubleshooting-list">
+          <div v-for="item in troubleshootingCommands" :key="item.id" class="troubleshooting-item">
+            <div class="troubleshooting-item-title">{{ item.title }}</div>
+            <pre class="troubleshooting-item-command">{{ item.command }}</pre>
+            <div v-if="item.note" class="troubleshooting-item-note">{{ item.note }}</div>
+            <button class="troubleshooting-copy" @click="copyTroubleshootingCommand(item.command)">
+              {{ copiedTroubleshootingCommand === item.command ? '✅ 已复制' : '复制命令' }}
+            </button>
+          </div>
+        </div>
+        <div class="troubleshooting-actions">
+          <button class="troubleshooting-action-btn docs" @click="copyTroubleshootingScript">
+            {{ copiedTroubleshootingScript ? '✅ 已复制完整脚本' : '复制完整排障脚本' }}
+          </button>
+          <button class="troubleshooting-action-btn docs" @click="openTroubleshooting"
+            >打开文档</button
+          >
+          <button class="troubleshooting-action-btn" @click="showTroubleshootingDialog = false"
+            >关闭</button
+          >
+        </div>
+      </div>
+    </div>
+
     <!-- 侧边栏承担工作流管理；编辑器在独立窗口中打开 -->
 
     <!-- Coming Soon Toast -->
@@ -474,6 +568,11 @@ import { createDisconnectedPopupSnapshot } from '@/common/popup-connection-state
 import { resolvePopupPortUpdate } from '@/common/popup-port-input';
 import { shouldApplyPopupServerStatusMessage } from '@/common/popup-server-status-message';
 import { resolvePopupConnectionState } from '@/common/popup-status-phase';
+import { normalizeNativeLastError } from '@/common/normalize-native-last-error';
+import {
+  getPopupNativeErrorGuidance,
+  getPopupRepairCommand,
+} from '@/common/popup-native-error-guidance';
 import { getMessage } from '@/utils/i18n';
 import { useAgentTheme, type AgentThemeId } from '../sidepanel/composables/useAgentTheme';
 
@@ -649,6 +748,7 @@ const isConnecting = ref(false);
 const isBootstrappingStatus = ref(true);
 const nativeServerPort = ref<number>(12306);
 const lastNativeError = ref<string | null>(null);
+const daemonReachable = ref(false);
 
 const serverStatus = ref<ServerStatus>({
   isRunning: false,
@@ -656,7 +756,10 @@ const serverStatus = ref<ServerStatus>({
 });
 
 const showMcpConfig = computed(() => {
-  return nativeConnectionStatus.value === 'connected' && serverStatus.value.isRunning;
+  return (
+    (nativeConnectionStatus.value === 'connected' && serverStatus.value.isRunning) ||
+    (daemonReachable.value && serverStatus.value.isRunning)
+  );
 });
 
 const connectionState = computed(() =>
@@ -690,7 +793,7 @@ function applyDisconnectedPopupSnapshot() {
   nativeConnectionStatus.value = snapshot.nativeConnectionStatus;
   serverStatus.value = snapshot.serverStatus;
   connectedClients.value = [];
-  lastNativeError.value = snapshot.lastNativeError;
+  lastNativeError.value = normalizeNativeLastError(snapshot.lastNativeError);
 }
 
 function getServerBaseUrl(): string {
@@ -699,6 +802,37 @@ function getServerBaseUrl(): string {
 }
 
 const serverBaseUrl = computed(() => getServerBaseUrl());
+
+async function refreshStandaloneDaemonStatus(): Promise<void> {
+  const requestedBaseUrl = getServerBaseUrl();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+    const res = await fetch(`${requestedBaseUrl}/status`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      daemonReachable.value = false;
+      return;
+    }
+    const json = await res.json();
+    const snapshot = json?.data;
+    if (snapshot && typeof snapshot === 'object') {
+      serverStatus.value = {
+        ...(serverStatus.value || {}),
+        ...(snapshot as ServerStatus),
+        lastUpdated: Date.now(),
+      };
+      if (!serverStatus.value.port) {
+        serverStatus.value.port = nativeServerPort.value;
+      }
+      daemonReachable.value = Boolean(serverStatus.value.isRunning);
+    } else {
+      daemonReachable.value = false;
+    }
+  } catch {
+    daemonReachable.value = false;
+  }
+}
 
 async function fetchConnectedClients(): Promise<void> {
   if (!showMcpConfig.value) {
@@ -746,6 +880,11 @@ function formatConnectedTime(ts: number): string {
 }
 
 const copyButtonText = ref(getMessage('copyConfigButton'));
+const repairCommandButtonText = ref('复制修复命令');
+const showTroubleshootingDialog = ref(false);
+const copiedTroubleshootingCommand = ref<string | null>(null);
+const copiedTroubleshootingScript = ref(false);
+const remoteToggleCopiedText = ref('');
 
 type ConfigTabId = 'local' | 'stdio' | 'remote';
 
@@ -757,6 +896,7 @@ const isWildcardHost = computed(() => {
   const host = serverStatus.value.host;
   return host === '0.0.0.0' || host === '::';
 });
+const remoteAccessEnabled = computed(() => isWildcardHost.value);
 
 const lanIpAddress = computed(() => {
   return isWildcardHost.value ? serverStatus.value.networkAddresses?.[0] || null : null;
@@ -816,6 +956,11 @@ const activeConfigTabHint = computed(() => {
     default:
       return '';
   }
+});
+
+const remoteRestartHint = computed(() => {
+  if (activeConfigTab.value !== 'remote') return '';
+  return '提示：切换远程监听后，请完全退出并重启 Chrome，再点击 Connect 使配置生效。';
 });
 
 const activeConfigJson = computed(() => {
@@ -1034,15 +1179,113 @@ const getStatusText = () => {
 const statusDetailText = computed(() => {
   const state = connectionState.value;
   if (state === ConnectionState.ERROR && lastNativeError.value) {
-    return `最近一次连接错误: ${lastNativeError.value}`;
+    return (
+      getPopupNativeErrorGuidance(lastNativeError.value) ||
+      `最近一次连接错误: ${lastNativeError.value}。建议先执行 mcp-chrome-bridge doctor --fix，再执行 mcp-chrome-bridge register --force，随后完全重启 Chrome 并在 chrome://extensions/ 重新加载扩展。`
+    );
+  }
+  if (
+    state === ConnectionState.DISCONNECTED &&
+    daemonReachable.value &&
+    serverStatus.value.isRunning
+  ) {
+    return '检测到本机守护进程正在运行，但扩展尚未连接。若需浏览器自动化工具，请打开 Chrome 并点击 Connect 建立扩展通道。';
   }
   if (state === ConnectionState.CONNECTED) {
     return 'Native host 已连接，但本地 MCP 服务尚未就绪。可先点「刷新」；仍失败时在终端执行 mcp-chrome-bridge doctor，核对端口与防火墙，并在 chrome://extensions/ 重新加载本扩展。';
   }
   if (state === ConnectionState.DISCONNECTED) {
-    return '点击连接后如果仍无法启动，请确认扩展已重新加载，且本地 native host manifest 已重新注册。';
+    return '点击连接后如果仍无法启动，请确认扩展已重新加载，且本地 native host manifest 已重新注册。若希望无浏览器时保持服务在线，可执行 mcp-chrome-bridge daemon start。';
   }
   return '';
+});
+
+const repairCommandText = computed(() => {
+  const state = connectionState.value;
+  if (state === ConnectionState.ERROR && lastNativeError.value) {
+    return getPopupRepairCommand(lastNativeError.value);
+  }
+  if (state === ConnectionState.CONNECTED || state === ConnectionState.DISCONNECTED) {
+    return 'mcp-chrome-bridge doctor; if ($?) { mcp-chrome-bridge doctor --fix }';
+  }
+  return null;
+});
+
+const troubleshootingCommands = computed(() => {
+  const items: Array<{ id: string; title: string; command: string; note?: string }> = [];
+  const seen = new Set<string>();
+  const pushCommand = (id: string, title: string, command: string, note?: string) => {
+    if (seen.has(command)) return;
+    seen.add(command);
+    items.push({ id, title, command, note });
+  };
+
+  if (repairCommandText.value) {
+    pushCommand('quick', '当前错误快速修复', repairCommandText.value);
+  }
+
+  pushCommand(
+    'doctor-fix',
+    '基础诊断与自动修复',
+    'mcp-chrome-bridge doctor; if ($?) { mcp-chrome-bridge doctor --fix }',
+  );
+  if (!daemonReachable.value) {
+    pushCommand(
+      'daemon-start',
+      '启动守护进程（无浏览器也可保持服务在线）',
+      'mcp-chrome-bridge daemon start',
+    );
+    pushCommand(
+      'daemon-autostart',
+      '安装守护进程开机自启（Windows）',
+      'mcp-chrome-bridge daemon install-autostart',
+    );
+  }
+  pushCommand('register-force', '强制重注册 Native host', 'mcp-chrome-bridge register --force');
+  pushCommand(
+    'remote-mode',
+    '启用远程模式（局域网访问）',
+    '[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")',
+    '设置后需完全重启 Chrome 生效。',
+  );
+
+  return items;
+});
+
+const troubleshootingScript = computed(() => {
+  const lines = [
+    '# MCP Chrome 快速排障脚本',
+    '$ErrorActionPreference = "Continue"',
+    '',
+    '# 1) 基础诊断',
+    'mcp-chrome-bridge doctor',
+    '',
+    '# 2) 自动修复常见问题',
+    'mcp-chrome-bridge doctor --fix',
+    '',
+    '# 3) 启动守护进程（可选，提升重启后可用性）',
+    'mcp-chrome-bridge daemon start',
+    '',
+    '# 4) （Windows）安装守护进程开机自启（可选）',
+    'mcp-chrome-bridge daemon install-autostart',
+    '',
+    '# 5) 强制重注册 Native host',
+    'mcp-chrome-bridge register --force',
+  ];
+
+  if (repairCommandText.value) {
+    lines.push('', '# 6) 当前错误专项修复', repairCommandText.value);
+  }
+
+  lines.push(
+    '',
+    '# 5) 如需局域网访问，取消下一行注释：',
+    '# [Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")',
+    '',
+    '# 6) 执行后请完全重启 Chrome，并在 chrome://extensions/ 重新加载扩展',
+  );
+
+  return lines.join('\n');
 });
 
 const formatIndexSize = () => {
@@ -1331,9 +1574,11 @@ const checkNativeConnection = async () => {
   try {
     const response = await chrome.runtime.sendMessage({ type: 'ping_native' });
     nativeConnectionStatus.value = response?.connected ? 'connected' : 'disconnected';
+    await refreshStandaloneDaemonStatus();
   } catch (error) {
     console.error('检测 Native 连接状态失败:', error);
     applyDisconnectedPopupSnapshot();
+    await refreshStandaloneDaemonStatus();
   }
 };
 
@@ -1345,18 +1590,20 @@ const checkServerStatus = async () => {
     if (response?.success && response.serverStatus) {
       serverStatus.value = response.serverStatus;
     }
-    if (typeof response?.lastError === 'string' || response?.lastError === null) {
-      lastNativeError.value = response.lastError ?? null;
+    if (response && response.lastError !== undefined) {
+      lastNativeError.value = normalizeNativeLastError(response.lastError);
     }
 
     if (response?.connected !== undefined) {
       nativeConnectionStatus.value = response.connected ? 'connected' : 'disconnected';
     }
 
+    await refreshStandaloneDaemonStatus();
     await fetchConnectedClients();
   } catch (error) {
     console.error('检测服务器状态失败:', error);
     applyDisconnectedPopupSnapshot();
+    await refreshStandaloneDaemonStatus();
   }
 };
 
@@ -1368,18 +1615,20 @@ const refreshServerStatus = async () => {
     if (response?.success && response.serverStatus) {
       serverStatus.value = response.serverStatus;
     }
-    if (typeof response?.lastError === 'string' || response?.lastError === null) {
-      lastNativeError.value = response.lastError ?? null;
+    if (response && response.lastError !== undefined) {
+      lastNativeError.value = normalizeNativeLastError(response.lastError);
     }
 
     if (response?.connected !== undefined) {
       nativeConnectionStatus.value = response.connected ? 'connected' : 'disconnected';
     }
 
+    await refreshStandaloneDaemonStatus();
     await fetchConnectedClients();
   } catch (error) {
     console.error('刷新服务器状态失败:', error);
     applyDisconnectedPopupSnapshot();
+    await refreshStandaloneDaemonStatus();
   }
 };
 
@@ -1401,6 +1650,71 @@ const copyMcpConfig = async () => {
   }
 };
 
+const copyRepairCommand = async () => {
+  if (!repairCommandText.value) return;
+  try {
+    await navigator.clipboard.writeText(repairCommandText.value);
+    repairCommandButtonText.value = '✅ 已复制';
+    setTimeout(() => {
+      repairCommandButtonText.value = '复制修复命令';
+    }, 2000);
+  } catch (error) {
+    console.error('复制修复命令失败:', error);
+    repairCommandButtonText.value = '❌ 复制失败';
+    setTimeout(() => {
+      repairCommandButtonText.value = '复制修复命令';
+    }, 2000);
+  }
+};
+
+const copyTroubleshootingCommand = async (command: string) => {
+  try {
+    await navigator.clipboard.writeText(command);
+    copiedTroubleshootingCommand.value = command;
+    setTimeout(() => {
+      if (copiedTroubleshootingCommand.value === command) {
+        copiedTroubleshootingCommand.value = null;
+      }
+    }, 2000);
+  } catch (error) {
+    console.error('复制排查命令失败:', error);
+  }
+};
+
+const copyTroubleshootingScript = async () => {
+  try {
+    await navigator.clipboard.writeText(troubleshootingScript.value);
+    copiedTroubleshootingScript.value = true;
+    setTimeout(() => {
+      copiedTroubleshootingScript.value = false;
+    }, 2200);
+  } catch (error) {
+    console.error('复制完整排障脚本失败:', error);
+    copiedTroubleshootingScript.value = false;
+  }
+};
+
+const copyRemoteToggleCommand = async (enable: boolean) => {
+  const command = enable
+    ? '[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")'
+    : '[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "127.0.0.1", "User")';
+  try {
+    await navigator.clipboard.writeText(command);
+    remoteToggleCopiedText.value = enable
+      ? '✅ 已复制开启远程命令（执行后重启 Chrome）'
+      : '✅ 已复制恢复本地命令（执行后重启 Chrome）';
+    setTimeout(() => {
+      remoteToggleCopiedText.value = '';
+    }, 2200);
+  } catch (error) {
+    console.error('复制远程切换命令失败:', error);
+    remoteToggleCopiedText.value = '❌ 复制失败，请手动复制命令';
+    setTimeout(() => {
+      remoteToggleCopiedText.value = '';
+    }, 2200);
+  }
+};
+
 const testNativeConnection = async () => {
   if (isConnecting.value) return;
   isConnecting.value = true;
@@ -1415,8 +1729,8 @@ const testNativeConnection = async () => {
         type: 'connectNative',
         port: nativeServerPort.value,
       });
-      if (typeof response?.lastError === 'string' || response?.lastError === null) {
-        lastNativeError.value = response.lastError ?? null;
+      if (response && response.lastError !== undefined) {
+        lastNativeError.value = normalizeNativeLastError(response.lastError);
       }
       if (response?.success && response?.connected) {
         await refreshServerStatus();
@@ -1429,13 +1743,19 @@ const testNativeConnection = async () => {
         }
       } else {
         nativeConnectionStatus.value = 'disconnected';
-        console.error('连接失败:', response);
+        console.error('连接失败', {
+          success: response?.success,
+          connected: response?.connected,
+          lastError: response?.lastError,
+          raw: response,
+        });
         await refreshServerStatus();
       }
     }
   } catch (error) {
     console.error('测试连接失败:', error);
     applyDisconnectedPopupSnapshot();
+    await refreshStandaloneDaemonStatus();
   } finally {
     isConnecting.value = false;
   }
@@ -1843,7 +2163,7 @@ const setupServerStatusListener = () => {
     type?: string;
     payload?: unknown;
     connected?: boolean;
-    lastError?: string | null;
+    lastError?: unknown;
   }) => {
     if (message.type === BACKGROUND_MESSAGE_TYPES.SERVER_STATUS_CHANGED && message.payload) {
       const nextServerStatus = message.payload as ServerStatus;
@@ -1862,8 +2182,8 @@ const setupServerStatusListener = () => {
       if (message.connected !== undefined) {
         nativeConnectionStatus.value = message.connected ? 'connected' : 'disconnected';
       }
-      if (typeof message.lastError === 'string' || message.lastError === null) {
-        lastNativeError.value = message.lastError ?? null;
+      if (message.lastError !== undefined) {
+        lastNativeError.value = normalizeNativeLastError(message.lastError);
       }
       if (message.connected && nextServerStatus.isRunning) {
         void fetchConnectedClients();
@@ -2387,6 +2707,165 @@ onUnmounted(() => {
   word-break: break-word;
 }
 
+.status-detail-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.repair-command-button {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(180, 83, 9, 0.25);
+  background: rgba(255, 255, 255, 0.75);
+  color: #9a3412;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.repair-command-button:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(180, 83, 9, 0.4);
+}
+
+.repair-guide-button {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(30, 64, 175, 0.25);
+  background: rgba(255, 255, 255, 0.75);
+  color: #1d4ed8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.repair-guide-button:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(30, 64, 175, 0.45);
+}
+
+.troubleshooting-dialog {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+}
+
+.troubleshooting-content {
+  width: min(680px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+}
+
+.troubleshooting-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.troubleshooting-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #1f2937;
+}
+
+.troubleshooting-close {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.troubleshooting-desc {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.troubleshooting-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.troubleshooting-item {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.troubleshooting-item-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.troubleshooting-item-command {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #1f2937;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.troubleshooting-item-note {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.troubleshooting-copy {
+  margin-top: 8px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  font-size: 12px;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.troubleshooting-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.troubleshooting-action-btn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.troubleshooting-action-btn.docs {
+  border-color: #1d4ed8;
+  color: #1d4ed8;
+}
+
 /* Connected clients */
 .connected-clients-section {
   border-top: 1px solid #f1f5f9;
@@ -2539,6 +3018,90 @@ onUnmounted(() => {
   color: #94a3b8;
   margin-bottom: 6px;
   line-height: 1.4;
+}
+
+.remote-toggle-card {
+  margin-bottom: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+}
+
+.remote-toggle-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.remote-toggle-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.remote-toggle-state {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.remote-toggle-state.on {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.remote-toggle-state.off {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+.remote-toggle-desc {
+  font-size: 11px;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.remote-toggle-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.remote-toggle-btn {
+  font-size: 11px;
+  border-radius: 6px;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  background: #eff6ff;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.remote-toggle-btn.primary {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.remote-toggle-copied {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #0369a1;
+}
+
+.mcp-restart-hint {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
 }
 
 .mcp-network-info {

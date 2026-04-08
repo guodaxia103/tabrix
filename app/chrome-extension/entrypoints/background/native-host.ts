@@ -1,6 +1,7 @@
 import { NativeMessageType } from 'chrome-mcp-shared';
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import { NATIVE_HOST, STORAGE_KEYS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '@/common/constants';
+import { normalizeNativeLastError } from '@/common/normalize-native-last-error';
 import { handleCallTool } from './tools';
 import { listPublished, getFlow } from './record-replay/flow-store';
 import { acquireKeepalive } from './keepalive-manager';
@@ -62,7 +63,7 @@ async function loadLastNativeError(): Promise<string | null> {
   try {
     const result = await chrome.storage.local.get([STORAGE_KEYS.LAST_NATIVE_ERROR]);
     const value = result[STORAGE_KEYS.LAST_NATIVE_ERROR];
-    return typeof value === 'string' && value.trim().length > 0 ? value : null;
+    return normalizeNativeLastError(value);
   } catch (storageError) {
     console.error(`${LOG_PREFIX} Failed to load last native error`, storageError);
     return null;
@@ -70,14 +71,7 @@ async function loadLastNativeError(): Promise<string | null> {
 }
 
 async function setLastNativeError(error: unknown): Promise<void> {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : error
-          ? String(error)
-          : null;
+  const message = normalizeNativeLastError(error);
   lastNativeError = message;
   await saveLastNativeError(message);
 }

@@ -462,11 +462,13 @@ export class Server {
   // Server Lifecycle
   // ============================================================
 
-  public async start(port = NATIVE_SERVER_PORT, nativeHost: NativeMessagingHost): Promise<void> {
-    if (!this.nativeHost) {
-      this.nativeHost = nativeHost;
-    } else if (this.nativeHost !== nativeHost) {
-      this.nativeHost = nativeHost;
+  public async start(port = NATIVE_SERVER_PORT, nativeHost?: NativeMessagingHost): Promise<void> {
+    if (nativeHost) {
+      if (!this.nativeHost) {
+        this.nativeHost = nativeHost;
+      } else if (this.nativeHost !== nativeHost) {
+        this.nativeHost = nativeHost;
+      }
     }
 
     if (this.isRunning) {

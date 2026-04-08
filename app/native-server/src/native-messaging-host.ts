@@ -14,6 +14,7 @@ interface PendingRequest {
 export class NativeMessagingHost {
   private associatedServer: Server | null = null;
   private pendingRequests: Map<string, PendingRequest> = new Map();
+  private extensionBridgeAvailable = false;
 
   public setServer(serverInstance: Server): void {
     this.associatedServer = serverInstance;
@@ -29,6 +30,7 @@ export class NativeMessagingHost {
   }
 
   private setupMessageHandling(): void {
+    this.extensionBridgeAvailable = true;
     let buffer = Buffer.alloc(0);
     let expectedLength = -1;
     const MAX_MESSAGES_PER_TICK = 100; // Safety guard to avoid long-running loops per readable tick
@@ -195,6 +197,13 @@ export class NativeMessagingHost {
     messageType: string = 'request_data',
     timeoutMs: number = TIMEOUTS.DEFAULT_REQUEST_TIMEOUT,
   ): Promise<any> {
+    if (!this.extensionBridgeAvailable) {
+      return Promise.reject(
+        new Error(
+          'Chrome extension bridge is unavailable. Open Chrome and click Connect in the extension popup.',
+        ),
+      );
+    }
     return new Promise((resolve, reject) => {
       const requestId = uuidv4(); // Generate unique request ID
 
@@ -314,6 +323,7 @@ export class NativeMessagingHost {
    * Clean up resources
    */
   private cleanup(): void {
+    this.extensionBridgeAvailable = false;
     // Reject all pending requests
     this.pendingRequests.forEach((pending) => {
       clearTimeout(pending.timeoutId);
