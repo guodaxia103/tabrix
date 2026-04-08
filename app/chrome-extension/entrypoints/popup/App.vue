@@ -127,6 +127,7 @@
                 type="text"
                 id="port"
                 :value="nativeServerPort"
+                :disabled="connectActionState.busy"
                 @input="updatePort"
                 class="port-input"
               />
@@ -470,6 +471,7 @@ import { ConnectionState, stateToStatusClass, type ServerStatus } from '@/common
 import { resolvePopupConnectAction } from '@/common/popup-connect-action';
 import { shouldApplyConnectedClientsResponse } from '@/common/popup-connected-clients';
 import { createDisconnectedPopupSnapshot } from '@/common/popup-connection-state';
+import { resolvePopupPortUpdate } from '@/common/popup-port-input';
 import { resolvePopupConnectionState } from '@/common/popup-status-phase';
 import { getMessage } from '@/utils/i18n';
 import { useAgentTheme, type AgentThemeId } from '../sidepanel/composables/useAgentTheme';
@@ -1310,7 +1312,15 @@ const retryModelInitialization = async () => {
 
 const updatePort = async (event: Event) => {
   const target = event.target as HTMLInputElement;
-  const newPort = Number(target.value);
+  const newPort = resolvePopupPortUpdate({
+    currentPort: nativeServerPort.value,
+    nextValue: target.value,
+    allowEdit: !connectActionState.value.busy,
+  });
+  if (newPort === nativeServerPort.value) {
+    target.value = String(nativeServerPort.value);
+    return;
+  }
   nativeServerPort.value = newPort;
 
   await savePortPreference(newPort);
