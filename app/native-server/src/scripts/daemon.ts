@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawn, execFileSync } from 'child_process';
+import { NATIVE_SERVER_PORT } from '../constant';
 
 interface DaemonStatus {
   running: boolean;
@@ -54,11 +55,16 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+function resolvePort(): number {
+  return Number(process.env.CHROME_MCP_PORT || NATIVE_SERVER_PORT);
+}
+
 async function checkHealth(): Promise<boolean> {
   try {
+    const port = resolvePort();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 1500);
-    const res = await fetch('http://127.0.0.1:12306/ping', { signal: controller.signal });
+    const res = await fetch(`http://127.0.0.1:${port}/ping`, { signal: controller.signal });
     clearTimeout(timeout);
     return res.ok;
   } catch {
@@ -86,13 +92,18 @@ export async function daemonStart(): Promise<{ started: boolean; pid: number }> 
     throw new Error(`Daemon entry not found: ${daemonEntry}. Please run build first.`);
   }
 
+  const logFile = path.join(PID_DIR, 'daemon.log');
+  fs.mkdirSync(PID_DIR, { recursive: true });
+  const logFd = fs.openSync(logFile, 'a');
+
   const child = spawn(process.execPath, [daemonEntry], {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', logFd, logFd],
     windowsHide: true,
     env: process.env,
   });
   child.unref();
+  fs.closeSync(logFd);
 
   if (!child.pid) {
     throw new Error('Failed to start daemon process.');

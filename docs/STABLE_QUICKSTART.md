@@ -87,7 +87,42 @@ For Streamable HTTP clients:
 }
 ```
 
-## 5. Remote access (optional)
+## 5. Standalone daemon (optional)
+
+By default, the MCP server starts when Chrome launches the native host (on Connect). If you want the MCP service to stay online **even when Chrome is closed**, you can run it as a standalone daemon:
+
+```powershell
+# Start daemon in the background
+mcp-chrome-bridge daemon start
+
+# Check daemon status
+mcp-chrome-bridge daemon status
+
+# Stop daemon
+mcp-chrome-bridge daemon stop
+```
+
+The daemon listens on the same port (default `12306`) and serves all non-browser MCP tools. Browser-specific tools (like `chrome_screenshot`) will return an error until Chrome opens and the extension connects.
+
+### Autostart on boot (Windows)
+
+```powershell
+# Install a Windows scheduled task that starts the daemon on login
+mcp-chrome-bridge daemon install-autostart
+
+# Remove the autostart task
+mcp-chrome-bridge daemon remove-autostart
+```
+
+### Daemon logs
+
+Daemon output is written to `~/.mcp-chrome/daemon.log`. Check this file if the daemon fails to start or crashes.
+
+### Custom port
+
+Set the `CHROME_MCP_PORT` environment variable to override the default port for both the daemon and the extension-based server.
+
+## 6. Remote access (optional)
 
 To allow other machines or Docker containers to connect:
 
@@ -126,7 +161,7 @@ netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow
 
 > Token auto-expires in 7 days (configure via `MCP_AUTH_TOKEN_TTL`). Use popup's "Remote" tab to view, copy, or refresh the token. Localhost requests bypass token auth.
 
-## 6. Troubleshooting order
+## 7. Troubleshooting order
 
 If the client cannot use tools, check in this order:
 
@@ -139,7 +174,7 @@ If the client cannot use tools, check in this order:
 7. Use the popup `Refresh` button to force a status refresh and recovery attempt
 8. If you just updated extension code, reload the unpacked extension once in `chrome://extensions/`
 
-## 7. What the new diagnostics mean
+## 8. What the new diagnostics mean
 
 - `status`
   - Quick runtime snapshot from the live bridge process
@@ -155,7 +190,7 @@ If the client cannot use tools, check in this order:
   - If the extension is disconnected, it now fails with an actionable hint instead of a generic fetch error
   - If the popup says connected but the service is still down, use `Refresh` or `Disconnect -> Connect` once before retrying
 
-## 8. Local development workflow that avoids stale builds
+## 9. Local development workflow that avoids stale builds
 
 If `doctor` shows Chrome is loading a different unpacked directory than the one you just built, either:
 
@@ -193,7 +228,7 @@ D:\projects\ai\chrome-mcp-server-1.0.0
 
 Do not keep switching between multiple unpacked build folders.
 
-## 9. Known notes
+## 10. Known notes
 
 - On Windows, rebuilding while the native host is active may log a non-fatal `EBUSY` warning during `dist` cleanup. The build continues and overwrites artifacts.
 - If you rebuild local source, restart the native host once so the running process picks up the latest `dist` output.

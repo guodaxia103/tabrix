@@ -108,6 +108,29 @@ mcp-chrome-bridge smoke
 
 Use the popup `Refresh` button or `Disconnect -> Connect` if the UI says connected but the local service is not running yet. For the full troubleshooting flow, see [Stable Quickstart](docs/STABLE_QUICKSTART.md).
 
+### Standalone Daemon (optional)
+
+By default, the MCP server starts when Chrome launches the native host. To keep the MCP service online **even when Chrome is closed** (e.g., after a reboot, allowing AI clients to connect immediately):
+
+```bash
+# Start daemon in the background
+mcp-chrome-bridge daemon start
+
+# Check daemon status
+mcp-chrome-bridge daemon status
+
+# Stop daemon
+mcp-chrome-bridge daemon stop
+
+# (Windows) Install autostart on login
+mcp-chrome-bridge daemon install-autostart
+
+# (Windows) Remove autostart
+mcp-chrome-bridge daemon remove-autostart
+```
+
+> **Note**: In daemon mode, browser-specific tools (like `chrome_screenshot`) are unavailable until Chrome opens and the extension connects. Non-browser tools work normally. Daemon logs are saved to `~/.mcp-chrome/daemon.log`.
+
 ### Usage with MCP Protocol Clients
 
 #### Using Streamable HTTP Connection (👍🏻 Recommended)

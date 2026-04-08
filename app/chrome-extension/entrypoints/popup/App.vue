@@ -172,9 +172,11 @@
                 id="port"
                 :value="nativeServerPort"
                 :disabled="connectActionState.busy"
-                @input="updatePort"
+                @change="updatePort"
+                @keydown.enter="($event.target as HTMLInputElement)?.blur()"
                 class="port-input"
               />
+              <span v-if="portReconnectHint" class="port-hint">{{ portReconnectHint }}</span>
             </div>
 
             <button
@@ -1273,16 +1275,18 @@ const troubleshootingScript = computed(() => {
     'mcp-chrome-bridge register --force',
   ];
 
+  let step = 6;
   if (repairCommandText.value) {
-    lines.push('', '# 6) 当前错误专项修复', repairCommandText.value);
+    lines.push('', `# ${step}) 当前错误专项修复`, repairCommandText.value);
+    step++;
   }
 
   lines.push(
     '',
-    '# 5) 如需局域网访问，取消下一行注释：',
+    `# ${step}) 如需局域网访问，取消下一行注释：`,
     '# [Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")',
     '',
-    '# 6) 执行后请完全重启 Chrome，并在 chrome://extensions/ 重新加载扩展',
+    `# ${step + 1}) 执行后请完全重启 Chrome，并在 chrome://extensions/ 重新加载扩展`,
   );
 
   return lines.join('\n');
@@ -1554,6 +1558,17 @@ const retryModelInitialization = async () => {
   await switchModel(currentModel.value);
 };
 
+const portReconnectHint = ref('');
+let portReconnectHintTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showPortHint(msg: string, durationMs = 3000) {
+  portReconnectHint.value = msg;
+  if (portReconnectHintTimer) clearTimeout(portReconnectHintTimer);
+  portReconnectHintTimer = setTimeout(() => {
+    portReconnectHint.value = '';
+  }, durationMs);
+}
+
 const updatePort = async (event: Event) => {
   const target = event.target as HTMLInputElement;
   const newPort = resolvePopupPortUpdate({
@@ -1565,9 +1580,52 @@ const updatePort = async (event: Event) => {
     target.value = String(nativeServerPort.value);
     return;
   }
-  nativeServerPort.value = newPort;
+  if (newPort <= 0 || newPort > 65535 || !Number.isFinite(newPort)) {
+    target.value = String(nativeServerPort.value);
+    return;
+  }
 
+  const oldPort = nativeServerPort.value;
+  nativeServerPort.value = newPort;
   await savePortPreference(newPort);
+
+  const wasConnected = nativeConnectionStatus.value === 'connected' || serverStatus.value.isRunning;
+
+  if (!wasConnected) {
+    showPortHint(`端口已保存为 ${newPort}，点击连接后生效`);
+    return;
+  }
+
+  showPortHint(`端口 ${oldPort} → ${newPort}，正在重连…`, 10000);
+  isConnecting.value = true;
+  try {
+    await chrome.runtime.sendMessage({ type: 'disconnect_native' });
+    await new Promise((r) => setTimeout(r, 300));
+
+    const response = await chrome.runtime.sendMessage({
+      type: 'connectNative',
+      port: newPort,
+    });
+
+    if (response && response.lastError !== undefined) {
+      lastNativeError.value = normalizeNativeLastError(response.lastError);
+    }
+    if (response?.success && response?.connected) {
+      await refreshServerStatus();
+      showPortHint(`已切换到端口 ${newPort}`);
+    } else {
+      nativeConnectionStatus.value = 'disconnected';
+      await refreshServerStatus();
+      showPortHint(`端口 ${newPort} 连接失败，请检查后重试`, 5000);
+    }
+  } catch (error) {
+    console.error('端口切换重连失败:', error);
+    applyDisconnectedPopupSnapshot();
+    await refreshStandaloneDaemonStatus();
+    showPortHint(`端口切换失败: ${error instanceof Error ? error.message : String(error)}`, 5000);
+  } finally {
+    isConnecting.value = false;
+  }
 };
 
 const checkNativeConnection = async () => {
@@ -3223,6 +3281,14 @@ onUnmounted(() => {
   outline: none;
   border-color: var(--ac-accent, #d97757);
   box-shadow: 0 0 0 3px var(--ac-accent-subtle, rgba(217, 119, 87, 0.12));
+}
+
+.port-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ac-accent, #d97757);
+  line-height: 1.4;
 }
 
 .connect-button {

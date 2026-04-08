@@ -107,6 +107,29 @@ mcp-chrome-bridge smoke
 
 如果 popup 显示已连接但本地服务未启动，点击 popup 的 `刷新` 按钮或 `断开 → 连接`。详细排障流程见 [快速入门](docs/STABLE_QUICKSTART.md)。
 
+### 守护进程模式（可选）
+
+默认情况下，MCP 服务在 Chrome 打开并点击扩展 Connect 后才启动。如果你希望 **即使 Chrome 未打开也能保持 MCP 服务在线**（例如重启电脑后，第三方 AI 客户端直接调用），可以启动守护进程：
+
+```bash
+# 启动守护进程
+mcp-chrome-bridge daemon start
+
+# 查看守护进程状态
+mcp-chrome-bridge daemon status
+
+# 停止守护进程
+mcp-chrome-bridge daemon stop
+
+# （Windows）安装开机自启
+mcp-chrome-bridge daemon install-autostart
+
+# （Windows）移除开机自启
+mcp-chrome-bridge daemon remove-autostart
+```
+
+> **注意**：守护进程模式下，浏览器相关的工具（如 `chrome_screenshot`）在 Chrome 未打开时不可用，但非浏览器工具正常可用。打开 Chrome 后扩展会自动补全浏览器通道。守护进程日志保存在 `~/.mcp-chrome/daemon.log`。
+
 ### 在支持MCP协议的客户端中使用
 
 #### 使用streamable http的方式连接（👍🏻推荐）

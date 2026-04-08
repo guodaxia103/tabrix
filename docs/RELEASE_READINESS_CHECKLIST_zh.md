@@ -135,7 +135,61 @@ node app\native-server\dist\cli.js smoke --json
 
 ---
 
-## 6. 发布阻断项
+## 6. 守护进程验证
+
+```powershell
+mcp-chrome-bridge daemon start
+mcp-chrome-bridge daemon status
+curl http://127.0.0.1:12306/ping
+mcp-chrome-bridge daemon stop
+```
+
+通过标准：
+
+- `daemon start` 成功返回 pid
+- `daemon status` 显示 `running=true, healthy=true`
+- `/ping` 返回 `200`
+- `daemon stop` 成功终止进程
+- `~/.mcp-chrome/daemon.log` 有启动日志输出
+- （Windows）`daemon install-autostart` / `daemon remove-autostart` 不报错
+
+---
+
+## 7. 远程访问验证
+
+```powershell
+# 设置远程模式
+[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")
+# 完全重启 Chrome，重新连接扩展
+```
+
+通过标准：
+
+- 扩展 Popup 远程 Tab 显示 Token 和局域网 IP
+- 从同一局域网的另一台设备/容器能访问 `http://<LAN-IP>:12306/ping`
+- 携带 `Authorization: Bearer <token>` 请求 `/mcp` 能成功 `initialize`
+- 不带 Token 的远程请求返回 `401`
+- localhost 请求免 Token（本机豁免）
+- Token 过期后刷新能拿到新 Token
+
+---
+
+## 8. stdio 传输验证
+
+```powershell
+# 查看 stdio 入口文件路径
+npm list -g mcp-chrome-bridge
+```
+
+通过标准：
+
+- stdio 入口文件 `mcp-server-stdio.js` 存在且可执行
+- 客户端通过 stdio 配置能连接并调用工具
+- 扩展 Popup 中 stdio Tab 正常显示
+
+---
+
+## 9. 发布阻断项
 
 出现以下任一情况时，不建议发布：
 
@@ -145,10 +199,12 @@ node app\native-server\dist\cli.js smoke --json
 - 扩展构建重新出现已知告警回归
 - Chrome 实际加载的扩展路径与当前构建目录不一致
 - 客户端能连上 `/mcp`，但工具调用失败
+- `daemon start` 后 `daemon status` 显示 unhealthy 或无日志输出
+- 远程模式下 Token 验证流程不通（无 Token 能访问 / 有效 Token 被拒）
 
 ---
 
-## 7. 2026-04-08 当前基线
+## 10. 2026-04-08 当前基线
 
 本仓库在 `2026-04-08` 已重新实测通过：
 
