@@ -26,6 +26,8 @@ let ensurePromise: Promise<boolean> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
 let manualDisconnect = false;
+let activeNativeConnectionId = 0;
+let nextNativeConnectionId = 0;
 
 import type { ServerStatus } from '../../common/connection-state';
 
@@ -163,6 +165,18 @@ function clearReconnectTimer(): void {
   reconnectTimer = null;
 }
 
+function isActiveNativeConnection(connectionId: number, port: chrome.runtime.Port | null): boolean {
+  return activeNativeConnectionId === connectionId && nativePort === port;
+}
+
+function hasNewerActiveConnection(connectionId?: number): boolean {
+  return (
+    connectionId !== undefined &&
+    activeNativeConnectionId !== 0 &&
+    activeNativeConnectionId !== connectionId
+  );
+}
+
 /**
  * Reset reconnect state after successful connection.
  */
@@ -290,18 +304,30 @@ function scheduleReconnect(reason: string): void {
 /**
  * Mark server as stopped and broadcast the change.
  */
-async function markServerStopped(reason: string): Promise<void> {
-  currentServerStatus = {
+async function markServerStopped(reason: string, connectionId?: number): Promise<void> {
+  if (hasNewerActiveConnection(connectionId)) {
+    console.debug(`${LOG_PREFIX} Ignoring stale stopped state before save (${reason})`);
+    return;
+  }
+
+  const nextStatus: ServerStatus = {
     isRunning: false,
     port: currentServerStatus.port,
     lastUpdated: Date.now(),
   };
+  currentServerStatus = nextStatus;
   try {
-    await saveServerStatus(currentServerStatus);
+    await saveServerStatus(nextStatus);
   } catch {
     // Ignore
   }
-  broadcastServerStatusChange(currentServerStatus);
+
+  if (hasNewerActiveConnection(connectionId)) {
+    console.debug(`${LOG_PREFIX} Ignoring stale stopped state after save (${reason})`);
+    return;
+  }
+
+  broadcastServerStatusChange(nextStatus);
   console.debug(`${LOG_PREFIX} Server marked stopped (${reason})`);
 }
 
@@ -413,14 +439,22 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
   }
 
   try {
-    nativePort = chrome.runtime.connectNative(HOST_NAME);
+    const portHandle = chrome.runtime.connectNative(HOST_NAME);
+    const connectionId = ++nextNativeConnectionId;
+    nativePort = portHandle;
+    activeNativeConnectionId = connectionId;
 
-    nativePort.onMessage.addListener(async (message) => {
+    portHandle.onMessage.addListener(async (message) => {
+      if (!isActiveNativeConnection(connectionId, portHandle)) {
+        console.debug(`${LOG_PREFIX} Ignoring message from stale native connection`, message?.type);
+        return;
+      }
+
       if (message.type === NativeMessageType.PROCESS_DATA && message.requestId) {
         const requestId = message.requestId;
         const requestPayload = message.payload;
 
-        nativePort?.postMessage({
+        portHandle.postMessage({
           responseToRequestId: requestId,
           payload: {
             status: 'success',
@@ -432,7 +466,8 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         const requestId = message.requestId;
         try {
           const result = await handleCallTool(message.payload);
-          nativePort?.postMessage({
+          if (!isActiveNativeConnection(connectionId, portHandle)) return;
+          portHandle.postMessage({
             responseToRequestId: requestId,
             payload: {
               status: 'success',
@@ -441,7 +476,8 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
             },
           });
         } catch (error) {
-          nativePort?.postMessage({
+          if (!isActiveNativeConnection(connectionId, portHandle)) return;
+          portHandle.postMessage({
             responseToRequestId: requestId,
             payload: {
               status: 'error',
@@ -468,12 +504,14 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
               meta: flow.meta || {},
             });
           }
-          nativePort?.postMessage({
+          if (!isActiveNativeConnection(connectionId, portHandle)) return;
+          portHandle.postMessage({
             responseToRequestId: requestId,
             payload: { status: 'success', items },
           });
         } catch (error: any) {
-          nativePort?.postMessage({
+          if (!isActiveNativeConnection(connectionId, portHandle)) return;
+          portHandle.postMessage({
             responseToRequestId: requestId,
             payload: { status: 'error', error: error?.message || String(error) },
           });
@@ -515,11 +553,16 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
       }
     });
 
-    nativePort.onDisconnect.addListener(() => {
+    portHandle.onDisconnect.addListener(() => {
+      if (!isActiveNativeConnection(connectionId, portHandle)) {
+        return;
+      }
+
       const lastError = chrome.runtime.lastError?.message || null;
       const wasManualDisconnect = manualDisconnect;
       manualDisconnect = false;
       nativePort = null;
+      activeNativeConnectionId = 0;
 
       if (wasManualDisconnect) {
         return;
@@ -533,14 +576,14 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
       }
 
       // Mark server as stopped since native host disconnection means server is down
-      void markServerStopped('native_port_disconnected');
+      void markServerStopped('native_port_disconnected', connectionId);
 
       // Handle reconnection based on disconnect reason
       if (!autoConnectEnabled) return;
       scheduleReconnect('native_port_disconnected');
     });
 
-    nativePort.postMessage({ type: NativeMessageType.START, payload: { port } });
+    portHandle.postMessage({ type: NativeMessageType.START, payload: { port } });
     // Note: Don't reset reconnect state here. Wait for SERVER_STARTED confirmation.
     // Chrome may return a Port but disconnect immediately if native host is missing.
     return true;
@@ -680,6 +723,7 @@ export const initNativeHostListener = () => {
         reconnectAttempts = 0;
         syncKeepaliveHold();
 
+        const disconnectedConnectionId = activeNativeConnectionId || undefined;
         if (nativePort) {
           // Only set manualDisconnect if we actually have a port to disconnect.
           // This prevents the flag from persisting when there's no active connection.
@@ -690,9 +734,10 @@ export const initNativeHostListener = () => {
             // Ignore
           }
           nativePort = null;
+          activeNativeConnectionId = 0;
         }
         await clearLastNativeError();
-        await markServerStopped('manual_disconnect');
+        await markServerStopped('manual_disconnect', disconnectedConnectionId);
       })()
         .then(() => {
           sendResponse({ success: true, lastError: null });

@@ -58,7 +58,20 @@ function createMockPort() {
   };
 }
 
-function createChromeHarness(ports: ReturnType<typeof createMockPort>[]) {
+function createDeferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+function createChromeHarness(
+  ports: ReturnType<typeof createMockPort>[],
+  options?: {
+    onStorageSet?: (value: Record<string, unknown>) => Promise<void> | void;
+  },
+) {
   const runtimeMessageListeners: RuntimeMessageHandler[] = [];
   const storageState: Record<string, unknown> = {
     [STORAGE_KEYS.NATIVE_AUTO_CONNECT_ENABLED]: false,
@@ -102,6 +115,7 @@ function createChromeHarness(ports: ReturnType<typeof createMockPort>[]) {
           return { [keys]: storageState[keys] };
         }),
         set: vi.fn(async (value: Record<string, unknown>) => {
+          await options?.onStorageSet?.(value);
           Object.assign(storageState, value);
         }),
         remove: vi.fn(async (keys: string | string[]) => {
@@ -173,6 +187,7 @@ describe('native host reconnect behavior', () => {
       type: NativeMessageType.SERVER_STARTED,
       payload: { port: 12306 },
     });
+    await vi.advanceTimersByTimeAsync(300);
     const connectResponse = await connectPromise;
 
     expect(connectResponse).toMatchObject({ success: true, connected: true });
@@ -229,6 +244,7 @@ describe('native host reconnect behavior', () => {
       type: NativeMessageType.SERVER_STARTED,
       payload: { port: 12306 },
     });
+    await vi.advanceTimersByTimeAsync(300);
     await connectPromise;
     harness.chromeMock.runtime.lastError = { message: 'Manual disconnect should not persist' };
 
@@ -276,25 +292,103 @@ describe('native host reconnect behavior', () => {
     });
 
     await flushMicrotasks();
-    harness.chromeMock.runtime.lastError = { message: 'Native host exited before startup' };
-    firstPort.emitDisconnect();
     await flushMicrotasks();
+    expect(firstPort.onDisconnect.addListener).toHaveBeenCalled();
+    harness.chromeMock.runtime.lastError = { message: 'Native host exited before startup' };
+    firstPort.disconnect();
+    await flushMicrotasks();
+
+    const statusAfterStartupDrop = await harness.sendRuntimeMessage({
+      type: BACKGROUND_MESSAGE_TYPES.GET_SERVER_STATUS,
+    });
+    expect(statusAfterStartupDrop.connected).toBe(false);
+    expect(statusAfterStartupDrop.lastError).toBe('Native host exited before startup');
+    expect(statusAfterStartupDrop.serverStatus.isRunning).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(400);
+    expect(harness.connectNative).toHaveBeenCalledTimes(2);
+
+    await secondPort.emitMessage({
+      type: NativeMessageType.SERVER_STARTED,
+      payload: { port: 12306 },
+    });
     await vi.advanceTimersByTimeAsync(300);
 
     const connectResponse = await connectPromise;
     expect(connectResponse).toMatchObject({
       success: true,
-      lastError: 'Native host exited before startup',
+      connected: true,
     });
-
-    await vi.advanceTimersByTimeAsync(100);
-    expect(harness.connectNative).toHaveBeenCalledTimes(2);
 
     const statusAfterFailedConnect = await harness.sendRuntimeMessage({
       type: BACKGROUND_MESSAGE_TYPES.GET_SERVER_STATUS,
     });
     expect(statusAfterFailedConnect.connected).toBe(true);
-    expect(statusAfterFailedConnect.lastError).toBe('Native host exited before startup');
-    expect(statusAfterFailedConnect.serverStatus.isRunning).toBe(false);
+    expect(statusAfterFailedConnect.lastError).toBe(null);
+    expect(statusAfterFailedConnect.serverStatus.isRunning).toBe(true);
+  });
+
+  it('ignores stale disconnect cleanup after a newer connection has already started', async () => {
+    const firstPort = createMockPort();
+    const secondPort = createMockPort();
+    const clearErrorDeferred = createDeferred();
+    let holdNextClearError = false;
+    const harness = createChromeHarness([firstPort, secondPort], {
+      onStorageSet(value) {
+        if (holdNextClearError && value[STORAGE_KEYS.LAST_NATIVE_ERROR] === null) {
+          holdNextClearError = false;
+          return clearErrorDeferred.promise;
+        }
+      },
+    });
+    (globalThis as any).chrome = harness.chromeMock;
+
+    const nativeHostModule = await import('@/entrypoints/background/native-host');
+    nativeHostModule.initNativeHostListener();
+    await flushMicrotasks();
+
+    const firstConnectPromise = harness.sendRuntimeMessage({
+      type: NativeMessageType.CONNECT_NATIVE,
+      port: 12306,
+    });
+    await flushMicrotasks();
+    await firstPort.emitMessage({
+      type: NativeMessageType.SERVER_STARTED,
+      payload: { port: 12306 },
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    await firstConnectPromise;
+
+    holdNextClearError = true;
+    const disconnectPromise = harness.sendRuntimeMessage({
+      type: NativeMessageType.DISCONNECT_NATIVE,
+    });
+    await flushMicrotasks();
+
+    const reconnectPromise = harness.sendRuntimeMessage({
+      type: NativeMessageType.CONNECT_NATIVE,
+      port: 12306,
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+    await secondPort.emitMessage({
+      type: NativeMessageType.SERVER_STARTED,
+      payload: { port: 12306 },
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    const reconnectResponse = await reconnectPromise;
+    expect(reconnectResponse).toMatchObject({ success: true, connected: true });
+
+    clearErrorDeferred.resolve();
+    await disconnectPromise;
+    await flushMicrotasks();
+
+    const finalStatus = await harness.sendRuntimeMessage({
+      type: BACKGROUND_MESSAGE_TYPES.GET_SERVER_STATUS,
+    });
+    expect(finalStatus.connected).toBe(true);
+    expect(finalStatus.lastError).toBe(null);
+    expect(finalStatus.serverStatus.isRunning).toBe(true);
+    expect(finalStatus.serverStatus.port).toBe(12306);
   });
 });
