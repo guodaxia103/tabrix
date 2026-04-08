@@ -18,8 +18,15 @@ const STORAGE_KEY_SELECTED_SESSION = 'agent-selected-session-id';
 export interface UseAgentSessionsOptions {
   getServerPort: () => number | null;
   ensureServer: () => Promise<boolean>;
+  getConnectionError?: () => string | null;
   onSessionChanged?: (sessionId: string) => void;
   onHistoryLoaded?: (messages: AgentStoredMessage[]) => void;
+}
+
+function getUnavailableMessage(connectionError?: string | null): string {
+  return connectionError
+    ? `Agent server is not available: ${connectionError}`
+    : 'Agent server is not available.';
 }
 
 export function useAgentSessions(options: UseAgentSessionsOptions) {
@@ -172,7 +179,7 @@ export function useAgentSessions(options: UseAgentSessionsOptions) {
     const ready = await options.ensureServer();
     const serverPort = options.getServerPort();
     if (!ready || !serverPort) {
-      sessionError.value = 'Server not available';
+      sessionError.value = getUnavailableMessage(options.getConnectionError?.());
       return null;
     }
 
@@ -383,7 +390,7 @@ export function useAgentSessions(options: UseAgentSessionsOptions) {
     const ready = await options.ensureServer();
     const serverPort = options.getServerPort();
     if (!ready || !serverPort || !sessionId) {
-      sessionError.value = 'Server not available';
+      sessionError.value = getUnavailableMessage(options.getConnectionError?.());
       return null;
     }
 

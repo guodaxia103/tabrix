@@ -274,6 +274,7 @@ const attachmentCacheOpen = ref(false);
 const sessions = useAgentSessions({
   getServerPort: () => server.serverPort.value,
   ensureServer: () => server.ensureNativeServer(),
+  getConnectionError: () => server.lastError.value,
   onSessionChanged: (sessionId: string) => {
     // Guard against stale callbacks from concurrent session switches
     // This prevents race conditions where an older switch completes after a newer one
@@ -320,6 +321,7 @@ const chat = useAgentChat({
 const projects = useAgentProjects({
   getServerPort: () => server.serverPort.value,
   ensureServer: () => server.ensureNativeServer(),
+  getConnectionError: () => server.lastError.value,
   onHistoryLoaded: (messages: AgentStoredMessage[]) => {
     const converted = convertStoredMessages(messages);
     chat.setMessages(converted);

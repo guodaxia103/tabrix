@@ -30,7 +30,14 @@ function normalizePathForComparison(path: string): string {
 export interface UseAgentProjectsOptions {
   getServerPort: () => number | null;
   ensureServer: () => Promise<boolean>;
+  getConnectionError?: () => string | null;
   onHistoryLoaded?: (messages: AgentStoredMessage[]) => void;
+}
+
+function getUnavailableMessage(connectionError?: string | null): string {
+  return connectionError
+    ? `Agent server is not available: ${connectionError}`
+    : 'Agent server is not available.';
 }
 
 export function useAgentProjects(options: UseAgentProjectsOptions) {
@@ -175,7 +182,7 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
     const ready = await options.ensureServer();
     const serverPort = options.getServerPort();
     if (!ready || !serverPort) {
-      projectError.value = 'Agent server is not available.';
+      projectError.value = getUnavailableMessage(options.getConnectionError?.());
       return null;
     }
 
@@ -288,7 +295,7 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
     const ready = await options.ensureServer();
     const serverPort = options.getServerPort();
     if (!ready || !serverPort) {
-      projectError.value = 'Server not available';
+      projectError.value = getUnavailableMessage(options.getConnectionError?.());
       return null;
     }
 
@@ -397,7 +404,7 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
     const ready = await options.ensureServer();
     const serverPort = options.getServerPort();
     if (!ready || !serverPort) {
-      projectError.value = 'Agent server is not available.';
+      projectError.value = getUnavailableMessage(options.getConnectionError?.());
       return null;
     }
 
