@@ -468,6 +468,7 @@ import {
   stateToStatusClass,
   type ServerStatus,
 } from '@/common/connection-state';
+import { createDisconnectedPopupSnapshot } from '@/common/popup-connection-state';
 import { getMessage } from '@/utils/i18n';
 import { useAgentTheme, type AgentThemeId } from '../sidepanel/composables/useAgentTheme';
 
@@ -673,6 +674,13 @@ interface ConnectedClient {
 }
 
 const connectedClients = ref<ConnectedClient[]>([]);
+
+function applyDisconnectedPopupSnapshot() {
+  const snapshot = createDisconnectedPopupSnapshot(serverStatus.value);
+  nativeConnectionStatus.value = snapshot.nativeConnectionStatus;
+  serverStatus.value = snapshot.serverStatus;
+  connectedClients.value = [];
+}
 
 function getServerBaseUrl(): string {
   const port = serverStatus.value.port || nativeServerPort.value;
@@ -1292,7 +1300,7 @@ const checkNativeConnection = async () => {
     nativeConnectionStatus.value = response?.connected ? 'connected' : 'disconnected';
   } catch (error) {
     console.error('检测 Native 连接状态失败:', error);
-    nativeConnectionStatus.value = 'disconnected';
+    applyDisconnectedPopupSnapshot();
   }
 };
 
@@ -1315,6 +1323,7 @@ const checkServerStatus = async () => {
     await fetchConnectedClients();
   } catch (error) {
     console.error('检测服务器状态失败:', error);
+    applyDisconnectedPopupSnapshot();
   }
 };
 
@@ -1337,6 +1346,7 @@ const refreshServerStatus = async () => {
     await fetchConnectedClients();
   } catch (error) {
     console.error('刷新服务器状态失败:', error);
+    applyDisconnectedPopupSnapshot();
   }
 };
 
@@ -1392,7 +1402,7 @@ const testNativeConnection = async () => {
     }
   } catch (error) {
     console.error('测试连接失败:', error);
-    nativeConnectionStatus.value = 'disconnected';
+    applyDisconnectedPopupSnapshot();
   } finally {
     isConnecting.value = false;
   }
