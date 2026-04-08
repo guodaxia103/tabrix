@@ -17,6 +17,7 @@ describe('popup connection fallback snapshot', () => {
 
     expect(snapshot.nativeConnectionStatus).toBe('disconnected');
     expect(snapshot.connectedClients).toEqual([]);
+    expect(snapshot.lastNativeError).toBe(null);
     expect(snapshot.serverStatus).toMatchObject({
       isRunning: false,
       port: 12306,
@@ -44,6 +45,7 @@ describe('popup connection fallback snapshot', () => {
       port: 12306,
       lastUpdated: Date.now(),
     });
+    expect(snapshot.lastNativeError).toBe(null);
 
     vi.useRealTimers();
   });

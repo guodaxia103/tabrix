@@ -4,6 +4,7 @@ export interface PopupConnectionSnapshot {
   nativeConnectionStatus: 'unknown' | 'connected' | 'disconnected';
   serverStatus: ServerStatus;
   connectedClients: unknown[];
+  lastNativeError: string | null;
 }
 
 /**
@@ -22,5 +23,6 @@ export function createDisconnectedPopupSnapshot(
       lastUpdated: Date.now(),
     },
     connectedClients: [],
+    lastNativeError: null,
   };
 }

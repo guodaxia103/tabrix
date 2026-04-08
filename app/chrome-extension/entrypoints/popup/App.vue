@@ -681,6 +681,7 @@ function applyDisconnectedPopupSnapshot() {
   nativeConnectionStatus.value = snapshot.nativeConnectionStatus;
   serverStatus.value = snapshot.serverStatus;
   connectedClients.value = [];
+  lastNativeError.value = snapshot.lastNativeError;
 }
 
 function getServerBaseUrl(): string {
