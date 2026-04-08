@@ -189,6 +189,8 @@ export default defineConfig({
       target: 'es2022',
       // 非生产环境下生成sourcemap
       sourcemap: env.mode !== 'production',
+      // Keep production build logs focused on actionable warnings.
+      checks: env.mode === 'production' ? { pluginTimings: false } : undefined,
       // 禁用gzip 压缩大小报告，因为压缩大型文件可能会很慢
       reportCompressedSize: false,
       // chunk大小超过1500kb时触发警告
