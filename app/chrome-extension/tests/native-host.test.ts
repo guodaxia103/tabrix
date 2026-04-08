@@ -391,4 +391,67 @@ describe('native host reconnect behavior', () => {
     expect(finalStatus.serverStatus.isRunning).toBe(true);
     expect(finalStatus.serverStatus.port).toBe(12306);
   });
+
+  it('keeps auto-reconnect working after manual disconnect callback arrives late', async () => {
+    const firstPort = createMockPort();
+    const secondPort = createMockPort();
+    const thirdPort = createMockPort();
+    const harness = createChromeHarness([firstPort, secondPort, thirdPort]);
+    (globalThis as any).chrome = harness.chromeMock;
+
+    const nativeHostModule = await import('@/entrypoints/background/native-host');
+    nativeHostModule.initNativeHostListener();
+    await flushMicrotasks();
+
+    const firstConnectPromise = harness.sendRuntimeMessage({
+      type: NativeMessageType.CONNECT_NATIVE,
+      port: 12306,
+    });
+    await flushMicrotasks();
+    await firstPort.emitMessage({
+      type: NativeMessageType.SERVER_STARTED,
+      payload: { port: 12306 },
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    await firstConnectPromise;
+
+    firstPort.disconnect.mockImplementation(() => {
+      setTimeout(() => {
+        firstPort.emitDisconnect();
+      }, 0);
+    });
+
+    const manualDisconnectResponse = await harness.sendRuntimeMessage({
+      type: NativeMessageType.DISCONNECT_NATIVE,
+    });
+    expect(manualDisconnectResponse).toMatchObject({ success: true });
+
+    const reconnectPromise = harness.sendRuntimeMessage({
+      type: NativeMessageType.CONNECT_NATIVE,
+      port: 12306,
+    });
+    await flushMicrotasks();
+    await secondPort.emitMessage({
+      type: NativeMessageType.SERVER_STARTED,
+      payload: { port: 12306 },
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    await reconnectPromise;
+
+    await vi.advanceTimersByTimeAsync(1);
+    await flushMicrotasks();
+
+    harness.chromeMock.runtime.lastError = { message: 'Second connection dropped unexpectedly' };
+    secondPort.emitDisconnect();
+    await flushMicrotasks();
+
+    await vi.advanceTimersByTimeAsync(400);
+    await flushMicrotasks();
+
+    expect(harness.connectNative).toHaveBeenCalledTimes(3);
+    expect(thirdPort.postMessage).toHaveBeenCalledWith({
+      type: NativeMessageType.START,
+      payload: { port: 12306 },
+    });
+  });
 });

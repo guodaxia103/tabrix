@@ -26,6 +26,7 @@ let ensurePromise: Promise<boolean> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
 let manualDisconnect = false;
+let manualDisconnectConnectionId: number | null = null;
 let activeNativeConnectionId = 0;
 let nextNativeConnectionId = 0;
 
@@ -554,13 +555,24 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
     });
 
     portHandle.onDisconnect.addListener(() => {
+      const isManualDisconnectForThisConnection =
+        manualDisconnect &&
+        manualDisconnectConnectionId !== null &&
+        manualDisconnectConnectionId === connectionId;
+
+      if (isManualDisconnectForThisConnection) {
+        manualDisconnect = false;
+        manualDisconnectConnectionId = null;
+      }
+
       if (!isActiveNativeConnection(connectionId, portHandle)) {
         return;
       }
 
       const lastError = chrome.runtime.lastError?.message || null;
-      const wasManualDisconnect = manualDisconnect;
+      const wasManualDisconnect = isManualDisconnectForThisConnection;
       manualDisconnect = false;
+      manualDisconnectConnectionId = null;
       nativePort = null;
       activeNativeConnectionId = 0;
 
@@ -728,13 +740,19 @@ export const initNativeHostListener = () => {
           // Only set manualDisconnect if we actually have a port to disconnect.
           // This prevents the flag from persisting when there's no active connection.
           manualDisconnect = true;
+          manualDisconnectConnectionId = disconnectedConnectionId ?? null;
           try {
             nativePort.disconnect();
           } catch {
+            manualDisconnect = false;
+            manualDisconnectConnectionId = null;
             // Ignore
           }
           nativePort = null;
           activeNativeConnectionId = 0;
+        } else {
+          manualDisconnect = false;
+          manualDisconnectConnectionId = null;
         }
         await clearLastNativeError();
         await markServerStopped('manual_disconnect', disconnectedConnectionId);
