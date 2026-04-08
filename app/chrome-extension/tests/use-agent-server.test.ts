@@ -48,6 +48,10 @@ function createChromeMock(sendMessage: SendMessageMock) {
   };
 }
 
+function flushMicrotasks(): Promise<void> {
+  return Promise.resolve().then(() => Promise.resolve());
+}
+
 describe('useAgentServer SSE recovery', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -151,5 +155,48 @@ describe('useAgentServer SSE recovery', () => {
 
     expect(onError).toHaveBeenCalledWith('SSE connection failed after multiple attempts');
     expect(MockEventSource.instances).toHaveLength(1);
+  });
+
+  it('exposes connecting state while ensuring the native server', async () => {
+    let releaseEnsure: (() => void) | null = null;
+    const sendMessage = vi.fn((message: { type: string }) => {
+      if (message.type === 'ping_native') {
+        return Promise.resolve({ connected: false });
+      }
+      if (message.type === 'ensure_native') {
+        return new Promise((resolve) => {
+          releaseEnsure = () => resolve({ connected: true });
+        });
+      }
+      if (message.type === 'get_server_status') {
+        return Promise.resolve({
+          connected: true,
+          serverStatus: { isRunning: true, port: 12306 },
+        });
+      }
+      return Promise.resolve({});
+    });
+    (globalThis as any).chrome = createChromeMock(sendMessage);
+
+    const { useAgentServer } = await import('@/entrypoints/sidepanel/composables/useAgentServer');
+
+    const agentServer = useAgentServer({
+      getSessionId: () => 'session-1',
+    });
+
+    const ensurePromise = agentServer.ensureNativeServer();
+    await flushMicrotasks();
+
+    expect(agentServer.connecting.value).toBe(true);
+    expect(agentServer.connectionState.value).toBe('connecting');
+    expect(releaseEnsure).toBeTypeOf('function');
+
+    releaseEnsure?.();
+    await vi.advanceTimersByTimeAsync(500);
+    await flushMicrotasks();
+    await ensurePromise;
+
+    expect(agentServer.connecting.value).toBe(false);
+    expect(agentServer.connectionState.value).toBe('ready');
   });
 });

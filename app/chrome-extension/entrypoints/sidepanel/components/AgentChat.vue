@@ -380,9 +380,7 @@ const sessionLabel = computed(() => {
 });
 
 const connectionState = computed(() => {
-  if (server.isServerReady.value) return 'ready';
-  if (server.nativeConnected.value) return 'connecting';
-  return 'disconnected';
+  return server.connectionState.value;
 });
 
 // Computed values for AgentComposer

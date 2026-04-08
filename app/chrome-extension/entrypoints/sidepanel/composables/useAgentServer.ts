@@ -40,6 +40,11 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
   const isServerReady = computed(() => {
     return nativeConnected.value && serverStatus.value?.isRunning && serverPort.value !== null;
   });
+  const connectionState = computed<'ready' | 'connecting' | 'disconnected'>(() => {
+    if (isServerReady.value) return 'ready';
+    if (connecting.value || nativeConnected.value) return 'connecting';
+    return 'disconnected';
+  });
 
   // Check native host connection using existing message type
   async function checkNativeHost(): Promise<boolean> {
@@ -279,6 +284,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
 
     // Computed
     isServerReady,
+    connectionState,
 
     // Methods
     ensureNativeServer,
