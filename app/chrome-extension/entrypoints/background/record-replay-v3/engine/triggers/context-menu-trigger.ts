@@ -32,7 +32,7 @@ interface InstalledContextMenuTrigger {
 const MENU_ITEM_PREFIX = 'rr_v3_';
 
 // Default context types if not specified
-const DEFAULT_CONTEXTS: chrome.contextMenus.ContextType[] = [chrome.contextMenus.ContextType.PAGE];
+const DEFAULT_CONTEXTS: chrome.contextMenus.ContextType[] = ['page'];
 
 // ==================== Handler Implementation ====================
 
