@@ -145,6 +145,8 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
         return false;
       }
 
+      lastError.value = null;
+
       // Step 3: Fetch engines
       await fetchEngines();
 
@@ -227,6 +229,7 @@ export function useAgentServer(options: UseAgentServerOptions = {}) {
       console.log('[AgentServer] SSE connection opened');
       reconnectAttempts = 0;
       clearReconnectTimer();
+      lastError.value = null;
     };
 
     es.onmessage = (event) => {
