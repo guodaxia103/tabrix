@@ -164,10 +164,16 @@ describe('native host reconnect behavior', () => {
     nativeHostModule.initNativeHostListener();
     await flushMicrotasks();
 
-    const connectResponse = await harness.sendRuntimeMessage({
+    const connectPromise = harness.sendRuntimeMessage({
       type: NativeMessageType.CONNECT_NATIVE,
       port: 12306,
     });
+    await flushMicrotasks();
+    await firstPort.emitMessage({
+      type: NativeMessageType.SERVER_STARTED,
+      payload: { port: 12306 },
+    });
+    const connectResponse = await connectPromise;
 
     expect(connectResponse).toMatchObject({ success: true, connected: true });
     expect(harness.connectNative).toHaveBeenCalledTimes(1);
@@ -207,11 +213,16 @@ describe('native host reconnect behavior', () => {
     nativeHostModule.initNativeHostListener();
     await flushMicrotasks();
 
-    await harness.sendRuntimeMessage({
+    const connectPromise = harness.sendRuntimeMessage({
       type: NativeMessageType.CONNECT_NATIVE,
       port: 12306,
     });
     await flushMicrotasks();
+    await firstPort.emitMessage({
+      type: NativeMessageType.SERVER_STARTED,
+      payload: { port: 12306 },
+    });
+    await connectPromise;
 
     const disconnectResponse = await harness.sendRuntimeMessage({
       type: NativeMessageType.DISCONNECT_NATIVE,
@@ -232,5 +243,43 @@ describe('native host reconnect behavior', () => {
 
     expect(harness.connectNative).toHaveBeenCalledTimes(1);
     expect(secondPort.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('preserves startup errors and retries when the port drops before startup settles', async () => {
+    const firstPort = createMockPort();
+    const secondPort = createMockPort();
+    const harness = createChromeHarness([firstPort, secondPort]);
+    (globalThis as any).chrome = harness.chromeMock;
+
+    const nativeHostModule = await import('@/entrypoints/background/native-host');
+    nativeHostModule.initNativeHostListener();
+    await flushMicrotasks();
+
+    const connectPromise = harness.sendRuntimeMessage({
+      type: NativeMessageType.CONNECT_NATIVE,
+      port: 12306,
+    });
+
+    await flushMicrotasks();
+    harness.chromeMock.runtime.lastError = { message: 'Native host exited before startup' };
+    firstPort.emitDisconnect();
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(300);
+
+    const connectResponse = await connectPromise;
+    expect(connectResponse).toMatchObject({
+      success: true,
+      lastError: 'Native host exited before startup',
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(harness.connectNative).toHaveBeenCalledTimes(2);
+
+    const statusAfterFailedConnect = await harness.sendRuntimeMessage({
+      type: BACKGROUND_MESSAGE_TYPES.GET_SERVER_STATUS,
+    });
+    expect(statusAfterFailedConnect.connected).toBe(true);
+    expect(statusAfterFailedConnect.lastError).toBe('Native host exited before startup');
+    expect(statusAfterFailedConnect.serverStatus.isRunning).toBe(false);
   });
 });

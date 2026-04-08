@@ -326,6 +326,22 @@ async function waitForServerStatusSettle(timeoutMs: number = 1200): Promise<void
   }
 }
 
+async function getSettledNativeConnectionState(
+  expectedPort: chrome.runtime.Port | null,
+  timeoutMs: number = 250,
+): Promise<boolean> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (nativePort !== expectedPort) return false;
+    if (!nativePort) return false;
+    if (currentServerStatus.isRunning) return true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  return nativePort === expectedPort && nativePort !== null;
+}
+
 // ==================== Core Ensure Function ====================
 
 /**
@@ -580,10 +596,15 @@ export const initNativeHostListener = () => {
     if (msgType === NativeMessageType.ENSURE_NATIVE) {
       const portOverride = typeof message === 'object' ? message.port : undefined;
       ensureNativeConnected('ui_ensure', portOverride)
-        .then((connected) => {
+        .then(async (connected) => {
+          const expectedPort = nativePort;
+          const settledConnected =
+            connected && nativePort && !currentServerStatus.isRunning
+              ? await getSettledNativeConnectionState(expectedPort)
+              : connected;
           sendResponse({
             success: true,
-            connected,
+            connected: settledConnected,
             autoConnectEnabled,
             lastError: lastNativeError,
           });
@@ -619,8 +640,13 @@ export const initNativeHostListener = () => {
 
         return ensureNativeConnected('ui_connect', normalized ?? undefined);
       })()
-        .then((connected) => {
-          sendResponse({ success: true, connected, lastError: lastNativeError });
+        .then(async (connected) => {
+          const expectedPort = nativePort;
+          const settledConnected =
+            connected && nativePort && !currentServerStatus.isRunning
+              ? await getSettledNativeConnectionState(expectedPort)
+              : connected;
+          sendResponse({ success: true, connected: settledConnected, lastError: lastNativeError });
         })
         .catch((e) => {
           sendResponse({
