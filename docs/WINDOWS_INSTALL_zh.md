@@ -36,7 +36,7 @@ npm install -g mcp-chrome-bridge
 ```json
 {
   "mcpServers": {
-    "streamable-mcp-server": {
+    "chrome-mcp": {
       "type": "streamable-http",
       "url": "http://127.0.0.1:12306/mcp"
     }

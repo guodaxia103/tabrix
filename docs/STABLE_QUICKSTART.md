@@ -79,7 +79,7 @@ For Streamable HTTP clients:
 ```json
 {
   "mcpServers": {
-    "chrome-mcp-server": {
+    "chrome-mcp": {
       "type": "streamableHttp",
       "url": "http://127.0.0.1:12306/mcp"
     }
@@ -87,7 +87,46 @@ For Streamable HTTP clients:
 }
 ```
 
-## 5. Troubleshooting order
+## 5. Remote access (optional)
+
+To allow other machines or Docker containers to connect:
+
+1. Set environment variable `MCP_HTTP_HOST=0.0.0.0` and fully restart Chrome
+
+```powershell
+# Windows PowerShell (persistent)
+[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")
+```
+
+2. On first startup, a Token is **auto-generated** and saved to `~/.mcp-chrome/auth-token.json`. Open the extension popup → Remote tab to see it. You may also set `MCP_AUTH_TOKEN` manually if preferred.
+
+3. Allow port 12306 through Windows Firewall:
+
+```powershell
+netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow protocol=tcp localport=12306
+```
+
+4. The extension popup will auto-detect your LAN IP and display it in the config snippet
+5. On the remote machine, configure:
+
+```json
+{
+  "mcpServers": {
+    "chrome-mcp": {
+      "url": "http://<your-lan-ip>:12306/mcp",
+      "headers": {
+        "Authorization": "Bearer your-secret-token"
+      }
+    }
+  }
+}
+```
+
+6. Check the popup's "Connected clients" list to verify the remote connection
+
+> Token auto-expires in 7 days (configure via `MCP_AUTH_TOKEN_TTL`). Use popup's "Remote" tab to view, copy, or refresh the token. Localhost requests bypass token auth.
+
+## 6. Troubleshooting order
 
 If the client cannot use tools, check in this order:
 
@@ -100,7 +139,7 @@ If the client cannot use tools, check in this order:
 7. Use the popup `Refresh` button to force a status refresh and recovery attempt
 8. If you just updated extension code, reload the unpacked extension once in `chrome://extensions/`
 
-## 6. What the new diagnostics mean
+## 7. What the new diagnostics mean
 
 - `status`
   - Quick runtime snapshot from the live bridge process
@@ -116,7 +155,7 @@ If the client cannot use tools, check in this order:
   - If the extension is disconnected, it now fails with an actionable hint instead of a generic fetch error
   - If the popup says connected but the service is still down, use `Refresh` or `Disconnect -> Connect` once before retrying
 
-## 7. Local development workflow that avoids stale builds
+## 8. Local development workflow that avoids stale builds
 
 If `doctor` shows Chrome is loading a different unpacked directory than the one you just built, either:
 
@@ -154,7 +193,7 @@ D:\projects\ai\chrome-mcp-server-1.0.0
 
 Do not keep switching between multiple unpacked build folders.
 
-## 8. Known notes
+## 9. Known notes
 
 - On Windows, rebuilding while the native host is active may log a non-fatal `EBUSY` warning during `dist` cleanup. The build continues and overwrites artifacts.
 - If you rebuild local source, restart the native host once so the running process picks up the latest `dist` output.

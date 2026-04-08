@@ -117,19 +117,7 @@ claude mcp add chrome-mcp --transport http http://127.0.0.1:12306/mcp
 
 ---
 
-## SSE 传输（兼容旧客户端）
-
-部分旧版客户端不支持 Streamable HTTP，可使用 SSE 端点：
-
-```
-http://127.0.0.1:12306/sse
-```
-
-POST 消息端点：`http://127.0.0.1:12306/messages?sessionId=<id>`
-
----
-
-## stdio 传输（无需 HTTP）
+## stdio 传输（备用方案）
 
 适用于只支持 stdio 的客户端，或网络受限环境。
 
@@ -144,7 +132,23 @@ npm list -g mcp-chrome-bridge
 pnpm list -g mcp-chrome-bridge
 ```
 
-### 通用 stdio 配置
+### 全局安装后直接使用（推荐）
+
+`npm i -g mcp-chrome-bridge` 后，`mcp-chrome-stdio` 命令即可用：
+
+```json
+{
+  "mcpServers": {
+    "chrome-mcp": {
+      "command": "mcp-chrome-stdio"
+    }
+  }
+}
+```
+
+### node + 绝对路径
+
+如果 `mcp-chrome-stdio` 命令不在 PATH 中：
 
 ```json
 {
@@ -157,20 +161,20 @@ pnpm list -g mcp-chrome-bridge
 }
 ```
 
-### npx 方式（无需提前安装）
+### npx 方式（无需提前全局安装）
 
 ```json
 {
   "mcpServers": {
     "chrome-mcp": {
       "command": "npx",
-      "args": ["-y", "mcp-chrome-bridge-stdio"]
+      "args": ["-p", "mcp-chrome-bridge", "mcp-chrome-stdio"]
     }
   }
 }
 ```
 
-> Windows 下 `command` 可能需要改为 `"node.exe"` 或使用完整路径。
+> Windows 下如果 `mcp-chrome-stdio` 找不到，尝试 `mcp-chrome-stdio.cmd` 或使用 node + 绝对路径方式。
 
 ---
 
@@ -180,6 +184,8 @@ pnpm list -g mcp-chrome-bridge
 | ----------------------------- | ------------------------------------------------------------------------------------------------ | ------------ |
 | `MCP_HTTP_PORT`               | MCP HTTP 端口                                                                                    | `12306`      |
 | `MCP_HTTP_HOST`               | 监听地址（`127.0.0.1` / `0.0.0.0` / `localhost` / `::`）                                         | `127.0.0.1`  |
+| `MCP_AUTH_TOKEN`              | 远程访问 Bearer Token（可选，不设则自动生成并存到 `~/.mcp-chrome/auth-token.json`）              | （自动生成） |
+| `MCP_AUTH_TOKEN_TTL`          | Token 过期天数（`0` = 永不过期）                                                                 | `7`          |
 | `MCP_ALLOWED_WORKSPACE_BASE`  | 额外允许的工作目录                                                                               | （无）       |
 | `CHROME_MCP_NODE_PATH`        | 覆盖 Node.js 可执行文件路径                                                                      | （自动检测） |
 | `ENABLE_MCP_TOOLS`            | 白名单模式：只暴露指定工具（逗号分隔）                                                           | （全部）     |
@@ -241,25 +247,49 @@ export MCP_HTTP_HOST=0.0.0.0
 $env:MCP_HTTP_HOST = "0.0.0.0"
 ```
 
-**第二步：在远程 AI 客户端中配置**
+**第二步：设置 Token 认证**（强烈推荐）
 
-将 `127.0.0.1` 替换为浏览器所在机器的局域网 IP：
+启用 `0.0.0.0` 监听后，服务端首次启动会**自动生成 Token** 并持久化。打开扩展 Popup 的「远程」Tab 即可查看并复制 Token。
+
+也可通过环境变量手动指定：
+
+```powershell
+# Windows PowerShell
+[Environment]::SetEnvironmentVariable("MCP_AUTH_TOKEN", "your-secret-token", "User")
+```
+
+本机（`127.0.0.1`）请求免 Token，远程 IP 必须携带 `Authorization: Bearer <token>` 头。
+
+**第三步：开放 Windows 防火墙**（管理员 PowerShell）
+
+```powershell
+netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow protocol=tcp localport=12306
+```
+
+**第四步：在远程 AI 客户端中配置**
+
+扩展 Popup 的配置模板会自动识别本机 LAN IP 并显示在配置 JSON 中（优先 WLAN/Ethernet，过滤 VPN/虚拟网卡）。直接复制即可使用。
+
+也可以手动将 `127.0.0.1` 替换为浏览器所在机器的局域网 IP：
 
 ```json
 {
   "mcpServers": {
     "chrome-mcp": {
-      "url": "http://192.168.1.100:12306/mcp"
+      "url": "http://192.168.1.100:12306/mcp",
+      "headers": {
+        "Authorization": "Bearer your-secret-token"
+      }
     }
   }
 }
 ```
 
-**第三步：确认连接**
+**第五步：确认连接**
 
 在扩展 Popup 的「已连接的客户端」列表中，应能看到远程 IP 和客户端名称。不认识的 IP 可以直接踢出。
 
-**Docker 场景**
+**第六步（Docker 场景）**
 
 ```json
 {
@@ -271,18 +301,19 @@ $env:MCP_HTTP_HOST = "0.0.0.0"
 }
 ```
 
-> ⚠️ **安全提示**：`0.0.0.0` 监听意味着局域网内任何设备都可以无认证地控制浏览器。请仅在受信任的网络环境中使用，并通过 Popup 的客户端列表监控连接。
+> Token 默认 7 天过期，可通过 `MCP_AUTH_TOKEN_TTL` 调整。Popup 远程 Tab 提供"重新生成"按钮。
 
 ---
 
 ## 常见问题
 
-| 症状                | 原因                   | 解决方案                                                        |
-| ------------------- | ---------------------- | --------------------------------------------------------------- |
-| Connection refused  | 服务未启动             | 打开扩展 popup 点击 Connect                                     |
-| Tools not appearing | 配置文件 JSON 语法错误 | 用 JSON 校验器检查配置                                          |
-| Port conflict       | 12306 端口被占用       | 在扩展设置中修改端口，然后更新客户端配置                        |
-| Docker 容器无法连接 | 127.0.0.1 指向容器内部 | 设 `MCP_HTTP_HOST=0.0.0.0`，用宿主 IP 或 `host.docker.internal` |
-| 远程连接被拒绝      | 默认只监听 127.0.0.1   | 设 `MCP_HTTP_HOST=0.0.0.0` 并检查防火墙                         |
-| Popup 显示未知 IP   | 不认识的远程客户端     | 点击 ✕ 踢出该会话                                               |
-| Windows 路径问题    | `\` 未转义             | JSON 中用 `\\` 或 `/`                                           |
+| 症状                | 原因                     | 解决方案                                                        |
+| ------------------- | ------------------------ | --------------------------------------------------------------- |
+| Connection refused  | 服务未启动               | 打开扩展 popup 点击 Connect                                     |
+| Tools not appearing | 配置文件 JSON 语法错误   | 用 JSON 校验器检查配置                                          |
+| Port conflict       | 12306 端口被占用         | 在扩展设置中修改端口，然后更新客户端配置                        |
+| Docker 容器无法连接 | 127.0.0.1 指向容器内部   | 设 `MCP_HTTP_HOST=0.0.0.0`，用宿主 IP 或 `host.docker.internal` |
+| 远程连接被拒绝      | 默认只监听 127.0.0.1     | 设 `MCP_HTTP_HOST=0.0.0.0` 并检查防火墙                         |
+| 远程连接返回 401    | Token 缺失/不匹配/已过期 | 从 Popup 远程 Tab 复制最新 Token；过期则点"重新生成"            |
+| Popup 显示未知 IP   | 不认识的远程客户端       | 点击 ✕ 踢出该会话                                               |
+| Windows 路径问题    | `\` 未转义               | JSON 中用 `\\` 或 `/`                                           |

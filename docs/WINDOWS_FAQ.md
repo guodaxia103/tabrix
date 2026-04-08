@@ -126,19 +126,30 @@ taskkill /PID <pid> /F
 
 ---
 
-## 8. 扩展重新加载后连接断开
+## 8. 扩展重新加载后连接断开 / "Access to the specified native messaging host is forbidden"
 
-**原因**：在 `chrome://extensions/` 页面重新加载扩展会生成新的 Extension ID（unpacked 模式），旧的 manifest 中 `allowed_origins` 不匹配。
+**原因**：Chrome 扩展的 Extension ID 变化后，Native Messaging manifest 中 `allowed_origins` 仍指向旧 ID。
 
 **修复**：
 
 ```powershell
-# 重新注册以更新 allowed_origins
-mcp-chrome-bridge register
-# 重新加载扩展后点击 Connect
+# 自动诊断并修复（推荐）
+mcp-chrome-bridge doctor --fix
 ```
 
-> 提示：项目已内置稳定 key 生成逻辑（`ensure-extension-key.cjs`），但首次加载仍可能需要注册。
+`doctor --fix` 会自动：
+
+1. 从当前构建的 `manifest.json` 的 `key` 字段计算出确定性 ID
+2. 合并 Chrome 已加载扩展的 ID
+3. 重新生成 `allowed_origins` 并写入 Native Messaging manifest
+
+如果自动修复不生效，手动执行：
+
+```powershell
+mcp-chrome-bridge register
+```
+
+> 提示：项目内置稳定 key 生成逻辑（`ensure-extension-key.cjs`），确保同一台机器上 Extension ID 在重新构建后保持不变。`register` 命令现在通过三层来源合并 `allowed_origins`（key 计算 + Chrome 发现 + 兜底常量），即使扩展 ID 发生变化也能自动适配。
 
 ---
 
@@ -168,6 +179,63 @@ robocopy .\app\chrome-extension\.output\chrome-mv3 C:\stable-ext /MIR
 ```
 
 - 用 `mcp-chrome-bridge doctor` 检查 "Chrome extension path" 是否指向正确目录
+
+---
+
+## 11. 远程连接后 Popup 配置中 IP 不正确
+
+**原因**：设置 `MCP_HTTP_HOST=0.0.0.0` 后，Popup 自动选择本机网卡 IP 显示在配置模板中。如果机器上有 VPN 或虚拟网卡，可能选中了非预期的 IP。
+
+**说明**：Popup 按优先级排序本机网卡：WLAN/Wi-Fi > Ethernet > 其他物理网卡 > 虚拟网卡/VPN。`192.168.x.x` 和 `10.x.x.x` 段获得额外加权。
+
+**修复**：如果自动选择的 IP 不对，手动复制配置后将 URL 中的 IP 替换为实际局域网 IP 即可。
+
+---
+
+## 12. 远程连接被防火墙拦截
+
+**原因**：Windows 防火墙默认不允许外部访问 12306 端口。
+
+**修复**（以管理员身份运行 PowerShell）：
+
+```powershell
+netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow protocol=tcp localport=12306
+```
+
+验证：
+
+```powershell
+netstat -ano | findstr :12306
+```
+
+应显示 `0.0.0.0:12306` 处于 `LISTENING` 状态。
+
+---
+
+## 13. 远程连接返回 401 Unauthorized
+
+**原因**：Token 缺失、不匹配或已过期。监听 `0.0.0.0` 时远程 IP 需携带正确 Token。
+
+**诊断步骤**：
+
+1. 打开扩展 Popup → 「远程」Tab，查看当前 Token 及过期时间
+2. 若 Token 已过期，点击"重新生成"
+3. 复制 Token 到客户端配置：
+
+```json
+{
+  "mcpServers": {
+    "chrome-mcp": {
+      "url": "http://<局域网IP>:12306/mcp",
+      "headers": {
+        "Authorization": "Bearer <从 Popup 复制的 Token>"
+      }
+    }
+  }
+}
+```
+
+本机（`127.0.0.1`）请求免 Token。`/ping`、`/status` 端点不需要认证。
 
 ---
 

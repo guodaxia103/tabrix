@@ -1,6 +1,6 @@
 # Program 0 详细任务清单
 
-最后更新：`2026-04-07 Asia/Shanghai`（v2.10 — J2/J3/J4 功能请求）
+最后更新：`2026-04-08 Asia/Shanghai`（v2.13 — SSE 硬删 + Token 完整方案）
 分支：`codex/phase0-stabilization`
 
 基于：当前分支 51 commits、上游 hangwin/mcp-chrome 173 个 Open Issues、PHASE0 系列文档、实际代码审查、**竞品调研（15+ 开源 / 8+ 商业产品）**。
@@ -274,6 +274,12 @@
 | J2   | 截图自动保存            | #207            | `[x]` **已完成**：`chrome_computer` 的 `screenshot` action 新增 `saveToDownloads` 参数，为 true 时通过 `chrome.downloads.download` 保存 PNG 到下载目录；schema + 中英文文档已更新                     |
 | J3   | 页面滚动 API 文档化     | #200            | `[x]` **已完成**：TOOLS.md + TOOLS_zh.md 新增 `scroll` vs `scroll_to` 区别说明、参数组合规则、3 个滚动示例 JSON                                                                                       |
 | J4   | 后台静默运行            | #178            | `[x]` **已完成**：`chrome_computer` 的 `screenshot` action 传递 `background` 参数到 screenshotTool（CDP 截图路径）；TOOLS.md + TOOLS_zh.md 新增「Background Mode」参考表格（5 个支持工具 + 限制说明） |
+| J5   | CSP eval 修复           | MV3 兼容        | `[x]` **已完成**：Vite 插件 `strip-protobufjs-eval` 构建时剥离 `@protobufjs/inquire` 的 eval("require")，消除 Chrome MV3 CSP 违规                                                                     |
+| J6   | 扩展 ID 自动修复        | #198            | `[x]` **已完成**：`computeExtensionIdFromKey` + `findBuiltExtensionKey` + `createManifestContent` 三层合并 origins；`doctor --fix` 自动重新注册                                                       |
+| J7   | Popup 配置 IP 智能化    | #290            | `[x]` **已完成**：监听 0.0.0.0 时 Popup 配置模板显示实际 LAN IP；`/status` 返回 `networkAddresses`；网卡排序过滤 VPN/虚拟网卡                                                                         |
+| J8   | 配置名统一 chrome-mcp   | —               | `[x]` **已完成**：Popup 配置模板 + STABLE_QUICKSTART.md + WINDOWS_INSTALL_zh.md 中 mcpServers key 统一为 `chrome-mcp`                                                                                 |
+| J9   | SSE 硬删除              | —               | `[x]` **已完成**：硬删 `GET /sse` + `POST /messages` 路由、`SSEServerTransport` import、`session-registry.ts` SSE 类型、SSE 测试；Popup 恢复「本机 / stdio / 远程」三 Tab                             |
+| J10  | 远程 Token 完整方案     | —               | `[x]` **已完成**：`TokenManager` 自动生成 + 持久化（`~/.mcp-chrome/auth-token.json`）+ 7 天过期 + 本机豁免；`/auth/token` + `/auth/refresh` 端点；Popup 远程 Tab Token 显示/复制/刷新 UI              |
 
 ---
 
@@ -356,11 +362,12 @@
 ## 统计
 
 - 总维度：10 个（A–J）+ **维护约定** + **手动测试清单**
-- 总任务（编号项）：约 72 个（含 E7b、可选加分项 A6/A7/B8/G8 已完成归档）
-- 已完成 `[x]`：约 **72** 个（+J2/J3/J4）
+- 总任务（编号项）：约 78 个（含 J5–J10 新增、E7b、可选加分项 A6/A7/B8/G8 已完成归档）
+- 已完成 `[x]`：约 **78** 个
 - 部分完成 `[~]`：**0** 个
-- 待完成 `[ ]`：约 **0** 个（编号代码任务已全部清零，剩余为手动验证与文档迭代）
+- 待完成 `[ ]`：**3** 个（B9 Mac 验证、C6 macOS 依赖、G7 视频脚本）
 - 决策延期 `[!]`：**2** 个（E7/E9 标记 Phase 1）
+- 手动验证待做：B7/B10/C4/C5/C8/F1–F6/F8–F9/I4 迭代/I5
 - 预估周期：3–4 周（第一批基本收尾，二/三/四批可交叉并行）
 
 ## v2 变更追溯
@@ -455,3 +462,27 @@
 - `[x]` **J2（截图自动保存）**：`chrome_computer` schema 新增 `saveToDownloads` 参数；`computer.ts` screenshot action 在 `saveToDownloads: true` 时委托 screenshotTool 执行 `savePng: true` 路径（`chrome.downloads.download` 保存 PNG 到下载目录）。
 - `[x]` **J3（页面滚动文档）**：TOOLS.md + TOOLS_zh.md 新增 `scroll` vs `scroll_to` 区别说明（scroll 需 ref/coordinates + direction；scroll_to 只需 ref）；补充 3 个滚动示例 JSON。
 - `[x]` **J4（后台静默运行）**：`chrome_computer` 的 screenshot action 传递 `background` 参数到 screenshotTool（启用 CDP `Page.captureScreenshot` 路径）；TOOLS.md + TOOLS_zh.md 新增「Background Mode」参考表格，覆盖 5 个支持工具（navigate/computer/screenshot/console/web_fetcher）及其限制。
+
+### 2026-04-08 v2.11 部署加固 + 远程连接优化
+
+- `[x]` **J5（CSP eval 修复）**：`@protobufjs/inquire` 的 `eval("require")` 违反 Chrome MV3 CSP，构建时通过 Vite 插件 `strip-protobufjs-eval` 替换为 no-op；扩展 error 页面不再报 `blocked script` 错误（`wxt.config.ts`）。
+- `[x]` **J6（扩展 ID 自动修复）**：三层防御消除 `allowed_origins` ID 不匹配问题：1）新增 `computeExtensionIdFromKey()` 从 manifest key 确定性计算 ID；2）`createManifestContent()` 合并 key 计算 ID + Chrome 发现 ID + 兜底常量；3）`EXTENSION_ID` 常量更新为当前 key 对应的 `njlidkjgkcccdoffkfcbgiefdpaipfdn`；4）`doctor --fix` 在检测到 mismatch 时自动重新注册（`utils.ts` + `constant.ts` + `doctor.ts`）。
+- `[x]` **J7（Popup 配置 IP 智能化）**：监听 `0.0.0.0` 时，Popup 配置模板显示实际局域网 IP 而非 `127.0.0.1`：1）`/status` 返回 `networkAddresses` 字段（`server/index.ts`）；2）`SERVER_STARTED` 消息携带 `host` + `networkAddresses`（`native-messaging-host.ts`）；3）`ServerStatus` 接口增加 `host`/`networkAddresses`（`connection-state.ts`）；4）Popup `mcpConfigJson` 优先使用 LAN IP；5）网卡排序过滤 VPN/虚拟网卡，优先 WLAN/Ethernet/192.168.x.x。
+- `[x]` **J8（配置名统一）**：Popup 配置模板名称 `streamable-mcp-server` → `chrome-mcp`；`STABLE_QUICKSTART.md` 和 `WINDOWS_INSTALL_zh.md` 同步统一。
+- `[x]` **测试适配**：`server.test.ts` host 断言从硬编码 `'127.0.0.1'` 改为 `SERVER_CONFIG.HOST`，适配 `MCP_HTTP_HOST` 环境变量。
+
+### 2026-04-08 v2.12 SSE 废弃 + 远程 Token 验证（初版）
+
+- `[x]` **J9 v1（SSE 软废弃）**：路由 `console.warn` 警告；Popup 移除 SSE Tab；文档标记 Deprecated。
+- `[x]` **J10 v1（静态 Token）**：`AUTH_CONFIG` 读 `MCP_AUTH_TOKEN` 环境变量；authGuard hook。
+
+### 2026-04-08 v2.13 SSE 硬删 + Token 完整方案
+
+- `[x]` **J9 v2（SSE 硬删除）**：1）删除 `GET /sse` + `POST /messages` 路由代码；2）删除 `SSEServerTransport` import；3）`session-registry.ts` 移除 `kind: 'sse'` 联合类型、`SSEServerTransport` import、snapshot `sse` 计数；4）`server.test.ts` 删除 `openSseConnection` 辅助函数 + 整个「经典 SSE 传输」describe 块（5 个测试）+ `node:http` import；5）Popup 恢复「本机 / stdio / 远程」三 Tab + stdio 配置 JSON；6）文档删除 SSE 章节。
+- `[x]` **J10 v2（Token 完整方案）**：1）新增 `server/auth.ts` `TokenManager` 类：`resolve`（优先 env → 文件 → 自动生成）、`generate`、`refresh`、`verify`、`info`；Token 持久化到 `~/.mcp-chrome/auth-token.json`；2）默认 7 天过期（`MCP_AUTH_TOKEN_TTL` 可配，`0` = 永不过期）；3）authGuard 本机 IP（`127.0.0.1` / `::1` / `::ffff:127.0.0.1`）豁免；4）Token 过期返回 `401 Token expired`；5）`GET /auth/token` + `POST /auth/refresh` 端点（仅本机 403）；6）Popup 远程 Tab：Token 遮罩/明文切换、复制按钮、过期倒计时、「重新生成」按钮、`fromEnv` 标识；7）`server.start()` 中 `0.0.0.0` 监听自动 `tokenManager.resolve()`；8）`doctor.ts` 改用 `MCP_AUTH_TOKEN_ENV` + 检查 `auth-token.json` 文件；9）全部文档同步。
+
+### 待办标记
+
+- `[ ]` **B9**：Mac 平台 Native Host 注册验证 — 需在 macOS 环境手动验证
+- `[ ]` **C6**：macOS 开发环境依赖安装报错 — 需记录 macOS 下 `node-gyp` / native 模块前置条件
+- `[ ]` **G7**：视频/动图脚本大纲 — 5 分钟演示分镜脚本（待定）
