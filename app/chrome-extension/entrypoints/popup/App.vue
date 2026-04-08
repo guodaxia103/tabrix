@@ -472,6 +472,7 @@ import { resolvePopupConnectAction } from '@/common/popup-connect-action';
 import { shouldApplyConnectedClientsResponse } from '@/common/popup-connected-clients';
 import { createDisconnectedPopupSnapshot } from '@/common/popup-connection-state';
 import { resolvePopupPortUpdate } from '@/common/popup-port-input';
+import { shouldApplyPopupServerStatusMessage } from '@/common/popup-server-status-message';
 import { resolvePopupConnectionState } from '@/common/popup-status-phase';
 import { getMessage } from '@/utils/i18n';
 import { useAgentTheme, type AgentThemeId } from '../sidepanel/composables/useAgentTheme';
@@ -1845,14 +1846,26 @@ const setupServerStatusListener = () => {
     lastError?: string | null;
   }) => {
     if (message.type === BACKGROUND_MESSAGE_TYPES.SERVER_STATUS_CHANGED && message.payload) {
-      serverStatus.value = message.payload as ServerStatus;
+      const nextServerStatus = message.payload as ServerStatus;
+      if (
+        !shouldApplyPopupServerStatusMessage({
+          desiredPort: nativeServerPort.value,
+          isBusy: connectActionState.value.busy,
+          serverStatus: nextServerStatus,
+          connected: message.connected,
+        })
+      ) {
+        return;
+      }
+
+      serverStatus.value = nextServerStatus;
       if (message.connected !== undefined) {
         nativeConnectionStatus.value = message.connected ? 'connected' : 'disconnected';
       }
       if (typeof message.lastError === 'string' || message.lastError === null) {
         lastNativeError.value = message.lastError ?? null;
       }
-      if (message.connected && (message.payload as ServerStatus).isRunning) {
+      if (message.connected && nextServerStatus.isRunning) {
         void fetchConnectedClients();
       } else {
         connectedClients.value = [];
