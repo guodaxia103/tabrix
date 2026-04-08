@@ -12,6 +12,8 @@ export default defineConfig({
       '~': rootDir,
       // Mock hnswlib-wasm-static to avoid native module issues in tests
       'hnswlib-wasm-static': `${rootDir}/tests/__mocks__/hnswlib-wasm-static.ts`,
+      // Mock transformers to avoid pulling in sharp/native runtime dependencies in unit tests
+      '@xenova/transformers': `${rootDir}/tests/__mocks__/transformers.ts`,
     },
   },
   test: {
