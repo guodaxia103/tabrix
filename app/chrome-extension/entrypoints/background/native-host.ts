@@ -516,8 +516,15 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
 
     nativePort.onDisconnect.addListener(() => {
       const lastError = chrome.runtime.lastError?.message || null;
-      console.warn(ERROR_MESSAGES.NATIVE_DISCONNECTED, chrome.runtime.lastError);
+      const wasManualDisconnect = manualDisconnect;
+      manualDisconnect = false;
       nativePort = null;
+
+      if (wasManualDisconnect) {
+        return;
+      }
+
+      console.warn(ERROR_MESSAGES.NATIVE_DISCONNECTED, chrome.runtime.lastError);
 
       // Mark server as stopped since native host disconnection means server is down
       void markServerStopped('native_port_disconnected');
@@ -526,10 +533,6 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
       }
 
       // Handle reconnection based on disconnect reason
-      if (manualDisconnect) {
-        manualDisconnect = false;
-        return;
-      }
       if (!autoConnectEnabled) return;
       scheduleReconnect('native_port_disconnected');
     });

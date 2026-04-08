@@ -223,6 +223,7 @@ describe('native host reconnect behavior', () => {
       payload: { port: 12306 },
     });
     await connectPromise;
+    harness.chromeMock.runtime.lastError = { message: 'Manual disconnect should not persist' };
 
     const disconnectResponse = await harness.sendRuntimeMessage({
       type: NativeMessageType.DISCONNECT_NATIVE,
