@@ -82,6 +82,26 @@ export interface AgentAttachment {
 
 export type AgentCliPreference = 'claude' | 'codex' | 'cursor' | 'qwen' | 'glm';
 
+/**
+ * Optional client-only metadata on act requests (e.g. web editor apply chips).
+ * Persisted on user messages and echoed in session preview metadata.
+ */
+export interface AgentActRequestClientMeta {
+  kind?: string;
+  elementCount?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Structured preview for session list (beyond plain `preview` text).
+ */
+export interface AgentSessionPreviewMeta {
+  displayText?: string;
+  clientMeta?: AgentActRequestClientMeta;
+  /** Full instruction when UI preview is shortened (e.g. web editor context). */
+  fullContent?: string;
+}
+
 export interface AgentActRequest {
   instruction: string;
   cliPreference?: AgentCliPreference;
@@ -236,6 +256,8 @@ export interface AgentSession {
   name?: string;
   /** Preview text from first user message, for display in session list */
   preview?: string;
+  /** Optional structured preview (e.g. web editor apply chip metadata) */
+  previewMeta?: AgentSessionPreviewMeta;
   model?: string;
   permissionMode: string;
   allowDangerouslySkipPermissions: boolean;
@@ -393,10 +415,20 @@ export interface AttachmentMetadata {
 }
 
 /**
+ * Parsed shape of `AgentMessage.metadata` when attachments are present.
+ */
+export interface AgentMessageAttachmentMetadata {
+  attachments?: AttachmentMetadata[];
+  [key: string]: unknown;
+}
+
+/**
  * Statistics for attachments in a single project.
  */
 export interface AttachmentProjectStats {
   projectId: string;
+  /** Human-readable name when available (e.g. from stats API) */
+  projectName?: string;
   /** Directory path for this project's attachments */
   dirPath: string;
   /** Whether the directory exists */

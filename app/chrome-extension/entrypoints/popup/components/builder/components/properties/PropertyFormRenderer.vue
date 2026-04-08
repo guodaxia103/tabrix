@@ -21,6 +21,7 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, reactive, watch, defineComponent, h, ref } from 'vue';
+import type { Component } from 'vue';
 import type { FieldSpec, NodeSpec } from '@/entrypoints/popup/components/builder/model/node-spec';
 import { getNodeSpec } from '@/entrypoints/popup/components/builder/model/node-spec-registry';
 import {
@@ -209,15 +210,18 @@ const JsonField = defineComponent({
   },
 });
 
+/** Forward declare for recursive ObjectField ↔ ArrayField resolution. */
+let ArrayField: Component;
+
 const ObjectField = defineComponent({
   name: 'ObjectField',
   props: ['field', 'modelValue'],
   emits: ['update:modelValue'],
   setup(props: any, { emit }) {
     const local = ref<Record<string, any>>({ ...(props.modelValue || {}) });
-    const compOf = (f: any) => {
+    const compOf = (f: any): Component => {
       const w = getWidget(f.widget);
-      if (w) return w as any;
+      if (w) return w as Component;
       if (f.type === 'string') return StringField;
       if (f.type === 'number') return NumberField;
       if (f.type === 'boolean') return BoolField;
@@ -251,7 +255,7 @@ const ObjectField = defineComponent({
   },
 });
 
-const ArrayField = defineComponent({
+ArrayField = defineComponent({
   name: 'ArrayField',
   props: ['field', 'modelValue'],
   emits: ['update:modelValue'],
@@ -275,9 +279,9 @@ const ArrayField = defineComponent({
       items.value.splice(i, 1);
       update();
     };
-    const compOf = (f: any) => {
+    const compOf = (f: any): Component => {
       const w = getWidget(f.widget);
-      if (w) return w as any;
+      if (w) return w as Component;
       if (f.type === 'string') return StringField;
       if (f.type === 'number') return NumberField;
       if (f.type === 'boolean') return BoolField;

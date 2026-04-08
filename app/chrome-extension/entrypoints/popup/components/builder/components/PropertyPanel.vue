@@ -95,12 +95,18 @@ import type { NodeBase } from '@/entrypoints/background/record-replay/types';
 import { validateNodeWithRegistry } from '@/entrypoints/popup/components/builder/model/ui-nodes';
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import PropertyFromSpec from '@/entrypoints/popup/components/builder/components/properties/PropertyFromSpec.vue';
+import type { VariableOption } from '@/entrypoints/popup/components/builder/model/variables';
 
 const props = defineProps<{
   node: NodeBase | null;
   highlightField?: string | null;
   subflowIds?: string[];
-  variables?: Array<{ key: string }>;
+  variables?: Array<{
+    key: string;
+    origin?: VariableOption['origin'];
+    nodeId?: string;
+    nodeName?: string;
+  }>;
 }>();
 const emit = defineEmits<{
   // Use kebab-case event names to match parent listeners
@@ -175,7 +181,14 @@ const ifJson = computed({
 });
 
 // --- if node helpers ---
-const variables = computed(() => props.variables || []);
+const variables = computed<VariableOption[]>(() =>
+  (props.variables || []).map((v) => ({
+    key: v.key,
+    origin: v.origin ?? 'global',
+    nodeId: v.nodeId,
+    nodeName: v.nodeName,
+  })),
+);
 const ops = ['==', '!=', '>', '>=', '<', '<=', '&&', '||'];
 const ifBranches = computed<any[]>({
   get() {
