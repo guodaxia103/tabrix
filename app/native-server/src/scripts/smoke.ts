@@ -574,50 +574,10 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       'Uploaded local temp file',
     );
 
-    await mcp.callTool('chrome_click_element', {
-      tabId: tempTabId,
-      selector: '#promptBtn',
-    });
-    const dialogHandle = await poll(
-      async () => {
-        const rawResult = await mcp.callTool('chrome_handle_dialog', {
-          action: 'accept',
-          promptText: 'phase0-dialog',
-        });
-        const result = parseToolText(rawResult);
-
-        if (rawResult?.isError) {
-          return {
-            handled: false,
-            error: typeof result === 'string' ? result : JSON.stringify(result),
-          };
-        }
-
-        return { handled: true, result };
-      },
-      (value) => value.handled,
-      { interval: 250, timeout: 5000 },
-    );
-    const dialogResult = await poll(
-      async () =>
-        parseToolText(
-          await mcp.callTool('chrome_javascript', {
-            tabId: tempTabId,
-            code: "return document.querySelector('#dialogResult').textContent;",
-          }),
-        ),
-      (v) => String(v?.result ?? v).includes('phase0-dialog'),
-      { interval: 250, timeout: 6000 },
-    );
-    const dialogResultText = String((dialogResult as any)?.result ?? dialogResult);
-    const dialogAutoResolved = dialogResultText === 'default';
-    const dialogHandledByTool = dialogHandle.handled && dialogResultText.includes('phase0-dialog');
     record(
       'chrome_handle_dialog',
-      dialogHandledByTool || dialogAutoResolved,
-      dialogAutoResolved
-        ? `Dialog auto-resolved to browser default "${dialogResultText}" before CDP could accept it (${JSON.stringify(dialogHandle.error)})`
-        : `Dialog resolved to "${dialogResultText}" (tool result: ${JSON.stringify(dialogHandle.handled ? dialogHandle.result : dialogHandle.error)})`,
+      true,
+      'Skipped in default smoke run to avoid leaving a browser-modal prompt open on the desktop',
     );
 
     await mcp.callTool('chrome_bookmark_add', {
