@@ -1,53 +1,17 @@
 import { describe, expect, test, afterAll, beforeAll } from '@jest/globals';
 import supertest from 'supertest';
-import http from 'node:http';
 import Server from './index';
+import { SERVER_CONFIG } from '../constant';
 import { sessionManager } from '../execution/session-manager';
+import { tokenManager } from './auth';
+import type { TokenData } from './auth';
 
-/**
- * Open an SSE connection to GET /sse and resolve once the first `endpoint`
- * event is received (which contains the sessionId in the URL).
- * Returns the sessionId and a cleanup function to close the connection.
- */
-function openSseConnection(port: number): Promise<{ sessionId: string; close: () => void }> {
-  return new Promise((resolve, reject) => {
-    const req = http.get(
-      {
-        hostname: '127.0.0.1',
-        port,
-        path: '/sse',
-        headers: { Accept: 'text/event-stream' },
-      },
-      (res) => {
-        if (res.statusCode !== 200) {
-          reject(new Error(`SSE returned status ${res.statusCode}`));
-          return;
-        }
-        let buf = '';
-        res.on('data', (chunk: Buffer) => {
-          buf += chunk.toString();
-          const endpointMatch = buf.match(/event:\s*endpoint\ndata:\s*(\S+)/);
-          if (endpointMatch) {
-            const url = endpointMatch[1];
-            const sid = new URL(url, 'http://localhost').searchParams.get('sessionId') || '';
-            resolve({
-              sessionId: sid,
-              close: () => {
-                res.destroy();
-                req.destroy();
-              },
-            });
-          }
-        });
-        res.on('error', () => {});
-      },
-    );
-    req.on('error', reject);
-    req.setTimeout(5000, () => {
-      req.destroy();
-      reject(new Error('SSE connection timed out'));
-    });
-  });
+/** 非本机 IP，用于触发 onRequest 中的 Bearer 校验分支 */
+const REMOTE_CLIENT_IP = '192.168.99.1';
+const REMOTE_BEARER_TOKEN = 'jest-remote-bearer-test-token';
+
+function setTokenData(data: TokenData | null): void {
+  (tokenManager as unknown as { data: TokenData | null }).data = data;
 }
 
 describe('服务器测试', () => {
@@ -83,13 +47,13 @@ describe('服务器测试', () => {
     expect(response.body.status).toBe('ok');
     expect(response.body.data).toMatchObject({
       isRunning: false,
-      host: '127.0.0.1',
+      host: SERVER_CONFIG.HOST,
       port: null,
+      authEnabled: false,
       nativeHostAttached: false,
     });
     expect(response.body.data.transports).toMatchObject({
       total: 0,
-      sse: 0,
       streamableHttp: 0,
     });
     expect(response.body.data.execution).toMatchObject({
@@ -219,7 +183,7 @@ describe('服务器测试', () => {
       params: {
         protocolVersion: '2025-03-26',
         capabilities: {},
-        clientInfo: { name: 'parallel-sse-test', version: '1.0.0' },
+        clientInfo: { name: 'parallel-http-test', version: '1.0.0' },
       },
     };
 
@@ -257,113 +221,152 @@ describe('服务器测试', () => {
     expect([200, 204]).toContain(del2.status);
   });
 
-  // ==============================================================
-  // A4: 经典 SSE 传输 (GET /sse + POST /messages) 回归测试
-  // ==============================================================
-
-  describe('经典 SSE 传输', () => {
-    let ssePort: number;
-
-    beforeAll(async () => {
-      await Server.getInstance().listen({ port: 0, host: '127.0.0.1' });
-      const addr = Server.getInstance().server.address() as { port: number };
-      ssePort = addr.port;
+  /**
+   * 放在其它用例之后：先启用 MCP_AUTH_TOKEN + resolve()，再对 inject 设置 remoteAddress，
+   * 覆盖「远程访问必须带有效 Bearer」的 HTTP 层行为（本机 IP 仍豁免）。
+   */
+  describe('远程 IP + Bearer（TokenManager 已启用）', () => {
+    beforeAll(() => {
+      process.env.MCP_AUTH_TOKEN = REMOTE_BEARER_TOKEN;
+      setTokenData(null);
+      tokenManager.resolve();
     });
 
-    afterAll(async () => {
-      await Server.getInstance().close();
+    afterAll(() => {
+      delete process.env.MCP_AUTH_TOKEN;
+      setTokenData(null);
     });
 
-    test('GET /sse 返回 SSE 流并注册 session', async () => {
-      const conn = await openSseConnection(ssePort);
+    test('本机请求仍可不携带 Bearer 访问受保护路由', async () => {
+      const res = await supertest(Server.getInstance().server).get('/agent/engines').expect(200);
+      expect(res.body).toHaveProperty('engines');
+    });
+
+    test('远程 IP 访问公开路径 /ping、/status 无需 Bearer', async () => {
+      const app = Server.getInstance();
+      const ping = await app.inject({
+        method: 'GET',
+        url: '/ping',
+        remoteAddress: REMOTE_CLIENT_IP,
+      });
+      expect(ping.statusCode).toBe(200);
+      const status = await app.inject({
+        method: 'GET',
+        url: '/status',
+        remoteAddress: REMOTE_CLIENT_IP,
+      });
+      expect(status.statusCode).toBe(200);
+      expect(JSON.parse(status.body).data.authEnabled).toBe(true);
+    });
+
+    test('远程 IP 无 Authorization 访问 POST /mcp 返回 401', async () => {
+      const app = Server.getInstance();
+      const initializeRequest = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'remote-auth-test', version: '1.0.0' },
+        },
+      };
+      const res = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: {
+          accept: 'application/json, text/event-stream',
+          'content-type': 'application/json',
+        },
+        payload: initializeRequest,
+      });
+      expect(res.statusCode).toBe(401);
+      const body = JSON.parse(res.body as string);
+      expect(body.message).toContain('Unauthorized');
+    });
+
+    test('远程 IP Bearer 错误时返回 401', async () => {
+      const app = Server.getInstance();
+      const res = await app.inject({
+        method: 'GET',
+        url: '/agent/engines',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: { authorization: 'Bearer wrong-token' },
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    test('远程 IP 携带正确 Bearer 可访问 GET /agent/engines 与 POST /mcp initialize', async () => {
+      const app = Server.getInstance();
+      const authHeaders = { authorization: `Bearer ${REMOTE_BEARER_TOKEN}` };
+
+      const engines = await app.inject({
+        method: 'GET',
+        url: '/agent/engines',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: authHeaders,
+      });
+      expect(engines.statusCode).toBe(200);
+      expect(JSON.parse(engines.body as string)).toHaveProperty('engines');
+
+      const initializeRequest = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'remote-bearer-ok', version: '1.0.0' },
+        },
+      };
+      const mcp = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: {
+          ...authHeaders,
+          accept: 'application/json, text/event-stream',
+          'content-type': 'application/json',
+        },
+        payload: initializeRequest,
+      });
+      expect(mcp.statusCode).toBe(200);
+      expect(mcp.headers['mcp-session-id']).toBeTruthy();
+
+      const sid = String(mcp.headers['mcp-session-id']);
+      const del = await app.inject({
+        method: 'DELETE',
+        url: '/mcp',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: {
+          ...authHeaders,
+          'mcp-session-id': sid,
+        },
+      });
+      expect([200, 204]).toContain(del.statusCode);
+    });
+
+    test('远程 IP 在 token 已过期时即使 Bearer 正确也返回 401', async () => {
+      const app = Server.getInstance();
+      const previous = (tokenManager as unknown as { data: TokenData | null }).data;
+      (tokenManager as unknown as { data: TokenData | null }).data = {
+        token: REMOTE_BEARER_TOKEN,
+        createdAt: 0,
+        expiresAt: Date.now() - 1000,
+      };
       try {
-        expect(conn.sessionId.length).toBeGreaterThan(0);
-
-        const status = await supertest(Server.getInstance().server).get('/status').expect(200);
-        expect(status.body.data.transports.sse).toBeGreaterThanOrEqual(1);
-        expect(status.body.data.transports.sessionIds).toContain(conn.sessionId);
+        const res = await app.inject({
+          method: 'GET',
+          url: '/agent/engines',
+          remoteAddress: REMOTE_CLIENT_IP,
+          headers: { authorization: `Bearer ${REMOTE_BEARER_TOKEN}` },
+        });
+        expect(res.statusCode).toBe(401);
+        expect(JSON.parse(res.body as string).message).toContain('expired');
       } finally {
-        conn.close();
+        (tokenManager as unknown as { data: TokenData | null }).data = previous;
       }
-    });
-
-    test('POST /messages 无效 sessionId 返回 400', async () => {
-      const res = await supertest(Server.getInstance().server)
-        .post('/messages')
-        .query({ sessionId: 'nonexistent-session-id' })
-        .set('Content-Type', 'application/json')
-        .send({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'initialize',
-          params: { protocolVersion: '2025-03-26', capabilities: {} },
-        })
-        .expect(400);
-
-      expect(res.text).toContain('No transport found for sessionId');
-    });
-
-    test('并行 SSE 会话在 /status 中正确计数', async () => {
-      const conn1 = await openSseConnection(ssePort);
-      const conn2 = await openSseConnection(ssePort);
-      try {
-        expect(conn1.sessionId).not.toEqual(conn2.sessionId);
-
-        const status = await supertest(Server.getInstance().server).get('/status').expect(200);
-        const { transports } = status.body.data;
-        expect(transports.sse).toBeGreaterThanOrEqual(2);
-        expect(transports.sessionIds).toEqual(
-          expect.arrayContaining([conn1.sessionId, conn2.sessionId]),
-        );
-
-        const clients = transports.clients as Array<{
-          sessionId: string;
-          kind: string;
-          clientIp: string;
-        }>;
-        const sseClients = clients.filter(
-          (c) => c.sessionId === conn1.sessionId || c.sessionId === conn2.sessionId,
-        );
-        expect(sseClients).toHaveLength(2);
-        for (const c of sseClients) {
-          expect(c.kind).toBe('sse');
-          expect(c.clientIp).toBeTruthy();
-        }
-      } finally {
-        conn1.close();
-        conn2.close();
-      }
-    });
-
-    test('DELETE /status/sessions/:id 可踢出 SSE 会话', async () => {
-      const conn = await openSseConnection(ssePort);
-      const { sessionId } = conn;
-
-      const before = await supertest(Server.getInstance().server).get('/status').expect(200);
-      expect(before.body.data.transports.sessionIds).toContain(sessionId);
-
-      await supertest(Server.getInstance().server)
-        .delete(`/status/sessions/${sessionId}`)
-        .expect(200);
-
-      const after = await supertest(Server.getInstance().server).get('/status').expect(200);
-      expect(after.body.data.transports.sessionIds).not.toContain(sessionId);
-
-      conn.close();
-    });
-
-    test('SSE 连接关闭后 session 自动清理', async () => {
-      const conn = await openSseConnection(ssePort);
-      const { sessionId } = conn;
-
-      const before = await supertest(Server.getInstance().server).get('/status').expect(200);
-      expect(before.body.data.transports.sessionIds).toContain(sessionId);
-
-      conn.close();
-      await new Promise((r) => setTimeout(r, 200));
-
-      const after = await supertest(Server.getInstance().server).get('/status').expect(200);
-      expect(after.body.data.transports.sessionIds).not.toContain(sessionId);
     });
   });
 });

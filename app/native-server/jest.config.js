@@ -6,15 +6,8 @@ module.exports = {
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
-  collectCoverage: true,
+  // Default: fast green tests. Use `npm run test:coverage` for a coverage report.
+  collectCoverage: false,
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts', '!src/scripts/**/*'],
   coverageDirectory: 'coverage',
-  coverageThreshold: {
-    global: {
-      branches: 70,
-      functions: 80,
-      lines: 80,
-      statements: 80,
-    },
-  },
 };

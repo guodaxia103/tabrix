@@ -12,6 +12,7 @@
     "dev": "nodemon --watch src --ext ts,js,json --ignore dist/ --exec \"npm run build && npm run register:dev\"",
     "build": "ts-node src/scripts/build.ts",
     "test": "jest",
+    "test:coverage": "jest --collectCoverage",
     "test:watch": "jest --watch",
     "lint": "eslint 'src/**/*.{js,ts}'",
     "lint:fix": "eslint 'src/**/*.{js,ts}' --fix",
