@@ -31,6 +31,7 @@ export interface UseAgentChatOptions {
   getSessionId: () => string;
   ensureServer: () => Promise<boolean>;
   openEventSource: () => void;
+  getConnectionError?: () => string | null;
 }
 
 export function useAgentChat(options: UseAgentChatOptions) {
@@ -293,7 +294,10 @@ export function useAgentChat(options: UseAgentChatOptions) {
     const sessionId = options.getSessionId();
 
     if (!ready || !serverPort) {
-      errorMessage.value = 'Agent server is not available.';
+      const connectionError = options.getConnectionError?.();
+      errorMessage.value = connectionError
+        ? `Agent server is not available: ${connectionError}`
+        : 'Agent server is not available.';
       return;
     }
 

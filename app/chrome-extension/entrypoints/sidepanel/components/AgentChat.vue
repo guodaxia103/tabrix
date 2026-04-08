@@ -314,6 +314,7 @@ const chat = useAgentChat({
   getSessionId: () => sessions.selectedSessionId.value,
   ensureServer: () => server.ensureNativeServer(),
   openEventSource: () => server.openEventSource(),
+  getConnectionError: () => server.lastError.value,
 });
 
 const projects = useAgentProjects({
