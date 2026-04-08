@@ -517,6 +517,8 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
         fullPage: false,
         width: 1280,
         height: 800,
+        storeBase64: true,
+        savePng: false,
       }),
     );
     record(
