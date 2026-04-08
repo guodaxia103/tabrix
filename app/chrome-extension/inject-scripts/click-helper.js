@@ -1,4 +1,4 @@
-/* eslint-disable */
+ 
 // click-helper.js
 // This script is injected into the page to handle click operations
 
