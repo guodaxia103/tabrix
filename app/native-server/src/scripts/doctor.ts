@@ -25,7 +25,7 @@ import {
   getLogDir,
   discoverLoadedExtensionOrigins,
 } from './utils';
-import { HTTP_STATUS, NATIVE_SERVER_PORT } from '../constant';
+import { HTTP_STATUS, NATIVE_SERVER_PORT, SERVER_CONFIG, MCP_AUTH_TOKEN_ENV } from '../constant';
 
 const EXPECTED_PORT = 12306;
 const SCHEMA_VERSION = 1;
@@ -1392,6 +1392,42 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     },
   });
 
+  // Check 10: Remote access security
+  const isRemoteListening = SERVER_CONFIG.HOST === '0.0.0.0' || SERVER_CONFIG.HOST === '::';
+  const hasAuthToken = !!process.env[MCP_AUTH_TOKEN_ENV];
+  if (isRemoteListening && !hasAuthToken) {
+    const tokenFilePath = path.join(os.homedir(), '.mcp-chrome', 'auth-token.json');
+    const hasTokenFile = fs.existsSync(tokenFilePath);
+    if (!hasTokenFile) {
+      checks.push({
+        id: 'security.auth',
+        title: 'Remote access security',
+        status: 'warn',
+        message: 'Remote access enabled — token will be auto-generated on first server start',
+        details: {
+          host: SERVER_CONFIG.HOST,
+          fix: ['Start the server once to auto-generate a token, or set MCP_AUTH_TOKEN env var'],
+        },
+      });
+      nextSteps.push('Start the server to auto-generate auth token, or set MCP_AUTH_TOKEN');
+    } else {
+      checks.push({
+        id: 'security.auth',
+        title: 'Remote access security',
+        status: 'ok',
+        message: 'Remote access enabled with persisted token authentication',
+        details: { tokenFile: tokenFilePath },
+      });
+    }
+  } else if (isRemoteListening && hasAuthToken) {
+    checks.push({
+      id: 'security.auth',
+      title: 'Remote access security',
+      status: 'ok',
+      message: 'Remote access enabled with environment variable token',
+    });
+  }
+
   // Compute summary
   const summary = computeSummary(checks);
   const ok = summary.error === 0;
@@ -1448,6 +1484,14 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
     if (report.nextSteps.length > 0) {
       console.log('\nNext steps:');
       report.nextSteps.forEach((s, i) => console.log(`  ${i + 1}. ${s}`));
+      if (!options.fix) {
+        console.log(
+          colorText(
+            `\nTip: run "${COMMAND_NAME} doctor --fix" to auto-repair these issues.`,
+            'yellow',
+          ),
+        );
+      }
     }
   }
 

@@ -1,10 +1,9 @@
 /**
- * Session Registry — manages MCP transport sessions (SSE & Streamable HTTP).
+ * Session Registry — manages MCP transport sessions (Streamable HTTP only).
  *
  * Extracted from server/index.ts (A2) to centralize session lifecycle:
  *   register / get / remove / disconnect / snapshot / closeAll
  */
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
 
@@ -19,23 +18,15 @@ export interface TransportMeta {
   connectedAt: number;
 }
 
-export type ManagedTransport = (
-  | {
-      kind: 'sse';
-      transport: SSEServerTransport;
-      server: McpServer;
-    }
-  | {
-      kind: 'streamable-http';
-      transport: StreamableHTTPServerTransport;
-      server: McpServer;
-    }
-) &
-  TransportMeta;
+export type ManagedTransport = {
+  kind: 'streamable-http';
+  transport: StreamableHTTPServerTransport;
+  server: McpServer;
+} & TransportMeta;
 
 export interface ConnectedClient {
   sessionId: string;
-  kind: 'sse' | 'streamable-http';
+  kind: 'streamable-http';
   clientIp: string;
   clientName: string;
   clientVersion: string;
@@ -44,7 +35,6 @@ export interface ConnectedClient {
 
 export interface TransportsSnapshot {
   total: number;
-  sse: number;
   streamableHttp: number;
   sessionIds: string[];
   clients: ConnectedClient[];
@@ -122,16 +112,9 @@ export class SessionRegistry {
    */
   snapshot(): TransportsSnapshot {
     const sessionIds = [...this.transports.keys()];
-    let sse = 0;
-    let streamableHttp = 0;
     const clients: ConnectedClient[] = [];
 
     for (const [sid, entry] of this.transports.entries()) {
-      if (entry.kind === 'sse') {
-        sse += 1;
-      } else {
-        streamableHttp += 1;
-      }
       clients.push({
         sessionId: sid,
         kind: entry.kind,
@@ -142,6 +125,6 @@ export class SessionRegistry {
       });
     }
 
-    return { total: sessionIds.length, sse, streamableHttp, sessionIds, clients };
+    return { total: sessionIds.length, streamableHttp: sessionIds.length, sessionIds, clients };
   }
 }

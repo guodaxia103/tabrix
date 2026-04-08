@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import crypto from 'crypto';
 import { execSync } from 'child_process';
 import { promisify } from 'util';
 import { COMMAND_NAME, DESCRIPTION, EXTENSION_ID, HOST_NAME } from './constant';
@@ -241,22 +242,98 @@ async function ensureWindowsFilePermissions(packageDistDir: string): Promise<voi
 }
 
 /**
- * Create Native Messaging host manifest content
+ * Derive Chrome extension ID from a base64-encoded public key.
+ * Algorithm: SHA-256 the raw key bytes, take first 32 hex chars,
+ * map each hex digit 0-f → a-p.
+ */
+export function computeExtensionIdFromKey(base64Key: string): string {
+  const keyBytes = Buffer.from(base64Key, 'base64');
+  const hash = crypto.createHash('sha256').update(keyBytes).digest('hex');
+  return hash
+    .slice(0, 32)
+    .replace(/[0-9a-f]/g, (c) => String.fromCharCode('a'.charCodeAt(0) + parseInt(c, 16)));
+}
+
+/**
+ * Try to read the `key` field from the built extension's manifest.json.
+ * Searches common relative paths from the native-server package.
+ */
+export function findBuiltExtensionKey(): string | null {
+  const candidates = [
+    path.resolve(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      'chrome-extension',
+      '.output',
+      'chrome-mv3',
+      'manifest.json',
+    ),
+    path.resolve(
+      __dirname,
+      '..',
+      '..',
+      'chrome-extension',
+      '.output',
+      'chrome-mv3',
+      'manifest.json',
+    ),
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (!fs.existsSync(candidate)) continue;
+      const manifest = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+      if (typeof manifest.key === 'string' && manifest.key.length > 0) {
+        return manifest.key;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+/**
+ * Create Native Messaging host manifest content.
+ *
+ * Origin resolution order:
+ * 1. Compute ID from the built extension's manifest.json `key` (always correct)
+ * 2. Discover currently loaded extension IDs from Chrome Secure Preferences
+ * 3. Fall back to the hardcoded EXTENSION_ID constant
+ *
+ * All unique origins are merged so the manifest stays valid across
+ * extension upgrades, re-installs, and directory changes.
  */
 export async function createManifestContent(): Promise<any> {
   const mainPath = await getMainPath();
+
+  const originSet = new Set<string>();
+
+  // 1. Key-derived ID (highest priority — always matches the current build)
+  const builtKey = findBuiltExtensionKey();
+  if (builtKey) {
+    const keyDerivedId = computeExtensionIdFromKey(builtKey);
+    originSet.add(`chrome-extension://${keyDerivedId}/`);
+  }
+
+  // 2. Discovered IDs from Chrome Secure Preferences
   const detectedOrigins = discoverLoadedExtensionOrigins();
-  const allowedOrigins =
-    detectedOrigins.origins.length > 0
-      ? Array.from(new Set(detectedOrigins.origins))
-      : [`chrome-extension://${EXTENSION_ID}/`];
+  for (const origin of detectedOrigins.origins) {
+    originSet.add(origin);
+  }
+
+  // 3. Fallback constant
+  if (originSet.size === 0) {
+    originSet.add(`chrome-extension://${EXTENSION_ID}/`);
+  }
 
   return {
     name: HOST_NAME,
     description: DESCRIPTION,
-    path: mainPath, // Node.js可执行文件路径
+    path: mainPath,
     type: 'stdio',
-    allowed_origins: allowedOrigins,
+    allowed_origins: Array.from(originSet),
   };
 }
 

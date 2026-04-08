@@ -234,9 +234,15 @@ export class NativeMessagingHost {
 
       await this.associatedServer.start(port, this);
 
+      const snapshot = this.associatedServer.getStatusSnapshot();
       this.sendMessage({
         type: NativeMessageType.SERVER_STARTED,
-        payload: { port },
+        payload: {
+          port,
+          host: snapshot.host,
+          ...(snapshot.networkAddresses && { networkAddresses: snapshot.networkAddresses }),
+          authEnabled: snapshot.authEnabled,
+        },
       });
     } catch (error: any) {
       this.sendError(`Failed to start server: ${error.message}`);

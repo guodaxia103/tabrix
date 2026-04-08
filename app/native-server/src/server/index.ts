@@ -10,6 +10,7 @@
  */
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
+import os from 'os';
 import {
   NATIVE_SERVER_PORT,
   TIMEOUTS,
@@ -17,8 +18,8 @@ import {
   HTTP_STATUS,
   ERROR_MESSAGES,
 } from '../constant';
+import { tokenManager } from './auth';
 import { NativeMessagingHost } from '../native-messaging-host';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { randomUUID } from 'node:crypto';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -44,6 +45,9 @@ interface ServerStatusSnapshot {
   isRunning: boolean;
   host: string;
   port: number | null;
+  networkAddresses?: string[];
+  authEnabled: boolean;
+  securityWarning?: string;
   nativeHostAttached: boolean;
   transports: TransportsSnapshot;
   execution: {
@@ -71,6 +75,30 @@ export type { ConnectedClient };
 
 function canWriteReply(reply: FastifyReply): boolean {
   return !reply.sent && !reply.raw.writableEnded && !reply.raw.headersSent;
+}
+
+function getLocalNetworkAddresses(): string[] {
+  const interfaces = os.networkInterfaces();
+  const virtualPatterns =
+    /^(vEthernet|Tailscale|Meta|VMware|VirtualBox|docker|br-|virbr|tun|tap|utun|wg)/i;
+  const results: Array<{ name: string; address: string; priority: number }> = [];
+
+  for (const [name, entries] of Object.entries(interfaces)) {
+    if (!entries) continue;
+    for (const entry of entries) {
+      if (entry.internal || entry.family !== 'IPv4') continue;
+      let priority = 50;
+      if (virtualPatterns.test(name)) priority = 90;
+      else if (/^(WLAN|Wi-Fi|wlan|en0|eth)/i.test(name)) priority = 10;
+      else if (/^(Ethernet|eth|en)/i.test(name)) priority = 20;
+      if (/^192\.168\./.test(entry.address)) priority -= 5;
+      else if (/^10\./.test(entry.address)) priority -= 3;
+      results.push({ name, address: entry.address, priority });
+    }
+  }
+
+  results.sort((a, b) => a.priority - b.priority);
+  return results.map((r) => r.address);
 }
 
 // ============================================================
@@ -123,8 +151,37 @@ export class Server {
   }
 
   private setupRoutes(): void {
+    const LOCALHOST_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+    const AUTH_PUBLIC_PATHS = new Set(['/ping', '/status', '/auth/token', '/auth/refresh']);
+
+    this.fastify.addHook('onRequest', async (request, reply) => {
+      if (!tokenManager.enabled) return;
+      if (AUTH_PUBLIC_PATHS.has(request.url.split('?')[0])) return;
+      if (LOCALHOST_IPS.has(request.ip)) return;
+
+      const authHeader = request.headers.authorization;
+      const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : '';
+      const result = tokenManager.verify(bearer);
+
+      if (result === 'expired') {
+        reply.status(HTTP_STATUS.UNAUTHORIZED).send({
+          status: 'error',
+          message:
+            'Token expired – refresh via extension popup or POST /auth/refresh from localhost.',
+        });
+      } else if (result === 'invalid') {
+        reply.status(HTTP_STATUS.UNAUTHORIZED).send({
+          status: 'error',
+          message: 'Unauthorized – provide a valid Bearer token via the Authorization header.',
+        });
+      }
+    });
+
     // Health check
     this.setupHealthRoutes();
+
+    // Auth token management (localhost only)
+    this.setupAuthRoutes();
 
     // Extension communication
     this.setupExtensionRoutes();
@@ -175,6 +232,66 @@ export class Server {
   }
 
   // ============================================================
+  // Auth Routes (localhost only)
+  // ============================================================
+
+  private setupAuthRoutes(): void {
+    const LOCALHOST_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+    this.fastify.get('/auth/token', async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!LOCALHOST_IPS.has(request.ip)) {
+        return reply.status(403).send({
+          status: 'error',
+          message: 'Forbidden – auth management is only available from localhost.',
+        });
+      }
+      const info = tokenManager.info();
+      if (!info) {
+        return reply.status(HTTP_STATUS.OK).send({ status: 'ok', data: null });
+      }
+      reply.status(HTTP_STATUS.OK).send({ status: 'ok', data: info });
+    });
+
+    this.fastify.post('/auth/refresh', async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!LOCALHOST_IPS.has(request.ip)) {
+        return reply.status(403).send({
+          status: 'error',
+          message: 'Forbidden – auth management is only available from localhost.',
+        });
+      }
+      try {
+        const body = (request.body || {}) as { ttlDays?: unknown };
+        let ttlDays: number | undefined;
+        if (body.ttlDays !== undefined && body.ttlDays !== null && body.ttlDays !== '') {
+          const n = Number(body.ttlDays);
+          if (!Number.isFinite(n) || n < 0 || n > 3650) {
+            return reply.status(HTTP_STATUS.BAD_REQUEST).send({
+              status: 'error',
+              message: 'ttlDays must be a number between 0 and 3650 (0 = never expire).',
+            });
+          }
+          ttlDays = Math.floor(n);
+        }
+        const data = ttlDays !== undefined ? tokenManager.refresh(ttlDays) : tokenManager.refresh();
+        const info = tokenManager.info();
+        reply.status(HTTP_STATUS.OK).send({
+          status: 'ok',
+          data: {
+            token: data.token,
+            createdAt: data.createdAt,
+            expiresAt: data.expiresAt,
+            fromEnv: false,
+            ttlDays: info?.ttlDays ?? null,
+          },
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        reply.status(HTTP_STATUS.BAD_REQUEST).send({ status: 'error', message: msg });
+      }
+    });
+  }
+
+  // ============================================================
   // Extension Routes
   // ============================================================
 
@@ -222,59 +339,6 @@ export class Server {
   // ============================================================
 
   private setupMcpRoutes(): void {
-    // SSE endpoint
-    this.fastify.get('/sse', async (request, reply) => {
-      try {
-        reply.hijack();
-        // SSEServerTransport.start() (called by server.connect) sends
-        // writeHead + endpoint event itself — do NOT call writeHead here
-        // to avoid ERR_HTTP_HEADERS_SENT.
-        const transport = new SSEServerTransport('/messages', reply.raw);
-        const server = createMcpServer();
-        this.sessions.register(transport.sessionId, {
-          kind: 'sse',
-          transport,
-          server,
-          clientIp: request.ip,
-          clientName: '',
-          clientVersion: '',
-          connectedAt: Date.now(),
-        });
-
-        reply.raw.on('close', () => {
-          this.sessions.remove(transport.sessionId);
-        });
-
-        await server.connect(transport);
-      } catch (error) {
-        if (!reply.raw.writableEnded) {
-          reply.raw.end(ERROR_MESSAGES.INTERNAL_SERVER_ERROR);
-        }
-      }
-    });
-
-    // SSE messages endpoint
-    this.fastify.post('/messages', async (req, reply) => {
-      try {
-        const { sessionId } = req.query as { sessionId?: string };
-        const entry = this.sessions.get(sessionId || '');
-        if (!sessionId || !entry || entry.kind !== 'sse') {
-          reply.code(HTTP_STATUS.BAD_REQUEST).send('No transport found for sessionId');
-          return;
-        }
-
-        if (isInitializeRequest(req.body) && !entry.clientName) {
-          this.sessions.updateClientInfo(sessionId, req.body);
-        }
-
-        await entry.transport.handlePostMessage(req.raw, reply.raw, req.body);
-      } catch (error) {
-        if (canWriteReply(reply)) {
-          reply.code(HTTP_STATUS.INTERNAL_SERVER_ERROR).send(ERROR_MESSAGES.INTERNAL_SERVER_ERROR);
-        }
-      }
-    });
-
     // MCP POST endpoint
     this.fastify.post('/mcp', async (request, reply) => {
       const sessionId = request.headers['mcp-session-id'] as string | undefined;
@@ -410,7 +474,14 @@ export class Server {
     }
 
     try {
-      await this.fastify.listen({ port, host: SERVER_CONFIG.HOST });
+      const host = SERVER_CONFIG.HOST;
+      const isWildcard = host === '0.0.0.0' || host === '::';
+
+      if (isWildcard || process.env.MCP_AUTH_TOKEN) {
+        tokenManager.resolve();
+      }
+
+      await this.fastify.listen({ port, host });
 
       // Set port environment variables after successful listen for Chrome MCP URL resolution
       process.env.CHROME_MCP_PORT = String(port);
@@ -452,10 +523,20 @@ export class Server {
     const tasks = sessionManager.listTasks();
     const executionSessions = sessionManager.listSessions();
 
+    const host = SERVER_CONFIG.HOST;
+    const isWildcard = host === '0.0.0.0' || host === '::';
+
+    const authEnabled = tokenManager.enabled;
+    const securityWarning =
+      isWildcard && !authEnabled ? 'Remote access enabled without authentication' : undefined;
+
     return {
       isRunning: this.isRunning,
-      host: SERVER_CONFIG.HOST,
+      host,
       port: this.listeningPort,
+      ...(isWildcard && { networkAddresses: getLocalNetworkAddresses() }),
+      authEnabled,
+      ...(securityWarning && { securityWarning }),
       nativeHostAttached: this.nativeHost !== null,
       transports: this.sessions.snapshot(),
       execution: {

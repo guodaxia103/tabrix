@@ -19,6 +19,7 @@ export const TIMEOUTS = {
 
 // Server configuration
 export const MCP_HTTP_HOST_ENV = 'MCP_HTTP_HOST';
+export const MCP_AUTH_TOKEN_ENV = 'MCP_AUTH_TOKEN';
 
 function resolveListenHost(): string {
   const raw = process.env[MCP_HTTP_HOST_ENV];
@@ -48,6 +49,7 @@ export const HTTP_STATUS = {
   CREATED: 201,
   NO_CONTENT: 204,
   BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
   NOT_FOUND: 404,
   INTERNAL_SERVER_ERROR: 500,
   GATEWAY_TIMEOUT: 504,
