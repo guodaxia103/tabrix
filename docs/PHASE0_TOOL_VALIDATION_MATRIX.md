@@ -19,7 +19,7 @@ Status legend:
 | `chrome_close_tabs`               | navigation   | pass     | pass    | Verified by smoke cleanup and CoPaw close-tab flow                                          |
 | `chrome_read_page`                | page-read    | pass     | warn    | Verified on smoke page; CoPaw degrades on `chrome://` and sparse localhost pages            |
 | `chrome_get_web_content`          | page-read    | pass     | pass    | Verified via smoke, CoPaw runtime, and CoPaw chat-visible `#result` extraction              |
-| `chrome_get_interactive_elements` | page-read    | warn     | pending | Deprecated and not exposed in current tools/list; `chrome_read_page` is the supported path  |
+| `chrome_get_interactive_elements` | page-read    | warn     | pending | 当前仍在 tools/list 中暴露；新流程优先使用 `chrome_read_page`，后续可再评估收敛             |
 | `search_tabs_content`             | page-read    | fail     | pending | Documented in shared schema but not exposed by the current MCP tools/list response          |
 
 ## Interaction
@@ -76,7 +76,7 @@ These names exist in shared schemas or extension code, but are not currently exp
 | Tool                                   | Status | Notes                                                                     |
 | -------------------------------------- | ------ | ------------------------------------------------------------------------- |
 | `search_tabs_content`                  | fail   | Mentioned in docs/shared schema, but not returned by current `tools/list` |
-| `chrome_get_interactive_elements`      | warn   | Deprecated in favor of `chrome_read_page`                                 |
+| `chrome_get_interactive_elements`      | warn   | 当前仍对外暴露，建议新流程优先使用 `chrome_read_page`                     |
 | `chrome_inject_script`                 | fail   | Current bridge returns disabled/unavailable when called directly          |
 | `chrome_send_command_to_inject_script` | fail   | Current bridge returns disabled/unavailable when called directly          |
 | `chrome_userscript`                    | fail   | Mentioned in shared schema, but not returned by current `tools/list`      |

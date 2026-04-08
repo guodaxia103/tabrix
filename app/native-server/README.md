@@ -1,6 +1,10 @@
-# Fastify Chrome Native Messaging服务
+# MCP Chrome Bridge Native Server
 
-这是一个基于Fastify的TypeScript项目，用于与Chrome扩展进行原生通信。
+`app/native-server` 是 `mcp-chrome-bridge` 的本地服务端实现，负责：
+
+- 通过 Chrome Native Messaging 与扩展通信
+- 暴露 `http://127.0.0.1:12306/mcp` 等本地 HTTP / SSE MCP 接口
+- 提供 `setup`、`register`、`doctor`、`status`、`smoke` 等运维命令
 
 ## 功能特性
 
@@ -20,32 +24,36 @@
 
 ### 安装
 
+在 monorepo 根目录安装依赖：
+
 ```bash
-git clone https://github.com/your-username/fastify-chrome-native.git
-cd fastify-chrome-native
-npm install
+pnpm install
 ```
 
 ### 开发
 
-1. 本地构建注册native server
+1. 构建 native server
 
 ```bash
-cd app/native-server
-npm run dev
+pnpm --filter mcp-chrome-bridge build
 ```
 
-2. 启动chrome extension
+2. 开发模式运行 native server
 
 ```bash
-cd app/chrome-extension
-npm run dev
+pnpm --filter mcp-chrome-bridge dev
+```
+
+3. 启动 Chrome 扩展开发环境
+
+```bash
+pnpm --filter chrome-mcp-server dev
 ```
 
 ### 构建
 
 ```bash
-npm run build
+pnpm --filter mcp-chrome-bridge build
 ```
 
 ### 注册Native Messaging主机
@@ -90,7 +98,7 @@ npm i -g mcp-chrome-bridge
 
 ### 与Chrome扩展集成
 
-以下是Chrome扩展中如何使用此服务的简单示例：
+以下示例仅说明 Native Messaging 交互形态，真实项目中请以仓库内扩展实现为准：
 
 ```javascript
 // background.js
@@ -105,7 +113,7 @@ function startServer() {
   }
 
   try {
-    nativePort = chrome.runtime.connectNative('com.yourcompany.fastify_native_host');
+    nativePort = chrome.runtime.connectNative('com.chrome.mcp.nativehost');
 
     nativePort.onMessage.addListener((message) => {
       console.log('收到Native消息:', message);
@@ -128,7 +136,7 @@ function startServer() {
     });
 
     // 启动服务器
-    nativePort.postMessage({ type: 'start', payload: { port: 3000 } });
+    nativePort.postMessage({ type: 'start', payload: { port: 12306 } });
   } catch (error) {
     console.error('启动Native Messaging时出错:', error);
   }
@@ -144,7 +152,7 @@ function stopServer() {
 // 测试与服务器的通信
 async function testPing() {
   try {
-    const response = await fetch('http://localhost:3000/ping');
+    const response = await fetch('http://127.0.0.1:12306/ping');
     const data = await response.json();
     console.log('Ping响应:', data);
     return data;
@@ -175,7 +183,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 ### 测试
 
 ```bash
-npm run test
+pnpm --filter mcp-chrome-bridge test
 ```
 
 ### 许可证
