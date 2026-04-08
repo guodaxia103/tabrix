@@ -1,4 +1,18 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@": ["."],
+      "@/*": ["./*"],
+      "~": ["."],
+      "~/*": ["./*"],
+      "@@": ["."],
+      "@@/*": ["./*"],
+      "~~": ["."],
+      "~~/*": ["./*"],
+      "chrome-mcp-shared": ["../../packages/shared/src/index.ts"]
+    }
+  },
+  "include": ["**/*", "../../packages/shared/src/**/*", ".wxt/wxt.d.ts"],
   "exclude": ["tests", "node_modules", ".output", "dist", "**/vitest.config.*"]
 }
