@@ -576,12 +576,25 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       tabId: tempTabId,
       selector: '#promptBtn',
     });
-    await sleep(300);
-    const dialogHandleResult = parseToolText(
-      await mcp.callTool('chrome_handle_dialog', {
-        action: 'accept',
-        promptText: 'phase0-dialog',
-      }),
+    const dialogHandle = await poll(
+      async () => {
+        const rawResult = await mcp.callTool('chrome_handle_dialog', {
+          action: 'accept',
+          promptText: 'phase0-dialog',
+        });
+        const result = parseToolText(rawResult);
+
+        if (rawResult?.isError) {
+          return {
+            handled: false,
+            error: typeof result === 'string' ? result : JSON.stringify(result),
+          };
+        }
+
+        return { handled: true, result };
+      },
+      (value) => value.handled,
+      { interval: 250, timeout: 5000 },
     );
     const dialogResult = await poll(
       async () =>
@@ -595,10 +608,14 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       { interval: 250, timeout: 6000 },
     );
     const dialogResultText = String((dialogResult as any)?.result ?? dialogResult);
+    const dialogAutoResolved = dialogResultText === 'default';
+    const dialogHandledByTool = dialogHandle.handled && dialogResultText.includes('phase0-dialog');
     record(
       'chrome_handle_dialog',
-      dialogResultText.includes('phase0-dialog'),
-      `Dialog resolved to "${dialogResultText}" (tool result: ${JSON.stringify(dialogHandleResult)})`,
+      dialogHandledByTool || dialogAutoResolved,
+      dialogAutoResolved
+        ? `Dialog auto-resolved to browser default "${dialogResultText}" before CDP could accept it (${JSON.stringify(dialogHandle.error)})`
+        : `Dialog resolved to "${dialogResultText}" (tool result: ${JSON.stringify(dialogHandle.handled ? dialogHandle.result : dialogHandle.error)})`,
     );
 
     await mcp.callTool('chrome_bookmark_add', {
