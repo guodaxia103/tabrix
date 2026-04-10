@@ -279,6 +279,7 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 - [Architecture](docs/ARCHITECTURE.md)
 - [Contributing](docs/CONTRIBUTING.md)
 - [Visual Editor](docs/VisualEditor.md)
+- [Release Process](docs/RELEASE_PROCESS.md)
 
 ## License
 

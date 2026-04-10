@@ -277,6 +277,7 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 
 - [架构设计](docs/ARCHITECTURE_zh.md)
 - [贡献指南](docs/CONTRIBUTING_zh.md)
+- [发布流程](docs/RELEASE_PROCESS_zh.md)
 - [可视化编辑器](docs/VisualEditor_zh.md)
 
 ## 许可证

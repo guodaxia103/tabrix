@@ -45,50 +45,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
       - name: Resolve release metadata
         id: meta
         shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-            if [ -z "${TAG}" ]; then
-              echo "Missing required input: tag"
-              exit 1
-            fi
-          else
-            TAG="${GITHUB_REF_NAME}"
-          fi
-
-          EXPECTED="${TAG#tabrix-v}"
-          EXPECTED="${EXPECTED#v}"
-          ACTUAL="$(node -p "require('./app/native-server/package.json').version")"
-          PACKAGE_NAME="$(node -p "require('./app/native-server/package.json').name")"
-
-          echo "Tag: ${TAG}"
-          echo "Package name: ${PACKAGE_NAME}"
-          echo "Expected version: ${EXPECTED}"
-          echo "Package version: ${ACTUAL}"
-
-          if [ "${EXPECTED}" != "${ACTUAL}" ]; then
-            echo "Version mismatch: tag=${EXPECTED}, package=${ACTUAL}"
-            exit 1
-          fi
-
-          NOTES_CANDIDATE="docs/RELEASE_NOTES_v${ACTUAL}.md"
-          if [ -f "${NOTES_CANDIDATE}" ]; then
-            NOTES_FILE="${NOTES_CANDIDATE}"
-          else
-            NOTES_FILE="docs/CHANGELOG.md"
-          fi
-
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "package_name=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
-          echo "version=${ACTUAL}" >> "$GITHUB_OUTPUT"
-          echo "notes_file=${NOTES_FILE}" >> "$GITHUB_OUTPUT"
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+        run: pnpm run release:check
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -106,7 +72,7 @@ jobs:
         run: pnpm run audit
 
       - name: Build shared + native package
-        run: pnpm --filter ./app/native-server build
+        run: pnpm --filter @tabrix/tabrix build
 
       - name: Build extension zip
         run: pnpm --filter @tabrix/extension zip

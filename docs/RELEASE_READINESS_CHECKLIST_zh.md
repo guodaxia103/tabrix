@@ -16,7 +16,7 @@
 pnpm lint
 pnpm typecheck
 pnpm --filter @tabrix/extension test
-pnpm --filter tabrix test
+pnpm --filter @tabrix/tabrix test
 pnpm build
 ```
 
@@ -33,7 +33,7 @@ pnpm build
 如果是源码仓验证，先确保 native bridge 已构建：
 
 ```powershell
-pnpm --filter tabrix build
+pnpm --filter @tabrix/tabrix build
 ```
 
 首次安装或注册丢失时，执行：

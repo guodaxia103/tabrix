@@ -1,4 +1,4 @@
-# MCP Chrome Bridge Native Server
+# Tabrix Native Server
 
 `app/native-server` 是 `tabrix` 的本地服务端实现，负责：
 
@@ -35,13 +35,13 @@ pnpm install
 1. 构建 native server
 
 ```bash
-pnpm --filter tabrix build
+pnpm --filter @tabrix/tabrix build
 ```
 
 2. 开发模式运行 native server
 
 ```bash
-pnpm --filter tabrix dev
+pnpm --filter @tabrix/tabrix dev
 ```
 
 3. 启动 Chrome 扩展开发环境
@@ -53,7 +53,7 @@ pnpm --filter @tabrix/extension dev
 ### 构建
 
 ```bash
-pnpm --filter tabrix build
+pnpm --filter @tabrix/tabrix build
 ```
 
 ### 注册Native Messaging主机
@@ -183,7 +183,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 ### 测试
 
 ```bash
-pnpm --filter tabrix test
+pnpm --filter @tabrix/tabrix test
 ```
 
 ### 许可证

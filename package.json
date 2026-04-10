@@ -40,6 +40,8 @@
     "deps:outdated": "pnpm -r outdated",
     "audit": "pnpm audit --prod --audit-level high",
     "i18n:check": "node ./scripts/check-i18n.mjs",
+    "release:check": "node ./scripts/check-release-readiness.mjs",
+    "release:check:ci": "node ./scripts/check-release-readiness.mjs --allow-missing-notes",
     "ci:check": "pnpm run i18n:check && pnpm run typecheck && pnpm run test:core && pnpm run audit",
     "prepare": "husky"
   },
