@@ -57,6 +57,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Prepare extension generated types
+        run: pnpm --filter @tabrix/extension exec wxt prepare
+
       - name: i18n check
         run: pnpm run i18n:check
 
