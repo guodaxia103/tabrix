@@ -24,12 +24,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Checkout manual tag
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: |
-          git checkout "refs/tags/${{ github.event.inputs.tag }}"
+          fetch-tags: true
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -49,6 +45,10 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ github.event.inputs.tag }}"
+            if [ -z "${TAG}" ]; then
+              echo "Missing required input: tag"
+              exit 1
+            fi
           else
             TAG="${GITHUB_REF_NAME}"
           fi
