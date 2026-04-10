@@ -50,9 +50,21 @@ tabrix register
 
 ### 3) 本地校验
 
+检查当前运行状态：
+
 ```bash
 tabrix status
+```
+
+执行诊断：
+
+```bash
 tabrix doctor
+```
+
+执行冒烟测试：
+
+```bash
 tabrix smoke
 ```
 

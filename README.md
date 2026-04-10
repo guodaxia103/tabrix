@@ -50,9 +50,21 @@ Download from [Releases](https://github.com/guodaxia103/tabrix/releases), then l
 
 ### 3) Verify Environment
 
+Check runtime status:
+
 ```bash
 tabrix status
+```
+
+Run diagnostics:
+
+```bash
 tabrix doctor
+```
+
+Run smoke test:
+
+```bash
 tabrix smoke
 ```
 
