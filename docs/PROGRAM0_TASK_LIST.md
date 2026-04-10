@@ -23,7 +23,7 @@
 ### 维护约定（任务闭环）
 
 1. **合并或验收一个任务时**：在本文件中把对应编号更新为 `[x]`，或写入 **「§ 会话落地」** 子节；若为部分完成，标 `[~]` 并在说明列写清剩余工作。
-2. **自动化能覆盖的**（单测、`mcp-chrome-bridge smoke`、CI）：在 PR/提交说明里引用命令与结果；**不能替代的**（干净机安装、多客户端、Mac、SSE 并行）必须落入 **「十二、手动测试清单」** 或该任务行的说明列，避免「以为已闭环」。
+2. **自动化能覆盖的**（单测、`tabrix smoke`、CI）：在 PR/提交说明里引用命令与结果；**不能替代的**（干净机安装、多客户端、Mac、SSE 并行）必须落入 **「十二、手动测试清单」** 或该任务行的说明列，避免「以为已闭环」。
 3. **每次发版或里程碑结束前**：扫一遍本节与各表，更新 **「统计」** 与 **最后更新** 日期。
 
 ---
@@ -84,16 +84,16 @@
 - `[x]` C1. Windows 注册/管理员/构建流程加固
 - `[x]` C2. `postinstall` 权限检测对齐
 - `[x]` C3. 构建清理更健壮（EBUSY 处理）
-- `[x]` C7. CLI 子命令 `mcp-chrome-bridge setup`（`scripts/setup.ts` + `cli.ts`）
+- `[x]` C7. CLI 子命令 `tabrix setup`（`scripts/setup.ts` + `cli.ts`）
 
 ### 待完成
 
-| 编号 | 任务                          | 关联 Issue    | 难度 | 说明                                                                                                                                              |
-| ---- | ----------------------------- | ------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| C4   | npm global install 端到端验证 | #292, #199    | 高   | 从全新 Windows 机器执行 `npm install -g mcp-chrome-bridge` → `register` → 加载扩展 → 连接 → 跑通第一个工具，写成可复现 checklist。**见 §十二 C4** |
-| C5   | pnpm global install 兼容性    | README 已注明 | 中   | pnpm v7+ 默认禁用 postinstall，需验证 `enable-pre-post-scripts` 或手动 `register` 路径                                                            |
-| C6   | 开发环境依赖安装报错          | #274          | 低   | `pnpm install` 在某些 macOS 环境报错（`node-gyp` / native 模块），需记录已知依赖与前置条件                                                        |
-| C8   | npx 启动方式验证              | 社区常见      | 低   | 验证 `npx mcp-chrome-bridge doctor` 等是否可直接使用                                                                                              |
+| 编号 | 任务                          | 关联 Issue    | 难度 | 说明                                                                                                                                          |
+| ---- | ----------------------------- | ------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| C4   | npm global install 端到端验证 | #292, #199    | 高   | 从全新 Windows 机器执行 `npm install -g tabrix@latest` → `register` → 加载扩展 → 连接 → 跑通第一个工具，写成可复现 checklist。**见 §十二 C4** |
+| C5   | pnpm global install 兼容性    | README 已注明 | 中   | pnpm v7+ 默认禁用 postinstall，需验证 `enable-pre-post-scripts` 或手动 `register` 路径                                                        |
+| C6   | 开发环境依赖安装报错          | #274          | 低   | `pnpm install` 在某些 macOS 环境报错（`node-gyp` / native 模块），需记录已知依赖与前置条件                                                    |
+| C8   | npx 启动方式验证              | 社区常见      | 低   | 验证 `npx tabrix doctor` 等是否可直接使用                                                                                                     |
 
 ---
 
@@ -167,17 +167,17 @@
 
 ### 待验证
 
-| 编号 | 客户端                | 传输方式               | 关联 Issue       | 任务                                                                                                                                                                                                                                        |
-| ---- | --------------------- | ---------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1   | Claude Desktop        | streamableHttp         | —                | 验证连接、工具列表、基础操作，记录结果                                                                                                                                                                                                      |
-| F2   | Cursor                | streamableHttp / stdio | —                | 在 Cursor MCP 设置中配置并验证                                                                                                                                                                                                              |
-| F3   | Claude Code CLI       | stdio                  | #199, #299, #307 | 上游大量连接问题。确认 `mcp-chrome-stdio` 在 Windows 下的完整路径                                                                                                                                                                           |
-| F4   | CherryStudio          | streamableHttp         | README 示例      | 验证 README 配置是否直接可用                                                                                                                                                                                                                |
-| F5   | Dify                  | streamableHttp?        | #262             | 社区尝试失败。评估是否在 Phase 0 支持                                                                                                                                                                                                       |
-| F6   | MCP Inspector / curl  | HTTP                   | —                | 用 curl 手动验证 `/mcp` 的 initialize → tool call 流程                                                                                                                                                                                      |
-| F7   | stdio 通用验证        | stdio                  | #319             | `[x]` **已完成**：新增 `scripts/stdio-smoke.ts` — 使用 MCP SDK `StdioClientTransport` 启动子进程并验证 initialize → tools/list → resources/list → prompts/list → ping → clean close；CLI 新增 `mcp-chrome-bridge stdio-smoke [--json]` 命令 |
-| F8   | **OpenClaw 兼容验证** | MCP (streamableHttp)   | 新需求           | OpenClaw 是 2026 增长最快的开源个人 AI，天然需要浏览器能力。验证 `openclaw.json` MCP 配置 → 连接 → 工具调用 → 多渠道触发（Telegram/Discord）                                                                                                |
-| F9   | **Windsurf 兼容验证** | streamableHttp / stdio | 新需求           | Windsurf 是主流 AI IDE，有最强企业 MCP 管控。验证配置文件格式和工具发现                                                                                                                                                                     |
+| 编号 | 客户端                | 传输方式               | 关联 Issue       | 任务                                                                                                                                                                                                                             |
+| ---- | --------------------- | ---------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1   | Claude Desktop        | streamableHttp         | —                | 验证连接、工具列表、基础操作，记录结果                                                                                                                                                                                           |
+| F2   | Cursor                | streamableHttp / stdio | —                | 在 Cursor MCP 设置中配置并验证                                                                                                                                                                                                   |
+| F3   | Claude Code CLI       | stdio                  | #199, #299, #307 | 上游大量连接问题。确认 `tabrix-stdio` 在 Windows 下的完整路径                                                                                                                                                                    |
+| F4   | CherryStudio          | streamableHttp         | README 示例      | 验证 README 配置是否直接可用                                                                                                                                                                                                     |
+| F5   | Dify                  | streamableHttp?        | #262             | 社区尝试失败。评估是否在 Phase 0 支持                                                                                                                                                                                            |
+| F6   | MCP Inspector / curl  | HTTP                   | —                | 用 curl 手动验证 `/mcp` 的 initialize → tool call 流程                                                                                                                                                                           |
+| F7   | stdio 通用验证        | stdio                  | #319             | `[x]` **已完成**：新增 `scripts/stdio-smoke.ts` — 使用 MCP SDK `StdioClientTransport` 启动子进程并验证 initialize → tools/list → resources/list → prompts/list → ping → clean close；CLI 新增 `tabrix stdio-smoke [--json]` 命令 |
+| F8   | **OpenClaw 兼容验证** | MCP (streamableHttp)   | 新需求           | OpenClaw 是 2026 增长最快的开源个人 AI，天然需要浏览器能力。验证 `openclaw.json` MCP 配置 → 连接 → 工具调用 → 多渠道触发（Telegram/Discord）                                                                                     |
+| F9   | **Windsurf 兼容验证** | streamableHttp / stdio | 新需求           | Windsurf 是主流 AI IDE，有最强企业 MCP 管控。验证配置文件格式和工具发现                                                                                                                                                          |
 
 ### 产出物
 
@@ -196,7 +196,7 @@
 - `[x]` `WHY_MCP_CHROME.md`（竞品对比精简页）
 - `[x]` G8. README 已链入「Why mcp-chrome」竞品对比（与上条同一文档）
 - `[x]` G1. 统一 README 入口 — 底部文档区分层为 Users / AI Assistants / Developers；工具列表对齐 TOOL_SCHEMAS（27+ 工具分 8 类）
-- `[x]` G2. 中文 README 同步 — `README_zh.md` 新增运维指南区块、`mcp-chrome-bridge setup`/本地验证、工具列表对齐、文档分层
+- `[x]` G2. 中文 README 同步 — `README_zh.md` 新增运维指南区块、`tabrix setup`/本地验证、工具列表对齐、文档分层
 
 ### 待完成
 
@@ -279,7 +279,7 @@
 | J7   | Popup 配置 IP 智能化    | #290            | `[x]` **已完成**：监听 0.0.0.0 时 Popup 配置模板显示实际 LAN IP；`/status` 返回 `networkAddresses`；网卡排序过滤 VPN/虚拟网卡                                                                         |
 | J8   | 配置名统一 chrome-mcp   | —               | `[x]` **已完成**：Popup 配置模板 + STABLE_QUICKSTART.md + WINDOWS_INSTALL_zh.md 中 mcpServers key 统一为 `chrome-mcp`                                                                                 |
 | J9   | SSE 硬删除              | —               | `[x]` **已完成**：硬删 `GET /sse` + `POST /messages` 路由、`SSEServerTransport` import、`session-registry.ts` SSE 类型、SSE 测试；Popup 恢复「本机 / stdio / 远程」三 Tab                             |
-| J10  | 远程 Token 完整方案     | —               | `[x]` **已完成**：`TokenManager` 自动生成 + 持久化（`~/.mcp-chrome/auth-token.json`）+ 7 天过期 + 本机豁免；`/auth/token` + `/auth/refresh` 端点；Popup 远程 Tab Token 显示/复制/刷新 UI              |
+| J10  | 远程 Token 完整方案     | —               | `[x]` **已完成**：`TokenManager` 自动生成 + 持久化（`~/.tabrix/auth-token.json`）+ 7 天过期 + 本机豁免；`/auth/token` + `/auth/refresh` 端点；Popup 远程 Tab Token 显示/复制/刷新 UI                  |
 
 ---
 
@@ -346,8 +346,8 @@
 
 | ID              | 场景                                  | 如何测                                                                                                                                                   | 通过标准（摘要）                     |
 | --------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| **D9**          | smoke 稳定性                          | Chrome 打开扩展并 **连接**，`12306` 可达后执行 `mcp-chrome-bridge smoke`（或 `node dist/cli.js smoke`）                                                  | **连续 ≥5 次** exit code 0           |
-| **C4**          | npm global 干净机                     | 新 Windows 用户或 VM：`npm i -g mcp-chrome-bridge` → `register --browser chrome` → 加载扩展 → 连接 → `doctor` + 一次 `smoke` 或 `chrome_navigate`        | 无隐藏失败；doctor 无 ERROR          |
+| **D9**          | smoke 稳定性                          | Chrome 打开扩展并 **连接**，`12306` 可达后执行 `tabrix smoke`（或 `node dist/cli.js smoke`）                                                             | **连续 ≥5 次** exit code 0           |
+| **C4**          | npm global 干净机                     | 新 Windows 用户或 VM：`npm i -g tabrix@latest` → `register --browser chrome` → 加载扩展 → 连接 → `doctor` + 一次 `smoke` 或 `chrome_navigate`            | 无隐藏失败；doctor 无 ERROR          |
 | **A4**          | SSE / 并行 session                    | **已自动化**：`pnpm test` 中 `server.test.ts`（并行 streamable-http + `GET /mcp` 无 session 错误）。**可选手动**：两路 `GET /sse` 长连接或真实客户端并行 | 与 Jest 一致；手动无串 session       |
 | **B4/B7**       | 状态机 / 重启                         | 人为制造「已连但服务未起」、**完全退出 Chrome 再开**，观察 popup 与 CoPaw 连接                                                                           | 文案与真实状态一致；重连路径可理解   |
 | **B9**          | Mac                                   | 仅在 macOS：`register`、`doctor`、扩展路径与权限                                                                                                         | 与 Windows 行为对齐文档记录          |
@@ -390,7 +390,7 @@
 - `[x]` **E8（inject_script 禁用文档化）**：`docs/SECURITY.md` 中明确标记为 "Disabled by default for security"。
 - `[x]` **H3（安全文档）**：新建 `docs/SECURITY.md`，包含 Indirect Prompt Injection 风险说明、缓解措施表、用户建议、工具风险分类（Read-only / Side-effect / Destructive / Disabled）。
 - `[x]` **G1（README 统一入口）**：底部文档区分层为 For Users / For AI Assistants / For Developers & Contributors；工具列表对齐 TOOL_SCHEMAS（27+ 工具分 8 类）；修复 `PHASE0_TEST_MATRIX.md` 链接。
-- `[x]` **G2（中文 README 同步）**：`README_zh.md` 新增运维指南区块、`mcp-chrome-bridge setup` 与本地验证、工具列表对齐 27+ 工具 8 类、底部文档分层。
+- `[x]` **G2（中文 README 同步）**：`README_zh.md` 新增运维指南区块、`tabrix setup` 与本地验证、工具列表对齐 27+ 工具 8 类、底部文档分层。
 
 ### 2026-04-07 审计修正
 
@@ -404,7 +404,7 @@
 ### 2026-04-07 会话落地（节选）
 
 - `[x]` **A8**：`mcp-server-stdio` 增加 stdin 关闭与 SIGTERM/SIGINT 处理，减轻父进程退出后僵尸进程问题（`mcp/mcp-server-stdio.ts`）。
-- `[x]` **C7**：新增 CLI 子命令 `mcp-chrome-bridge setup`（`scripts/setup.ts` + `cli.ts`）。
+- `[x]` **C7**：新增 CLI 子命令 `tabrix setup`（`scripts/setup.ts` + `cli.ts`）。
 - `[x]` **A7**：新增 `docs/TRANSPORT.md`（HTTP/SSE/stdio 说明）。
 - `[x]` **G8**：新增 `docs/WHY_MCP_CHROME.md`，README 已链入。
 - `[x]` **I4 v1**：新增 `skills/chrome_mcp_browser/SKILL.md` 与 `references/quick_ref.md`。
@@ -454,7 +454,7 @@
 
 - `[x]` **A9（Chrome 144+ 兼容性）**：`POST /mcp` 新增 stale session 分支 — 当 `mcp-session-id` 存在但 registry 中无对应会话时，返回 `STALE_MCP_SESSION` 错误（含恢复指引：重新发送不带 session-id 的 initialize）；`wxt.config.ts` 新增 `minimum_chrome_version: '120'`。
 - `[x]` **D10（error-page 噪音清理）**：`base-browser.ts` 移除注入/ping 相关 `console.error`/`console.log`/`console.warn`（ping 超时和注入失败是预期路径，改为静默 catch 或由 throw 传播）；`element-marker/index.ts` 注入失败、overlay 启动失败、contextMenu 失败改为静默 catch；`recorder.js` 移除 `console.warn`。
-- `[x]` **F7（stdio 冒烟测试）**：新增 `scripts/stdio-smoke.ts` — 使用 MCP SDK `StdioClientTransport` 启动子进程并验证 initialize → tools/list → resources/list → prompts/list → ping → clean close；CLI 注册 `mcp-chrome-bridge stdio-smoke [--json]` 命令。
+- `[x]` **F7（stdio 冒烟测试）**：新增 `scripts/stdio-smoke.ts` — 使用 MCP SDK `StdioClientTransport` 启动子进程并验证 initialize → tools/list → resources/list → prompts/list → ping → clean close；CLI 注册 `tabrix stdio-smoke [--json]` 命令。
 - `[!]` **E7/E9（暂不开放）**：`search_tabs_content` 和 `chrome_userscript` 标记为 Phase 1。用户决策：Phase 0 暂不开放。
 
 ### 2026-04-07 v2.10 功能请求（J2/J3/J4）
@@ -479,7 +479,7 @@
 ### 2026-04-08 v2.13 SSE 硬删 + Token 完整方案
 
 - `[x]` **J9 v2（SSE 硬删除）**：1）删除 `GET /sse` + `POST /messages` 路由代码；2）删除 `SSEServerTransport` import；3）`session-registry.ts` 移除 `kind: 'sse'` 联合类型、`SSEServerTransport` import、snapshot `sse` 计数；4）`server.test.ts` 删除 `openSseConnection` 辅助函数 + 整个「经典 SSE 传输」describe 块（5 个测试）+ `node:http` import；5）Popup 恢复「本机 / stdio / 远程」三 Tab + stdio 配置 JSON；6）文档删除 SSE 章节。
-- `[x]` **J10 v2（Token 完整方案）**：1）新增 `server/auth.ts` `TokenManager` 类：`resolve`（优先 env → 文件 → 自动生成）、`generate`、`refresh`、`verify`、`info`；Token 持久化到 `~/.mcp-chrome/auth-token.json`；2）默认 7 天过期（`MCP_AUTH_TOKEN_TTL` 可配，`0` = 永不过期）；3）authGuard 本机 IP（`127.0.0.1` / `::1` / `::ffff:127.0.0.1`）豁免；4）Token 过期返回 `401 Token expired`；5）`GET /auth/token` + `POST /auth/refresh` 端点（仅本机 403）；6）Popup 远程 Tab：Token 遮罩/明文切换、复制按钮、过期倒计时、「重新生成」按钮、`fromEnv` 标识；7）`server.start()` 中 `0.0.0.0` 监听自动 `tokenManager.resolve()`；8）`doctor.ts` 改用 `MCP_AUTH_TOKEN_ENV` + 检查 `auth-token.json` 文件；9）全部文档同步。
+- `[x]` **J10 v2（Token 完整方案）**：1）新增 `server/auth.ts` `TokenManager` 类：`resolve`（优先 env → 文件 → 自动生成）、`generate`、`refresh`、`verify`、`info`；Token 持久化到 `~/.tabrix/auth-token.json`；2）默认 7 天过期（`MCP_AUTH_TOKEN_TTL` 可配，`0` = 永不过期）；3）authGuard 本机 IP（`127.0.0.1` / `::1` / `::ffff:127.0.0.1`）豁免；4）Token 过期返回 `401 Token expired`；5）`GET /auth/token` + `POST /auth/refresh` 端点（仅本机 403）；6）Popup 远程 Tab：Token 遮罩/明文切换、复制按钮、过期倒计时、「重新生成」按钮、`fromEnv` 标识；7）`server.start()` 中 `0.0.0.0` 监听自动 `tokenManager.resolve()`；8）`doctor.ts` 改用 `MCP_AUTH_TOKEN_ENV` + 检查 `auth-token.json` 文件；9）全部文档同步。
 
 ### 待办标记
 

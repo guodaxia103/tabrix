@@ -42,7 +42,7 @@ export function getPopupNativeErrorGuidance(error: string): string | null {
     return [
       `最近一次连接错误: ${normalized}`,
       '诊断结论：当前扩展 ID 不在生效的 Native Messaging manifest.allowed_origins 中，或注册表指向了旧清单。',
-      '建议：在终端执行 mcp-chrome-bridge doctor --fix；若仍失败，执行 mcp-chrome-bridge register --force，然后完全重启 Chrome 并在 chrome://extensions/ 重新加载扩展。',
+      '建议：在终端执行 tabrix doctor --fix；若仍失败，执行 tabrix register --force，然后完全重启 Chrome 并在 chrome://extensions/ 重新加载扩展。',
     ].join(' ');
   }
 
@@ -50,7 +50,7 @@ export function getPopupNativeErrorGuidance(error: string): string | null {
     return [
       `最近一次连接错误: ${normalized}`,
       '诊断结论：Native host 未注册、路径失效或宿主启动失败。',
-      '建议：执行 mcp-chrome-bridge doctor --fix；必要时 mcp-chrome-bridge register --force。',
+      '建议：执行 tabrix doctor --fix；必要时 tabrix register --force。',
     ].join(' ');
   }
 
@@ -64,7 +64,7 @@ export function getPopupNativeErrorGuidance(error: string): string | null {
 
   return [
     `最近一次连接错误: ${normalized}`,
-    '建议：执行 mcp-chrome-bridge doctor --fix 进行自动修复；仍失败时执行 mcp-chrome-bridge register --force，然后完全重启 Chrome。',
+    '建议：执行 tabrix doctor --fix 进行自动修复；仍失败时执行 tabrix register --force，然后完全重启 Chrome。',
   ].join(' ');
 }
 
@@ -72,7 +72,7 @@ export function getPopupRepairCommand(error: string | null): string | null {
   if (!error) return null;
   const category = classifyPopupNativeError(error);
   if (category === 'forbidden' || category === 'host-missing' || category === 'unknown') {
-    return 'mcp-chrome-bridge doctor --fix && mcp-chrome-bridge register --force';
+    return 'tabrix doctor --fix && tabrix register --force';
   }
   if (category === 'auth') {
     return null;

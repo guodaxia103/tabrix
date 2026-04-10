@@ -26,7 +26,7 @@ import { getPersistedHost } from '../host-config';
 /**
  * Resolve listen host with priority:
  *   1. MCP_HTTP_HOST env var (explicit override for advanced users / daemon)
- *   2. ~/.mcp-chrome/config.json "host" (persisted user preference from extension toggle)
+ *   2. ~/.tabrix/config.json "host" (persisted user preference from extension toggle)
  *   3. Default: '127.0.0.1'
  */
 function resolveListenHost(): string {

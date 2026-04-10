@@ -139,8 +139,8 @@ program
               'yellow',
             ),
           );
-          console.log(colorText('  1. sudo mcp-chrome-bridge register', 'yellow'));
-          console.log(colorText('  2. mcp-chrome-bridge register --system', 'yellow'));
+          console.log(colorText('  1. sudo tabrix register', 'yellow'));
+          console.log(colorText('  2. tabrix register --system', 'yellow'));
           process.exit(1);
         }
       }

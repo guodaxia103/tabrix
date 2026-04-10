@@ -1,12 +1,12 @@
-# Chrome MCP Server 🚀
+# Tabrix 🚀
 
-[![Stars](https://img.shields.io/github/stars/hangwin/mcp-chrome)](https://img.shields.io/github/stars/hangwin/mcp-chrome)
+[![Stars](https://img.shields.io/github/stars/guodaxia103/tabrix)](https://img.shields.io/github/stars/guodaxia103/tabrix)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-blue.svg)](https://www.typescriptlang.org/)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-green.svg)](https://developer.chrome.com/docs/extensions/)
-[![Release](https://img.shields.io/github/v/release/hangwin/mcp-chrome.svg)](https://img.shields.io/github/v/release/hangwin/mcp-chrome.svg)
+[![Release](https://img.shields.io/github/v/release/guodaxia103/tabrix.svg)](https://img.shields.io/github/v/release/guodaxia103/tabrix.svg)
 
-> 🌟 **Turn your Chrome browser into your intelligent assistant** - Let AI take control of your browser, transforming it into a powerful AI-controlled automation tool.
+> 🌟 **Turn your Chrome browser into your intelligent assistant** - Tabrix lets AI take control of your browser, transforming it into a powerful automation tool.
 
 **📖 Documentation**: [English](README.md) | [中文](README_zh.md)
 
@@ -14,14 +14,14 @@
 
 ---
 
-## 🎯 What is Chrome MCP Server?
+## 🎯 What is Tabrix?
 
-Chrome MCP Server is a Chrome extension-based **Model Context Protocol (MCP) server** that exposes your Chrome browser functionality to AI assistants like Claude, enabling complex browser automation, content analysis, and semantic search. Unlike traditional browser automation tools (like Playwright), **Chrome MCP Server** directly uses your daily Chrome browser, leveraging existing user habits, configurations, and login states, allowing various large models or chatbots to take control of your browser and truly become your everyday assistant.
+Tabrix is a Chrome extension-based **Model Context Protocol (MCP) server** that exposes your Chrome browser functionality to AI assistants like Claude, enabling complex browser automation, content analysis, and semantic search. Unlike traditional browser automation tools (like Playwright), **Tabrix** directly uses your daily Chrome browser, leveraging existing user habits, configurations, and login states, allowing various large models or chatbots to take control of your browser and truly become your everyday assistant.
 
 ## ✨ New Features(2025/12/30)
 
 - **A New Visual Editor for Claude Code & Codex**, for more detail here: [VisualEditor](docs/VisualEditor.md)
-- **Stable runtime diagnostics**: use `mcp-chrome-bridge status`, `doctor`, and `report` for faster local troubleshooting
+- **Stable runtime diagnostics**: use `tabrix status`, `doctor`, and `report` for faster local troubleshooting
 
 ## 📘 Stable Ops Guides
 
@@ -63,14 +63,14 @@ Chrome MCP Server is a Chrome extension-based **Model Context Protocol (MCP) ser
 
 1. **Download the latest Chrome extension from GitHub**
 
-Download link: https://github.com/hangwin/mcp-chrome/releases
+Download link: https://github.com/guodaxia103/tabrix/releases
 
-2. **Install mcp-chrome-bridge globally**
+2. **Install tabrix globally**
 
 npm
 
 ```bash
-npm install -g mcp-chrome-bridge
+npm install -g tabrix@latest
 ```
 
 pnpm
@@ -78,14 +78,14 @@ pnpm
 ```bash
 # Method 1: Enable scripts globally (recommended)
 pnpm config set enable-pre-post-scripts true
-pnpm install -g mcp-chrome-bridge
+pnpm install -g tabrix@latest
 
 # Method 2: Manual registration (if postinstall doesn't run)
-pnpm install -g mcp-chrome-bridge
-mcp-chrome-bridge register
+pnpm install -g tabrix@latest
+tabrix register
 ```
 
-**Guided setup (register + next steps):** after install, you can run `mcp-chrome-bridge setup` for the same registration flow plus a short checklist (extension load URL, `doctor`, `smoke`).
+**Guided setup (register + next steps):** after install, you can run `tabrix setup` for the same registration flow plus a short checklist (extension load URL, `doctor`, `smoke`).
 
 > Note: pnpm v7+ disables postinstall scripts by default for security. The `enable-pre-post-scripts` setting controls whether pre/post install scripts run. If automatic registration fails, use the manual registration command above.
 
@@ -101,9 +101,9 @@ mcp-chrome-bridge register
 For a hardened local validation flow, use:
 
 ```bash
-mcp-chrome-bridge status
-mcp-chrome-bridge doctor
-mcp-chrome-bridge smoke
+tabrix status
+tabrix doctor
+tabrix smoke
 ```
 
 Use the popup `Refresh` button or `Disconnect -> Connect` if the UI says connected but the local service is not running yet. For the full troubleshooting flow, see [Stable Quickstart](docs/STABLE_QUICKSTART.md).
@@ -114,29 +114,29 @@ By default, the MCP server starts when Chrome launches the native host. To keep 
 
 ```bash
 # Start daemon in the background
-mcp-chrome-bridge daemon start
+tabrix daemon start
 
 # Check daemon status
-mcp-chrome-bridge daemon status
+tabrix daemon status
 
 # Stop daemon
-mcp-chrome-bridge daemon stop
+tabrix daemon stop
 
 # (Windows) Install autostart on login
-mcp-chrome-bridge daemon install-autostart
+tabrix daemon install-autostart
 
 # (Windows) Remove autostart
-mcp-chrome-bridge daemon remove-autostart
+tabrix daemon remove-autostart
 ```
 
-> **Note**: In daemon mode, browser-specific tools (like `chrome_screenshot`) are unavailable until Chrome opens and the extension connects. Non-browser tools work normally. Daemon logs are saved to `~/.mcp-chrome/daemon.log`.
+> **Note**: In daemon mode, browser-specific tools (like `chrome_screenshot`) are unavailable until Chrome opens and the extension connects. Non-browser tools work normally. Daemon logs are saved to `~/.tabrix/daemon.log`.
 
 ### Remote Access (optional)
 
 To allow LAN machines or Docker containers to connect:
 
-1. Open the extension popup → **Remote** tab → toggle the **remote access switch** ON. The server immediately restarts on `0.0.0.0` — no browser restart needed. The preference is saved to `~/.mcp-chrome/config.json` and persists across reconnects and browser restarts.
-2. A Token is auto-generated on first enable (saved to `~/.mcp-chrome/auth-token.json`). The popup displays the full MCP config including the `Authorization` header.
+1. Open the extension popup → **Remote** tab → toggle the **remote access switch** ON. The server immediately restarts on `0.0.0.0` — no browser restart needed. The preference is saved to `~/.tabrix/config.json` and persists across reconnects and browser restarts.
+2. A Token is auto-generated on first enable (saved to `~/.tabrix/auth-token.json`). The popup displays the full MCP config including the `Authorization` header.
 3. Allow the port through your firewall, then copy the config to the remote machine.
 
 > **Advanced**: Set `MCP_HTTP_HOST=0.0.0.0` as an OS env var to override the config file (useful for daemon mode). Token expires in 7 days by default (`MCP_AUTH_TOKEN_TTL`). Localhost requests bypass token auth.
@@ -168,13 +168,13 @@ If your client only supports stdio connection method, please use the following a
 
 ```sh
 # npm check method
-npm list -g mcp-chrome-bridge
+npm list -g tabrix
 # pnpm check method
-pnpm list -g mcp-chrome-bridge
+pnpm list -g tabrix
 ```
 
 Assuming the command above outputs the path: /Users/xxx/Library/pnpm/global/5
-Then your final path would be: /Users/xxx/Library/pnpm/global/5/node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js
+Then your final path would be: /Users/xxx/Library/pnpm/global/5/node_modules/tabrix/dist/mcp/mcp-server-stdio.js
 
 2. Replace the configuration below with the final path you just obtained
 
@@ -185,7 +185,7 @@ Then your final path would be: /Users/xxx/Library/pnpm/global/5/node_modules/mcp
       "command": "npx",
       "args": [
         "node",
-        "/Users/xxx/Library/pnpm/global/5/node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js"
+        "/Users/xxx/Library/pnpm/global/5/node_modules/tabrix/dist/mcp/mcp-server-stdio.js"
       ]
     }
   }

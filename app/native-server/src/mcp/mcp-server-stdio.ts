@@ -128,7 +128,7 @@ async function shutdownGracefully(reason: string): Promise<void> {
     // ignore close errors
   }
   // stderr only — stdout is MCP protocol stream
-  console.error(`[mcp-chrome-stdio] shutting down (${reason})`);
+  console.error(`[tabrix-stdio] shutting down (${reason})`);
   process.exit(0);
 }
 

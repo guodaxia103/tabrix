@@ -5,13 +5,13 @@ import { LINKS, NATIVE_HOST } from '@/common/constants';
 import '../sidepanel/styles/agent-chat.css';
 
 const COMMANDS = {
-  npmInstall: 'npm install -g mcp-chrome-bridge',
-  pnpmInstall: 'pnpm add -g mcp-chrome-bridge',
-  yarnInstall: 'yarn global add mcp-chrome-bridge',
+  npmInstall: 'npm install -g tabrix@latest',
+  pnpmInstall: 'pnpm add -g tabrix@latest',
+  yarnInstall: 'yarn global add tabrix@latest',
   mcpUrl: 'http://127.0.0.1:' + NATIVE_HOST.DEFAULT_PORT + '/mcp',
-  doctor: 'mcp-chrome-bridge doctor',
-  fix: 'mcp-chrome-bridge doctor --fix',
-  report: 'mcp-chrome-bridge report --copy',
+  doctor: 'tabrix doctor',
+  fix: 'tabrix doctor --fix',
+  report: 'tabrix report --copy',
 } as const;
 
 type CommandKey = keyof typeof COMMANDS;
@@ -106,7 +106,7 @@ async function openDocs(): Promise<void> {
         <div class="max-w-3xl mx-auto space-y-6">
           <section class="welcome-card welcome-card--primary p-6">
             <h2 class="welcome-title text-xl font-medium">
-              Install <code class="welcome-code">mcp-chrome-bridge</code>
+              Install <code class="welcome-code">tabrix</code>
             </h2>
             <p class="welcome-muted text-sm mt-2">
               The Chrome extension uses this local bridge to expose MCP tools to your client.

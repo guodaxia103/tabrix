@@ -1,6 +1,6 @@
 # MCP Chrome Bridge Native Server
 
-`app/native-server` 是 `mcp-chrome-bridge` 的本地服务端实现，负责：
+`app/native-server` 是 `tabrix` 的本地服务端实现，负责：
 
 - 通过 Chrome Native Messaging 与扩展通信
 - 暴露 `http://127.0.0.1:12306/mcp` 等本地 HTTP / SSE MCP 接口
@@ -35,13 +35,13 @@ pnpm install
 1. 构建 native server
 
 ```bash
-pnpm --filter mcp-chrome-bridge build
+pnpm --filter tabrix build
 ```
 
 2. 开发模式运行 native server
 
 ```bash
-pnpm --filter mcp-chrome-bridge dev
+pnpm --filter tabrix dev
 ```
 
 3. 启动 Chrome 扩展开发环境
@@ -53,7 +53,7 @@ pnpm --filter chrome-mcp-server dev
 ### 构建
 
 ```bash
-pnpm --filter mcp-chrome-bridge build
+pnpm --filter tabrix build
 ```
 
 ### 注册Native Messaging主机
@@ -61,26 +61,26 @@ pnpm --filter mcp-chrome-bridge build
 #### 自动检测并注册所有已安装的浏览器
 
 ```bash
-mcp-chrome-bridge register --detect
+tabrix register --detect
 ```
 
 #### 注册特定浏览器
 
 ```bash
 # 仅注册 Chrome
-mcp-chrome-bridge register --browser chrome
+tabrix register --browser chrome
 
 # 仅注册 Chromium
-mcp-chrome-bridge register --browser chromium
+tabrix register --browser chromium
 
 # 注册所有支持的浏览器
-mcp-chrome-bridge register --browser all
+tabrix register --browser all
 ```
 
 #### 全局安装（会自动注册检测到的浏览器）
 
 ```bash
-npm i -g mcp-chrome-bridge
+npm i -g tabrix@latest
 ```
 
 #### 浏览器支持
@@ -183,7 +183,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 ### 测试
 
 ```bash
-pnpm --filter mcp-chrome-bridge test
+pnpm --filter tabrix test
 ```
 
 ### 许可证

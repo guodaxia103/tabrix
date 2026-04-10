@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Stdio smoke test — validates the mcp-chrome-stdio proxy process
+ * Stdio smoke test — validates the tabrix-stdio proxy process
  * can start, respond to MCP protocol messages, and shut down cleanly.
  *
  * Does NOT require the HTTP MCP server to be running (only tests local
@@ -111,7 +111,7 @@ export async function runStdioSmoke(options: StdioSmokeOptions = {}): Promise<nu
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
   } else {
-    process.stdout.write('mcp-chrome-bridge stdio-smoke\n\n');
+    process.stdout.write('tabrix stdio-smoke\n\n');
     for (const step of steps) {
       process.stdout.write(`${step.ok ? '[OK]' : '[FAIL]'} ${step.name}: ${step.detail}\n`);
     }

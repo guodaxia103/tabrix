@@ -10,7 +10,7 @@ interface DaemonStatus {
   healthy: boolean;
 }
 
-const PID_DIR = path.join(os.homedir(), '.mcp-chrome');
+const PID_DIR = path.join(os.homedir(), '.tabrix');
 const PID_FILE = path.join(PID_DIR, 'daemon.pid');
 const TASK_NAME = 'McpChromeBridgeDaemon';
 
@@ -155,7 +155,7 @@ export async function daemonStop(): Promise<{
   return { stopped: !stillAlive, pid, graceful: false };
 }
 
-const LAUNCHD_LABEL = 'com.mcp-chrome-bridge.daemon';
+const LAUNCHD_LABEL = 'com.tabrix.daemon';
 
 function getLaunchdPlistPath(): string {
   return path.join(os.homedir(), 'Library', 'LaunchAgents', `${LAUNCHD_LABEL}.plist`);
@@ -163,7 +163,7 @@ function getLaunchdPlistPath(): string {
 
 function getSystemdUnitPath(): string {
   const configDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-  return path.join(configDir, 'systemd', 'user', 'mcp-chrome-bridge.service');
+  return path.join(configDir, 'systemd', 'user', 'tabrix.service');
 }
 
 function buildLaunchdPlist(nodePath: string, cliPath: string): string {
@@ -236,7 +236,7 @@ export function installDaemonAutostart(): void {
   fs.mkdirSync(path.dirname(unitPath), { recursive: true });
   fs.writeFileSync(unitPath, buildSystemdUnit(nodePath, cliPath), 'utf8');
   execFileSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'pipe' });
-  execFileSync('systemctl', ['--user', 'enable', 'mcp-chrome-bridge.service'], {
+  execFileSync('systemctl', ['--user', 'enable', 'tabrix.service'], {
     stdio: 'pipe',
   });
 }
@@ -264,7 +264,7 @@ export function removeDaemonAutostart(): void {
   }
 
   try {
-    execFileSync('systemctl', ['--user', 'disable', 'mcp-chrome-bridge.service'], {
+    execFileSync('systemctl', ['--user', 'disable', 'tabrix.service'], {
       stdio: 'pipe',
     });
   } catch {

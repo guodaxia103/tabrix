@@ -949,7 +949,7 @@ const activeConfigTabHint = computed(() => {
     case 'local':
       return 'Cursor / Claude Desktop / CherryStudio / Windsurf 等本地客户端';
     case 'stdio':
-      return '适用于 Claude Code CLI 等（需先 npm i -g mcp-chrome-bridge）';
+      return '适用于 Claude Code CLI 等（需先 npm i -g tabrix@latest）';
     case 'remote':
       return '远程机器或 Docker 通过局域网 IP 连接';
     default:
@@ -979,7 +979,7 @@ const activeConfigJson = computed(() => {
         {
           mcpServers: {
             'chrome-mcp': {
-              command: 'mcp-chrome-stdio',
+              command: 'tabrix-stdio',
             },
           },
         },
@@ -1175,7 +1175,7 @@ const statusDetailText = computed(() => {
   if (state === ConnectionState.ERROR && lastNativeError.value) {
     return (
       getPopupNativeErrorGuidance(lastNativeError.value) ||
-      `最近一次连接错误: ${lastNativeError.value}。建议先执行 mcp-chrome-bridge doctor --fix，再执行 mcp-chrome-bridge register --force，随后完全重启 Chrome 并在 chrome://extensions/ 重新加载扩展。`
+      `最近一次连接错误: ${lastNativeError.value}。建议先执行 tabrix doctor --fix，再执行 tabrix register --force，随后完全重启 Chrome 并在 chrome://extensions/ 重新加载扩展。`
     );
   }
   if (
@@ -1186,10 +1186,10 @@ const statusDetailText = computed(() => {
     return '检测到本机守护进程正在运行，但扩展尚未连接。若需浏览器自动化工具，请打开 Chrome 并点击 Connect 建立扩展通道。';
   }
   if (state === ConnectionState.CONNECTED) {
-    return 'Native host 已连接，但本地 MCP 服务尚未就绪。可先点「刷新」；仍失败时在终端执行 mcp-chrome-bridge doctor，核对端口与防火墙，并在 chrome://extensions/ 重新加载本扩展。';
+    return 'Native host 已连接，但本地 MCP 服务尚未就绪。可先点「刷新」；仍失败时在终端执行 tabrix doctor，核对端口与防火墙，并在 chrome://extensions/ 重新加载本扩展。';
   }
   if (state === ConnectionState.DISCONNECTED) {
-    return '点击连接后如果仍无法启动，请确认扩展已重新加载，且本地 native host manifest 已重新注册。若希望无浏览器时保持服务在线，可执行 mcp-chrome-bridge daemon start。';
+    return '点击连接后如果仍无法启动，请确认扩展已重新加载，且本地 native host manifest 已重新注册。若希望无浏览器时保持服务在线，可执行 tabrix daemon start。';
   }
   return '';
 });
@@ -1200,10 +1200,10 @@ const repairCommandText = computed(() => {
     return getPopupRepairCommand(lastNativeError.value);
   }
   if (state === ConnectionState.CONNECTED) {
-    return 'mcp-chrome-bridge status';
+    return 'tabrix status';
   }
   if (state === ConnectionState.DISCONNECTED) {
-    return 'mcp-chrome-bridge doctor --fix && mcp-chrome-bridge register --force';
+    return 'tabrix doctor --fix && tabrix register --force';
   }
   return null;
 });
@@ -1221,24 +1221,12 @@ const troubleshootingCommands = computed(() => {
     pushCommand('quick', '当前错误快速修复', repairCommandText.value);
   }
 
-  pushCommand(
-    'doctor-fix',
-    '基础诊断与自动修复',
-    'mcp-chrome-bridge doctor && mcp-chrome-bridge doctor --fix',
-  );
+  pushCommand('doctor-fix', '基础诊断与自动修复', 'tabrix doctor && tabrix doctor --fix');
   if (!daemonReachable.value) {
-    pushCommand(
-      'daemon-start',
-      '启动守护进程（无浏览器也可保持服务在线）',
-      'mcp-chrome-bridge daemon start',
-    );
-    pushCommand(
-      'daemon-autostart',
-      '安装守护进程开机自启',
-      'mcp-chrome-bridge daemon install-autostart',
-    );
+    pushCommand('daemon-start', '启动守护进程（无浏览器也可保持服务在线）', 'tabrix daemon start');
+    pushCommand('daemon-autostart', '安装守护进程开机自启', 'tabrix daemon install-autostart');
   }
-  pushCommand('register-force', '强制重注册 Native host', 'mcp-chrome-bridge register --force');
+  pushCommand('register-force', '强制重注册 Native host', 'tabrix register --force');
   pushCommand(
     'remote-mode',
     '持久化远程模式（守护进程/环境变量）',
@@ -1256,19 +1244,19 @@ const troubleshootingScript = computed(() => {
     '# MCP Chrome 快速排障脚本（适用于 bash / zsh / PowerShell）',
     '',
     '# 1) 基础诊断',
-    'mcp-chrome-bridge doctor',
+    'tabrix doctor',
     '',
     '# 2) 自动修复常见问题',
-    'mcp-chrome-bridge doctor --fix',
+    'tabrix doctor --fix',
     '',
     '# 3) 启动守护进程（可选，提升重启后可用性）',
-    'mcp-chrome-bridge daemon start',
+    'tabrix daemon start',
     '',
     '# 4) （Windows）安装守护进程开机自启（可选）',
-    'mcp-chrome-bridge daemon install-autostart',
+    'tabrix daemon install-autostart',
     '',
     '# 5) 强制重注册 Native host',
-    'mcp-chrome-bridge register --force',
+    'tabrix register --force',
   ];
 
   let step = 6;

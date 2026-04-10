@@ -27,7 +27,7 @@ When an AI assistant reads web page content via `chrome_read_page` or `chrome_ge
 - **Separate browser profiles**: Use a dedicated Chrome profile for AI automation. Do not keep banking, email admin, or cloud console sessions active in the same profile.
 - **Review tool permissions**: Set `DISABLE_MCP_TOOLS` to disable tools you don't need (e.g., `chrome_javascript`, `chrome_bookmark_delete`).
 - **Use read-only mode when possible**: Many AI clients support MCP tool approval. Enable it for destructive operations.
-- **Stay updated**: Keep mcp-chrome-bridge and the Chrome extension up to date to benefit from security patches.
+- **Stay updated**: Keep tabrix and the Chrome extension up to date to benefit from security patches.
 
 ## Tool Risk Classification
 
@@ -40,4 +40,4 @@ When an AI assistant reads web page content via `chrome_read_page` or `chrome_ge
 
 ## Reporting Security Issues
 
-If you discover a security vulnerability, please report it via [GitHub Security Advisories](https://github.com/hangwin/mcp-chrome/security/advisories) rather than opening a public issue.
+If you discover a security vulnerability, please report it via [GitHub Security Advisories](https://github.com/guodaxia103/tabrix/security/advisories) rather than opening a public issue.

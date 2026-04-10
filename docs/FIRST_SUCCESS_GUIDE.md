@@ -4,25 +4,25 @@
 
 ---
 
-## 第一步：安装 mcp-chrome-bridge（1 分钟）
+## 第一步：安装 tabrix（1 分钟）
 
 ```bash
-npm install -g mcp-chrome-bridge
+npm install -g tabrix@latest
 ```
 
 安装成功后运行：
 
 ```bash
-mcp-chrome-bridge doctor
+tabrix doctor
 ```
 
-如果所有项目都显示 ✅，进入下一步。如果有 ❌，按提示修复（通常是 `mcp-chrome-bridge register`）。
+如果所有项目都显示 ✅，进入下一步。如果有 ❌，按提示修复（通常是 `tabrix register`）。
 
 ---
 
 ## 第二步：加载 Chrome 扩展（1 分钟）
 
-1. 从 [GitHub Releases](https://github.com/hangwin/mcp-chrome/releases) 下载最新扩展包
+1. 从 [GitHub Releases](https://github.com/guodaxia103/tabrix/releases) 下载最新扩展包
 2. 解压到一个**固定目录**（后续不要移动）
 3. 打开 Chrome → 地址栏输入 `chrome://extensions/`
 4. 打开右上角**开发者模式**
@@ -116,12 +116,12 @@ AI 会调用 `chrome_screenshot`，返回页面截图。
 
 ## 遇到问题？
 
-| 症状                 | 快速解决                                 |
-| -------------------- | ---------------------------------------- |
-| AI 说"找不到工具"    | 重启 AI 客户端，确认配置文件语法正确     |
-| 绿灯亮但工具调用失败 | `mcp-chrome-bridge smoke` 验证端到端连通 |
-| 页面操作无反应       | 确认目标页面不是 `chrome://` 内部页面    |
-| 截图返回错误         | 等待页面完全加载后重试                   |
+| 症状                 | 快速解决                              |
+| -------------------- | ------------------------------------- |
+| AI 说"找不到工具"    | 重启 AI 客户端，确认配置文件语法正确  |
+| 绿灯亮但工具调用失败 | `tabrix smoke` 验证端到端连通         |
+| 页面操作无反应       | 确认目标页面不是 `chrome://` 内部页面 |
+| 截图返回错误         | 等待页面完全加载后重试                |
 
 详细排障请参考：
 

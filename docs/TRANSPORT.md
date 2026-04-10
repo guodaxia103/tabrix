@@ -32,10 +32,10 @@ Streamable HTTP 客户端在完成 `POST /mcp` initialize 后，可以用 `GET /
 
 ### 3. stdio（标准输入/输出，备用）
 
-通过子进程 `mcp-chrome-bridge-stdio` 桥接，AI 客户端直接通过 stdin/stdout 传输 JSON-RPC，子进程内部代理到本机 HTTP 服务。
+通过子进程 `tabrix-stdio` 桥接，AI 客户端直接通过 stdin/stdout 传输 JSON-RPC，子进程内部代理到本机 HTTP 服务。
 
 ```
-AI 客户端 ↔ stdin/stdout ↔ mcp-chrome-bridge-stdio ↔ HTTP 127.0.0.1:12306/mcp
+AI 客户端 ↔ stdin/stdout ↔ tabrix-stdio ↔ HTTP 127.0.0.1:12306/mcp
 ```
 
 **适用客户端**：Claude Code CLI、任何仅支持 stdio 的 MCP 宿主
@@ -53,7 +53,7 @@ AI 客户端 ↔ stdin/stdout ↔ mcp-chrome-bridge-stdio ↔ HTTP 127.0.0.1:123
 
 **方式一（推荐）：扩展 Popup 开关**
 
-打开扩展弹窗 → **远程** 选项卡 → 打开**远程访问开关**。服务立即重启在 `0.0.0.0`，无需重启浏览器。偏好持久化到 `~/.mcp-chrome/config.json`，断开重连或重启浏览器后保持不变。
+打开扩展弹窗 → **远程** 选项卡 → 打开**远程访问开关**。服务立即重启在 `0.0.0.0`，无需重启浏览器。偏好持久化到 `~/.tabrix/config.json`，断开重连或重启浏览器后保持不变。
 
 **方式二（高级 / 守护进程）：环境变量覆盖**
 
@@ -85,7 +85,7 @@ netstat -ano | findstr :12306
 
 ### Token 认证
 
-监听 `0.0.0.0` 时，服务端会**自动生成 Token** 并持久化到 `~/.mcp-chrome/auth-token.json`（默认 7 天过期，通过 `MCP_AUTH_TOKEN_TTL` 环境变量可配天数，`0` = 永不过期）。
+监听 `0.0.0.0` 时，服务端会**自动生成 Token** 并持久化到 `~/.tabrix/auth-token.json`（默认 7 天过期，通过 `MCP_AUTH_TOKEN_TTL` 环境变量可配天数，`0` = 永不过期）。
 
 也可以通过 `MCP_AUTH_TOKEN` 环境变量手动指定 Token（此时自动生成不生效，Token 永不过期）。
 
@@ -125,4 +125,4 @@ Token 管理端点（仅本机可用）：
 
 - 一般桌面 AI 客户端：优先 **Streamable HTTP** 指向本机 bridge。
 - 远程 / Docker 场景：用扩展开关或设 `MCP_HTTP_HOST=0.0.0.0`，用宿主机 IP 连接。
-- 仅当客户端只支持 stdio 时使用 **`mcp-chrome-stdio`**，并确保 MCP 宿主进程正确管理子进程生命周期。
+- 仅当客户端只支持 stdio 时使用 **`tabrix-stdio`**，并确保 MCP 宿主进程正确管理子进程生命周期。

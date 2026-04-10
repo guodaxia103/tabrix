@@ -6,8 +6,8 @@
 ## 前置条件
 
 1. Chrome 扩展已加载并点击 **Connect**
-2. `mcp-chrome-bridge` 已全局安装（`npm i -g mcp-chrome-bridge`）
-3. 运行 `mcp-chrome-bridge doctor` 确认一切正常
+2. `tabrix` 已全局安装（`npm i -g tabrix@latest`）
+3. 运行 `tabrix doctor` 确认一切正常
 
 ---
 
@@ -125,22 +125,22 @@ claude mcp add chrome-mcp --transport http http://127.0.0.1:12306/mcp
 
 ```bash
 # npm
-npm list -g mcp-chrome-bridge
-# 输出路径 + /node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js
+npm list -g tabrix
+# 输出路径 + /node_modules/tabrix/dist/mcp/mcp-server-stdio.js
 
 # pnpm
-pnpm list -g mcp-chrome-bridge
+pnpm list -g tabrix
 ```
 
 ### 全局安装后直接使用（推荐）
 
-`npm i -g mcp-chrome-bridge` 后，`mcp-chrome-stdio` 命令即可用：
+`npm i -g tabrix@latest` 后，`tabrix-stdio` 命令即可用：
 
 ```json
 {
   "mcpServers": {
     "chrome-mcp": {
-      "command": "mcp-chrome-stdio"
+      "command": "tabrix-stdio"
     }
   }
 }
@@ -148,14 +148,14 @@ pnpm list -g mcp-chrome-bridge
 
 ### node + 绝对路径
 
-如果 `mcp-chrome-stdio` 命令不在 PATH 中：
+如果 `tabrix-stdio` 命令不在 PATH 中：
 
 ```json
 {
   "mcpServers": {
     "chrome-mcp": {
       "command": "node",
-      "args": ["/path/to/node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js"]
+      "args": ["/path/to/node_modules/tabrix/dist/mcp/mcp-server-stdio.js"]
     }
   }
 }
@@ -168,13 +168,13 @@ pnpm list -g mcp-chrome-bridge
   "mcpServers": {
     "chrome-mcp": {
       "command": "npx",
-      "args": ["-p", "mcp-chrome-bridge", "mcp-chrome-stdio"]
+      "args": ["-p", "tabrix", "tabrix-stdio"]
     }
   }
 }
 ```
 
-> Windows 下如果 `mcp-chrome-stdio` 找不到，尝试 `mcp-chrome-stdio.cmd` 或使用 node + 绝对路径方式。
+> Windows 下如果 `tabrix-stdio` 找不到，尝试 `tabrix-stdio.cmd` 或使用 node + 绝对路径方式。
 
 ---
 
@@ -183,8 +183,8 @@ pnpm list -g mcp-chrome-bridge
 | 变量名                        | 说明                                                                                             | 默认值       |
 | ----------------------------- | ------------------------------------------------------------------------------------------------ | ------------ |
 | `MCP_HTTP_PORT`               | MCP HTTP 端口                                                                                    | `12306`      |
-| `MCP_HTTP_HOST`               | 监听地址覆盖（优先级高于 `~/.mcp-chrome/config.json`；推荐用扩展开关代替）                       | `127.0.0.1`  |
-| `MCP_AUTH_TOKEN`              | 远程访问 Bearer Token（可选，不设则自动生成并存到 `~/.mcp-chrome/auth-token.json`）              | （自动生成） |
+| `MCP_HTTP_HOST`               | 监听地址覆盖（优先级高于 `~/.tabrix/config.json`；推荐用扩展开关代替）                           | `127.0.0.1`  |
+| `MCP_AUTH_TOKEN`              | 远程访问 Bearer Token（可选，不设则自动生成并存到 `~/.tabrix/auth-token.json`）                  | （自动生成） |
 | `MCP_AUTH_TOKEN_TTL`          | Token 过期天数（`0` = 永不过期）                                                                 | `7`          |
 | `MCP_ALLOWED_WORKSPACE_BASE`  | 额外允许的工作目录                                                                               | （无）       |
 | `CHROME_MCP_NODE_PATH`        | 覆盖 Node.js 可执行文件路径                                                                      | （自动检测） |
@@ -198,13 +198,13 @@ pnpm list -g mcp-chrome-bridge
 
 ```bash
 # 检查服务状态
-mcp-chrome-bridge status
+tabrix status
 
 # 全面诊断
-mcp-chrome-bridge doctor
+tabrix doctor
 
 # 冒烟测试（调用几个工具看是否正常）
-mcp-chrome-bridge smoke
+tabrix smoke
 ```
 
 或在浏览器中访问 `http://127.0.0.1:12306/status` 查看服务状态和已连接客户端列表。
@@ -232,7 +232,7 @@ mcp-chrome-bridge smoke
 
 **第一步：启用远程监听**
 
-**推荐**：打开扩展弹窗 → **远程** 选项卡 → 打开**远程访问开关**。服务立即重启在 `0.0.0.0`，无需重启浏览器。偏好持久化到 `~/.mcp-chrome/config.json`。
+**推荐**：打开扩展弹窗 → **远程** 选项卡 → 打开**远程访问开关**。服务立即重启在 `0.0.0.0`，无需重启浏览器。偏好持久化到 `~/.tabrix/config.json`。
 
 高级 / 守护进程场景也可通过环境变量覆盖（优先级高于配置文件）：
 
@@ -246,7 +246,7 @@ $env:MCP_HTTP_HOST = "0.0.0.0"
 
 **第二步：确认 Token 认证**
 
-开启远程后，服务端会**自动生成 Token** 并持久化到 `~/.mcp-chrome/auth-token.json`。扩展 Popup 的「远程」Tab 会自动显示包含 `Authorization` 头的完整配置。
+开启远程后，服务端会**自动生成 Token** 并持久化到 `~/.tabrix/auth-token.json`。扩展 Popup 的「远程」Tab 会自动显示包含 `Authorization` 头的完整配置。
 
 也可通过环境变量手动指定：
 

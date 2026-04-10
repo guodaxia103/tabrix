@@ -1,6 +1,6 @@
 # Program 1 / Phase 1 Approved Plan
 
-Last updated: `2026-04-06 14:05 Asia/Shanghai`
+Last updated: `2026-04-09 11:20 Asia/Shanghai`
 
 This document is the approved development plan for **Program 1: Execution Platform Core**.
 
@@ -27,6 +27,7 @@ Program 1 includes:
 - artifact capture and references
 - retry and recovery policy
 - execution audit trail
+- rule-based DOM understanding and dehydration contract for tool outputs
 
 Program 1 does **not** include:
 
@@ -35,6 +36,7 @@ Program 1 does **not** include:
 - local model intelligence
 - enterprise auth/permissions model
 - full control panel
+- vision-model-first page parsing pipeline
 
 Those belong to later programs.
 
@@ -236,6 +238,28 @@ Suggested files:
 - `flow-adapter.ts`
 - `flow-session-bridge.ts`
 
+## Module F: DOM Understanding and Dehydration
+
+Location suggestion:
+
+- `app/chrome-extension/inject-scripts`
+- `app/chrome-extension/entrypoints/background/tools/browser`
+- `app/native-server/src/execution`
+
+Responsibilities:
+
+- provide task-oriented DOM output modes (`compact`, `normal`, `full`)
+- expose structured output shape (`page -> region -> actionable node`)
+- attach candidate confidence and fallback locator chain to execution artifacts
+- ensure compatibility with existing `chrome_read_page` callers
+
+Suggested files:
+
+- `read-page-v2.ts` (or `read-page.ts` extension)
+- `dom-dehydration-schema.ts`
+- `locator-fallback-policy.ts`
+- `dom-summary-artifact.ts`
+
 ## 6. Sequencing
 
 Program 1 should be delivered in this order:
@@ -304,6 +328,20 @@ Acceptance:
 
 - flow execution shows up as structured execution data, not only raw tool results
 
+### Phase 1.6: DOM Dehydration Contract
+
+Build:
+
+- add `compact/normal/full` response modes for read-page outputs
+- emit structured action candidates with `confidence`, `matchReason`, and `fallbackChain`
+- register DOM summary as artifact ref rather than inlining large payloads
+
+Acceptance:
+
+- same page can return smaller task-oriented payloads than legacy output by default
+- click/fill flows can consume the structured candidate contract without tool-specific parsing
+- legacy `chrome_read_page` behavior remains backward compatible
+
 ## 7. Acceptance Criteria
 
 Program 1 is done only when all are true:
@@ -314,6 +352,8 @@ Program 1 is done only when all are true:
 - at least one artifact type is session-linked
 - retryable failures are classified
 - flow invocations can be represented inside execution state
+- DOM dehydration contract is available to callers with documented modes
+- action candidates provide confidence and fallback locator chain
 - docs explain the new execution model clearly
 
 ## 8. Out of Scope
@@ -323,7 +363,7 @@ Do not drift into these during Program 1:
 - site strategies
 - selector memory
 - domain templates
-- model-based page understanding
+- model-based (LLM-driven) page understanding
 - commercial UI polish
 
 If a change is not directly helping structured execution, it should be deferred.
@@ -334,6 +374,7 @@ If a change is not directly helping structured execution, it should be deferred.
 - coupling browser execution too tightly to one result format
 - trying to solve strategy/memory at the same time as execution core
 - storing too much raw artifact data in hot paths
+- over-compressing DOM output and dropping fields needed for reliable actions
 
 ## 10. Recommended Execution Mode
 
@@ -347,10 +388,15 @@ Recommended first split:
 - Lane 1: execution skeleton + result normalization
 - Lane 2: artifacts + audit trail
 - Lane 3: retry/recovery
-- Lane 4: docs
+- Lane 4: DOM dehydration contract + locator fallback policy
+- Lane 5: docs
 
 ## 11. Immediate Next Step
 
 After Program 0 stabilizes enough, the next concrete move should be:
 
-**Create the initial `execution/types.ts` and `session-manager.ts` skeleton without changing existing browser behavior.**
+**Implement `chrome_read_page` structured dehydration modes (`compact/normal/full`) and wire DOM summary into execution artifacts without breaking existing callers.**
+
+Execution issue draft:
+
+- `docs/PROGRAM1_DOM_DEHYDRATION_TASK_LIST.md`

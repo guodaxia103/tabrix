@@ -16,7 +16,7 @@
 pnpm lint
 pnpm typecheck
 pnpm --filter chrome-mcp-server test
-pnpm --filter mcp-chrome-bridge test
+pnpm --filter tabrix test
 pnpm build
 ```
 
@@ -33,7 +33,7 @@ pnpm build
 如果是源码仓验证，先确保 native bridge 已构建：
 
 ```powershell
-pnpm --filter mcp-chrome-bridge build
+pnpm --filter tabrix build
 ```
 
 首次安装或注册丢失时，执行：
@@ -138,10 +138,10 @@ node app\native-server\dist\cli.js smoke --json
 ## 6. 守护进程验证
 
 ```powershell
-mcp-chrome-bridge daemon start
-mcp-chrome-bridge daemon status
+tabrix daemon start
+tabrix daemon status
 curl http://127.0.0.1:12306/ping
-mcp-chrome-bridge daemon stop
+tabrix daemon stop
 ```
 
 通过标准：
@@ -150,7 +150,7 @@ mcp-chrome-bridge daemon stop
 - `daemon status` 显示 `running=true, healthy=true`
 - `/ping` 返回 `200`
 - `daemon stop` 成功终止进程
-- `~/.mcp-chrome/daemon.log` 有启动日志输出
+- `~/.tabrix/daemon.log` 有启动日志输出
 - （Windows）`daemon install-autostart` / `daemon remove-autostart` 不报错
 
 ---
@@ -162,7 +162,7 @@ mcp-chrome-bridge daemon stop
 通过标准：
 
 - 开关切换后服务立即重启在 `0.0.0.0`，Popup 远程 Tab 显示 Token、局域网 IP 和完整配置
-- 关闭开关 → 断开重连 → 重启浏览器，远程保持关闭（偏好持久化到 `~/.mcp-chrome/config.json`）
+- 关闭开关 → 断开重连 → 重启浏览器，远程保持关闭（偏好持久化到 `~/.tabrix/config.json`）
 - 开启开关 → 断开重连 → 重启浏览器，远程保持开启
 - 从同一局域网的另一台设备/容器能访问 `http://<LAN-IP>:12306/ping`
 - 携带 `Authorization: Bearer <token>` 请求 `/mcp` 能成功 `initialize`
@@ -176,7 +176,7 @@ mcp-chrome-bridge daemon stop
 
 ```powershell
 # 查看 stdio 入口文件路径
-npm list -g mcp-chrome-bridge
+npm list -g tabrix
 ```
 
 通过标准：

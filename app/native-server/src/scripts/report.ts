@@ -307,7 +307,7 @@ async function collectRuntimeSnapshot(): Promise<RuntimeSnapshot> {
           params: {
             protocolVersion: '2025-03-26',
             capabilities: {},
-            clientInfo: { name: 'mcp-chrome-report', version: '1.0.0' },
+            clientInfo: { name: 'tabrix-report', version: '1.0.0' },
           },
         }),
       });

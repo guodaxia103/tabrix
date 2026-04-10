@@ -69,8 +69,8 @@ The loaded client list should include:
 Before testing through CoPaw, make sure the local bridge itself is healthy:
 
 ```powershell
-mcp-chrome-bridge status
-mcp-chrome-bridge doctor
+tabrix status
+tabrix doctor
 ```
 
 The most useful new doctor check is:
@@ -170,10 +170,10 @@ This avoids vague prompts that cause blind clicking.
 
 If CoPaw appears to have the MCP client but browser operations do nothing:
 
-1. Run `mcp-chrome-bridge doctor`
+1. Run `tabrix doctor`
 2. Check `Chrome extension path`
 3. Open the extension popup and click `Connect`
-4. Re-run `mcp-chrome-bridge status`
+4. Re-run `tabrix status`
 5. Check `http://127.0.0.1:8088/api/mcp`
 6. Retry the CoPaw task with an explicit browser-operation prompt
 
@@ -197,8 +197,8 @@ Current assessment:
 Before debugging CoPaw, first confirm `mcp-chrome` itself is healthy:
 
 ```powershell
-mcp-chrome-bridge status
-mcp-chrome-bridge doctor
+tabrix status
+tabrix doctor
 ```
 
 Then check CoPaw:

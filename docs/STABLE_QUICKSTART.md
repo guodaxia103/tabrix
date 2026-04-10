@@ -5,7 +5,7 @@ This guide is the shortest path to a stable local setup on Windows with the curr
 ## 1. Install the bridge
 
 ```powershell
-npm install -g mcp-chrome-bridge
+npm install -g tabrix@latest
 ```
 
 If you are developing from source, build and register from the repo:
@@ -13,7 +13,7 @@ If you are developing from source, build and register from the repo:
 ```powershell
 cd D:\projects\ai\codex\mcp-chrome
 pnpm install
-pnpm --filter mcp-chrome-bridge build
+pnpm --filter tabrix build
 node app\native-server\dist\cli.js register
 ```
 
@@ -43,16 +43,16 @@ Important:
 
 - Chrome keeps using the exact unpacked directory you loaded the first time
 - If you later build in a different folder, Chrome will still run the old folder until you reload that exact path
-- `mcp-chrome-bridge doctor` now reports the real loaded path as `Chrome extension path`
+- `tabrix doctor` now reports the real loaded path as `Chrome extension path`
 
 ## 3. Verify the local runtime
 
 The fastest checks are now:
 
 ```powershell
-mcp-chrome-bridge status
-mcp-chrome-bridge doctor
-mcp-chrome-bridge smoke
+tabrix status
+tabrix doctor
+tabrix smoke
 ```
 
 Expected healthy output:
@@ -93,13 +93,13 @@ By default, the MCP server starts when Chrome launches the native host (on Conne
 
 ```powershell
 # Start daemon in the background
-mcp-chrome-bridge daemon start
+tabrix daemon start
 
 # Check daemon status
-mcp-chrome-bridge daemon status
+tabrix daemon status
 
 # Stop daemon
-mcp-chrome-bridge daemon stop
+tabrix daemon stop
 ```
 
 The daemon listens on the same port (default `12306`) and serves all non-browser MCP tools. Browser-specific tools (like `chrome_screenshot`) will return an error until Chrome opens and the extension connects.
@@ -108,15 +108,15 @@ The daemon listens on the same port (default `12306`) and serves all non-browser
 
 ```powershell
 # Install a Windows scheduled task that starts the daemon on login
-mcp-chrome-bridge daemon install-autostart
+tabrix daemon install-autostart
 
 # Remove the autostart task
-mcp-chrome-bridge daemon remove-autostart
+tabrix daemon remove-autostart
 ```
 
 ### Daemon logs
 
-Daemon output is written to `~/.mcp-chrome/daemon.log`. Check this file if the daemon fails to start or crashes.
+Daemon output is written to `~/.tabrix/daemon.log`. Check this file if the daemon fails to start or crashes.
 
 ### Custom port
 
@@ -126,9 +126,9 @@ Set the `CHROME_MCP_PORT` environment variable to override the default port for 
 
 To allow other machines or Docker containers to connect via LAN:
 
-1. Open the extension popup → **Remote** tab → toggle the **remote access switch** to ON. The server immediately restarts on `0.0.0.0` — no browser restart needed. The preference is saved to `~/.mcp-chrome/config.json` and survives reconnects / browser restarts.
+1. Open the extension popup → **Remote** tab → toggle the **remote access switch** to ON. The server immediately restarts on `0.0.0.0` — no browser restart needed. The preference is saved to `~/.tabrix/config.json` and survives reconnects / browser restarts.
 
-2. A Token is **auto-generated** on first remote enable and saved to `~/.mcp-chrome/auth-token.json`. The popup will show the full MCP config (including `Authorization` header) once remote is enabled.
+2. A Token is **auto-generated** on first remote enable and saved to `~/.tabrix/auth-token.json`. The popup will show the full MCP config (including `Authorization` header) once remote is enabled.
 
 3. Allow the port through your firewall (Windows example):
 
@@ -159,8 +159,8 @@ netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow
 
 If the client cannot use tools, check in this order:
 
-1. `mcp-chrome-bridge status`
-2. `mcp-chrome-bridge doctor`
+1. `tabrix status`
+2. `tabrix doctor`
 3. Confirm `doctor` reports the expected `Chrome extension path`
 4. Confirm the extension popup shows the server as running
 5. Confirm `http://127.0.0.1:12306/status` is reachable

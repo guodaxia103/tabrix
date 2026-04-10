@@ -75,7 +75,7 @@ function createSmokeServer(): Promise<{
   baseUrl: string;
   tempFilePath: string;
 }> {
-  const tempFilePath = path.join(os.tmpdir(), `mcp-chrome-smoke-${Date.now()}.txt`);
+  const tempFilePath = path.join(os.tmpdir(), `tabrix-smoke-${Date.now()}.txt`);
   fs.writeFileSync(tempFilePath, 'phase0 smoke upload');
 
   const html = `<!doctype html>
@@ -197,7 +197,7 @@ class LocalMcpClient {
     const response = await this.rpc('initialize', {
       protocolVersion: '2025-03-26',
       capabilities: {},
-      clientInfo: { name: 'mcp-chrome-smoke', version: '1.0.0' },
+      clientInfo: { name: 'tabrix-smoke', version: '1.0.0' },
     });
 
     const sessionId = response.raw.headers.get('mcp-session-id');
@@ -689,7 +689,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
   if (options.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
   } else {
-    process.stdout.write(`mcp-chrome-bridge smoke\n\n`);
+    process.stdout.write(`tabrix smoke\n\n`);
     process.stdout.write(`Local test page: ${result.baseUrl}\n`);
     for (const step of steps) {
       process.stdout.write(`${step.ok ? '[OK]' : '[FAIL]'} ${step.name}: ${step.detail}\n`);

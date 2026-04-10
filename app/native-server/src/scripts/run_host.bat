@@ -7,8 +7,8 @@ if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 set "NODE_SCRIPT=%SCRIPT_DIR%\index.js"
 
 REM Setup log directory - prefer user-writable locations
-REM Windows: %LOCALAPPDATA%\mcp-chrome-bridge\logs
-set "LOG_DIR=%LOCALAPPDATA%\mcp-chrome-bridge\logs"
+REM Windows: %LOCALAPPDATA%\tabrix\logs
+set "LOG_DIR=%LOCALAPPDATA%\tabrix\logs"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%" 2>nul
 if not exist "%LOG_DIR%" (
     REM Fallback to package directory if user directory not writable
@@ -158,7 +158,7 @@ REM Validation
 if not defined NODE_EXEC (
     echo ERROR: Node.js executable not found! >> "%WRAPPER_LOG%"
     echo Searched: CHROME_MCP_NODE_PATH, node_path.txt, relative, Volta, asdf, fnm, where, common paths >> "%WRAPPER_LOG%"
-    echo To fix: Set CHROME_MCP_NODE_PATH environment variable or run 'mcp-chrome-bridge doctor --fix' >> "%WRAPPER_LOG%"
+    echo To fix: Set CHROME_MCP_NODE_PATH environment variable or run 'tabrix doctor --fix' >> "%WRAPPER_LOG%"
     exit /B 1
 )
 

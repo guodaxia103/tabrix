@@ -22,25 +22,25 @@ export interface DetectedExtensionOrigin {
  * Get the log directory path for wrapper scripts.
  * Uses platform-appropriate user directories to avoid permission issues.
  *
- * - macOS: ~/Library/Logs/mcp-chrome-bridge
- * - Windows: %LOCALAPPDATA%/mcp-chrome-bridge/logs
- * - Linux: $XDG_STATE_HOME/mcp-chrome-bridge/logs or ~/.local/state/mcp-chrome-bridge/logs
+ * - macOS: ~/Library/Logs/tabrix
+ * - Windows: %LOCALAPPDATA%/tabrix/logs
+ * - Linux: $XDG_STATE_HOME/tabrix/logs or ~/.local/state/tabrix/logs
  */
 export function getLogDir(): string {
   const homedir = os.homedir();
 
   if (os.platform() === 'darwin') {
-    return path.join(homedir, 'Library', 'Logs', 'mcp-chrome-bridge');
+    return path.join(homedir, 'Library', 'Logs', 'tabrix');
   } else if (os.platform() === 'win32') {
     return path.join(
       process.env.LOCALAPPDATA || path.join(homedir, 'AppData', 'Local'),
-      'mcp-chrome-bridge',
+      'tabrix',
       'logs',
     );
   } else {
     // Linux: XDG_STATE_HOME or ~/.local/state
     const xdgState = process.env.XDG_STATE_HOME || path.join(homedir, '.local', 'state');
-    return path.join(xdgState, 'mcp-chrome-bridge', 'logs');
+    return path.join(xdgState, 'tabrix', 'logs');
   }
 }
 
@@ -365,7 +365,7 @@ function getSecurePreferencesPath(browser: BrowserType): string | null {
 }
 
 function looksLikeChromeMcpExtensionPath(candidatePath: string): boolean {
-  return /(chrome-mcp-server|mcp-chrome)/i.test(candidatePath);
+  return /(chrome-mcp-server|tabrix|mcp-chrome)/i.test(candidatePath);
 }
 
 export function discoverLoadedExtensionOrigins(targetBrowsers?: BrowserType[]): {

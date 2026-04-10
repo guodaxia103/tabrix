@@ -1,5 +1,5 @@
 /**
- * Persistent host configuration stored at ~/.mcp-chrome/config.json
+ * Persistent host configuration stored at ~/.tabrix/config.json
  *
  * Priority for resolving listen host:
  *   1. MCP_HTTP_HOST environment variable (explicit override)
@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const CONFIG_DIR = path.join(os.homedir(), '.mcp-chrome');
+const CONFIG_DIR = path.join(os.homedir(), '.tabrix');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 const ALLOWED_HOSTS = ['127.0.0.1', '0.0.0.0', 'localhost', '::'];

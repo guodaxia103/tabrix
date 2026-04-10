@@ -81,7 +81,7 @@ If you get "connection refused" errors:
 1. Ensure the Chrome extension is installed and the native server is running
 2. Check that the port matches (default: 12306)
 3. Verify no firewall is blocking localhost connections
-4. Run `mcp-chrome-bridge doctor` to diagnose issues
+4. Run `tabrix doctor` to diagnose issues
 
 ### Tools Not Appearing
 
@@ -97,7 +97,7 @@ If port 12306 is already in use:
 
 1. Set a custom port in the extension settings
 2. Update the CLI configuration to match the new port
-3. Run `mcp-chrome-bridge update-port <new-port>` to update the stdio config
+3. Run `tabrix update-port <new-port>` to update the stdio config
 
 ## Environment Variables
 

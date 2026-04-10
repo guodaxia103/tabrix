@@ -5,7 +5,7 @@
 
 // Native Host Configuration
 export const NATIVE_HOST = {
-  NAME: 'com.chromemcp.nativehost',
+  NAME: 'com.tabrix.nativehost',
   DEFAULT_PORT: 12306,
 } as const;
 
@@ -58,7 +58,7 @@ export const SUCCESS_MESSAGES = {
 
 // External Links
 export const LINKS = {
-  TROUBLESHOOTING: 'https://github.com/hangwin/mcp-chrome/blob/master/docs/TROUBLESHOOTING.md',
+  TROUBLESHOOTING: 'https://github.com/guodaxia103/tabrix/blob/main/docs/TROUBLESHOOTING.md',
 } as const;
 
 // File Extensions and MIME Types

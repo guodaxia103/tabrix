@@ -3,7 +3,7 @@
  *
  * Token resolution priority:
  *   1. MCP_AUTH_TOKEN environment variable (always wins)
- *   2. Persisted file at ~/.mcp-chrome/auth-token.json
+ *   2. Persisted file at ~/.tabrix/auth-token.json
  *   3. Auto-generated on first use when listening on 0.0.0.0
  *
  * Tokens have an optional TTL (default 7 days, configurable via
@@ -14,7 +14,7 @@ import path from 'path';
 import os from 'os';
 import { randomUUID } from 'node:crypto';
 
-const TOKEN_DIR = path.join(os.homedir(), '.mcp-chrome');
+const TOKEN_DIR = path.join(os.homedir(), '.tabrix');
 const TOKEN_FILE = path.join(TOKEN_DIR, 'auth-token.json');
 const DEFAULT_TTL_DAYS = 7;
 

@@ -11,13 +11,13 @@ describe('getPopupNativeErrorGuidance', () => {
       'Access to the specified native messaging host is forbidden.',
     );
     expect(text).toContain('manifest.allowed_origins');
-    expect(text).toContain('mcp-chrome-bridge register --force');
+    expect(text).toContain('tabrix register --force');
   });
 
   it('returns host registration guidance for missing host errors', () => {
     const text = getPopupNativeErrorGuidance('Specified native messaging host not found.');
     expect(text).toContain('Native host 未注册');
-    expect(text).toContain('mcp-chrome-bridge doctor --fix');
+    expect(text).toContain('tabrix doctor --fix');
   });
 
   it('returns token guidance for unauthorized errors', () => {
@@ -29,7 +29,7 @@ describe('getPopupNativeErrorGuidance', () => {
   it('returns fallback guidance for unknown errors', () => {
     const text = getPopupNativeErrorGuidance('some random network glitch');
     expect(text).toContain('some random network glitch');
-    expect(text).toContain('mcp-chrome-bridge doctor --fix');
+    expect(text).toContain('tabrix doctor --fix');
   });
 
   it('classifies forbidden errors and returns repair command', () => {

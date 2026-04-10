@@ -6,14 +6,14 @@ Chrome MCP Server 在windows电脑的详细安装和配置步骤
 
 1. **从github上下载最新的chrome扩展**
 
-下载地址：https://github.com/hangwin/mcp-chrome/releases
+下载地址：https://github.com/guodaxia103/tabrix/releases
 
-2. **全局安装mcp-chrome-bridge**
+2. **全局安装tabrix**
 
 确保电脑上已经安装了node，如果没安装请自行先安装
 
 ```bash
-npm install -g mcp-chrome-bridge
+npm install -g tabrix@latest
 ```
 
 3. **加载 Chrome 扩展**
@@ -51,21 +51,21 @@ npm install -g mcp-chrome-bridge
 如果遇到问题，运行诊断工具：
 
 ```bash
-mcp-chrome-bridge doctor
+tabrix doctor
 ```
 
 自动修复常见问题：
 
 ```bash
-mcp-chrome-bridge doctor --fix
+tabrix doctor --fix
 ```
 
 ### 点击扩展的连接按钮后如果没连接成功
 
-1. **检查mcp-chrome-bridge是否安装成功**，确保是全局安装的
+1. **检查tabrix是否安装成功**，确保是全局安装的
 
 ```bash
-mcp-chrome-bridge -V
+tabrix -V
 ```
 
 <img width="612" alt="截屏2025-06-11 15 09 57" src="https://github.com/user-attachments/assets/59458532-e6e1-457c-8c82-3756a5dbb28e" />
@@ -76,9 +76,9 @@ mcp-chrome-bridge -V
 
 3. **检查日志**
 
-日志现在存储在用户目录：`%LOCALAPPDATA%\mcp-chrome-bridge\logs\`
+日志现在存储在用户目录：`%LOCALAPPDATA%\tabrix\logs\`
 
-例如：`C:\Users\xxx\AppData\Local\mcp-chrome-bridge\logs\`
+例如：`C:\Users\xxx\AppData\Local\tabrix\logs\`
 
 <img width="804" alt="截屏2025-06-11 15 09 41" src="https://github.com/user-attachments/assets/ce7b7c94-7c84-409a-8210-c9317823aae1" />
 
@@ -90,4 +90,4 @@ mcp-chrome-bridge -V
 set CHROME_MCP_NODE_PATH=C:\path\to\your\node.exe
 ```
 
-或者运行 `mcp-chrome-bridge doctor --fix` 自动写入当前 Node 路径。
+或者运行 `tabrix doctor --fix` 自动写入当前 Node 路径。

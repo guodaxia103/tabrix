@@ -1,13 +1,13 @@
 /**
  * One-shot onboarding: register Native Messaging host and print next steps.
- * Goal: shortest path from `npm i -g mcp-chrome-bridge` to "load extension + connect".
+ * Goal: shortest path from `npm i -g tabrix@latest` to "load extension + connect".
  */
 import fs from 'fs';
 import path from 'path';
 import { colorText, tryRegisterUserLevelHost, writeNodePathFile, getLogDir } from './utils';
 import { detectInstalledBrowsers } from './browser-config';
 
-const UPSTREAM_RELEASE = 'https://github.com/hangwin/mcp-chrome/releases';
+const UPSTREAM_RELEASE = 'https://github.com/guodaxia103/tabrix/releases';
 
 export async function runSetup(): Promise<number> {
   const nodeMajor = Number(process.versions.node.split('.')[0]);
@@ -18,7 +18,7 @@ export async function runSetup(): Promise<number> {
     return 2;
   }
 
-  console.log(colorText('mcp-chrome-bridge setup', 'blue'));
+  console.log(colorText('tabrix setup', 'blue'));
   console.log(colorText(`  Node ${process.version}`, 'green'));
 
   try {
@@ -39,7 +39,7 @@ export async function runSetup(): Promise<number> {
     if (!ok) {
       console.error(
         colorText(
-          'Registration failed. Try: sudo mcp-chrome-bridge register   or   mcp-chrome-bridge register --system',
+          'Registration failed. Try: sudo tabrix register   or   tabrix register --system',
           'yellow',
         ),
       );
@@ -56,8 +56,8 @@ export async function runSetup(): Promise<number> {
     console.log(`  4) In your AI client, point MCP to: http://127.0.0.1:12306/mcp (default port)`);
     console.log('');
     console.log(colorText('Verify:', 'blue'));
-    console.log(`  mcp-chrome-bridge doctor`);
-    console.log(`  mcp-chrome-bridge smoke`);
+    console.log(`  tabrix doctor`);
+    console.log(`  tabrix smoke`);
     return 0;
   } catch (e: any) {
     console.error(colorText(`Setup failed: ${e?.message ?? e}`, 'red'));

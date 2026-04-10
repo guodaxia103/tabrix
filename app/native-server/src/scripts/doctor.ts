@@ -946,7 +946,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
   const pkg = readPackageJson();
   const distDir = resolveDistDir();
   const rootDir = path.resolve(distDir, '..');
-  const packageName = typeof pkg.name === 'string' ? pkg.name : 'mcp-chrome-bridge';
+  const packageName = typeof pkg.name === 'string' ? pkg.name : 'tabrix';
   const packageVersion = typeof pkg.version === 'string' ? pkg.version : 'unknown';
   const commandInfo = getCommandInfo(pkg);
 
@@ -1463,7 +1463,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
             : `GET ${new URL('/status', url)} failed (${runtimeStatus.error || 'unknown error'})`,
           details: {
             snapshot: runtimeStatus.snapshot,
-            hint: 'Use "mcp-chrome-bridge status" for a concise runtime summary.',
+            hint: 'Use "tabrix status" for a concise runtime summary.',
           },
         });
 
@@ -1485,9 +1485,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
           });
 
           if (!initialize.ok) {
-            nextSteps.push(
-              'Check transport/session logs or run mcp-chrome-bridge report --include-logs tail',
-            );
+            nextSteps.push('Check transport/session logs or run tabrix report --include-logs tail');
           }
         }
       } catch (e) {
@@ -1548,7 +1546,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
   const isRemoteListening = SERVER_CONFIG.HOST === '0.0.0.0' || SERVER_CONFIG.HOST === '::';
   const hasAuthToken = !!process.env[MCP_AUTH_TOKEN_ENV];
   if (isRemoteListening && !hasAuthToken) {
-    const tokenFilePath = path.join(os.homedir(), '.mcp-chrome', 'auth-token.json');
+    const tokenFilePath = path.join(os.homedir(), '.tabrix', 'auth-token.json');
     const hasTokenFile = fs.existsSync(tokenFilePath);
     if (!hasTokenFile) {
       checks.push({

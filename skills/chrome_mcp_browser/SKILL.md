@@ -7,11 +7,11 @@ metadata:
 
 # Chrome MCP 浏览器技能
 
-面向 **任意 MCP 客户端**（Cursor、Claude、CoPaw、OpenClaw 等）。本机需已安装并连接 [mcp-chrome](https://github.com/hangwin/mcp-chrome)（扩展 + `mcp-chrome-bridge`）。
+面向 **任意 MCP 客户端**（Cursor、Claude、CoPaw、OpenClaw 等）。本机需已安装并连接 [mcp-chrome](https://github.com/guodaxia103/tabrix)（扩展 + `tabrix`）。
 
 ## 最短成功路径
 
-1. 确认 bridge 与扩展已连接：让用户运行 `mcp-chrome-bridge doctor`（或通过 MCP 调用与连接相关的诊断，若存在）。
+1. 确认 bridge 与扩展已连接：让用户运行 `tabrix doctor`（或通过 MCP 调用与连接相关的诊断，若存在）。
 2. `get_windows_and_tabs` — 确认当前标签与 `tabId`。
 3. `chrome_navigate` — 打开目标 URL（或 `refresh` 当前页）。
 4. `chrome_read_page` 或 `chrome_get_web_content` — 取结构化内容（优先于截图）。
@@ -39,7 +39,7 @@ metadata:
 
 ## 标准失败回复模板
 
-向用户说明时包含：**发生了什么 → 可能原因 → 建议命令或操作**（例如：「请先执行 `mcp-chrome-bridge setup` 或 `doctor`，确认 Native Messaging 已注册」）。
+向用户说明时包含：**发生了什么 → 可能原因 → 建议命令或操作**（例如：「请先执行 `tabrix setup` 或 `doctor`，确认 Native Messaging 已注册」）。
 
 ## 参考
 

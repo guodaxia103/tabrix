@@ -1,6 +1,6 @@
 # Windows 安装常见问题 FAQ
 
-> 适用于 Windows 10/11 环境下使用 `npm` 或 `pnpm` 全局安装 `mcp-chrome-bridge` 的场景。
+> 适用于 Windows 10/11 环境下使用 `npm` 或 `pnpm` 全局安装 `tabrix` 的场景。
 
 ---
 
@@ -11,11 +11,11 @@
 **修复**：
 
 ```powershell
-mcp-chrome-bridge register
-mcp-chrome-bridge doctor
+tabrix register
+tabrix doctor
 ```
 
-确认以下路径存在 `com.chromemcp.nativehost.json`：
+确认以下路径存在 `com.tabrix.nativehost.json`：
 
 ```
 %APPDATA%\Google\Chrome\NativeMessagingHosts\
@@ -31,7 +31,7 @@ mcp-chrome-bridge doctor
 
 ```powershell
 # 用普通用户权限重新注册
-mcp-chrome-bridge register
+tabrix register
 ```
 
 > 提示：始终用**普通用户**执行全局安装和注册。只有 `register --system` 才需要管理员。
@@ -47,11 +47,11 @@ mcp-chrome-bridge register
 ```powershell
 # 方法 1：开启 postinstall（推荐）
 pnpm config set enable-pre-post-scripts true
-pnpm install -g mcp-chrome-bridge
+pnpm install -g tabrix@latest
 
 # 方法 2：手动注册
-pnpm install -g mcp-chrome-bridge
-mcp-chrome-bridge register
+pnpm install -g tabrix@latest
+tabrix register
 ```
 
 ---
@@ -65,10 +65,10 @@ mcp-chrome-bridge register
 ```powershell
 # 方法 1：设置环境变量指向实际 node.exe
 set CHROME_MCP_NODE_PATH=C:\Program Files\nodejs\node.exe
-mcp-chrome-bridge register
+tabrix register
 
 # 方法 2：让 doctor 自动修复
-mcp-chrome-bridge doctor --fix
+tabrix doctor --fix
 ```
 
 `doctor --fix` 会把当前 `node.exe` 的完整路径写入 `node_path.txt`。
@@ -134,7 +134,7 @@ taskkill /PID <pid> /F
 
 ```powershell
 # 自动诊断并修复（推荐）
-mcp-chrome-bridge doctor --fix
+tabrix doctor --fix
 ```
 
 `doctor --fix` 会自动：
@@ -146,7 +146,7 @@ mcp-chrome-bridge doctor --fix
 如果自动修复不生效，手动执行：
 
 ```powershell
-mcp-chrome-bridge register
+tabrix register
 ```
 
 > 提示：项目内置稳定 key 生成逻辑（`ensure-extension-key.cjs`），确保同一台机器上 Extension ID 在重新构建后保持不变。`register` 命令现在通过三层来源合并 `allowed_origins`（key 计算 + Chrome 发现 + 兜底常量），即使扩展 ID 发生变化也能自动适配。
@@ -178,7 +178,7 @@ mcp-chrome-bridge register
 robocopy .\app\chrome-extension\.output\chrome-mv3 C:\stable-ext /MIR
 ```
 
-- 用 `mcp-chrome-bridge doctor` 检查 "Chrome extension path" 是否指向正确目录
+- 用 `tabrix doctor` 检查 "Chrome extension path" 是否指向正确目录
 
 ---
 
@@ -245,17 +245,17 @@ netstat -ano | findstr :12306
 
 ```powershell
 # 1. 检查版本
-mcp-chrome-bridge -V
+tabrix -V
 node -v
 
 # 2. 全面诊断
-mcp-chrome-bridge doctor
+tabrix doctor
 
 # 3. 查看服务状态
-mcp-chrome-bridge status
+tabrix status
 
 # 4. 冒烟测试
-mcp-chrome-bridge smoke
+tabrix smoke
 ```
 
 如果 `doctor` 报错，按提示修复后重新连接扩展。

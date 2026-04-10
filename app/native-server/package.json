@@ -1,11 +1,13 @@
 {
-  "name": "mcp-chrome-bridge",
-  "version": "1.0.29",
-  "description": "Chrome Native-Messaging host (Node)",
+  "name": "tabrix",
+  "version": "1.0.0",
+  "description": "Tabrix Native-Messaging host (Node)",
   "main": "dist/index.js",
   "bin": {
+    "tabrix": "./dist/cli.js",
     "mcp-chrome-bridge": "./dist/cli.js",
     "chrome-mcp-bridge": "./dist/cli.js",
+    "tabrix-stdio": "./dist/mcp/mcp-server-stdio.js",
     "mcp-chrome-stdio": "./dist/mcp/mcp-server-stdio.js"
   },
   "scripts": {
@@ -38,6 +40,14 @@
   ],
   "author": "hangye",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guodaxia103/tabrix.git"
+  },
+  "bugs": {
+    "url": "https://github.com/guodaxia103/tabrix/issues"
+  },
+  "homepage": "https://github.com/guodaxia103/tabrix#readme",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.69",
     "@fastify/cors": "^11.0.1",

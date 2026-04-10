@@ -35,12 +35,12 @@
 
 这些由 Chrome 直接报告，非项目定义：
 
-| 错误消息                                                     | 原因                           | 修复                         |
-| ------------------------------------------------------------ | ------------------------------ | ---------------------------- |
-| `Specified native messaging host not found`                  | manifest 未注册                | `mcp-chrome-bridge register` |
-| `Access to the specified native messaging host is forbidden` | 扩展 ID 不在 `allowed_origins` | 重新 `register`              |
-| `Native host has exited`                                     | bridge 进程异常退出            | 查看 logs，运行 `doctor`     |
-| `Error when communicating with the native messaging host`    | 非法 JSON 输出                 | 确认 Node.js >= 20           |
+| 错误消息                                                     | 原因                           | 修复                     |
+| ------------------------------------------------------------ | ------------------------------ | ------------------------ |
+| `Specified native messaging host not found`                  | manifest 未注册                | `tabrix register`        |
+| `Access to the specified native messaging host is forbidden` | 扩展 ID 不在 `allowed_origins` | 重新 `register`          |
+| `Native host has exited`                                     | bridge 进程异常退出            | 查看 logs，运行 `doctor` |
+| `Error when communicating with the native messaging host`    | 非法 JSON 输出                 | 确认 Node.js >= 20       |
 
 ---
 

@@ -7,11 +7,11 @@
 Chrome MCP Bridge 的安装和注册流程如下：
 
 ```
-npm install -g mcp-chrome-bridge
+npm install -g tabrix@latest
 └─ postinstall.js
    ├─ 复制可执行文件到 npm_prefix/bin   ← 总是可写（用户或root权限）
    ├─ 尝试用户级别注册                  ← 无需sudo，大多数情况下成功
-   └─ 如果失败 ➜ 提示用户运行 mcp-chrome-bridge register --system
+   └─ 如果失败 ➜ 提示用户运行 tabrix register --system
       └─ 需要手动使用管理员权限运行
 ```
 
@@ -22,7 +22,7 @@ npm install -g mcp-chrome-bridge
 ### 1. 全局安装
 
 ```bash
-npm install -g mcp-chrome-bridge
+npm install -g tabrix@latest
 ```
 
 安装完成后，系统会自动尝试在用户目录中注册 Native Messaging 主机。这不需要管理员权限，是推荐的安装方式。
@@ -47,13 +47,13 @@ npm install -g mcp-chrome-bridge
 如果自动注册失败，或者您想手动注册，可以运行：
 
 ```bash
-mcp-chrome-bridge register
+tabrix register
 ```
 
 **推荐：运行诊断工具检查问题：**
 
 ```bash
-mcp-chrome-bridge doctor
+tabrix doctor
 ```
 
 ### 3. 系统级别注册
@@ -66,10 +66,10 @@ mcp-chrome-bridge doctor
 
 ```bash
 # macOS/Linux
-sudo mcp-chrome-bridge register --system
+sudo tabrix register --system
 
 # Windows (以管理员身份运行命令提示符)
-mcp-chrome-bridge register --system
+tabrix register --system
 ```
 
 系统级安装需要管理员权限才能写入系统目录和注册表。
@@ -80,14 +80,14 @@ mcp-chrome-bridge register --system
 以管理员身份运行命令提示符或 PowerShell，然后执行：
 
 ```
-mcp-chrome-bridge register
+tabrix register
 ```
 
 **macOS/Linux**：
 使用 sudo 命令：
 
 ```
-sudo mcp-chrome-bridge register
+sudo tabrix register
 ```
 
 ## 注册流程详解
@@ -96,14 +96,14 @@ sudo mcp-chrome-bridge register
 
 ```
 注册流程
-├─ 用户级别注册 (mcp-chrome-bridge register)
+├─ 用户级别注册 (tabrix register)
 │  ├─ 获取用户级别清单路径
 │  ├─ 创建用户目录
 │  ├─ 生成清单内容
 │  ├─ 写入清单文件
 │  └─ Windows平台：创建用户级注册表项
 │
-└─ 系统级别注册 (mcp-chrome-bridge register --system)
+└─ 系统级别注册 (tabrix register --system)
    ├─ 检查是否有管理员权限
    │  ├─ 有权限 → 直接创建系统目录和写入清单
    │  └─ 无权限 → 提示用户使用管理员权限运行
@@ -114,7 +114,7 @@ sudo mcp-chrome-bridge register
 
 ```
 manifest.json
-├─ name: "com.chromemcp.nativehost"
+├─ name: "com.tabrix.nativehost"
 ├─ description: "Node.js Host for Browser Bridge Extension"
 ├─ path: "/path/to/run_host.sh"       ← 启动脚本路径
 ├─ type: "stdio"                      ← 通信类型
@@ -147,7 +147,7 @@ manifest.json
    - 在 Windows 上创建系统级注册表项
 3. 如果没有管理员权限：
    - 提示用户使用管理员权限重新运行命令
-   - macOS/Linux: `sudo mcp-chrome-bridge register --system`
+   - macOS/Linux: `sudo tabrix register --system`
    - Windows: 以管理员身份运行命令提示符
 
 ## 验证安装
@@ -200,9 +200,9 @@ manifest.json
 │  ├─ 执行权限问题 (macOS/Linux)
 │  │  ├─ "Permission denied" 错误
 │  │  ├─ "Native host has exited" 错误
-│  │  └─ 运行 mcp-chrome-bridge fix-permissions
+│  │  └─ 运行 tabrix fix-permissions
 │  │
-│  └─ 尝试 mcp-chrome-bridge register --system
+│  └─ 尝试 tabrix register --system
 │
 ├─ 路径问题
 │  ├─ 检查Node.js安装 (node -v)
@@ -243,27 +243,27 @@ manifest.json
    a) **使用内置修复命令（推荐）**：
 
    ```bash
-   mcp-chrome-bridge fix-permissions
+   tabrix fix-permissions
    ```
 
    b) **运行诊断工具自动修复**：
 
    ```bash
-   mcp-chrome-bridge doctor --fix
+   tabrix doctor --fix
    ```
 
    c) **手动设置权限**：
 
    ```bash
    # 查找安装路径
-   npm list -g mcp-chrome-bridge
+   npm list -g tabrix
    # 或者对于 pnpm
-   pnpm list -g mcp-chrome-bridge
+   pnpm list -g tabrix
 
    # 设置执行权限（替换为实际路径）
-   chmod +x /path/to/node_modules/mcp-chrome-bridge/run_host.sh
-   chmod +x /path/to/node_modules/mcp-chrome-bridge/index.js
-   chmod +x /path/to/node_modules/mcp-chrome-bridge/cli.js
+   chmod +x /path/to/node_modules/tabrix/run_host.sh
+   chmod +x /path/to/node_modules/tabrix/index.js
+   chmod +x /path/to/node_modules/tabrix/cli.js
    ```
 
    **Windows 平台**：
@@ -278,20 +278,20 @@ manifest.json
    a) **使用内置修复命令（推荐）**：
 
    ```cmd
-   mcp-chrome-bridge fix-permissions
+   tabrix fix-permissions
    ```
 
    b) **运行诊断工具自动修复**：
 
    ```cmd
-   mcp-chrome-bridge doctor --fix
+   tabrix doctor --fix
    ```
 
    c) **手动检查文件属性**：
 
    ```cmd
    # 查找安装路径
-   npm list -g mcp-chrome-bridge
+   npm list -g tabrix
 
    # 检查文件属性（在文件资源管理器中右键 -> 属性）
    # 确保 run_host.bat 不是只读文件
@@ -301,15 +301,15 @@ manifest.json
 
    ```bash
    # 卸载
-   npm uninstall -g mcp-chrome-bridge
-   # 或 pnpm uninstall -g mcp-chrome-bridge
+   npm uninstall -g tabrix
+   # 或 pnpm uninstall -g tabrix
 
    # 重新安装
-   npm install -g mcp-chrome-bridge
-   # 或 pnpm install -g mcp-chrome-bridge
+   npm install -g tabrix@latest
+   # 或 pnpm install -g tabrix@latest
 
    # 如果仍有问题，运行权限修复
-   mcp-chrome-bridge fix-permissions
+   tabrix fix-permissions
    ```
 
 4. 在 Windows 上，确保注册表访问没有被限制
@@ -317,7 +317,7 @@ manifest.json
    - 对于系统级别，检查 `HKLM\Software\Google\Chrome\NativeMessagingHosts\`
 
 5. 尝试使用系统级别安装
-   - 使用 `mcp-chrome-bridge register --system` 命令
+   - 使用 `tabrix register --system` 命令
    - 或直接使用管理员权限运行
 
 6. 检查控制台输出的错误信息

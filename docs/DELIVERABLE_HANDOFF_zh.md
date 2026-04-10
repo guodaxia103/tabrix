@@ -26,7 +26,7 @@
 ```powershell
 cd D:\projects\ai\codex\mcp-chrome
 pnpm install
-pnpm --filter mcp-chrome-bridge build
+pnpm --filter tabrix build
 node app\native-server\dist\cli.js register --browser chrome
 ```
 
