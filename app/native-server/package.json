@@ -29,6 +29,10 @@
     "dist",
     "!dist/node_path.txt"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "engines": {
     "node": ">=20.0.0"
   },
