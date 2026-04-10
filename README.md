@@ -126,20 +126,75 @@ tabrix
 tabrix-stdio
 ```
 
-Main `tabrix` subcommands (copy-ready):
+First-time guided setup:
 
 ```bash
 tabrix setup
+```
+
+Register Native Messaging host:
+
+```bash
 tabrix register
+```
+
+Fix local execution permissions:
+
+```bash
 tabrix fix-permissions
+```
+
+Update MCP port:
+
+```bash
 tabrix update-port <port>
+```
+
+Check current runtime status:
+
+```bash
 tabrix status
+```
+
+Diagnose issues (`--fix` applies common auto-fixes):
+
+```bash
+tabrix doctor
+```
+
+```bash
 tabrix doctor --fix
+```
+
+Run browser-path smoke test:
+
+```bash
 tabrix smoke
+```
+
+Run stdio-only smoke test:
+
+```bash
 tabrix stdio-smoke
+```
+
+Export diagnostics report (copy to clipboard):
+
+```bash
 tabrix report --copy
+```
+
+Daemon lifecycle commands:
+
+```bash
 tabrix daemon start
+```
+
+```bash
 tabrix daemon status
+```
+
+```bash
 tabrix daemon stop
 ```
 

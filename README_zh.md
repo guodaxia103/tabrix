@@ -125,20 +125,75 @@ tabrix
 tabrix-stdio
 ```
 
-`tabrix` 主要子命令（可整段复制执行）：
+首次引导（自动检查并提示下一步）：
 
 ```bash
 tabrix setup
+```
+
+注册 Native Messaging Host：
+
+```bash
 tabrix register
+```
+
+修复本地执行权限：
+
+```bash
 tabrix fix-permissions
+```
+
+修改 MCP 端口：
+
+```bash
 tabrix update-port <port>
+```
+
+查看当前运行状态：
+
+```bash
 tabrix status
+```
+
+诊断问题（自动修复用 `--fix`）：
+
+```bash
+tabrix doctor
+```
+
+```bash
 tabrix doctor --fix
+```
+
+浏览器链路冒烟测试：
+
+```bash
 tabrix smoke
+```
+
+仅 stdio 链路测试：
+
+```bash
 tabrix stdio-smoke
+```
+
+导出诊断报告（可复制到剪贴板）：
+
+```bash
 tabrix report --copy
+```
+
+守护进程控制：
+
+```bash
 tabrix daemon start
+```
+
+```bash
 tabrix daemon status
+```
+
+```bash
 tabrix daemon stop
 ```
 
