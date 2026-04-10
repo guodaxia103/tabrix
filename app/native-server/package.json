@@ -20,7 +20,7 @@
     "lint:fix": "eslint src --fix",
     "format": "prettier --write \"src/**/*.{js,ts,json}\"",
     "register:dev": "node dist/scripts/register-dev.js",
-    "postinstall": "node dist/scripts/postinstall.js"
+    "postinstall": "node -e \"const fs=require('fs');const path=require('path');const file=path.join(process.cwd(),'dist','scripts','postinstall.js');if(fs.existsSync(file)){require(file);}else{console.log('[tabrix] Skip native postinstall in source checkout (dist/scripts/postinstall.js not found).');}\""
   },
   "files": [
     "dist",
