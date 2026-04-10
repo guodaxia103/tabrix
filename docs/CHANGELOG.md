@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.0.5] - 2026-04-10
+
+### Added
+
+- Release-readiness gate script for tag/version/release-notes consistency.
+- Formal release process docs in English and Chinese.
+- Repository spellcheck baseline for Tabrix terms.
+
+### Changed
+
+- Batch-B dependency upgrades: `markstream-vue`, `dotenv`, `commander`, `pino`.
+- CI/release workflow now includes stronger release metadata checks.
+- Command examples standardized to explicit package filter `@tabrix/tabrix`.
+
+### Fixed
+
+- Reduced release failures caused by version drift and incomplete release metadata.
+- Reduced editor false positives (`Unknown word`) for project naming.
+
 ## [v2.0.3] - 2026-04-10
 
 ### Added

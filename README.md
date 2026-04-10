@@ -270,6 +270,7 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 - [Transport Modes (HTTP / SSE / stdio)](docs/TRANSPORT.md)
 - [Popup Troubleshooting](docs/POPUP_TROUBLESHOOTING.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Release Notes v2.0.5](docs/RELEASE_NOTES_v2.0.5.md)
 - [Release Notes v2.0.4](docs/RELEASE_NOTES_v2.0.4.md)
 - [Release Notes v2.0.3](docs/RELEASE_NOTES_v2.0.3.md)
 - [Project Review 2026 Q2](docs/PROJECT_REVIEW_2026Q2.md)
