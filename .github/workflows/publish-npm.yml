@@ -60,6 +60,9 @@ jobs:
       - name: Prepare extension generated types
         run: pnpm --filter @tabrix/extension exec wxt prepare
 
+      - name: Build shared package
+        run: pnpm --filter @tabrix/shared build
+
       - name: i18n check
         run: pnpm run i18n:check
 
