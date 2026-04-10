@@ -145,20 +145,28 @@ jobs:
         run: |
           set +e
 
-          echo "Checking npm auth identity..."
-          npm whoami
-          AUTH_CODE=$?
-          if [ "${AUTH_CODE}" -ne 0 ]; then
-            echo "publish_code=${AUTH_CODE}" >> "$GITHUB_OUTPUT"
-            echo "::error::npm authentication failed. Please verify NPM_TOKEN."
-            exit "${AUTH_CODE}"
+          if [ -n "${NODE_AUTH_TOKEN}" ]; then
+            echo "Publish mode: token (NPM_TOKEN)"
+            echo "publish_mode=token" >> "$GITHUB_OUTPUT"
+
+            echo "Checking npm auth identity..."
+            npm whoami
+            AUTH_CODE=$?
+            if [ "${AUTH_CODE}" -ne 0 ]; then
+              echo "publish_code=${AUTH_CODE}" >> "$GITHUB_OUTPUT"
+              echo "::error::npm authentication failed. Please verify NPM_TOKEN."
+              exit "${AUTH_CODE}"
+            fi
+          else
+            echo "Publish mode: trusted publishing (OIDC, no NPM_TOKEN)"
+            echo "publish_mode=trusted" >> "$GITHUB_OUTPUT"
           fi
 
           echo "Publishing with provenance..."
           npm publish --access public --provenance
           PUBLISH_CODE=$?
 
-          if [ "${PUBLISH_CODE}" -ne 0 ]; then
+          if [ "${PUBLISH_CODE}" -ne 0 ] && [ -n "${NODE_AUTH_TOKEN}" ]; then
             echo "Provenance publish failed with code ${PUBLISH_CODE}. Retrying without provenance..."
             npm publish --access public
             PUBLISH_CODE=$?
@@ -166,7 +174,11 @@ jobs:
 
           echo "publish_code=${PUBLISH_CODE}" >> "$GITHUB_OUTPUT"
           if [ "${PUBLISH_CODE}" -ne 0 ]; then
-            echo "::error::npm publish failed with code ${PUBLISH_CODE}."
+            if [ -z "${NODE_AUTH_TOKEN}" ]; then
+              echo "::error::npm publish failed in trusted publishing mode. Configure npm trusted publishing for this package or provide NPM_TOKEN."
+            else
+              echo "::error::npm publish failed with code ${PUBLISH_CODE}."
+            fi
             exit "${PUBLISH_CODE}"
           fi
 
@@ -208,5 +220,6 @@ jobs:
       - name: Mark workflow failed when npm publish expected but failed
         if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true') && steps.npm_publish.outputs.publish_code != '0'
         run: |
-          echo "::error::npm publish failed. Please verify NPM_TOKEN, npm package ownership, and provenance compatibility."
+          echo "::error::npm publish failed. Verify npm package ownership plus either NPM_TOKEN permissions or Trusted Publishing setup."
           exit 1
+
