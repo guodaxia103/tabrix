@@ -58,12 +58,12 @@
     "better-sqlite3": "^11.6.0",
     "chalk": "^5.4.1",
     "chrome-devtools-frontend": "^1.0.1611825",
-    "commander": "^13.1.0",
+    "commander": "^14.0.3",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.3.2",
     "is-admin": "^4.0.0",
     "node-fetch": "2",
-    "pino": "^9.6.0",
+    "pino": "^10.3.1",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

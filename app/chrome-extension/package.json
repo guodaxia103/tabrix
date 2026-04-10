@@ -37,7 +37,7 @@
     "elkjs": "^0.11.0",
     "gifenc": "^1.0.3",
     "hnswlib-wasm-static": "0.8.5",
-    "markstream-vue": "0.0.3-beta.5",
+    "markstream-vue": "0.0.12",
     "vue": "^3.5.13",
     "zod": "^3.24.4"
   },
@@ -46,7 +46,7 @@
     "@tailwindcss/vite": "^4.0.0",
     "@types/chrome": "^0.0.318",
     "@wxt-dev/module-vue": "^1.0.2",
-    "dotenv": "^16.5.0",
+    "dotenv": "^17.4.1",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^26.0.0",
     "tailwindcss": "^4.0.0",
