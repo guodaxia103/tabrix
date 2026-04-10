@@ -447,51 +447,162 @@
     "message": "Userscripts Manager",
     "description": "Options page title"
   },
-  "emergencySwitchLabel": { "message": "Emergency Switch", "description": "Global disable switch" },
+  "emergencySwitchLabel": {
+    "message": "Emergency Switch",
+    "description": "Global disable switch"
+  },
   "createRunSectionTitle": {
     "message": "Create / Run",
     "description": "Create & run section title"
   },
-  "nameLabel": { "message": "Name", "description": "Name input label" },
-  "runAtLabel": { "message": "Run At", "description": "runAt select label" },
-  "runAtAuto": { "message": "auto", "description": "runAt auto" },
-  "runAtDocumentStart": { "message": "document_start", "description": "runAt document_start" },
-  "runAtDocumentEnd": { "message": "document_end", "description": "runAt document_end" },
-  "runAtDocumentIdle": { "message": "document_idle", "description": "runAt document_idle" },
-  "worldLabel": { "message": "World", "description": "world select label" },
-  "worldAuto": { "message": "auto", "description": "world auto" },
-  "worldIsolated": { "message": "ISOLATED", "description": "ISOLATED world" },
-  "worldMain": { "message": "MAIN", "description": "MAIN world" },
-  "modeLabel": { "message": "Mode", "description": "mode select label" },
-  "modeAuto": { "message": "auto", "description": "mode auto" },
-  "modePersistent": { "message": "persistent", "description": "mode persistent" },
-  "modeCss": { "message": "css", "description": "mode css" },
-  "modeOnce": { "message": "once", "description": "mode once" },
-  "allFramesLabel": { "message": "All Frames", "description": "allFrames checkbox" },
-  "persistLabel": { "message": "Persist", "description": "persist checkbox" },
-  "dnrFallbackLabel": { "message": "DNR Fallback", "description": "dnr fallback checkbox" },
-  "matchesInputLabel": { "message": "Matches (comma-separated)", "description": "matches input" },
+  "nameLabel": {
+    "message": "Name",
+    "description": "Name input label"
+  },
+  "runAtLabel": {
+    "message": "Run At",
+    "description": "runAt select label"
+  },
+  "runAtAuto": {
+    "message": "auto",
+    "description": "runAt auto"
+  },
+  "runAtDocumentStart": {
+    "message": "document_start",
+    "description": "runAt document_start"
+  },
+  "runAtDocumentEnd": {
+    "message": "document_end",
+    "description": "runAt document_end"
+  },
+  "runAtDocumentIdle": {
+    "message": "document_idle",
+    "description": "runAt document_idle"
+  },
+  "worldLabel": {
+    "message": "World",
+    "description": "world select label"
+  },
+  "worldAuto": {
+    "message": "auto",
+    "description": "world auto"
+  },
+  "worldIsolated": {
+    "message": "ISOLATED",
+    "description": "ISOLATED world"
+  },
+  "worldMain": {
+    "message": "MAIN",
+    "description": "MAIN world"
+  },
+  "modeLabel": {
+    "message": "Mode",
+    "description": "mode select label"
+  },
+  "modeAuto": {
+    "message": "auto",
+    "description": "mode auto"
+  },
+  "modePersistent": {
+    "message": "persistent",
+    "description": "mode persistent"
+  },
+  "modeCss": {
+    "message": "css",
+    "description": "mode css"
+  },
+  "modeOnce": {
+    "message": "once",
+    "description": "mode once"
+  },
+  "allFramesLabel": {
+    "message": "All Frames",
+    "description": "allFrames checkbox"
+  },
+  "persistLabel": {
+    "message": "Persist",
+    "description": "persist checkbox"
+  },
+  "dnrFallbackLabel": {
+    "message": "DNR Fallback",
+    "description": "dnr fallback checkbox"
+  },
+  "matchesInputLabel": {
+    "message": "Matches (comma-separated)",
+    "description": "matches input"
+  },
   "excludesInputLabel": {
     "message": "Excludes (comma-separated)",
     "description": "excludes input"
   },
-  "tagsInputLabel": { "message": "Tags (comma-separated)", "description": "tags input" },
-  "scriptLabel": { "message": "Script", "description": "script textarea label" },
-  "applyButton": { "message": "Apply", "description": "apply button" },
-  "runOnceButton": { "message": "Run Once (CDP)", "description": "run once button" },
-  "listSectionTitle": { "message": "List", "description": "list section title" },
-  "queryLabel": { "message": "Query", "description": "query input label" },
-  "statusAll": { "message": "all", "description": "status all" },
-  "statusEnabled": { "message": "enabled", "description": "status enabled" },
-  "statusDisabled": { "message": "disabled", "description": "status disabled" },
-  "domainLabel": { "message": "Domain", "description": "domain filter label" },
-  "exportAllButton": { "message": "Export All", "description": "export button" },
-  "tableHeaderName": { "message": "Name", "description": "table header name" },
-  "tableHeaderWorld": { "message": "World", "description": "table header world" },
-  "tableHeaderRunAt": { "message": "Run At", "description": "table header runAt" },
-  "tableHeaderUpdated": { "message": "Updated", "description": "table header updated" },
-  "deleteButton": { "message": "Delete", "description": "delete button" },
-  "placeholderOptional": { "message": "optional", "description": "generic optional placeholder" },
+  "tagsInputLabel": {
+    "message": "Tags (comma-separated)",
+    "description": "tags input"
+  },
+  "scriptLabel": {
+    "message": "Script",
+    "description": "script textarea label"
+  },
+  "applyButton": {
+    "message": "Apply",
+    "description": "apply button"
+  },
+  "runOnceButton": {
+    "message": "Run Once (CDP)",
+    "description": "run once button"
+  },
+  "listSectionTitle": {
+    "message": "List",
+    "description": "list section title"
+  },
+  "queryLabel": {
+    "message": "Query",
+    "description": "query input label"
+  },
+  "statusAll": {
+    "message": "all",
+    "description": "status all"
+  },
+  "statusEnabled": {
+    "message": "enabled",
+    "description": "status enabled"
+  },
+  "statusDisabled": {
+    "message": "disabled",
+    "description": "status disabled"
+  },
+  "domainLabel": {
+    "message": "Domain",
+    "description": "domain filter label"
+  },
+  "exportAllButton": {
+    "message": "Export All",
+    "description": "export button"
+  },
+  "tableHeaderName": {
+    "message": "Name",
+    "description": "table header name"
+  },
+  "tableHeaderWorld": {
+    "message": "World",
+    "description": "table header world"
+  },
+  "tableHeaderRunAt": {
+    "message": "Run At",
+    "description": "table header runAt"
+  },
+  "tableHeaderUpdated": {
+    "message": "Updated",
+    "description": "table header updated"
+  },
+  "deleteButton": {
+    "message": "Delete",
+    "description": "delete button"
+  },
+  "placeholderOptional": {
+    "message": "optional",
+    "description": "generic optional placeholder"
+  },
   "placeholderMatchesExample": {
     "message": "e.g. https://*.example.com/*",
     "description": "matches example placeholder"
@@ -500,5 +611,740 @@
     "message": "Paste JS/CSS/TM here",
     "description": "script textarea placeholder"
   },
-  "placeholderDomainHint": { "message": "example.com", "description": "domain filter placeholder" }
+  "placeholderDomainHint": {
+    "message": "example.com",
+    "description": "domain filter placeholder"
+  },
+  "markerAddLabel": {
+    "message": "Add Marker",
+    "description": "Auto-synced key: markerAddLabel"
+  },
+  "markerCurrentPageLabel": {
+    "message": "Current Page",
+    "description": "Auto-synced key: markerCurrentPageLabel"
+  },
+  "markerDeleteButton": {
+    "message": "Delete",
+    "description": "Auto-synced key: markerDeleteButton"
+  },
+  "markerEditButton": {
+    "message": "Edit",
+    "description": "Auto-synced key: markerEditButton"
+  },
+  "markerMatchExact": {
+    "message": "Exact Match",
+    "description": "Auto-synced key: markerMatchExact"
+  },
+  "markerMatchHost": {
+    "message": "Host",
+    "description": "Auto-synced key: markerMatchHost"
+  },
+  "markerMatchPrefix": {
+    "message": "Path Prefix",
+    "description": "Auto-synced key: markerMatchPrefix"
+  },
+  "markerNamePlaceholder": {
+    "message": "Name, e.g. Login button",
+    "description": "Auto-synced key: markerNamePlaceholder"
+  },
+  "markerSelectorPlaceholder": {
+    "message": "CSS selector",
+    "description": "Auto-synced key: markerSelectorPlaceholder"
+  },
+  "markerTotalLabel": {
+    "message": "Marked Elements",
+    "description": "Auto-synced key: markerTotalLabel"
+  },
+  "markerValidateButton": {
+    "message": "Validate",
+    "description": "Auto-synced key: markerValidateButton"
+  },
+  "popupAgentAssistantDesc": {
+    "message": "AI Agent chat and tasks",
+    "description": "Auto-synced key: popupAgentAssistantDesc"
+  },
+  "popupAgentAssistantTitle": {
+    "message": "AI Assistant",
+    "description": "Auto-synced key: popupAgentAssistantTitle"
+  },
+  "popupComingSoonSuffix": {
+    "message": "is under development, stay tuned",
+    "description": "Auto-synced key: popupComingSoonSuffix"
+  },
+  "popupConnectedClientsLabel": {
+    "message": "Connected clients ($ARG1$)",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: popupConnectedClientsLabel"
+  },
+  "popupCopiedFullScript": {
+    "message": "Copied full script",
+    "description": "Auto-synced key: popupCopiedFullScript"
+  },
+  "popupCopiedShort": {
+    "message": "Copied",
+    "description": "Auto-synced key: popupCopiedShort"
+  },
+  "popupCopyCommand": {
+    "message": "Copy command",
+    "description": "Auto-synced key: popupCopyCommand"
+  },
+  "popupCopyFailed": {
+    "message": "Copy failed",
+    "description": "Auto-synced key: popupCopyFailed"
+  },
+  "popupCopyFullTroubleshootScript": {
+    "message": "Copy full troubleshooting script",
+    "description": "Auto-synced key: popupCopyFullTroubleshootScript"
+  },
+  "popupCopyRepairCommand": {
+    "message": "Copy repair command",
+    "description": "Auto-synced key: popupCopyRepairCommand"
+  },
+  "popupDisablingRemote": {
+    "message": "Disabling remote access...",
+    "description": "Auto-synced key: popupDisablingRemote"
+  },
+  "popupDisconnectClientTitle": {
+    "message": "Disconnect this client",
+    "description": "Auto-synced key: popupDisconnectClientTitle"
+  },
+  "popupElementMarkerManagementDesc": {
+    "message": "Manage page element markers",
+    "description": "Auto-synced key: popupElementMarkerManagementDesc"
+  },
+  "popupElementMarkerManagementTitle": {
+    "message": "Element Marker Management",
+    "description": "Auto-synced key: popupElementMarkerManagementTitle"
+  },
+  "popupEnableElementMarker": {
+    "message": "Enable element marker",
+    "description": "Auto-synced key: popupEnableElementMarker"
+  },
+  "popupEnableWebEditor": {
+    "message": "Enable Web Editor mode",
+    "description": "Auto-synced key: popupEnableWebEditor"
+  },
+  "popupEnablingRemote": {
+    "message": "Enabling remote access...",
+    "description": "Auto-synced key: popupEnablingRemote"
+  },
+  "popupHoursAgo": {
+    "message": "$ARG1$ hour(s) ago",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: popupHoursAgo"
+  },
+  "popupJustNow": {
+    "message": "Just now",
+    "description": "Auto-synced key: popupJustNow"
+  },
+  "popupLanIpPlaceholder": {
+    "message": "<LAN_IP>",
+    "description": "Auto-synced key: popupLanIpPlaceholder"
+  },
+  "popupLocalModelDesc": {
+    "message": "Semantic engine and model management",
+    "description": "Auto-synced key: popupLocalModelDesc"
+  },
+  "popupLocalModelTitle": {
+    "message": "Local Models",
+    "description": "Auto-synced key: popupLocalModelTitle"
+  },
+  "popupLocalTab": {
+    "message": "Local",
+    "description": "Auto-synced key: popupLocalTab"
+  },
+  "popupManagementEntrancesTitle": {
+    "message": "Management",
+    "description": "Auto-synced key: popupManagementEntrancesTitle"
+  },
+  "popupMcpConfigLabel": {
+    "message": "MCP Configuration",
+    "description": "Auto-synced key: popupMcpConfigLabel"
+  },
+  "popupMinutesAgo": {
+    "message": "$ARG1$ minute(s) ago",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: popupMinutesAgo"
+  },
+  "popupNetworkLanLabel": {
+    "message": "LAN:",
+    "description": "Auto-synced key: popupNetworkLanLabel"
+  },
+  "popupNetworkLocalLabel": {
+    "message": "Local:",
+    "description": "Auto-synced key: popupNetworkLocalLabel"
+  },
+  "popupNoConnectedClients": {
+    "message": "No MCP client connected",
+    "description": "Auto-synced key: popupNoConnectedClients"
+  },
+  "popupOpenDocs": {
+    "message": "Open docs",
+    "description": "Auto-synced key: popupOpenDocs"
+  },
+  "popupOpenTroubleshootingGuide": {
+    "message": "Open Troubleshooting Guide",
+    "description": "Auto-synced key: popupOpenTroubleshootingGuide"
+  },
+  "popupQuickToolsTitle": {
+    "message": "Quick Tools",
+    "description": "Auto-synced key: popupQuickToolsTitle"
+  },
+  "popupRecordComingSoon": {
+    "message": "Recording feature is under development",
+    "description": "Auto-synced key: popupRecordComingSoon"
+  },
+  "popupRecordReplayFeature": {
+    "message": "Record & Replay",
+    "description": "Auto-synced key: popupRecordReplayFeature"
+  },
+  "popupRefreshClientsTitle": {
+    "message": "Refresh client list",
+    "description": "Auto-synced key: popupRefreshClientsTitle"
+  },
+  "popupRemoteAccessTitle": {
+    "message": "Remote Access",
+    "description": "Auto-synced key: popupRemoteAccessTitle"
+  },
+  "popupRemoteConfigHint": {
+    "message": "Enable Remote Access to view MCP configuration for remote clients.",
+    "description": "Auto-synced key: popupRemoteConfigHint"
+  },
+  "popupRemoteEnabled": {
+    "message": "Remote access enabled",
+    "description": "Auto-synced key: popupRemoteEnabled"
+  },
+  "popupRemoteEnabledWithToken": {
+    "message": "Remote access enabled; default token generated",
+    "description": "Auto-synced key: popupRemoteEnabledWithToken"
+  },
+  "popupRemoteRestoredLocalOnly": {
+    "message": "Restored to local-only access",
+    "description": "Auto-synced key: popupRemoteRestoredLocalOnly"
+  },
+  "popupRemoteSecurityWarning": {
+    "message": "popupRemoteSecurityWarning",
+    "description": "Auto-synced key: popupRemoteSecurityWarning"
+  },
+  "popupRemoteSummaryAutoCreating": {
+    "message": "popupRemoteSummaryAutoCreating",
+    "description": "Auto-synced key: popupRemoteSummaryAutoCreating"
+  },
+  "popupRemoteSummaryEnabledSecure": {
+    "message": "popupRemoteSummaryEnabledSecure",
+    "description": "Auto-synced key: popupRemoteSummaryEnabledSecure"
+  },
+  "popupRemoteSummaryLocalOnly": {
+    "message": "popupRemoteSummaryLocalOnly",
+    "description": "Auto-synced key: popupRemoteSummaryLocalOnly"
+  },
+  "popupRemoteSummaryNeedRunning": {
+    "message": "popupRemoteSummaryNeedRunning",
+    "description": "Auto-synced key: popupRemoteSummaryNeedRunning"
+  },
+  "popupRemoteTab": {
+    "message": "Remote",
+    "description": "Auto-synced key: popupRemoteTab"
+  },
+  "popupStatusDetailConnectedNoService": {
+    "message": "popupStatusDetailConnectedNoService",
+    "description": "Auto-synced key: popupStatusDetailConnectedNoService"
+  },
+  "popupStatusDetailDisconnected": {
+    "message": "popupStatusDetailDisconnected",
+    "description": "Auto-synced key: popupStatusDetailDisconnected"
+  },
+  "popupStatusDetailDisconnectedWhileDaemon": {
+    "message": "popupStatusDetailDisconnectedWhileDaemon",
+    "description": "Auto-synced key: popupStatusDetailDisconnectedWhileDaemon"
+  },
+  "popupStatusDetailErrorDefault": {
+    "message": "popupStatusDetailErrorDefault",
+    "description": "Auto-synced key: popupStatusDetailErrorDefault"
+  },
+  "popupTabHintLocal": {
+    "message": "For local clients like Cursor / Claude Desktop / CherryStudio / Windsurf",
+    "description": "Auto-synced key: popupTabHintLocal"
+  },
+  "popupTabHintRemote": {
+    "message": "For remote hosts or Docker via LAN IP",
+    "description": "Auto-synced key: popupTabHintRemote"
+  },
+  "popupTabHintStdio": {
+    "message": "For CLI clients like Claude Code CLI (npm i -g tabrix@latest first)",
+    "description": "Auto-synced key: popupTabHintStdio"
+  },
+  "popupToggleFailedPrefix": {
+    "message": "Toggle failed:",
+    "description": "Auto-synced key: popupToggleFailedPrefix"
+  },
+  "popupTokenManagementDesc": {
+    "message": "Remote auth, refresh and validity",
+    "description": "Auto-synced key: popupTokenManagementDesc"
+  },
+  "popupTokenManagementTitle": {
+    "message": "Token Management",
+    "description": "Auto-synced key: popupTokenManagementTitle"
+  },
+  "popupTroubleshootDaemonAutostartTitle": {
+    "message": "Install daemon auto-start on boot",
+    "description": "Auto-synced key: popupTroubleshootDaemonAutostartTitle"
+  },
+  "popupTroubleshootDaemonStartTitle": {
+    "message": "Start daemon (keep service online without browser)",
+    "description": "Auto-synced key: popupTroubleshootDaemonStartTitle"
+  },
+  "popupTroubleshootDoctorFixTitle": {
+    "message": "Basic diagnostics and auto-fix",
+    "description": "Auto-synced key: popupTroubleshootDoctorFixTitle"
+  },
+  "popupTroubleshootingGuideDesc": {
+    "message": "popupTroubleshootingGuideDesc",
+    "description": "Auto-synced key: popupTroubleshootingGuideDesc"
+  },
+  "popupTroubleshootingGuideTitle": {
+    "message": "Troubleshooting Guide",
+    "description": "Auto-synced key: popupTroubleshootingGuideTitle"
+  },
+  "popupTroubleshootQuickFixTitle": {
+    "message": "Quick fix for current error",
+    "description": "Auto-synced key: popupTroubleshootQuickFixTitle"
+  },
+  "popupTroubleshootRegisterForceTitle": {
+    "message": "Force re-register Native host",
+    "description": "Auto-synced key: popupTroubleshootRegisterForceTitle"
+  },
+  "popupTroubleshootRemotePersistNote": {
+    "message": "popupTroubleshootRemotePersistNote",
+    "description": "Auto-synced key: popupTroubleshootRemotePersistNote"
+  },
+  "popupTroubleshootRemotePersistTitle": {
+    "message": "Persist remote mode (daemon/env)",
+    "description": "Auto-synced key: popupTroubleshootRemotePersistTitle"
+  },
+  "popupUnknownClient": {
+    "message": "Unknown client",
+    "description": "Auto-synced key: popupUnknownClient"
+  },
+  "popupWorkflowManagementDesc": {
+    "message": "Record/replay automation flows",
+    "description": "Auto-synced key: popupWorkflowManagementDesc"
+  },
+  "popupWorkflowManagementTitle": {
+    "message": "Workflow Management",
+    "description": "Auto-synced key: popupWorkflowManagementTitle"
+  },
+  "scheduleArgsLabel": {
+    "message": "Arguments (JSON)",
+    "description": "Auto-synced key: scheduleArgsLabel"
+  },
+  "scheduleDailyTimeLabel": {
+    "message": "Time (HH:mm)",
+    "description": "Auto-synced key: scheduleDailyTimeLabel"
+  },
+  "scheduleDailyTimePlaceholder": {
+    "message": "e.g. 09:30",
+    "description": "Auto-synced key: scheduleDailyTimePlaceholder"
+  },
+  "scheduleDeleteButton": {
+    "message": "Delete",
+    "description": "Auto-synced key: scheduleDeleteButton"
+  },
+  "scheduleDescribeDaily": {
+    "message": "Every day at $ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: scheduleDescribeDaily"
+  },
+  "scheduleDescribeInterval": {
+    "message": "Every $ARG1$ minute(s)",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: scheduleDescribeInterval"
+  },
+  "scheduleDescribeOnce": {
+    "message": "One-time at $ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: scheduleDescribeOnce"
+  },
+  "scheduleEnabledLabel": {
+    "message": "Enabled",
+    "description": "Auto-synced key: scheduleEnabledLabel"
+  },
+  "scheduleEnabledToggle": {
+    "message": "Enable scheduling",
+    "description": "Auto-synced key: scheduleEnabledToggle"
+  },
+  "scheduleExistingPlansTitle": {
+    "message": "Existing Plans",
+    "description": "Auto-synced key: scheduleExistingPlansTitle"
+  },
+  "scheduleIntervalMinutesLabel": {
+    "message": "Interval (minutes)",
+    "description": "Auto-synced key: scheduleIntervalMinutesLabel"
+  },
+  "scheduleOnceTimeLabel": {
+    "message": "Time (ISO)",
+    "description": "Auto-synced key: scheduleOnceTimeLabel"
+  },
+  "scheduleOnceTimePlaceholder": {
+    "message": "e.g. 2025-10-05T10:00:00",
+    "description": "Auto-synced key: scheduleOnceTimePlaceholder"
+  },
+  "scheduleTitle": {
+    "message": "Scheduled Execution",
+    "description": "Auto-synced key: scheduleTitle"
+  },
+  "scheduleTypeDaily": {
+    "message": "Daily at fixed time",
+    "description": "Auto-synced key: scheduleTypeDaily"
+  },
+  "scheduleTypeInterval": {
+    "message": "Every N minutes",
+    "description": "Auto-synced key: scheduleTypeInterval"
+  },
+  "scheduleTypeLabel": {
+    "message": "Type",
+    "description": "Auto-synced key: scheduleTypeLabel"
+  },
+  "scheduleTypeOnce": {
+    "message": "Run once",
+    "description": "Auto-synced key: scheduleTypeOnce"
+  },
+  "sidepanelNavigatorTitle": {
+    "message": "Switch Pages",
+    "description": "Auto-synced key: sidepanelNavigatorTitle"
+  },
+  "sidepanelNavigatorTriggerTitle": {
+    "message": "Switch pages (drag to move, double-click to reset position)",
+    "description": "Auto-synced key: sidepanelNavigatorTriggerTitle"
+  },
+  "tokenPageBackHomeTitle": {
+    "message": "Back to home",
+    "description": "Auto-synced key: tokenPageBackHomeTitle"
+  },
+  "tokenPageBackLabel": {
+    "message": "Back",
+    "description": "Auto-synced key: tokenPageBackLabel"
+  },
+  "tokenPageCopyFullConfigButton": {
+    "message": "Copy full configuration",
+    "description": "Auto-synced key: tokenPageCopyFullConfigButton"
+  },
+  "tokenPageCopyTokenTitle": {
+    "message": "Copy token",
+    "description": "Auto-synced key: tokenPageCopyTokenTitle"
+  },
+  "tokenPageCurrentTokenTitle": {
+    "message": "Current Token",
+    "description": "Auto-synced key: tokenPageCurrentTokenTitle"
+  },
+  "tokenPageDays": {
+    "message": "$ARG1$ day(s)",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: tokenPageDays"
+  },
+  "tokenPageEmptyLocalOnly": {
+    "message": "tokenPageEmptyLocalOnly",
+    "description": "Auto-synced key: tokenPageEmptyLocalOnly"
+  },
+  "tokenPageEmptyRemoteEnabled": {
+    "message": "tokenPageEmptyRemoteEnabled",
+    "description": "Auto-synced key: tokenPageEmptyRemoteEnabled"
+  },
+  "tokenPageEnvTokenBadge": {
+    "message": "tokenPageEnvTokenBadge",
+    "description": "Auto-synced key: tokenPageEnvTokenBadge"
+  },
+  "tokenPageExpired": {
+    "message": "Expired",
+    "description": "Auto-synced key: tokenPageExpired"
+  },
+  "tokenPageExpiryTimeLabel": {
+    "message": "Expires At",
+    "description": "Auto-synced key: tokenPageExpiryTimeLabel"
+  },
+  "tokenPageGenerateDefaultTokenButton": {
+    "message": "Generate default token",
+    "description": "Auto-synced key: tokenPageGenerateDefaultTokenButton"
+  },
+  "tokenPageLocalServiceUnavailable": {
+    "message": "tokenPageLocalServiceUnavailable",
+    "description": "Auto-synced key: tokenPageLocalServiceUnavailable"
+  },
+  "tokenPageNeverExpire": {
+    "message": "Never expires",
+    "description": "Auto-synced key: tokenPageNeverExpire"
+  },
+  "tokenPageNewTokenTtlLabel": {
+    "message": "New token validity days",
+    "description": "Auto-synced key: tokenPageNewTokenTtlLabel"
+  },
+  "tokenPageNotesText": {
+    "message": "tokenPageNotesText",
+    "description": "Auto-synced key: tokenPageNotesText"
+  },
+  "tokenPageNotesTitle": {
+    "message": "Notes",
+    "description": "Auto-synced key: tokenPageNotesTitle"
+  },
+  "tokenPageReadTokenFailedHttp": {
+    "message": "Failed to read token (HTTP $ARG1$)",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: tokenPageReadTokenFailedHttp"
+  },
+  "tokenPageRefreshConfirmMessage": {
+    "message": "tokenPageRefreshConfirmMessage",
+    "description": "Auto-synced key: tokenPageRefreshConfirmMessage"
+  },
+  "tokenPageRefreshFailed": {
+    "message": "Refresh failed: $ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: tokenPageRefreshFailed"
+  },
+  "tokenPageRefreshRequestFailed": {
+    "message": "Refresh request failed",
+    "description": "Auto-synced key: tokenPageRefreshRequestFailed"
+  },
+  "tokenPageRegenerateConfirmButton": {
+    "message": "Confirm regenerate",
+    "description": "Auto-synced key: tokenPageRegenerateConfirmButton"
+  },
+  "tokenPageRegenerateConfirmItem": {
+    "message": "Saved new token or confirmed all clients can be updated now",
+    "description": "Auto-synced key: tokenPageRegenerateConfirmItem"
+  },
+  "tokenPageRegenerateConfirmTitle": {
+    "message": "Regenerate Token?",
+    "description": "Auto-synced key: tokenPageRegenerateConfirmTitle"
+  },
+  "tokenPageRegenerateConfirmWarning": {
+    "message": "This action cannot be undone.",
+    "description": "Auto-synced key: tokenPageRegenerateConfirmWarning"
+  },
+  "tokenPageRegenerateTokenButton": {
+    "message": "Regenerate Token",
+    "description": "Auto-synced key: tokenPageRegenerateTokenButton"
+  },
+  "tokenPageRemainingDaysHours": {
+    "message": "About $ARG1$ day(s) $ARG2$ hour(s) left",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    },
+    "description": "Auto-synced key: tokenPageRemainingDaysHours"
+  },
+  "tokenPageRemainingHoursMinutes": {
+    "message": "About $ARG1$ hour(s) $ARG2$ minute(s) left",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    },
+    "description": "Auto-synced key: tokenPageRemainingHoursMinutes"
+  },
+  "tokenPageRemainingMinutes": {
+    "message": "About $ARG1$ minute(s) left",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: tokenPageRemainingMinutes"
+  },
+  "tokenPageRemoteConfigTitle": {
+    "message": "Remote MCP Configuration (with Token)",
+    "description": "Auto-synced key: tokenPageRemoteConfigTitle"
+  },
+  "tokenPageTtlDaysLabel": {
+    "message": "TTL days when generated",
+    "description": "Auto-synced key: tokenPageTtlDaysLabel"
+  },
+  "tokenPageTtlHint": {
+    "message": "0 = never expires, max 3650",
+    "description": "Auto-synced key: tokenPageTtlHint"
+  },
+  "sidepanelMarkerAddTitle": {
+    "message": "Add Marker",
+    "description": "Auto-synced key: sidepanelMarkerAddTitle"
+  },
+  "sidepanelMarkerClearSearch": {
+    "message": "Clear search",
+    "description": "Auto-synced key: sidepanelMarkerClearSearch"
+  },
+  "sidepanelMarkerDeleteConfirm": {
+    "message": "Delete marker \\\"$ARG1$\\\"?",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: sidepanelMarkerDeleteConfirm"
+  },
+  "sidepanelMarkerDomainCount": {
+    "message": "$ARG1$ markers",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: sidepanelMarkerDomainCount"
+  },
+  "sidepanelMarkerEditTitle": {
+    "message": "Edit Marker",
+    "description": "Auto-synced key: sidepanelMarkerEditTitle"
+  },
+  "sidepanelMarkerEmpty": {
+    "message": "No markers yet",
+    "description": "Auto-synced key: sidepanelMarkerEmpty"
+  },
+  "sidepanelMarkerLocalFile": {
+    "message": "(Local file)",
+    "description": "Auto-synced key: sidepanelMarkerLocalFile"
+  },
+  "sidepanelMarkerMatchTypeLabel": {
+    "message": "Match Type",
+    "description": "Auto-synced key: sidepanelMarkerMatchTypeLabel"
+  },
+  "sidepanelMarkerNameLabel": {
+    "message": "Name",
+    "description": "Auto-synced key: sidepanelMarkerNameLabel"
+  },
+  "sidepanelMarkerNoMatch": {
+    "message": "No matching markers found",
+    "description": "Auto-synced key: sidepanelMarkerNoMatch"
+  },
+  "sidepanelMarkerSearchPlaceholder": {
+    "message": "Search marker name or selector...",
+    "description": "Auto-synced key: sidepanelMarkerSearchPlaceholder"
+  },
+  "sidepanelMarkerSelectorLabel": {
+    "message": "Selector",
+    "description": "Auto-synced key: sidepanelMarkerSelectorLabel"
+  },
+  "sidepanelMarkerSelectorPlaceholder": {
+    "message": "CSS selector or XPath",
+    "description": "Auto-synced key: sidepanelMarkerSelectorPlaceholder"
+  },
+  "sidepanelMarkerSelectorTypeLabel": {
+    "message": "Selector Type",
+    "description": "Auto-synced key: sidepanelMarkerSelectorTypeLabel"
+  },
+  "sidepanelMarkerStatsFiltered": {
+    "message": "Filtered $ARG1$ markers (total $ARG2$, $ARG3$ domains)",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      },
+      "arg3": {
+        "content": "$3",
+        "example": "3"
+      }
+    },
+    "description": "Auto-synced key: sidepanelMarkerStatsFiltered"
+  },
+  "sidepanelMarkerStatsTotal": {
+    "message": "Total $ARG1$ markers, $ARG2$ domains",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    },
+    "description": "Auto-synced key: sidepanelMarkerStatsTotal"
+  },
+  "sidepanelMarkerUnknownUrl": {
+    "message": "(Unknown URL)",
+    "description": "Auto-synced key: sidepanelMarkerUnknownUrl"
+  },
+  "sidepanelMarkerUpdateButton": {
+    "message": "Update",
+    "description": "Auto-synced key: sidepanelMarkerUpdateButton"
+  },
+  "sidepanelTriggerCreateNotImplemented": {
+    "message": "sidepanelTriggerCreateNotImplemented",
+    "description": "Auto-synced key: sidepanelTriggerCreateNotImplemented"
+  },
+  "sidepanelTriggerEditNotImplemented": {
+    "message": "sidepanelTriggerEditNotImplemented",
+    "description": "Auto-synced key: sidepanelTriggerEditNotImplemented"
+  },
+  "sidepanelWorkflowCreateNotImplemented": {
+    "message": "sidepanelWorkflowCreateNotImplemented",
+    "description": "Auto-synced key: sidepanelWorkflowCreateNotImplemented"
+  },
+  "sidepanelWorkflowDeleteConfirm": {
+    "message": "Delete this workflow? This action cannot be undone.",
+    "description": "Auto-synced key: sidepanelWorkflowDeleteConfirm"
+  },
+  "sidepanelWorkflowEditNotImplemented": {
+    "message": "sidepanelWorkflowEditNotImplemented",
+    "description": "Auto-synced key: sidepanelWorkflowEditNotImplemented"
+  }
 }

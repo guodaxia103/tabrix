@@ -443,50 +443,914 @@
     "message": "页",
     "description": "页面计数单位"
   },
-  "userscriptsManagerTitle": { "message": "脚本管理器", "description": "Options 页标题" },
-  "emergencySwitchLabel": { "message": "紧急开关", "description": "紧急关闭开关" },
-  "createRunSectionTitle": { "message": "创建 / 运行", "description": "创建与运行分区标题" },
-  "nameLabel": { "message": "名称", "description": "名称输入标签" },
-  "runAtLabel": { "message": "运行时机", "description": "runAt 选择标签" },
-  "runAtAuto": { "message": "自动", "description": "runAt auto" },
-  "runAtDocumentStart": { "message": "document_start", "description": "runAt document_start" },
-  "runAtDocumentEnd": { "message": "document_end", "description": "runAt document_end" },
-  "runAtDocumentIdle": { "message": "document_idle", "description": "runAt document_idle" },
-  "worldLabel": { "message": "执行上下文", "description": "world 选择标签" },
-  "worldAuto": { "message": "自动", "description": "world auto" },
-  "worldIsolated": { "message": "隔离 (ISOLATED)", "description": "ISOLATED world" },
-  "worldMain": { "message": "页面 (MAIN)", "description": "MAIN world" },
-  "modeLabel": { "message": "模式", "description": "模式选择标签" },
-  "modeAuto": { "message": "自动", "description": "mode auto" },
-  "modePersistent": { "message": "持久", "description": "mode persistent" },
-  "modeCss": { "message": "仅样式 (CSS)", "description": "mode css" },
-  "modeOnce": { "message": "一次运行 (CDP)", "description": "mode once" },
-  "allFramesLabel": { "message": "全部 frame", "description": "allFrames 复选框" },
-  "persistLabel": { "message": "持久化", "description": "persist 复选框" },
-  "dnrFallbackLabel": { "message": "DNR 回退", "description": "DNR fallback 复选框" },
-  "matchesInputLabel": { "message": "匹配（逗号分隔）", "description": "matches 输入" },
-  "excludesInputLabel": { "message": "排除（逗号分隔）", "description": "excludes 输入" },
-  "tagsInputLabel": { "message": "标签（逗号分隔）", "description": "tags 输入" },
-  "scriptLabel": { "message": "脚本", "description": "脚本文本标签" },
-  "applyButton": { "message": "应用", "description": "应用按钮" },
-  "runOnceButton": { "message": "一次运行（CDP）", "description": "一次运行按钮" },
-  "listSectionTitle": { "message": "脚本列表", "description": "列表分区标题" },
-  "queryLabel": { "message": "搜索", "description": "查询输入标签" },
-  "statusAll": { "message": "全部", "description": "状态-全部" },
-  "statusEnabled": { "message": "启用", "description": "状态-启用" },
-  "statusDisabled": { "message": "禁用", "description": "状态-禁用" },
-  "domainLabel": { "message": "域名", "description": "域名过滤标签" },
-  "exportAllButton": { "message": "导出全部", "description": "导出按钮" },
-  "tableHeaderName": { "message": "名称", "description": "表头-名称" },
-  "tableHeaderWorld": { "message": "执行上下文", "description": "表头-World" },
-  "tableHeaderRunAt": { "message": "运行时机", "description": "表头-RunAt" },
-  "tableHeaderUpdated": { "message": "更新时间", "description": "表头-更新时间" },
-  "deleteButton": { "message": "删除", "description": "删除按钮" },
-  "placeholderOptional": { "message": "可选", "description": "通用可选占位符" },
+  "userscriptsManagerTitle": {
+    "message": "脚本管理器",
+    "description": "Options 页标题"
+  },
+  "emergencySwitchLabel": {
+    "message": "紧急开关",
+    "description": "紧急关闭开关"
+  },
+  "createRunSectionTitle": {
+    "message": "创建 / 运行",
+    "description": "创建与运行分区标题"
+  },
+  "nameLabel": {
+    "message": "名称",
+    "description": "名称输入标签"
+  },
+  "runAtLabel": {
+    "message": "运行时机",
+    "description": "runAt 选择标签"
+  },
+  "runAtAuto": {
+    "message": "自动",
+    "description": "runAt auto"
+  },
+  "runAtDocumentStart": {
+    "message": "document_start",
+    "description": "runAt document_start"
+  },
+  "runAtDocumentEnd": {
+    "message": "document_end",
+    "description": "runAt document_end"
+  },
+  "runAtDocumentIdle": {
+    "message": "document_idle",
+    "description": "runAt document_idle"
+  },
+  "worldLabel": {
+    "message": "执行上下文",
+    "description": "world 选择标签"
+  },
+  "worldAuto": {
+    "message": "自动",
+    "description": "world auto"
+  },
+  "worldIsolated": {
+    "message": "隔离 (ISOLATED)",
+    "description": "ISOLATED world"
+  },
+  "worldMain": {
+    "message": "页面 (MAIN)",
+    "description": "MAIN world"
+  },
+  "modeLabel": {
+    "message": "模式",
+    "description": "模式选择标签"
+  },
+  "modeAuto": {
+    "message": "自动",
+    "description": "mode auto"
+  },
+  "modePersistent": {
+    "message": "持久",
+    "description": "mode persistent"
+  },
+  "modeCss": {
+    "message": "仅样式 (CSS)",
+    "description": "mode css"
+  },
+  "modeOnce": {
+    "message": "一次运行 (CDP)",
+    "description": "mode once"
+  },
+  "allFramesLabel": {
+    "message": "全部 frame",
+    "description": "allFrames 复选框"
+  },
+  "persistLabel": {
+    "message": "持久化",
+    "description": "persist 复选框"
+  },
+  "dnrFallbackLabel": {
+    "message": "DNR 回退",
+    "description": "DNR fallback 复选框"
+  },
+  "matchesInputLabel": {
+    "message": "匹配（逗号分隔）",
+    "description": "matches 输入"
+  },
+  "excludesInputLabel": {
+    "message": "排除（逗号分隔）",
+    "description": "excludes 输入"
+  },
+  "tagsInputLabel": {
+    "message": "标签（逗号分隔）",
+    "description": "tags 输入"
+  },
+  "scriptLabel": {
+    "message": "脚本",
+    "description": "脚本文本标签"
+  },
+  "applyButton": {
+    "message": "应用",
+    "description": "应用按钮"
+  },
+  "runOnceButton": {
+    "message": "一次运行（CDP）",
+    "description": "一次运行按钮"
+  },
+  "listSectionTitle": {
+    "message": "脚本列表",
+    "description": "列表分区标题"
+  },
+  "queryLabel": {
+    "message": "搜索",
+    "description": "查询输入标签"
+  },
+  "statusAll": {
+    "message": "全部",
+    "description": "状态-全部"
+  },
+  "statusEnabled": {
+    "message": "启用",
+    "description": "状态-启用"
+  },
+  "statusDisabled": {
+    "message": "禁用",
+    "description": "状态-禁用"
+  },
+  "domainLabel": {
+    "message": "域名",
+    "description": "域名过滤标签"
+  },
+  "exportAllButton": {
+    "message": "导出全部",
+    "description": "导出按钮"
+  },
+  "tableHeaderName": {
+    "message": "名称",
+    "description": "表头-名称"
+  },
+  "tableHeaderWorld": {
+    "message": "执行上下文",
+    "description": "表头-World"
+  },
+  "tableHeaderRunAt": {
+    "message": "运行时机",
+    "description": "表头-RunAt"
+  },
+  "tableHeaderUpdated": {
+    "message": "更新时间",
+    "description": "表头-更新时间"
+  },
+  "deleteButton": {
+    "message": "删除",
+    "description": "删除按钮"
+  },
+  "placeholderOptional": {
+    "message": "可选",
+    "description": "通用可选占位符"
+  },
   "placeholderMatchesExample": {
     "message": "例如：https://*.example.com/*",
     "description": "匹配示例占位符"
   },
-  "placeholderScriptHint": { "message": "在此粘贴 JS/CSS/TM", "description": "脚本文本域占位符" },
-  "placeholderDomainHint": { "message": "example.com", "description": "域名筛选占位符" }
+  "placeholderScriptHint": {
+    "message": "在此粘贴 JS/CSS/TM",
+    "description": "脚本文本域占位符"
+  },
+  "placeholderDomainHint": {
+    "message": "example.com",
+    "description": "域名筛选占位符"
+  },
+  "markerAddLabel": {
+    "message": "新增标注",
+    "description": "自动同步键: markerAddLabel"
+  },
+  "markerCurrentPageLabel": {
+    "message": "当前页面",
+    "description": "自动同步键: markerCurrentPageLabel"
+  },
+  "markerDeleteButton": {
+    "message": "删除",
+    "description": "自动同步键: markerDeleteButton"
+  },
+  "markerEditButton": {
+    "message": "编辑",
+    "description": "自动同步键: markerEditButton"
+  },
+  "markerMatchExact": {
+    "message": "精确匹配",
+    "description": "自动同步键: markerMatchExact"
+  },
+  "markerMatchHost": {
+    "message": "域名",
+    "description": "自动同步键: markerMatchHost"
+  },
+  "markerMatchPrefix": {
+    "message": "路径前缀",
+    "description": "自动同步键: markerMatchPrefix"
+  },
+  "markerNamePlaceholder": {
+    "message": "名称，如 登录按钮",
+    "description": "自动同步键: markerNamePlaceholder"
+  },
+  "markerSelectorPlaceholder": {
+    "message": "CSS 选择器",
+    "description": "自动同步键: markerSelectorPlaceholder"
+  },
+  "markerTotalLabel": {
+    "message": "已标注元素",
+    "description": "自动同步键: markerTotalLabel"
+  },
+  "markerValidateButton": {
+    "message": "验证",
+    "description": "自动同步键: markerValidateButton"
+  },
+  "popupAgentAssistantDesc": {
+    "message": "AI Agent 对话与任务",
+    "description": "自动同步键: popupAgentAssistantDesc"
+  },
+  "popupAgentAssistantTitle": {
+    "message": "智能助手",
+    "description": "自动同步键: popupAgentAssistantTitle"
+  },
+  "popupComingSoonSuffix": {
+    "message": "功能开发中，敬请期待",
+    "description": "自动同步键: popupComingSoonSuffix"
+  },
+  "popupConnectedClientsLabel": {
+    "message": "已连接的客户端 ($ARG1$)",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: popupConnectedClientsLabel"
+  },
+  "popupCopiedFullScript": {
+    "message": "✅ 已复制完整脚本",
+    "description": "自动同步键: popupCopiedFullScript"
+  },
+  "popupCopiedShort": {
+    "message": "✅ 已复制",
+    "description": "自动同步键: popupCopiedShort"
+  },
+  "popupCopyCommand": {
+    "message": "复制命令",
+    "description": "自动同步键: popupCopyCommand"
+  },
+  "popupCopyFailed": {
+    "message": "❌ 复制失败",
+    "description": "自动同步键: popupCopyFailed"
+  },
+  "popupCopyFullTroubleshootScript": {
+    "message": "复制完整排障脚本",
+    "description": "自动同步键: popupCopyFullTroubleshootScript"
+  },
+  "popupCopyRepairCommand": {
+    "message": "复制修复命令",
+    "description": "自动同步键: popupCopyRepairCommand"
+  },
+  "popupDisablingRemote": {
+    "message": "正在关闭远程访问…",
+    "description": "自动同步键: popupDisablingRemote"
+  },
+  "popupDisconnectClientTitle": {
+    "message": "断开此客户端",
+    "description": "自动同步键: popupDisconnectClientTitle"
+  },
+  "popupElementMarkerManagementDesc": {
+    "message": "管理页面元素标注",
+    "description": "自动同步键: popupElementMarkerManagementDesc"
+  },
+  "popupElementMarkerManagementTitle": {
+    "message": "元素标注管理",
+    "description": "自动同步键: popupElementMarkerManagementTitle"
+  },
+  "popupEnableElementMarker": {
+    "message": "开启元素标注",
+    "description": "自动同步键: popupEnableElementMarker"
+  },
+  "popupEnableWebEditor": {
+    "message": "开启页面编辑模式",
+    "description": "自动同步键: popupEnableWebEditor"
+  },
+  "popupEnablingRemote": {
+    "message": "正在开启远程访问…",
+    "description": "自动同步键: popupEnablingRemote"
+  },
+  "popupHoursAgo": {
+    "message": "$ARG1$ 小时前",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: popupHoursAgo"
+  },
+  "popupJustNow": {
+    "message": "刚刚",
+    "description": "自动同步键: popupJustNow"
+  },
+  "popupLanIpPlaceholder": {
+    "message": "<局域网IP>",
+    "description": "自动同步键: popupLanIpPlaceholder"
+  },
+  "popupLocalModelDesc": {
+    "message": "语义引擎与模型管理",
+    "description": "自动同步键: popupLocalModelDesc"
+  },
+  "popupLocalModelTitle": {
+    "message": "本地模型",
+    "description": "自动同步键: popupLocalModelTitle"
+  },
+  "popupLocalTab": {
+    "message": "本机",
+    "description": "自动同步键: popupLocalTab"
+  },
+  "popupManagementEntrancesTitle": {
+    "message": "管理入口",
+    "description": "自动同步键: popupManagementEntrancesTitle"
+  },
+  "popupMcpConfigLabel": {
+    "message": "MCP 配置",
+    "description": "自动同步键: popupMcpConfigLabel"
+  },
+  "popupMinutesAgo": {
+    "message": "$ARG1$ 分钟前",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: popupMinutesAgo"
+  },
+  "popupNetworkLanLabel": {
+    "message": "局域网：",
+    "description": "自动同步键: popupNetworkLanLabel"
+  },
+  "popupNetworkLocalLabel": {
+    "message": "本机：",
+    "description": "自动同步键: popupNetworkLocalLabel"
+  },
+  "popupNoConnectedClients": {
+    "message": "暂无 MCP 客户端连接",
+    "description": "自动同步键: popupNoConnectedClients"
+  },
+  "popupOpenDocs": {
+    "message": "打开文档",
+    "description": "自动同步键: popupOpenDocs"
+  },
+  "popupOpenTroubleshootingGuide": {
+    "message": "打开排查向导",
+    "description": "自动同步键: popupOpenTroubleshootingGuide"
+  },
+  "popupQuickToolsTitle": {
+    "message": "快捷工具",
+    "description": "自动同步键: popupQuickToolsTitle"
+  },
+  "popupRecordComingSoon": {
+    "message": "录制功能开发中",
+    "description": "自动同步键: popupRecordComingSoon"
+  },
+  "popupRecordReplayFeature": {
+    "message": "录制回放",
+    "description": "自动同步键: popupRecordReplayFeature"
+  },
+  "popupRefreshClientsTitle": {
+    "message": "刷新客户端列表",
+    "description": "自动同步键: popupRefreshClientsTitle"
+  },
+  "popupRemoteAccessTitle": {
+    "message": "远程访问",
+    "description": "自动同步键: popupRemoteAccessTitle"
+  },
+  "popupRemoteConfigHint": {
+    "message": "开启远程访问后将显示可供远程客户端使用的 MCP 配置。",
+    "description": "自动同步键: popupRemoteConfigHint"
+  },
+  "popupRemoteEnabled": {
+    "message": "✅ 远程访问已开启",
+    "description": "自动同步键: popupRemoteEnabled"
+  },
+  "popupRemoteEnabledWithToken": {
+    "message": "✅ 远程访问已开启，已生成默认 Token",
+    "description": "自动同步键: popupRemoteEnabledWithToken"
+  },
+  "popupRemoteRestoredLocalOnly": {
+    "message": "✅ 已恢复仅本机访问",
+    "description": "自动同步键: popupRemoteRestoredLocalOnly"
+  },
+  "popupRemoteSecurityWarning": {
+    "message": "远程模式必须携带 Bearer Token。正在自动创建默认 Token，你也可以在「Token 管理」手动生成并复制配置。",
+    "description": "自动同步键: popupRemoteSecurityWarning"
+  },
+  "popupRemoteSummaryAutoCreating": {
+    "message": "远程访问已开启，正在自动创建默认 Token。",
+    "description": "自动同步键: popupRemoteSummaryAutoCreating"
+  },
+  "popupRemoteSummaryEnabledSecure": {
+    "message": "远程访问已开启（0.0.0.0），局域网设备可通过 Token 安全接入。",
+    "description": "自动同步键: popupRemoteSummaryEnabledSecure"
+  },
+  "popupRemoteSummaryLocalOnly": {
+    "message": "当前仅本机访问（127.0.0.1）。开启远程访问后，局域网设备即可接入 Tabrix。",
+    "description": "自动同步键: popupRemoteSummaryLocalOnly"
+  },
+  "popupRemoteSummaryNeedRunning": {
+    "message": "需先连接并启动服务后才能切换远程访问。",
+    "description": "自动同步键: popupRemoteSummaryNeedRunning"
+  },
+  "popupRemoteTab": {
+    "message": "远程",
+    "description": "自动同步键: popupRemoteTab"
+  },
+  "popupStatusDetailConnectedNoService": {
+    "message": "Native host 已连接，但本地 MCP 服务尚未就绪。先点「刷新」；若仍失败执行 tabrix doctor 并重新加载扩展。",
+    "description": "自动同步键: popupStatusDetailConnectedNoService"
+  },
+  "popupStatusDetailDisconnected": {
+    "message": "点击 Connect 后仍失败时，执行 tabrix doctor --fix 和 tabrix register --force，再完全重启 Chrome。",
+    "description": "自动同步键: popupStatusDetailDisconnected"
+  },
+  "popupStatusDetailDisconnectedWhileDaemon": {
+    "message": "本机服务运行中，但浏览器通道未连接。点击 Connect 即可启用自动化。",
+    "description": "自动同步键: popupStatusDetailDisconnectedWhileDaemon"
+  },
+  "popupStatusDetailErrorDefault": {
+    "message": "最近一次连接错误: $ARG1$。建议先执行 tabrix doctor --fix，再执行 tabrix register --force，随后完全重启 Chrome 并在 chrome://extensions/ 重新加载扩展。",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: popupStatusDetailErrorDefault"
+  },
+  "popupTabHintLocal": {
+    "message": "适用于 Cursor / Claude Desktop / CherryStudio / Windsurf 等本地客户端",
+    "description": "自动同步键: popupTabHintLocal"
+  },
+  "popupTabHintRemote": {
+    "message": "远程机器或 Docker 通过局域网 IP 连接",
+    "description": "自动同步键: popupTabHintRemote"
+  },
+  "popupTabHintStdio": {
+    "message": "适用于 Claude Code CLI 等（需先 npm i -g tabrix@latest）",
+    "description": "自动同步键: popupTabHintStdio"
+  },
+  "popupToggleFailedPrefix": {
+    "message": "切换失败:",
+    "description": "自动同步键: popupToggleFailedPrefix"
+  },
+  "popupTokenManagementDesc": {
+    "message": "远程认证、刷新与有效期",
+    "description": "自动同步键: popupTokenManagementDesc"
+  },
+  "popupTokenManagementTitle": {
+    "message": "Token 管理",
+    "description": "自动同步键: popupTokenManagementTitle"
+  },
+  "popupTroubleshootDaemonAutostartTitle": {
+    "message": "安装守护进程开机自启",
+    "description": "自动同步键: popupTroubleshootDaemonAutostartTitle"
+  },
+  "popupTroubleshootDaemonStartTitle": {
+    "message": "启动守护进程（无浏览器也可保持服务在线）",
+    "description": "自动同步键: popupTroubleshootDaemonStartTitle"
+  },
+  "popupTroubleshootDoctorFixTitle": {
+    "message": "基础诊断与自动修复",
+    "description": "自动同步键: popupTroubleshootDoctorFixTitle"
+  },
+  "popupTroubleshootingGuideDesc": {
+    "message": "推荐按顺序执行以下命令。执行后请完全重启 Chrome，并在 chrome://extensions/ 重新加载扩展。",
+    "description": "自动同步键: popupTroubleshootingGuideDesc"
+  },
+  "popupTroubleshootingGuideTitle": {
+    "message": "故障排查向导",
+    "description": "自动同步键: popupTroubleshootingGuideTitle"
+  },
+  "popupTroubleshootQuickFixTitle": {
+    "message": "当前错误快速修复",
+    "description": "自动同步键: popupTroubleshootQuickFixTitle"
+  },
+  "popupTroubleshootRegisterForceTitle": {
+    "message": "强制重注册 Native host",
+    "description": "自动同步键: popupTroubleshootRegisterForceTitle"
+  },
+  "popupTroubleshootRemotePersistNote": {
+    "message": "建议直接使用“远程”选项卡中的开关。此命令仅在需要守护进程持久远程时使用。",
+    "description": "自动同步键: popupTroubleshootRemotePersistNote"
+  },
+  "popupTroubleshootRemotePersistTitle": {
+    "message": "持久化远程模式（守护进程/环境变量）",
+    "description": "自动同步键: popupTroubleshootRemotePersistTitle"
+  },
+  "popupUnknownClient": {
+    "message": "未知客户端",
+    "description": "自动同步键: popupUnknownClient"
+  },
+  "popupWorkflowManagementDesc": {
+    "message": "录制与回放自动化流程",
+    "description": "自动同步键: popupWorkflowManagementDesc"
+  },
+  "popupWorkflowManagementTitle": {
+    "message": "工作流管理",
+    "description": "自动同步键: popupWorkflowManagementTitle"
+  },
+  "scheduleArgsLabel": {
+    "message": "参数(JSON)",
+    "description": "自动同步键: scheduleArgsLabel"
+  },
+  "scheduleDailyTimeLabel": {
+    "message": "时间(HH:mm)",
+    "description": "自动同步键: scheduleDailyTimeLabel"
+  },
+  "scheduleDailyTimePlaceholder": {
+    "message": "例如 09:30",
+    "description": "自动同步键: scheduleDailyTimePlaceholder"
+  },
+  "scheduleDeleteButton": {
+    "message": "删除",
+    "description": "自动同步键: scheduleDeleteButton"
+  },
+  "scheduleDescribeDaily": {
+    "message": "每天 $ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: scheduleDescribeDaily"
+  },
+  "scheduleDescribeInterval": {
+    "message": "每 $ARG1$ 分钟",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: scheduleDescribeInterval"
+  },
+  "scheduleDescribeOnce": {
+    "message": "一次 $ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: scheduleDescribeOnce"
+  },
+  "scheduleEnabledLabel": {
+    "message": "启用",
+    "description": "自动同步键: scheduleEnabledLabel"
+  },
+  "scheduleEnabledToggle": {
+    "message": "启用定时",
+    "description": "自动同步键: scheduleEnabledToggle"
+  },
+  "scheduleExistingPlansTitle": {
+    "message": "已有计划",
+    "description": "自动同步键: scheduleExistingPlansTitle"
+  },
+  "scheduleIntervalMinutesLabel": {
+    "message": "间隔(分钟)",
+    "description": "自动同步键: scheduleIntervalMinutesLabel"
+  },
+  "scheduleOnceTimeLabel": {
+    "message": "时间(ISO)",
+    "description": "自动同步键: scheduleOnceTimeLabel"
+  },
+  "scheduleOnceTimePlaceholder": {
+    "message": "例如 2025-10-05T10:00:00",
+    "description": "自动同步键: scheduleOnceTimePlaceholder"
+  },
+  "scheduleTitle": {
+    "message": "定时执行",
+    "description": "自动同步键: scheduleTitle"
+  },
+  "scheduleTypeDaily": {
+    "message": "每天固定时间",
+    "description": "自动同步键: scheduleTypeDaily"
+  },
+  "scheduleTypeInterval": {
+    "message": "每隔 N 分钟",
+    "description": "自动同步键: scheduleTypeInterval"
+  },
+  "scheduleTypeLabel": {
+    "message": "类型",
+    "description": "自动同步键: scheduleTypeLabel"
+  },
+  "scheduleTypeOnce": {
+    "message": "只执行一次",
+    "description": "自动同步键: scheduleTypeOnce"
+  },
+  "sidepanelNavigatorTitle": {
+    "message": "切换页面",
+    "description": "自动同步键: sidepanelNavigatorTitle"
+  },
+  "sidepanelNavigatorTriggerTitle": {
+    "message": "切换页面（可拖拽移动，双击重置位置）",
+    "description": "自动同步键: sidepanelNavigatorTriggerTitle"
+  },
+  "tokenPageBackHomeTitle": {
+    "message": "返回首页",
+    "description": "自动同步键: tokenPageBackHomeTitle"
+  },
+  "tokenPageBackLabel": {
+    "message": "返回",
+    "description": "自动同步键: tokenPageBackLabel"
+  },
+  "tokenPageCopyFullConfigButton": {
+    "message": "复制完整配置",
+    "description": "自动同步键: tokenPageCopyFullConfigButton"
+  },
+  "tokenPageCopyTokenTitle": {
+    "message": "复制 Token",
+    "description": "自动同步键: tokenPageCopyTokenTitle"
+  },
+  "tokenPageCurrentTokenTitle": {
+    "message": "当前 Token",
+    "description": "自动同步键: tokenPageCurrentTokenTitle"
+  },
+  "tokenPageDays": {
+    "message": "$ARG1$ 天",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: tokenPageDays"
+  },
+  "tokenPageEmptyLocalOnly": {
+    "message": "当前为本机访问模式，远程 Token 为可选项。开启远程访问后可在此生成 Token。",
+    "description": "自动同步键: tokenPageEmptyLocalOnly"
+  },
+  "tokenPageEmptyRemoteEnabled": {
+    "message": "未检测到可用 Token。可点击下方「生成默认 Token」（默认 7 天有效期）后再复制远程配置。",
+    "description": "自动同步键: tokenPageEmptyRemoteEnabled"
+  },
+  "tokenPageEnvTokenBadge": {
+    "message": "由环境变量 MCP_AUTH_TOKEN 提供（不可在此页刷新）",
+    "description": "自动同步键: tokenPageEnvTokenBadge"
+  },
+  "tokenPageExpired": {
+    "message": "已过期",
+    "description": "自动同步键: tokenPageExpired"
+  },
+  "tokenPageExpiryTimeLabel": {
+    "message": "到期时间",
+    "description": "自动同步键: tokenPageExpiryTimeLabel"
+  },
+  "tokenPageGenerateDefaultTokenButton": {
+    "message": "生成默认 Token",
+    "description": "自动同步键: tokenPageGenerateDefaultTokenButton"
+  },
+  "tokenPageLocalServiceUnavailable": {
+    "message": "无法连接本地服务，请确认已连接 Native 且服务运行中。",
+    "description": "自动同步键: tokenPageLocalServiceUnavailable"
+  },
+  "tokenPageNeverExpire": {
+    "message": "永不过期",
+    "description": "自动同步键: tokenPageNeverExpire"
+  },
+  "tokenPageNewTokenTtlLabel": {
+    "message": "新 Token 有效天数",
+    "description": "自动同步键: tokenPageNewTokenTtlLabel"
+  },
+  "tokenPageNotesText": {
+    "message": "在「重新生成 Token」弹框内可设置有效天数。服务端环境变量 MCP_AUTH_TOKEN_TTL 仍影响首次自动生成时的默认天数（默认 7；0 永不过期），修改后需重启生效。",
+    "description": "自动同步键: tokenPageNotesText"
+  },
+  "tokenPageNotesTitle": {
+    "message": "说明",
+    "description": "自动同步键: tokenPageNotesTitle"
+  },
+  "tokenPageReadTokenFailedHttp": {
+    "message": "无法读取 Token（HTTP $ARG1$）",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: tokenPageReadTokenFailedHttp"
+  },
+  "tokenPageRefreshConfirmMessage": {
+    "message": "旧 Token 将立即失效，其他设备上的 MCP 客户端需更新配置中的 Authorization。请在下方设置新 Token 的有效天数。",
+    "description": "自动同步键: tokenPageRefreshConfirmMessage"
+  },
+  "tokenPageRefreshFailed": {
+    "message": "刷新失败：$ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: tokenPageRefreshFailed"
+  },
+  "tokenPageRefreshRequestFailed": {
+    "message": "刷新请求失败",
+    "description": "自动同步键: tokenPageRefreshRequestFailed"
+  },
+  "tokenPageRegenerateConfirmButton": {
+    "message": "确认重新生成",
+    "description": "自动同步键: tokenPageRegenerateConfirmButton"
+  },
+  "tokenPageRegenerateConfirmItem": {
+    "message": "已保存新 Token 或确认可立即更新各客户端",
+    "description": "自动同步键: tokenPageRegenerateConfirmItem"
+  },
+  "tokenPageRegenerateConfirmTitle": {
+    "message": "重新生成 Token？",
+    "description": "自动同步键: tokenPageRegenerateConfirmTitle"
+  },
+  "tokenPageRegenerateConfirmWarning": {
+    "message": "此操作不可撤销。",
+    "description": "自动同步键: tokenPageRegenerateConfirmWarning"
+  },
+  "tokenPageRegenerateTokenButton": {
+    "message": "重新生成 Token",
+    "description": "自动同步键: tokenPageRegenerateTokenButton"
+  },
+  "tokenPageRemainingDaysHours": {
+    "message": "剩余约 $ARG1$ 天 $ARG2$ 小时",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    },
+    "description": "自动同步键: tokenPageRemainingDaysHours"
+  },
+  "tokenPageRemainingHoursMinutes": {
+    "message": "剩余约 $ARG1$ 小时 $ARG2$ 分钟",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    },
+    "description": "自动同步键: tokenPageRemainingHoursMinutes"
+  },
+  "tokenPageRemainingMinutes": {
+    "message": "剩余约 $ARG1$ 分钟",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: tokenPageRemainingMinutes"
+  },
+  "tokenPageRemoteConfigTitle": {
+    "message": "远程 MCP 配置（含 Token）",
+    "description": "自动同步键: tokenPageRemoteConfigTitle"
+  },
+  "tokenPageTtlDaysLabel": {
+    "message": "生成时有效天数",
+    "description": "自动同步键: tokenPageTtlDaysLabel"
+  },
+  "tokenPageTtlHint": {
+    "message": "0 = 永不过期，最大 3650",
+    "description": "自动同步键: tokenPageTtlHint"
+  },
+  "sidepanelMarkerAddTitle": {
+    "message": "新增标注",
+    "description": "自动同步键: sidepanelMarkerAddTitle"
+  },
+  "sidepanelMarkerClearSearch": {
+    "message": "清除搜索",
+    "description": "自动同步键: sidepanelMarkerClearSearch"
+  },
+  "sidepanelMarkerDeleteConfirm": {
+    "message": "确定要删除标注 \"$ARG1$\" 吗?",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: sidepanelMarkerDeleteConfirm"
+  },
+  "sidepanelMarkerDomainCount": {
+    "message": "$ARG1$ 个标注",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: sidepanelMarkerDomainCount"
+  },
+  "sidepanelMarkerEditTitle": {
+    "message": "编辑标注",
+    "description": "自动同步键: sidepanelMarkerEditTitle"
+  },
+  "sidepanelMarkerEmpty": {
+    "message": "暂无标注元素",
+    "description": "自动同步键: sidepanelMarkerEmpty"
+  },
+  "sidepanelMarkerLocalFile": {
+    "message": "(本地文件)",
+    "description": "自动同步键: sidepanelMarkerLocalFile"
+  },
+  "sidepanelMarkerMatchTypeLabel": {
+    "message": "匹配类型",
+    "description": "自动同步键: sidepanelMarkerMatchTypeLabel"
+  },
+  "sidepanelMarkerNameLabel": {
+    "message": "名称",
+    "description": "自动同步键: sidepanelMarkerNameLabel"
+  },
+  "sidepanelMarkerNoMatch": {
+    "message": "未找到匹配的标注",
+    "description": "自动同步键: sidepanelMarkerNoMatch"
+  },
+  "sidepanelMarkerSearchPlaceholder": {
+    "message": "搜索标注名称、选择器...",
+    "description": "自动同步键: sidepanelMarkerSearchPlaceholder"
+  },
+  "sidepanelMarkerSelectorLabel": {
+    "message": "选择器",
+    "description": "自动同步键: sidepanelMarkerSelectorLabel"
+  },
+  "sidepanelMarkerSelectorPlaceholder": {
+    "message": "CSS 选择器或 XPath",
+    "description": "自动同步键: sidepanelMarkerSelectorPlaceholder"
+  },
+  "sidepanelMarkerSelectorTypeLabel": {
+    "message": "选择器类型",
+    "description": "自动同步键: sidepanelMarkerSelectorTypeLabel"
+  },
+  "sidepanelMarkerStatsFiltered": {
+    "message": "筛选出 $ARG1$ 个标注（共 $ARG2$ 个，$ARG3$ 个域名）",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      },
+      "arg3": {
+        "content": "$3",
+        "example": "3"
+      }
+    },
+    "description": "自动同步键: sidepanelMarkerStatsFiltered"
+  },
+  "sidepanelMarkerStatsTotal": {
+    "message": "共 $ARG1$ 个标注，$ARG2$ 个域名",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    },
+    "description": "自动同步键: sidepanelMarkerStatsTotal"
+  },
+  "sidepanelMarkerUnknownUrl": {
+    "message": "(未知URL)",
+    "description": "自动同步键: sidepanelMarkerUnknownUrl"
+  },
+  "sidepanelMarkerUpdateButton": {
+    "message": "更新",
+    "description": "自动同步键: sidepanelMarkerUpdateButton"
+  },
+  "sidepanelTriggerCreateNotImplemented": {
+    "message": "V3 Trigger 管理尚未实现，暂时无法创建触发器",
+    "description": "自动同步键: sidepanelTriggerCreateNotImplemented"
+  },
+  "sidepanelTriggerEditNotImplemented": {
+    "message": "V3 Trigger 管理尚未实现，暂时无法编辑触发器",
+    "description": "自动同步键: sidepanelTriggerEditNotImplemented"
+  },
+  "sidepanelWorkflowCreateNotImplemented": {
+    "message": "V3 Builder 尚未实现，暂时无法创建工作流",
+    "description": "自动同步键: sidepanelWorkflowCreateNotImplemented"
+  },
+  "sidepanelWorkflowDeleteConfirm": {
+    "message": "确认删除该工作流？此操作不可恢复",
+    "description": "自动同步键: sidepanelWorkflowDeleteConfirm"
+  },
+  "sidepanelWorkflowEditNotImplemented": {
+    "message": "V3 Builder 尚未实现，暂时无法编辑工作流",
+    "description": "自动同步键: sidepanelWorkflowEditNotImplemented"
+  }
 }

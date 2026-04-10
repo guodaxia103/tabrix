@@ -2,40 +2,44 @@
   <div v-if="visible" class="rr-modal">
     <div class="rr-dialog">
       <div class="rr-header">
-        <div class="title">定时执行</div>
+        <div class="title">{{ getMessage('scheduleTitle') }}</div>
         <button class="close" @click="$emit('close')">✕</button>
       </div>
       <div class="rr-body">
         <div class="row">
-          <label>启用</label>
-          <label class="chk"><input type="checkbox" v-model="enabled" />启用定时</label>
+          <label>{{ getMessage('scheduleEnabledLabel') }}</label>
+          <label class="chk"
+            ><input type="checkbox" v-model="enabled" />{{
+              getMessage('scheduleEnabledToggle')
+            }}</label
+          >
         </div>
         <div class="row">
-          <label>类型</label>
+          <label>{{ getMessage('scheduleTypeLabel') }}</label>
           <select v-model="type">
-            <option value="interval">每隔 N 分钟</option>
-            <option value="daily">每天固定时间</option>
-            <option value="once">只执行一次</option>
+            <option value="interval">{{ getMessage('scheduleTypeInterval') }}</option>
+            <option value="daily">{{ getMessage('scheduleTypeDaily') }}</option>
+            <option value="once">{{ getMessage('scheduleTypeOnce') }}</option>
           </select>
         </div>
         <div class="row" v-if="type === 'interval'">
-          <label>间隔(分钟)</label>
+          <label>{{ getMessage('scheduleIntervalMinutesLabel') }}</label>
           <input type="number" v-model.number="intervalMinutes" />
         </div>
         <div class="row" v-if="type === 'daily'">
-          <label>时间(HH:mm)</label>
-          <input v-model="dailyTime" placeholder="例如 09:30" />
+          <label>{{ getMessage('scheduleDailyTimeLabel') }}</label>
+          <input v-model="dailyTime" :placeholder="getMessage('scheduleDailyTimePlaceholder')" />
         </div>
         <div class="row" v-if="type === 'once'">
-          <label>时间(ISO)</label>
-          <input v-model="onceAt" placeholder="例如 2025-10-05T10:00:00" />
+          <label>{{ getMessage('scheduleOnceTimeLabel') }}</label>
+          <input v-model="onceAt" :placeholder="getMessage('scheduleOnceTimePlaceholder')" />
         </div>
         <div class="row">
-          <label>参数(JSON)</label>
+          <label>{{ getMessage('scheduleArgsLabel') }}</label>
           <textarea v-model="argsJson" placeholder='{ "username": "xx" }'></textarea>
         </div>
         <div class="section">
-          <div class="section-title">已有计划</div>
+          <div class="section-title">{{ getMessage('scheduleExistingPlansTitle') }}</div>
           <div class="sched-list">
             <div class="sched-row" v-for="s in schedules" :key="s.id">
               <div class="meta">
@@ -43,14 +47,16 @@
                 <span class="desc">{{ describe(s) }}</span>
               </div>
               <div class="actions">
-                <button class="small danger" @click="$emit('remove', s.id)">删除</button>
+                <button class="small danger" @click="$emit('remove', s.id)">
+                  {{ getMessage('scheduleDeleteButton') }}
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
       <div class="rr-footer">
-        <button class="primary" @click="save">保存</button>
+        <button class="primary" @click="save">{{ getMessage('saveButton') }}</button>
       </div>
     </div>
   </div>
@@ -58,6 +64,7 @@
 
 <script lang="ts" setup>
 import { ref, watch } from 'vue';
+import { getMessage } from '@/utils/i18n';
 
 const props = defineProps<{ visible: boolean; flowId: string | null; schedules: any[] }>();
 const emit = defineEmits(['close', 'save', 'remove']);
@@ -111,9 +118,9 @@ function safeParse(s: string) {
 }
 
 function describe(s: any) {
-  if (s.type === 'interval') return `每 ${s.when} 分钟`;
-  if (s.type === 'daily') return `每天 ${s.when}`;
-  if (s.type === 'once') return `一次 ${s.when}`;
+  if (s.type === 'interval') return getMessage('scheduleDescribeInterval', [String(s.when)]);
+  if (s.type === 'daily') return getMessage('scheduleDescribeDaily', [String(s.when)]);
+  if (s.type === 'once') return getMessage('scheduleDescribeOnce', [String(s.when)]);
   return '';
 }
 </script>
