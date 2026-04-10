@@ -153,6 +153,131 @@ const fallbackMessages: Record<string, string> = {
   configCopiedNotification: 'Configuration copied to clipboard',
   dataClearedNotification: 'Data cleared successfully',
 
+  // Popup page
+  popupOpenTroubleshootingGuide: 'Open Troubleshooting Guide',
+  popupConnectedClientsLabel: 'Connected clients ({0})',
+  popupRefreshClientsTitle: 'Refresh client list',
+  popupUnknownClient: 'Unknown client',
+  popupDisconnectClientTitle: 'Disconnect this client',
+  popupNoConnectedClients: 'No MCP client connected',
+  popupMcpConfigLabel: 'MCP Configuration',
+  popupRemoteAccessTitle: 'Remote Access',
+  popupNetworkLocalLabel: 'Local:',
+  popupNetworkLanLabel: 'LAN:',
+  popupRemoteConfigHint: 'Enable Remote Access to view MCP configuration for remote clients.',
+  popupQuickToolsTitle: 'Quick Tools',
+  popupRecordComingSoon: 'Recording feature is under development',
+  popupEnableWebEditor: 'Enable Web Editor mode',
+  popupEnableElementMarker: 'Enable element marker',
+  popupManagementEntrancesTitle: 'Management',
+  popupAgentAssistantTitle: 'AI Assistant',
+  popupAgentAssistantDesc: 'AI Agent chat and tasks',
+  popupWorkflowManagementTitle: 'Workflow Management',
+  popupWorkflowManagementDesc: 'Record/replay automation flows',
+  popupElementMarkerManagementTitle: 'Element Marker Management',
+  popupElementMarkerManagementDesc: 'Manage page element markers',
+  popupLocalModelTitle: 'Local Models',
+  popupLocalModelDesc: 'Semantic engine and model management',
+  popupTokenManagementTitle: 'Token Management',
+  popupTokenManagementDesc: 'Remote auth, refresh and validity',
+  popupTroubleshootingGuideTitle: 'Troubleshooting Guide',
+  popupTroubleshootingGuideDesc:
+    'Run these commands in order. Then fully restart Chrome and reload the extension in chrome://extensions/.',
+  popupCopyCommand: 'Copy command',
+  popupCopiedShort: 'Copied',
+  popupCopiedFullScript: 'Copied full script',
+  popupCopyFullTroubleshootScript: 'Copy full troubleshooting script',
+  popupOpenDocs: 'Open docs',
+  popupComingSoonSuffix: 'is under development, stay tuned',
+  popupRecordReplayFeature: 'Record & Replay',
+  popupJustNow: 'Just now',
+  popupMinutesAgo: '{0} minute(s) ago',
+  popupHoursAgo: '{0} hour(s) ago',
+  popupCopyRepairCommand: 'Copy repair command',
+  popupCopyFailed: 'Copy failed',
+  popupRemoteSummaryNeedRunning:
+    'Connect and start the local service before toggling Remote Access.',
+  popupRemoteSummaryLocalOnly:
+    'Currently local-only (127.0.0.1). Enable Remote Access to allow LAN clients to connect.',
+  popupRemoteSummaryEnabledSecure:
+    'Remote access is enabled (0.0.0.0). LAN clients can connect securely with Token.',
+  popupRemoteSummaryAutoCreating:
+    'Remote access is enabled. A default token is being created automatically.',
+  popupRemoteSecurityWarning:
+    'Remote mode requires Bearer Token. A default token is being created automatically, or generate one manually in Token Management.',
+  popupLocalTab: 'Local',
+  popupRemoteTab: 'Remote',
+  popupTabHintLocal: 'For local clients like Cursor / Claude Desktop / CherryStudio / Windsurf',
+  popupTabHintStdio: 'For CLI clients like Claude Code CLI (npm i -g tabrix@latest first)',
+  popupTabHintRemote: 'For remote hosts or Docker via LAN IP',
+  popupLanIpPlaceholder: '<LAN_IP>',
+  popupStatusDetailErrorDefault:
+    'Last connection error: {0}. Try `tabrix doctor --fix`, then `tabrix register --force`, then fully restart Chrome and reload extension in chrome://extensions/.',
+  popupStatusDetailDisconnectedWhileDaemon:
+    'Local service is running, but browser channel is not connected. Click Connect to enable automation.',
+  popupStatusDetailConnectedNoService:
+    'Native host is connected, but local MCP service is not ready. Click Refresh first; if it still fails, run `tabrix doctor` and reload extension.',
+  popupStatusDetailDisconnected:
+    'If Connect still fails, run `tabrix doctor --fix` and `tabrix register --force`, then fully restart Chrome.',
+  popupTroubleshootQuickFixTitle: 'Quick fix for current error',
+  popupTroubleshootDoctorFixTitle: 'Basic diagnostics and auto-fix',
+  popupTroubleshootDaemonStartTitle: 'Start daemon (keep service online without browser)',
+  popupTroubleshootDaemonAutostartTitle: 'Install daemon auto-start on boot',
+  popupTroubleshootRegisterForceTitle: 'Force re-register Native host',
+  popupTroubleshootRemotePersistTitle: 'Persist remote mode (daemon/env)',
+  popupTroubleshootRemotePersistNote:
+    'Use the Remote tab toggle by default. This command is only for daemon-based persistent remote mode.',
+  popupEnablingRemote: 'Enabling remote access...',
+  popupDisablingRemote: 'Disabling remote access...',
+  popupToggleFailedPrefix: 'Toggle failed:',
+  popupRemoteRestoredLocalOnly: 'Restored to local-only access',
+  popupRemoteEnabledWithToken: 'Remote access enabled; default token generated',
+  popupRemoteEnabled: 'Remote access enabled',
+
+  // Token management page
+  tokenPageBackHomeTitle: 'Back to home',
+  tokenPageBackLabel: 'Back',
+  tokenPageCurrentTokenTitle: 'Current Token',
+  tokenPageCopyTokenTitle: 'Copy token',
+  tokenPageEnvTokenBadge:
+    'Provided by MCP_AUTH_TOKEN environment variable (cannot be refreshed here)',
+  tokenPageExpiryTimeLabel: 'Expires At',
+  tokenPageTtlDaysLabel: 'TTL days when generated',
+  tokenPageNeverExpire: 'Never expires',
+  tokenPageDays: '{0} day(s)',
+  tokenPageRegenerateTokenButton: 'Regenerate Token',
+  tokenPageGenerateDefaultTokenButton: 'Generate default token',
+  tokenPageNotesTitle: 'Notes',
+  tokenPageNotesText:
+    'You can set token validity days in the regenerate dialog. MCP_AUTH_TOKEN_TTL still controls default days on first auto-generation (default 7; 0 means never expire). Restart service after changing env vars.',
+  tokenPageRemoteConfigTitle: 'Remote MCP Configuration (with Token)',
+  tokenPageCopyFullConfigButton: 'Copy full configuration',
+  tokenPageRegenerateConfirmTitle: 'Regenerate Token?',
+  tokenPageRegenerateConfirmItem: 'Saved new token or confirmed all clients can be updated now',
+  tokenPageRegenerateConfirmWarning: 'This action cannot be undone.',
+  tokenPageRegenerateConfirmButton: 'Confirm regenerate',
+  tokenPageNewTokenTtlLabel: 'New token validity days',
+  tokenPageTtlHint: '0 = never expires, max 3650',
+  tokenPageEmptyRemoteEnabled:
+    'No available token detected. Click "Generate default token" (default 7 days) before copying remote config.',
+  tokenPageEmptyLocalOnly:
+    'Local-only mode is active. Remote token is optional. Enable remote access to generate one here.',
+  tokenPageRefreshConfirmMessage:
+    'The old token will expire immediately. MCP clients on other devices must update Authorization. Set validity days for the new token below.',
+  tokenPageExpired: 'Expired',
+  tokenPageRemainingDaysHours: 'About {0} day(s) {1} hour(s) left',
+  tokenPageRemainingHoursMinutes: 'About {0} hour(s) {1} minute(s) left',
+  tokenPageRemainingMinutes: 'About {0} minute(s) left',
+  tokenPageRefreshFailed: 'Refresh failed: {0}',
+  tokenPageRefreshRequestFailed: 'Refresh request failed',
+  tokenPageReadTokenFailedHttp: 'Failed to read token (HTTP {0})',
+  tokenPageLocalServiceUnavailable:
+    'Cannot reach local service. Ensure Native is connected and service is running.',
+
+  // Sidepanel navigator
+  sidepanelNavigatorTriggerTitle: 'Switch pages (drag to move, double-click to reset position)',
+  sidepanelNavigatorTitle: 'Switch Pages',
+
   // Units
   bytesUnit: 'bytes',
   kilobytesUnit: 'KB',

@@ -42,7 +42,7 @@
                     {{ repairCommandButtonText }}
                   </button>
                   <button class="repair-guide-button" @click="showTroubleshootingDialog = true">
-                    打开排查向导
+                    {{ getMessage('popupOpenTroubleshootingGuide') }}
                   </button>
                 </div>
               </div>
@@ -54,13 +54,13 @@
               class="connected-clients-section"
             >
               <div class="connected-clients-header">
-                <p class="connected-clients-label"
-                  >已连接的客户端 ({{ connectedClients.length }})</p
-                >
+                <p class="connected-clients-label">{{
+                  getMessage('popupConnectedClientsLabel', [connectedClients.length.toString()])
+                }}</p>
                 <button
                   class="refresh-status-button"
                   @click="fetchConnectedClients"
-                  title="刷新客户端列表"
+                  :title="getMessage('popupRefreshClientsTitle')"
                 >
                   <RefreshIcon className="icon-small" />
                 </button>
@@ -73,7 +73,9 @@
                 >
                   <div class="client-info">
                     <span class="client-dot"></span>
-                    <span class="client-name">{{ client.clientName || '未知客户端' }}</span>
+                    <span class="client-name">{{
+                      client.clientName || getMessage('popupUnknownClient')
+                    }}</span>
                     <span class="client-meta"
                       >{{ client.clientIp }} ·
                       {{ client.kind === 'streamable-http' ? 'HTTP' : 'SSE' }}</span
@@ -84,7 +86,7 @@
                     <button
                       class="client-disconnect-btn"
                       @click="disconnectClient(client.sessionId)"
-                      title="断开此客户端"
+                      :title="getMessage('popupDisconnectClientTitle')"
                       >✕</button
                     >
                   </div>
@@ -95,12 +97,12 @@
               v-else-if="showMcpConfig"
               class="connected-clients-section connected-clients-empty"
             >
-              <p class="connected-clients-label">暂无 MCP 客户端连接</p>
+              <p class="connected-clients-label">{{ getMessage('popupNoConnectedClients') }}</p>
             </div>
 
             <div v-if="showMcpConfig" class="mcp-config-section">
               <div class="mcp-config-header">
-                <p class="mcp-config-label">MCP 配置</p>
+                <p class="mcp-config-label">{{ getMessage('popupMcpConfigLabel') }}</p>
                 <button class="copy-config-button" @click="copyMcpConfig">
                   {{ copyButtonText }}
                 </button>
@@ -119,7 +121,9 @@
               </div>
               <div v-if="activeConfigTab === 'remote'" class="remote-toggle-card">
                 <div class="remote-toggle-header">
-                  <span class="remote-toggle-title">远程访问</span>
+                  <span class="remote-toggle-title">{{
+                    getMessage('popupRemoteAccessTitle')
+                  }}</span>
                   <label class="remote-switch" :class="{ disabled: remoteToggling }">
                     <input
                       type="checkbox"
@@ -145,18 +149,18 @@
                   <pre class="mcp-config-json">{{ activeConfigJson }}</pre>
                 </div>
                 <div class="mcp-network-info">
-                  <span class="network-label">本机：</span>
+                  <span class="network-label">{{ getMessage('popupNetworkLocalLabel') }}</span>
                   <span class="network-ip">127.0.0.1:{{ serverPort }}</span>
                   <template v-if="lanIpAddress">
                     <span class="network-sep">|</span>
-                    <span class="network-label">局域网：</span>
+                    <span class="network-label">{{ getMessage('popupNetworkLanLabel') }}</span>
                     <span class="network-ip">{{ lanIpAddress }}:{{ serverPort }}</span>
                   </template>
                 </div>
               </template>
-              <div v-else class="remote-disabled-hint">
-                开启远程访问后将显示可供远程客户端使用的 MCP 配置。
-              </div>
+              <div v-else class="remote-disabled-hint">{{
+                getMessage('popupRemoteConfigHint')
+              }}</div>
             </div>
             <div class="port-section">
               <label for="port" class="port-label">{{ getMessage('connectionPortLabel') }}</label>
@@ -191,33 +195,33 @@
 
         <!-- 快捷工具卡片 -->
         <div class="section">
-          <h2 class="section-title">快捷工具</h2>
+          <h2 class="section-title">{{ getMessage('popupQuickToolsTitle') }}</h2>
           <div class="rr-icon-buttons">
             <button
               class="rr-icon-btn rr-icon-btn-record rr-icon-btn-coming-soon has-tooltip"
               @click="startRecording"
-              data-tooltip="录制功能开发中"
+              :data-tooltip="getMessage('popupRecordComingSoon')"
             >
               <RecordIcon :recording="false" />
             </button>
             <button
               class="rr-icon-btn rr-icon-btn-stop rr-icon-btn-coming-soon has-tooltip"
               @click="stopRecording"
-              data-tooltip="录制功能开发中"
+              :data-tooltip="getMessage('popupRecordComingSoon')"
             >
               <StopIcon />
             </button>
             <button
               class="rr-icon-btn rr-icon-btn-edit has-tooltip"
               @click="toggleWebEditor"
-              data-tooltip="开启页面编辑模式"
+              :data-tooltip="getMessage('popupEnableWebEditor')"
             >
               <EditIcon />
             </button>
             <button
               class="rr-icon-btn rr-icon-btn-marker has-tooltip"
               @click="toggleElementMarker"
-              data-tooltip="开启元素标注"
+              :data-tooltip="getMessage('popupEnableElementMarker')"
             >
               <MarkerIcon />
             </button>
@@ -226,7 +230,7 @@
 
         <!-- 管理入口卡片 -->
         <div class="section">
-          <h2 class="section-title">管理入口</h2>
+          <h2 class="section-title">{{ getMessage('popupManagementEntrancesTitle') }}</h2>
           <div class="entry-card">
             <button class="entry-item" @click="openAgentSidepanel">
               <div class="entry-icon agent">
@@ -246,8 +250,8 @@
                 </svg>
               </div>
               <div class="entry-content">
-                <span class="entry-title">智能助手</span>
-                <span class="entry-desc">AI Agent 对话与任务</span>
+                <span class="entry-title">{{ getMessage('popupAgentAssistantTitle') }}</span>
+                <span class="entry-desc">{{ getMessage('popupAgentAssistantDesc') }}</span>
               </div>
               <svg
                 class="entry-arrow"
@@ -267,10 +271,10 @@
               </div>
               <div class="entry-content">
                 <span class="entry-title">
-                  工作流管理
+                  {{ getMessage('popupWorkflowManagementTitle') }}
                   <span class="coming-soon-badge">Coming Soon</span>
                 </span>
-                <span class="entry-desc">录制与回放自动化流程</span>
+                <span class="entry-desc">{{ getMessage('popupWorkflowManagementDesc') }}</span>
               </div>
               <svg
                 class="entry-arrow"
@@ -302,8 +306,10 @@
                 </svg>
               </div>
               <div class="entry-content">
-                <span class="entry-title">元素标注管理</span>
-                <span class="entry-desc">管理页面元素标注</span>
+                <span class="entry-title">{{
+                  getMessage('popupElementMarkerManagementTitle')
+                }}</span>
+                <span class="entry-desc">{{ getMessage('popupElementMarkerManagementDesc') }}</span>
               </div>
               <svg
                 class="entry-arrow"
@@ -335,8 +341,8 @@
                 </svg>
               </div>
               <div class="entry-content">
-                <span class="entry-title">本地模型</span>
-                <span class="entry-desc">语义引擎与模型管理</span>
+                <span class="entry-title">{{ getMessage('popupLocalModelTitle') }}</span>
+                <span class="entry-desc">{{ getMessage('popupLocalModelDesc') }}</span>
               </div>
               <svg
                 class="entry-arrow"
@@ -368,8 +374,8 @@
                 </svg>
               </div>
               <div class="entry-content">
-                <span class="entry-title">Token 管理</span>
-                <span class="entry-desc">远程认证、刷新与有效期</span>
+                <span class="entry-title">{{ getMessage('popupTokenManagementTitle') }}</span>
+                <span class="entry-desc">{{ getMessage('popupTokenManagementDesc') }}</span>
               </div>
               <svg
                 class="entry-arrow"
@@ -491,34 +497,40 @@
     >
       <div class="troubleshooting-content">
         <div class="troubleshooting-header">
-          <h3>故障排查向导</h3>
+          <h3>{{ getMessage('popupTroubleshootingGuideTitle') }}</h3>
           <button class="troubleshooting-close" @click="showTroubleshootingDialog = false"
             >✕</button
           >
         </div>
-        <p class="troubleshooting-desc">
-          推荐按顺序执行以下命令。执行后请完全重启 Chrome，并在 chrome://extensions/ 重新加载扩展。
-        </p>
+        <p class="troubleshooting-desc">{{ getMessage('popupTroubleshootingGuideDesc') }}</p>
         <div class="troubleshooting-list">
           <div v-for="item in troubleshootingCommands" :key="item.id" class="troubleshooting-item">
             <div class="troubleshooting-item-title">{{ item.title }}</div>
             <pre class="troubleshooting-item-command">{{ item.command }}</pre>
             <div v-if="item.note" class="troubleshooting-item-note">{{ item.note }}</div>
             <button class="troubleshooting-copy" @click="copyTroubleshootingCommand(item.command)">
-              {{ copiedTroubleshootingCommand === item.command ? '✅ 已复制' : '复制命令' }}
+              {{
+                copiedTroubleshootingCommand === item.command
+                  ? getMessage('popupCopiedShort')
+                  : getMessage('popupCopyCommand')
+              }}
             </button>
           </div>
         </div>
         <div class="troubleshooting-actions">
           <button class="troubleshooting-action-btn docs" @click="copyTroubleshootingScript">
-            {{ copiedTroubleshootingScript ? '✅ 已复制完整脚本' : '复制完整排障脚本' }}
+            {{
+              copiedTroubleshootingScript
+                ? getMessage('popupCopiedFullScript')
+                : getMessage('popupCopyFullTroubleshootScript')
+            }}
           </button>
-          <button class="troubleshooting-action-btn docs" @click="openTroubleshooting"
-            >打开文档</button
-          >
-          <button class="troubleshooting-action-btn" @click="showTroubleshootingDialog = false"
-            >关闭</button
-          >
+          <button class="troubleshooting-action-btn docs" @click="openTroubleshooting">{{
+            getMessage('popupOpenDocs')
+          }}</button>
+          <button class="troubleshooting-action-btn" @click="showTroubleshootingDialog = false">{{
+            getMessage('closeButton')
+          }}</button>
         </div>
       </div>
     </div>
@@ -538,7 +550,7 @@
           <circle cx="12" cy="12" r="10" />
           <path d="M12 6v6l4 2" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
-        <span>{{ comingSoonToast.feature }} 功能开发中，敬请期待</span>
+        <span>{{ comingSoonToast.feature }} {{ getMessage('popupComingSoonSuffix') }}</span>
       </div>
     </Transition>
   </div>
@@ -659,7 +671,7 @@ function isFlowBoundToCurrent(flow: any) {
 // 运行记录与覆盖项在侧边栏页面查看
 const startRecording = async () => {
   // TODO: 录制回放功能开发中，暂时拦截
-  showComingSoonToast('录制回放');
+  showComingSoonToast(getMessage('popupRecordReplayFeature'));
   return;
   // if (rrRecording.value) return;
   // try {
@@ -676,7 +688,7 @@ const startRecording = async () => {
 
 const stopRecording = async () => {
   // TODO: 录制回放功能开发中，暂时拦截
-  showComingSoonToast('录制回放');
+  showComingSoonToast(getMessage('popupRecordReplayFeature'));
   return;
   // if (!rrRecording.value) return;
   // try {
@@ -869,13 +881,15 @@ async function disconnectClient(sessionId: string): Promise<void> {
 
 function formatConnectedTime(ts: number): string {
   const diff = Date.now() - ts;
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  return `${Math.floor(diff / 3_600_000)} 小时前`;
+  if (diff < 60_000) return getMessage('popupJustNow');
+  if (diff < 3_600_000) {
+    return getMessage('popupMinutesAgo', [Math.floor(diff / 60_000).toString()]);
+  }
+  return getMessage('popupHoursAgo', [Math.floor(diff / 3_600_000).toString()]);
 }
 
 const copyButtonText = ref(getMessage('copyConfigButton'));
-const repairCommandButtonText = ref('复制修复命令');
+const repairCommandButtonText = ref(getMessage('popupCopyRepairCommand'));
 const showTroubleshootingDialog = ref(false);
 const copiedTroubleshootingCommand = ref<string | null>(null);
 const copiedTroubleshootingScript = ref(false);
@@ -894,15 +908,15 @@ const isWildcardHost = computed(() => {
 const remoteAccessEnabled = computed(() => isWildcardHost.value);
 const remoteAccessSummary = computed(() => {
   if (connectionState.value !== ConnectionState.RUNNING) {
-    return '需先连接并启动服务后才能切换远程访问。';
+    return getMessage('popupRemoteSummaryNeedRunning');
   }
   if (!remoteAccessEnabled.value) {
-    return '当前仅本机访问（127.0.0.1）。开启远程访问后，局域网设备即可接入 Tabrix。';
+    return getMessage('popupRemoteSummaryLocalOnly');
   }
   if (authEnabled.value || tokenInfo.value) {
-    return '远程访问已开启（0.0.0.0），局域网设备可通过 Token 安全接入。';
+    return getMessage('popupRemoteSummaryEnabledSecure');
   }
-  return '远程访问已开启，正在自动创建默认 Token。';
+  return getMessage('popupRemoteSummaryAutoCreating');
 });
 
 const lanIpAddress = computed(() => {
@@ -914,7 +928,7 @@ const authEnabled = computed(() => serverStatus.value.authEnabled === true);
 const remoteSecurityWarning = computed(() => {
   if (activeConfigTab.value !== 'remote') return '';
   if (isWildcardHost.value && !authEnabled.value && !tokenInfo.value) {
-    return '远程模式必须携带 Bearer Token。正在自动创建默认 Token，你也可以在「Token 管理」手动生成并复制配置。';
+    return getMessage('popupRemoteSecurityWarning');
   }
   return '';
 });
@@ -983,9 +997,9 @@ async function ensureRemoteTokenReady(maxAttempts = 6): Promise<boolean> {
 }
 
 const configTabs: Array<{ id: ConfigTabId; label: string }> = [
-  { id: 'local', label: '本机' },
+  { id: 'local', label: getMessage('popupLocalTab') },
   { id: 'stdio', label: 'stdio' },
-  { id: 'remote', label: '远程' },
+  { id: 'remote', label: getMessage('popupRemoteTab') },
 ];
 
 watch(activeConfigTab, (tab) => {
@@ -995,11 +1009,11 @@ watch(activeConfigTab, (tab) => {
 const activeConfigTabHint = computed(() => {
   switch (activeConfigTab.value) {
     case 'local':
-      return 'Cursor / Claude Desktop / CherryStudio / Windsurf 等本地客户端';
+      return getMessage('popupTabHintLocal');
     case 'stdio':
-      return '适用于 Claude Code CLI 等（需先 npm i -g tabrix@latest）';
+      return getMessage('popupTabHintStdio');
     case 'remote':
-      return '远程机器或 Docker 通过局域网 IP 连接';
+      return getMessage('popupTabHintRemote');
     default:
       return '';
   }
@@ -1035,7 +1049,7 @@ const activeConfigJson = computed(() => {
         2,
       );
     case 'remote': {
-      const remoteHost = lanIp || '<局域网IP>';
+      const remoteHost = lanIp || getMessage('popupLanIpPlaceholder');
       const config: any = {
         mcpServers: {
           tabrix: {
@@ -1135,7 +1149,7 @@ async function openSidepanelAndClose(tab: string) {
 // Open sidepanel from popup for workflow management
 function openWorkflowSidepanel() {
   // TODO: 工作流功能开发中，暂时拦截
-  showComingSoonToast('工作流管理');
+  showComingSoonToast(getMessage('popupWorkflowManagementTitle'));
   // openSidepanelAndClose('workflows');
 }
 
@@ -1223,7 +1237,7 @@ const statusDetailText = computed(() => {
   if (state === ConnectionState.ERROR && lastNativeError.value) {
     return (
       getPopupNativeErrorGuidance(lastNativeError.value) ||
-      `最近一次连接错误: ${lastNativeError.value}。建议先执行 tabrix doctor --fix，再执行 tabrix register --force，随后完全重启 Chrome 并在 chrome://extensions/ 重新加载扩展。`
+      getMessage('popupStatusDetailErrorDefault', [lastNativeError.value])
     );
   }
   if (
@@ -1231,13 +1245,13 @@ const statusDetailText = computed(() => {
     daemonReachable.value &&
     serverStatus.value.isRunning
   ) {
-    return '本机服务运行中，但浏览器通道未连接。点击 Connect 即可启用自动化。';
+    return getMessage('popupStatusDetailDisconnectedWhileDaemon');
   }
   if (state === ConnectionState.CONNECTED) {
-    return 'Native host 已连接，但本地 MCP 服务尚未就绪。先点「刷新」；若仍失败执行 tabrix doctor 并重新加载扩展。';
+    return getMessage('popupStatusDetailConnectedNoService');
   }
   if (state === ConnectionState.DISCONNECTED) {
-    return '点击 Connect 后仍失败时，执行 tabrix doctor --fix 和 tabrix register --force，再完全重启 Chrome。';
+    return getMessage('popupStatusDetailDisconnected');
   }
   return '';
 });
@@ -1266,22 +1280,38 @@ const troubleshootingCommands = computed(() => {
   };
 
   if (repairCommandText.value) {
-    pushCommand('quick', '当前错误快速修复', repairCommandText.value);
+    pushCommand('quick', getMessage('popupTroubleshootQuickFixTitle'), repairCommandText.value);
   }
 
-  pushCommand('doctor-fix', '基础诊断与自动修复', 'tabrix doctor && tabrix doctor --fix');
+  pushCommand(
+    'doctor-fix',
+    getMessage('popupTroubleshootDoctorFixTitle'),
+    'tabrix doctor && tabrix doctor --fix',
+  );
   if (!daemonReachable.value) {
-    pushCommand('daemon-start', '启动守护进程（无浏览器也可保持服务在线）', 'tabrix daemon start');
-    pushCommand('daemon-autostart', '安装守护进程开机自启', 'tabrix daemon install-autostart');
+    pushCommand(
+      'daemon-start',
+      getMessage('popupTroubleshootDaemonStartTitle'),
+      'tabrix daemon start',
+    );
+    pushCommand(
+      'daemon-autostart',
+      getMessage('popupTroubleshootDaemonAutostartTitle'),
+      'tabrix daemon install-autostart',
+    );
   }
-  pushCommand('register-force', '强制重注册 Native host', 'tabrix register --force');
+  pushCommand(
+    'register-force',
+    getMessage('popupTroubleshootRegisterForceTitle'),
+    'tabrix register --force',
+  );
   pushCommand(
     'remote-mode',
-    '持久化远程模式（守护进程/环境变量）',
+    getMessage('popupTroubleshootRemotePersistTitle'),
     navigator.platform?.startsWith('Win')
       ? '[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")'
       : 'export MCP_HTTP_HOST=0.0.0.0',
-    '建议直接使用"远程"选项卡中的开关。此命令仅在需要守护进程持久远程时使用。',
+    getMessage('popupTroubleshootRemotePersistNote'),
   );
 
   return items;
@@ -1289,37 +1319,37 @@ const troubleshootingCommands = computed(() => {
 
 const troubleshootingScript = computed(() => {
   const lines = [
-    '# MCP Chrome 快速排障脚本（适用于 bash / zsh / PowerShell）',
+    '# Tabrix quick troubleshooting script (bash / zsh / PowerShell)',
     '',
-    '# 1) 基础诊断',
+    '# 1) Basic diagnostics',
     'tabrix doctor',
     '',
-    '# 2) 自动修复常见问题',
+    '# 2) Auto-fix common issues',
     'tabrix doctor --fix',
     '',
-    '# 3) 启动守护进程（可选，提升重启后可用性）',
+    '# 3) Start daemon (optional, survives browser restarts better)',
     'tabrix daemon start',
     '',
-    '# 4) （Windows）安装守护进程开机自启（可选）',
+    '# 4) (Windows) Install daemon autostart (optional)',
     'tabrix daemon install-autostart',
     '',
-    '# 5) 强制重注册 Native host',
+    '# 5) Force re-register Native host',
     'tabrix register --force',
   ];
 
   let step = 6;
   if (repairCommandText.value) {
-    lines.push('', `# ${step}) 当前错误专项修复`, repairCommandText.value);
+    lines.push('', `# ${step}) Current error targeted fix`, repairCommandText.value);
     step++;
   }
 
   lines.push(
     '',
-    `# ${step}) 如需局域网访问：`,
+    `# ${step}) For LAN access:`,
     '#   Windows PowerShell:  [Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")',
     '#   macOS / Linux:       export MCP_HTTP_HOST=0.0.0.0',
     '',
-    `# ${step + 1}) 执行后请完全重启 Chrome，并在 chrome://extensions/ 重新加载扩展`,
+    `# ${step + 1}) Fully restart Chrome, then reload extension in chrome://extensions/`,
   );
 
   return lines.join('\n');
@@ -1625,11 +1655,11 @@ const updatePort = async (event: Event) => {
   const wasConnected = nativeConnectionStatus.value === 'connected' || serverStatus.value.isRunning;
 
   if (!wasConnected) {
-    showPortHint(`端口已保存为 ${newPort}，点击连接后生效`);
+    showPortHint(`Port saved as ${newPort}. It will apply on next Connect.`);
     return;
   }
 
-  showPortHint(`端口 ${oldPort} → ${newPort}，正在重连…`, 10000);
+  showPortHint(`Port ${oldPort} -> ${newPort}, reconnecting...`, 10000);
   isConnecting.value = true;
   try {
     await chrome.runtime.sendMessage({ type: 'disconnect_native' });
@@ -1645,17 +1675,20 @@ const updatePort = async (event: Event) => {
     }
     if (response?.success && response?.connected) {
       await refreshServerStatus();
-      showPortHint(`已切换到端口 ${newPort}`);
+      showPortHint(`Switched to port ${newPort}`);
     } else {
       nativeConnectionStatus.value = 'disconnected';
       await refreshServerStatus();
-      showPortHint(`端口 ${newPort} 连接失败，请检查后重试`, 5000);
+      showPortHint(`Failed to connect on port ${newPort}. Please check and retry.`, 5000);
     }
   } catch (error) {
     console.error('端口切换重连失败:', error);
     applyDisconnectedPopupSnapshot();
     await refreshStandaloneDaemonStatus();
-    showPortHint(`端口切换失败: ${error instanceof Error ? error.message : String(error)}`, 5000);
+    showPortHint(
+      `Port switch failed: ${error instanceof Error ? error.message : String(error)}`,
+      5000,
+    );
   } finally {
     isConnecting.value = false;
   }
@@ -1745,15 +1778,15 @@ const copyRepairCommand = async () => {
   if (!repairCommandText.value) return;
   try {
     await navigator.clipboard.writeText(repairCommandText.value);
-    repairCommandButtonText.value = '✅ 已复制';
+    repairCommandButtonText.value = getMessage('popupCopiedShort');
     setTimeout(() => {
-      repairCommandButtonText.value = '复制修复命令';
+      repairCommandButtonText.value = getMessage('popupCopyRepairCommand');
     }, 2000);
   } catch (error) {
     console.error('复制修复命令失败:', error);
-    repairCommandButtonText.value = '❌ 复制失败';
+    repairCommandButtonText.value = getMessage('popupCopyFailed');
     setTimeout(() => {
-      repairCommandButtonText.value = '复制修复命令';
+      repairCommandButtonText.value = getMessage('popupCopyRepairCommand');
     }, 2000);
   }
 };
@@ -1792,7 +1825,9 @@ const toggleRemoteAccess = async () => {
   const enable = !remoteAccessEnabled.value;
   const hadTokenBefore = Boolean(tokenInfo.value);
   remoteToggling.value = true;
-  remoteToggleCopiedText.value = enable ? '正在开启远程访问…' : '正在关闭远程访问…';
+  remoteToggleCopiedText.value = enable
+    ? getMessage('popupEnablingRemote')
+    : getMessage('popupDisablingRemote');
 
   try {
     const response = await chrome.runtime.sendMessage({
@@ -1800,7 +1835,7 @@ const toggleRemoteAccess = async () => {
       enable,
     });
     if (!response?.success) {
-      remoteToggleCopiedText.value = `❌ 切换失败: ${response?.error || '未知错误'}`;
+      remoteToggleCopiedText.value = `❌ ${getMessage('popupToggleFailedPrefix')} ${response?.error || getMessage('unknownErrorMessage')}`;
       setTimeout(() => {
         remoteToggleCopiedText.value = '';
       }, 3000);
@@ -1816,18 +1851,18 @@ const toggleRemoteAccess = async () => {
     }
 
     if (!enable) {
-      remoteToggleCopiedText.value = '✅ 已恢复仅本机访问';
+      remoteToggleCopiedText.value = getMessage('popupRemoteRestoredLocalOnly');
     } else if (!hadTokenBefore && tokenInfo.value) {
-      remoteToggleCopiedText.value = '✅ 远程访问已开启，已生成默认 Token';
+      remoteToggleCopiedText.value = getMessage('popupRemoteEnabledWithToken');
     } else {
-      remoteToggleCopiedText.value = '✅ 远程访问已开启';
+      remoteToggleCopiedText.value = getMessage('popupRemoteEnabled');
     }
     setTimeout(() => {
       remoteToggleCopiedText.value = '';
     }, 2500);
   } catch (error) {
     console.error('切换远程访问失败:', error);
-    remoteToggleCopiedText.value = `❌ 切换失败: ${error instanceof Error ? error.message : String(error)}`;
+    remoteToggleCopiedText.value = `❌ ${getMessage('popupToggleFailedPrefix')} ${error instanceof Error ? error.message : String(error)}`;
     setTimeout(() => {
       remoteToggleCopiedText.value = '';
     }, 3000);
@@ -2249,7 +2284,7 @@ const switchModel = async (newModel: ModelPreset) => {
     modelInitializationStatus.value = 'error';
     isModelDownloading.value = false;
 
-    const errorMessage = error?.message || '未知错误';
+    const errorMessage = error?.message || getMessage('unknownErrorMessage');
     if (
       errorMessage.includes('network') ||
       errorMessage.includes('fetch') ||

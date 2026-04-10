@@ -1,7 +1,12 @@
 <template>
   <div class="token-management-page">
     <div class="page-header">
-      <button class="back-button" type="button" @click="$emit('back')" title="返回首页">
+      <button
+        class="back-button"
+        type="button"
+        @click="$emit('back')"
+        :title="getMessage('tokenPageBackHomeTitle')"
+      >
         <svg
           viewBox="0 0 24 24"
           width="20"
@@ -12,16 +17,16 @@
         >
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
-        <span>返回</span>
+        <span>{{ getMessage('tokenPageBackLabel') }}</span>
       </button>
-      <h2 class="page-title">Token 管理</h2>
+      <h2 class="page-title">{{ getMessage('popupTokenManagementTitle') }}</h2>
     </div>
 
     <div class="page-content">
       <div v-if="loadError" class="error-banner">{{ loadError }}</div>
 
       <div v-else-if="tokenInfo" class="section">
-        <h3 class="section-title">当前 Token</h3>
+        <h3 class="section-title">{{ getMessage('tokenPageCurrentTokenTitle') }}</h3>
         <div class="token-row">
           <span class="token-value" @click="tokenVisible = !tokenVisible">
             {{ tokenVisible ? tokenInfo.token : maskedToken(tokenInfo.token) }}
@@ -29,29 +34,29 @@
           <button
             type="button"
             class="icon-btn"
-            title="复制 Token"
+            :title="getMessage('tokenPageCopyTokenTitle')"
             @click="copyText(tokenInfo.token)"
           >
             📋
           </button>
         </div>
-        <p v-if="tokenInfo.fromEnv" class="env-badge"
-          >由环境变量 MCP_AUTH_TOKEN 提供（不可在此页刷新）</p
-        >
+        <p v-if="tokenInfo.fromEnv" class="env-badge">{{ getMessage('tokenPageEnvTokenBadge') }}</p>
 
         <div class="meta-grid">
           <div>
-            <span class="meta-label">状态</span>
+            <span class="meta-label">{{ getMessage('statusLabel') }}</span>
             <span class="meta-value">{{ expiryStatusText }}</span>
           </div>
           <div v-if="tokenInfo.expiresAt !== null">
-            <span class="meta-label">到期时间</span>
+            <span class="meta-label">{{ getMessage('tokenPageExpiryTimeLabel') }}</span>
             <span class="meta-value">{{ formatExpiresAt(tokenInfo.expiresAt) }}</span>
           </div>
           <div v-if="!tokenInfo.fromEnv && tokenInfo.ttlDays != null">
-            <span class="meta-label">生成时有效天数</span>
+            <span class="meta-label">{{ getMessage('tokenPageTtlDaysLabel') }}</span>
             <span class="meta-value">{{
-              tokenInfo.ttlDays === 0 ? '永不过期' : `${tokenInfo.ttlDays} 天`
+              tokenInfo.ttlDays === 0
+                ? getMessage('tokenPageNeverExpire')
+                : getMessage('tokenPageDays', [String(tokenInfo.ttlDays)])
             }}</span>
           </div>
         </div>
@@ -63,7 +68,11 @@
           :disabled="refreshing"
           @click="showRefreshConfirm = true"
         >
-          {{ refreshing ? '处理中…' : '重新生成 Token' }}
+          {{
+            refreshing
+              ? getMessage('processingStatus')
+              : getMessage('tokenPageRegenerateTokenButton')
+          }}
         </button>
       </div>
 
@@ -74,7 +83,7 @@
           class="secondary-button"
           :disabled="creatingDefaultToken"
           @click="fetchToken"
-          >重试</button
+          >{{ getMessage('retryButton') }}</button
         >
         <button
           v-if="isRemoteEnabled"
@@ -82,21 +91,21 @@
           class="secondary-button"
           :disabled="creatingDefaultToken"
           @click="generateDefaultToken"
-          >{{ creatingDefaultToken ? '生成中…' : '生成默认 Token' }}</button
+          >{{
+            creatingDefaultToken
+              ? getMessage('processingStatus')
+              : getMessage('tokenPageGenerateDefaultTokenButton')
+          }}</button
         >
       </div>
 
       <div class="section">
-        <h3 class="section-title">说明</h3>
-        <p class="help-text">
-          在「重新生成 Token」弹框内可设置有效天数。服务端环境变量
-          <code>MCP_AUTH_TOKEN_TTL</code> 仍影响首次自动生成时的默认天数（默认 7；<code>0</code>
-          永不过期），修改后需重启生效。
-        </p>
+        <h3 class="section-title">{{ getMessage('tokenPageNotesTitle') }}</h3>
+        <p class="help-text">{{ getMessage('tokenPageNotesText') }}</p>
       </div>
 
       <div class="section">
-        <h3 class="section-title">远程 MCP 配置（含 Token）</h3>
+        <h3 class="section-title">{{ getMessage('tokenPageRemoteConfigTitle') }}</h3>
         <pre class="config-pre">{{ remoteConfigJson }}</pre>
         <button
           type="button"
@@ -104,27 +113,29 @@
           :disabled="!remoteConfigJson.trim()"
           @click="copyText(remoteConfigJson)"
         >
-          复制完整配置
+          {{ getMessage('tokenPageCopyFullConfigButton') }}
         </button>
       </div>
     </div>
 
     <ConfirmDialog
       :visible="showRefreshConfirm"
-      title="重新生成 Token？"
+      :title="getMessage('tokenPageRegenerateConfirmTitle')"
       :message="refreshConfirmMessage"
-      :items="['已保存新 Token 或确认可立即更新各客户端']"
-      warning="此操作不可撤销。"
+      :items="[getMessage('tokenPageRegenerateConfirmItem')]"
+      :warning="getMessage('tokenPageRegenerateConfirmWarning')"
       icon="⚠️"
-      confirm-text="确认重新生成"
-      cancel-text="取消"
+      :confirm-text="getMessage('tokenPageRegenerateConfirmButton')"
+      :cancel-text="getMessage('cancelButton')"
       :is-confirming="refreshing"
       @confirm="onConfirmRefresh"
       @cancel="showRefreshConfirm = false"
     >
       <template #extra>
         <div class="refresh-ttl-in-dialog">
-          <label class="refresh-ttl-label" for="dialog-token-ttl-days">新 Token 有效天数</label>
+          <label class="refresh-ttl-label" for="dialog-token-ttl-days">{{
+            getMessage('tokenPageNewTokenTtlLabel')
+          }}</label>
           <div class="refresh-ttl-row">
             <input
               id="dialog-token-ttl-days"
@@ -136,7 +147,7 @@
               class="refresh-ttl-input"
               @click.stop
             />
-            <span class="refresh-ttl-hint">0 = 永不过期，最大 3650</span>
+            <span class="refresh-ttl-hint">{{ getMessage('tokenPageTtlHint') }}</span>
           </div>
         </div>
       </template>
@@ -146,6 +157,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { getMessage } from '@/utils/i18n';
 import ConfirmDialog from './ConfirmDialog.vue';
 
 export interface TokenInfo {
@@ -183,9 +195,9 @@ const isRemoteEnabled = computed(() => Boolean(props.lanIp));
 
 const emptyStateText = computed(() => {
   if (isRemoteEnabled.value) {
-    return '未检测到可用 Token。可点击下方「生成默认 Token」（默认 7 天有效期）后再复制远程配置。';
+    return getMessage('tokenPageEmptyRemoteEnabled');
   }
-  return '当前为本机访问模式，远程 Token 为可选项。开启远程访问后可在此生成 Token。';
+  return getMessage('tokenPageEmptyLocalOnly');
 });
 
 function maskedToken(token: string): string {
@@ -209,27 +221,28 @@ function clampTtlDays(raw: number): number {
 const refreshTtlDaysClamped = computed(() => clampTtlDays(refreshTtlDays.value));
 
 /** 弹框内说明不含天数（天数在下方输入框设置） */
-const refreshConfirmMessage =
-  '旧 Token 将立即失效，其他设备上的 MCP 客户端需更新配置中的 Authorization。请在下方设置新 Token 的有效天数。';
+const refreshConfirmMessage = getMessage('tokenPageRefreshConfirmMessage');
 
 const expiryStatusText = computed(() => {
   void tick.value;
   const info = tokenInfo.value;
   if (!info) return '';
-  if (info.expiresAt === null) return '永不过期';
+  if (info.expiresAt === null) return getMessage('tokenPageNeverExpire');
   const remaining = info.expiresAt - Date.now();
-  if (remaining <= 0) return '已过期';
+  if (remaining <= 0) return getMessage('tokenPageExpired');
   const days = Math.floor(remaining / (24 * 60 * 60 * 1000));
   const hours = Math.floor((remaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
   const mins = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
-  if (days > 0) return `剩余约 ${days} 天 ${hours} 小时`;
-  if (hours > 0) return `剩余约 ${hours} 小时 ${mins} 分钟`;
-  return `剩余约 ${mins} 分钟`;
+  if (days > 0) return getMessage('tokenPageRemainingDaysHours', [String(days), String(hours)]);
+  if (hours > 0) {
+    return getMessage('tokenPageRemainingHoursMinutes', [String(hours), String(mins)]);
+  }
+  return getMessage('tokenPageRemainingMinutes', [String(mins)]);
 });
 
 const remoteConfigJson = computed(() => {
   const port = props.serverPort;
-  const host = props.lanIp || '<局域网IP>';
+  const host = props.lanIp || getMessage('popupLanIpPlaceholder');
   const tok = tokenInfo.value?.token;
   const chromeMcp: Record<string, unknown> = {
     url: `http://${host}:${port}/mcp`,
@@ -260,7 +273,7 @@ async function requestNewToken(ttlDays?: number, silent = false): Promise<TokenI
       if (!silent) {
         const errJson = await res.json().catch(() => null);
         const msg = errJson?.message || errJson?.status || res.status;
-        loadError.value = `刷新失败：${msg}`;
+        loadError.value = getMessage('tokenPageRefreshFailed', [String(msg)]);
       }
       return null;
     }
@@ -268,7 +281,7 @@ async function requestNewToken(ttlDays?: number, silent = false): Promise<TokenI
     return json?.data ?? null;
   } catch {
     if (!silent) {
-      loadError.value = '刷新请求失败';
+      loadError.value = getMessage('tokenPageRefreshRequestFailed');
     }
     return null;
   }
@@ -279,7 +292,7 @@ async function fetchToken(): Promise<void> {
   try {
     const res = await fetch(`${props.baseUrl}/auth/token`);
     if (!res.ok) {
-      loadError.value = `无法读取 Token（HTTP ${res.status}）`;
+      loadError.value = getMessage('tokenPageReadTokenFailedHttp', [String(res.status)]);
       tokenInfo.value = null;
       return;
     }
@@ -298,7 +311,7 @@ async function fetchToken(): Promise<void> {
       }
     }
   } catch {
-    loadError.value = '无法连接本地服务，请确认已连接 Native 且服务运行中。';
+    loadError.value = getMessage('tokenPageLocalServiceUnavailable');
     tokenInfo.value = null;
   }
 }
