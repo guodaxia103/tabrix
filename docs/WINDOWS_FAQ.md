@@ -149,7 +149,7 @@ tabrix doctor --fix
 tabrix register
 ```
 
-> 提示：项目内置稳定 key 生成逻辑（`ensure-extension-key.cjs`），确保同一台机器上 Extension ID 在重新构建后保持不变。`register` 命令现在通过三层来源合并 `allowed_origins`（key 计算 + Chrome 发现 + 兜底常量），即使扩展 ID 发生变化也能自动适配。
+> 提示：Tabrix 现已内置**稳定扩展 key**，默认在不同版本发布中保持同一 Extension ID。扩展 UI 的“刷新”仅刷新状态，不会修改系统 Native manifest；若出现 ID/授权失配，仍需执行 `tabrix doctor --fix`（或 `tabrix register --force`）修复 `allowed_origins`。
 
 ---
 

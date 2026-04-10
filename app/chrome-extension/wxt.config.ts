@@ -10,7 +10,11 @@ import IconsResolver from 'unplugin-icons/resolver';
 config({ path: resolve(process.cwd(), '.env') });
 config({ path: resolve(process.cwd(), '.env.local') });
 
-const CHROME_EXTENSION_KEY = process.env.CHROME_EXTENSION_KEY;
+// Stable public key to keep unpacked-extension ID deterministic across releases.
+// Users can override with CHROME_EXTENSION_KEY for private forks.
+const STABLE_CHROME_EXTENSION_KEY =
+  'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmYqyu+BGtkm1Qysyb15q2TjlCD9ETEdm0leWHFfKgNwYP7zvwtVghPpSj5gXnJnxCYW+w3LmMJ4hBZm6IKQ/sg9IzBGELo/NAK+2FDjPyhjRlTC+bx8zMJueatht1XaJylIbc0qy3xIvASPydkYIlhWQwk9JjvQnhsGt6y0M9Bbhr9I8WXntS0M7+31paPDiIvtkcha0M6i6yfFGaN34BeBTu2ELhBP3/48XcJEjz13NTQfAtmu5n/+303Cs9BM50ZX+scenCJn4GxdiEEyvnsouFL8gsE9aUmJlhCtjl0cALFYosCCtIIsmAWyTS0KhGGPmKnQQKNWfSIu4A90UzQIDAQAB';
+const CHROME_EXTENSION_KEY = process.env.CHROME_EXTENSION_KEY || STABLE_CHROME_EXTENSION_KEY;
 // Detect dev mode early for manifest-level switches
 const IS_DEV = process.env.NODE_ENV !== 'production' && process.env.MODE !== 'production';
 
@@ -32,7 +36,7 @@ export default defineConfig({
     // ],
   },
   manifest: {
-    // Use environment variable for the key, fallback to undefined if not set
+    // Stable by default; override via CHROME_EXTENSION_KEY for custom forks.
     key: CHROME_EXTENSION_KEY,
     minimum_chrome_version: '120',
     default_locale: 'zh_CN',
