@@ -12,11 +12,46 @@
 
 ---
 
+## 📜 项目来源说明
+
+Tabrix 来源于开源项目 [`hangwin/mcp-chrome`](https://github.com/hangwin/mcp-chrome) 的社区延续版本。
+
+由于上游在较长一段时间内更新节奏放缓、问题积压增加，我们启动 Tabrix 来持续维护、加快修复并提供更清晰的版本路线。
+
+也特别感谢上游维护者与所有历史贡献者，没有前期的开源积累，就没有今天的 Tabrix。
+
+## 🤝 维护承诺
+
+- 我们会持续维护 Tabrix，保持稳定更新与缺陷修复。
+- 每个重要版本都会提供明确的变更说明。
+- 在可行范围内保持向后兼容，降低迁移成本。
+
+## 🔔 Tabrix 2.0（2026-04-10）
+
+### 新增
+
+- 统一最新安装方式：`npm install -g tabrix@latest` 与 `pnpm install -g tabrix@latest`。
+- 新增基于 Git Tag 触发的 npm 自动发布流程（`v*` / `tabrix-v*`）。
+- 通用 AI 助手技能重命名并对齐为 `skills/tabrix_browser`。
+
+### 变更
+
+- 包名与主命令由 `mcp-chrome-bridge` 升级为 `tabrix`。
+- 保留兼容别名（`mcp-chrome-bridge`、`mcp-chrome-stdio`）以减少迁移成本。
+- 仓库链接、文档引用与公开目录结构已统一到 Tabrix 品牌。
+
+### 修复
+
+- 修复发布风险：`chrome-mcp-shared` 依赖从 workspace 改为 semver，保证 npm 发布后可安装。
+- 修复远程访问消息枚举版本差异导致的兼容性问题（增加回退处理）。
+
+---
+
 ## 🎯 什么是 Tabrix？
 
 Tabrix 是一个基于 Chrome 插件的 **模型上下文协议 (MCP) 服务器**，它将您的 Chrome 浏览器功能暴露给 Claude 等 AI 助手，实现复杂的浏览器自动化、内容分析和语义搜索等。与传统的浏览器自动化工具（如 Playwright）不同，**Tabrix** 直接使用您日常使用的 Chrome 浏览器，基于现有的用户习惯和配置、登录态，让各种大模型或 chatbot 都可以接管你的浏览器，真正成为你的日常助手。
 
-## ✨ 新功能(2025/12/30)
+## ✨ 当前亮点
 
 - **让 Claude Code / Codex 也能使用的可视化编辑器**：详情请看 [VisualEditor](docs/VisualEditor_zh.md)
 - **稳定运行时诊断**：使用 `tabrix status`、`doctor`、`report` 快速排障
@@ -347,7 +382,7 @@ https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
 
 ## 🚧 未来发展路线图
 
-我们对 Chrome MCP Server 的未来发展有着激动人心的计划：
+我们对 Tabrix 的未来发展有着激动人心的计划：
 
 - [ ] 身份认证
 

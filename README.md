@@ -14,11 +14,46 @@
 
 ---
 
+## 📜 Project Origin
+
+Tabrix is a community-driven continuation of the original open-source project [`hangwin/mcp-chrome`](https://github.com/hangwin/mcp-chrome).
+
+As upstream maintenance cadence slowed for an extended period and issue backlog pressure grew, we launched Tabrix to provide sustained maintenance, faster fixes, and a clearer product roadmap.
+
+Special thanks to all original maintainers and contributors for building the foundation that made this project possible.
+
+## 🤝 Maintenance Commitment
+
+- We will continue maintaining Tabrix with regular updates and bug fixes.
+- We will publish release notes for every significant version.
+- We will keep practical backward compatibility whenever possible.
+
+## 🔔 Tabrix 2.0 (2026-04-10)
+
+### Added
+
+- Standardized latest-install flow: `npm install -g tabrix@latest` and `pnpm install -g tabrix@latest`.
+- Automated npm release workflow triggered by Git tags (`v*` / `tabrix-v*`).
+- Portable assistant skill renamed and aligned to Tabrix: `skills/tabrix_browser`.
+
+### Changed
+
+- Rebranded package and command from `mcp-chrome-bridge` to `tabrix`.
+- Kept compatibility aliases for existing users (`mcp-chrome-bridge`, `mcp-chrome-stdio`).
+- Updated repository references, docs links, and public-facing project structure.
+
+### Fixed
+
+- Resolved package publishing risk caused by workspace dependency (`chrome-mcp-shared` now uses semver range).
+- Added compatibility fallback for remote-access message types when shared enum versions differ.
+
+---
+
 ## 🎯 What is Tabrix?
 
 Tabrix is a Chrome extension-based **Model Context Protocol (MCP) server** that exposes your Chrome browser functionality to AI assistants like Claude, enabling complex browser automation, content analysis, and semantic search. Unlike traditional browser automation tools (like Playwright), **Tabrix** directly uses your daily Chrome browser, leveraging existing user habits, configurations, and login states, allowing various large models or chatbots to take control of your browser and truly become your everyday assistant.
 
-## ✨ New Features(2025/12/30)
+## ✨ Current Highlights
 
 - **A New Visual Editor for Claude Code & Codex**, for more detail here: [VisualEditor](docs/VisualEditor.md)
 - **Stable runtime diagnostics**: use `tabrix status`, `doctor`, and `report` for faster local troubleshooting
@@ -351,7 +386,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for
 
 ## 🚧 Future Roadmap
 
-We have exciting plans for the future development of Chrome MCP Server:
+We have exciting plans for the future development of Tabrix:
 
 - [ ] Authentication
 - [ ] Recording and Playback

@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.0.0] - 2026-04-10
+
+### Added
+
+- Latest-install standardization for public users: `npm install -g tabrix@latest` and `pnpm install -g tabrix@latest`.
+- Git tag based npm auto-publish workflow (`v*` / `tabrix-v*`) with provenance.
+- Portable assistant skill renamed to `tabrix_browser` and linked in README.
+
+### Changed
+
+- Rebranded package and default CLI from `mcp-chrome-bridge` to `tabrix`.
+- Preserved legacy command aliases for migration compatibility.
+- Refined public documentation scope and removed internal planning docs from open-source surface.
+
+### Fixed
+
+- Resolved npm publish/install risk by replacing workspace dependency with semver dependency for `chrome-mcp-shared`.
+- Added compatibility fallback for remote-access message enums across shared package versions.
+
+### Notes
+
+- Tabrix is a community-maintained continuation of `hangwin/mcp-chrome`.
+- We appreciate and acknowledge all previous maintainers and contributors.
+
 ## [v0.0.5]
 
 ### Improved
@@ -70,7 +94,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Core Browser Tools**: Complete set of browser automation tools for web interaction
-
   - **Click Tool**: Intelligent element clicking with coordinate and selector support
   - **Fill Tool**: Form filling with text input and selection capabilities
   - **Screenshot Tool**: Full page and element-specific screenshot capture
@@ -78,20 +101,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Keyboard Tool**: Keyboard input simulation and hotkey support
 
 - **Vector Search Engine**: Advanced semantic search capabilities
-
   - **Content Indexing**: Automatic indexing of browser tab content
   - **Semantic Similarity**: AI-powered text similarity matching
   - **Vector Database**: Efficient storage and retrieval of embeddings
   - **Multi-language Support**: Comprehensive multilingual text processing
 
 - **Native Host Integration**: Seamless communication with external applications
-
   - **Chrome Native Messaging**: Bidirectional communication channel
   - **Cross-platform Support**: Windows, macOS, and Linux compatibility
   - **Message Protocol**: Structured messaging system for tool execution
 
 - **AI Model Integration**: State-of-the-art language models for semantic processing
-
   - **Transformer Models**: Support for multiple pre-trained models
   - **ONNX Runtime**: Optimized model inference with WebAssembly
   - **Model Management**: Dynamic model loading and switching
