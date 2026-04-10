@@ -17,9 +17,9 @@ interface StatusPayload {
     nativeHostAttached: boolean;
     transports: {
       total: number;
-      sse: number;
-      streamableHttp: number;
-      sessionIds: string[];
+      sse?: number;
+      streamableHttp?: number;
+      sessionIds?: string[];
     };
   };
 }
@@ -43,8 +43,31 @@ function stringifyError(err: unknown): string {
   return String(err);
 }
 
+function normalizeCount(value: unknown): number {
+  return Number.isFinite(value) ? Number(value) : 0;
+}
+
+function normalizeSessionIds(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+}
+
+function normalizeTransports(payload: StatusPayload['data']['transports']): {
+  total: number;
+  streamableHttp: number;
+  sse: number;
+  sessionIds: string[];
+} {
+  return {
+    total: normalizeCount(payload.total),
+    streamableHttp: normalizeCount(payload.streamableHttp),
+    sse: normalizeCount(payload.sse),
+    sessionIds: normalizeSessionIds(payload.sessionIds),
+  };
+}
+
 function renderPretty(payload: StatusPayload): string {
   const { data } = payload;
+  const transports = normalizeTransports(data.transports);
   const lines = [
     `${COMMAND_NAME} status`,
     '',
@@ -52,11 +75,11 @@ function renderPretty(payload: StatusPayload): string {
     `Host: ${data.host}`,
     `Port: ${data.port ?? 'unknown'}`,
     `Native host attached: ${data.nativeHostAttached ? 'yes' : 'no'}`,
-    `Active sessions: ${data.transports.total} (streamable-http: ${data.transports.streamableHttp}, sse: ${data.transports.sse})`,
+    `Active sessions: ${transports.total} (streamable-http: ${transports.streamableHttp}, sse: ${transports.sse})`,
   ];
 
-  if (data.transports.sessionIds.length > 0) {
-    lines.push(`Session IDs: ${data.transports.sessionIds.join(', ')}`);
+  if (transports.sessionIds.length > 0) {
+    lines.push(`Session IDs: ${transports.sessionIds.join(', ')}`);
   }
 
   return lines.join('\n');
