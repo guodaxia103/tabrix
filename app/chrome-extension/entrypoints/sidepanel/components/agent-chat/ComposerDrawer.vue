@@ -6,7 +6,7 @@
         class="fixed inset-0 z-50"
         role="dialog"
         aria-modal="true"
-        aria-label="Expanded editor"
+        :aria-label="getMessage('agentComposerDrawerAriaLabel')"
         @keydown.esc="emit('close')"
       >
         <!-- Backdrop -->
@@ -22,10 +22,10 @@
           <div class="flex items-center justify-between px-4 py-3" :style="headerStyle">
             <div class="min-w-0">
               <div class="text-sm font-semibold" :style="{ color: 'var(--ac-text)' }">
-                Expanded editor
+                {{ getMessage('agentComposerExpandedEditor') }}
               </div>
               <div class="text-[10px]" :style="{ color: 'var(--ac-text-subtle)' }">
-                Press {{ modifierKey }}+Enter to send
+                {{ getMessage('agentComposerPressModifierEnterToSend', [modifierKey]) }}
               </div>
             </div>
 
@@ -33,7 +33,7 @@
               type="button"
               class="p-1.5 transition-colors hover:opacity-80 cursor-pointer"
               :style="closeButtonStyle"
-              aria-label="Close expanded editor"
+              :aria-label="getMessage('agentComposerCloseExpandedEditor')"
               @click="emit('close')"
             >
               <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -79,7 +79,7 @@
                 <button
                   class="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                   :style="removeButtonStyle"
-                  title="Remove image"
+                  :title="getMessage('agentComposerRemoveImage')"
                   @click="emit('attachment:remove', index)"
                 >
                   <svg class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -143,7 +143,11 @@
                   :disabled="cancelling"
                   @click="emit('cancel')"
                 >
-                  {{ cancelling ? 'Stopping...' : 'Stop' }}
+                  {{
+                    cancelling
+                      ? getMessage('agentComposerStatusStopping')
+                      : getMessage('agentComposerStop')
+                  }}
                 </button>
 
                 <!-- Send button -->
@@ -153,7 +157,7 @@
                   :disabled="!canSend || sending"
                   @click="handleSubmit"
                 >
-                  Send
+                  {{ getMessage('agentComposerSend') }}
                 </button>
               </div>
             </div>
@@ -166,6 +170,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, nextTick, onMounted } from 'vue';
+import { getMessage } from '@/utils/i18n';
 import type { AttachmentWithPreview } from '../../composables/useAttachments';
 import type { RequestState } from '../../composables/useAgentChat';
 import FakeCaretOverlay from './FakeCaretOverlay.vue';

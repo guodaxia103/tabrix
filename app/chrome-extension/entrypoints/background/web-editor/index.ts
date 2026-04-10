@@ -11,6 +11,7 @@ import {
   type WebEditorCancelExecutionResponse,
 } from '@/common/web-editor-types';
 import { openAgentChatSidepanel } from '../utils/sidepanel';
+import { getMessage } from '@/utils/i18n';
 
 const CONTEXT_MENU_ID = 'web_editor_toggle';
 const COMMAND_KEY = 'toggle_web_editor';
@@ -677,7 +678,7 @@ async function ensureContextMenu(): Promise<void> {
     } catch {}
     await chrome.contextMenus.create({
       id: CONTEXT_MENU_ID,
-      title: '切换网页编辑模式',
+      title: getMessage('popupEnableWebEditor'),
       contexts: ['all'],
     });
   } catch (error) {
@@ -1498,8 +1499,7 @@ export function initWebEditorListeners(): void {
           if (!projectId) {
             return sendResponse({
               success: false,
-              error:
-                'No Agent project selected. Open Side Panel → 智能助手 and select/create a project first.',
+              error: getMessage('webEditorNoAgentProjectSelected'),
             });
           }
 

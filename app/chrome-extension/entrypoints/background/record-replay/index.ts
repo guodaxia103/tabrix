@@ -21,6 +21,7 @@ import { listTriggers, saveTrigger, deleteTrigger, type FlowTrigger } from './tr
 import { runFlow } from './flow-runner';
 import { RecorderManager } from './recording/recorder-manager';
 import { recordingSession } from './recording/session-manager';
+import { getMessage } from '@/utils/i18n';
 // Browser/content listeners are initialized via RecorderManager.init
 
 // design note: background listener for record & replay; delegates recording to dedicated modules
@@ -399,7 +400,7 @@ async function refreshContextMenus(triggers: FlowTrigger[]) {
     try {
       await chrome.contextMenus.create({
         id,
-        title: (t as any).title || '运行工作流',
+        title: (t as any).title || getMessage('triggerContextMenuDefaultTitle'),
         contexts: (t as any).contexts || ['all'],
       });
       rrContextMenuIds.add(id);

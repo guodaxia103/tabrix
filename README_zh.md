@@ -271,6 +271,7 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 - [故障排除](docs/TROUBLESHOOTING_zh.md)
 - [Release Notes v2.0.4](docs/RELEASE_NOTES_v2.0.4.md)
 - [Release Notes v2.0.3](docs/RELEASE_NOTES_v2.0.3.md)
+- [项目评估 2026 Q2](docs/PROJECT_REVIEW_2026Q2.md)
 
 ### 开发者文档
 

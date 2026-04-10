@@ -15,6 +15,7 @@ import {
 import { computerTool } from '@/entrypoints/background/tools/browser/computer';
 import { clickTool } from '@/entrypoints/background/tools/browser/interaction';
 import { keyboardTool } from '@/entrypoints/background/tools/browser/keyboard';
+import { getMessage } from '@/utils/i18n';
 
 const CONTEXT_MENU_ID = 'element_marker_mark';
 
@@ -54,7 +55,7 @@ async function ensureContextMenu() {
     } catch {}
     await chrome.contextMenus.create({
       id: CONTEXT_MENU_ID,
-      title: '标注元素',
+      title: getMessage('markerAddLabel'),
       contexts: ['all'],
     });
   } catch {

@@ -1,10 +1,11 @@
 import type { ExecCtx, ExecResult, NodeRuntime } from './types';
+import { getMessage } from '@/utils/i18n';
 
 export const executeFlowNode: NodeRuntime<any> = {
   validate: (step) => {
     const s: any = step;
     const ok = typeof s.flowId === 'string' && !!s.flowId;
-    return ok ? { ok } : { ok, errors: ['需提供 flowId'] };
+    return ok ? { ok } : { ok, errors: [getMessage('rrNodeNeedFlowId')] };
   },
   run: async (ctx: ExecCtx, step) => {
     const s: any = step;

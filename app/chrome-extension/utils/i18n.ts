@@ -219,6 +219,21 @@ const fallbackMessages: Record<string, string> = {
     'Native host is connected, but local MCP service is not ready. Click Refresh first; if it still fails, run `tabrix doctor` and reload extension.',
   popupStatusDetailDisconnected:
     'If Connect still fails, run `tabrix doctor --fix` and `tabrix register --force`, then fully restart Chrome.',
+  popupNativeGuidanceLastErrorPrefix: 'Last connection error: {0}',
+  popupNativeGuidanceForbiddenDiagnosis:
+    'Diagnosis: current extension ID is not in Native Messaging manifest.allowed_origins, or registry still points to an old manifest.',
+  popupNativeGuidanceForbiddenSuggestion:
+    'Suggestion: run `tabrix doctor --fix`; if it still fails, run `tabrix register --force`, then fully restart Chrome and reload extension in chrome://extensions/.',
+  popupNativeGuidanceHostMissingDiagnosis:
+    'Diagnosis: Native host is not registered, path is invalid, or host startup failed.',
+  popupNativeGuidanceHostMissingSuggestion:
+    'Suggestion: run `tabrix doctor --fix`; if needed, run `tabrix register --force`.',
+  popupNativeGuidanceAuthDiagnosis:
+    'Diagnosis: remote access token is missing, expired, or mismatched.',
+  popupNativeGuidanceAuthSuggestion:
+    'Suggestion: refresh/copy token in Popup > Remote, and configure Authorization header in your MCP client.',
+  popupNativeGuidanceUnknownSuggestion:
+    'Suggestion: run `tabrix doctor --fix`; if it still fails, run `tabrix register --force`, then fully restart Chrome.',
   popupTroubleshootQuickFixTitle: 'Quick fix for current error',
   popupTroubleshootDoctorFixTitle: 'Basic diagnostics and auto-fix',
   popupTroubleshootDaemonStartTitle: 'Start daemon (keep service online without browser)',
@@ -273,6 +288,11 @@ const fallbackMessages: Record<string, string> = {
   tokenPageReadTokenFailedHttp: 'Failed to read token (HTTP {0})',
   tokenPageLocalServiceUnavailable:
     'Cannot reach local service. Ensure Native is connected and service is running.',
+  webEditorNoAgentProjectSelected:
+    'No Agent project selected. Open Side Panel -> AI Assistant and select/create a project first.',
+  agentProjectConfirmCreateMissingDir: 'Directory "{0}" does not exist. Create it?',
+  agentProjectConfirmSwitchExisting:
+    'A project already exists for "{0}": {1}. Switch to that project?',
 
   // Sidepanel navigator
   sidepanelNavigatorTriggerTitle: 'Switch pages (drag to move, double-click to reset position)',
@@ -541,6 +561,32 @@ const fallbackMessages: Record<string, string> = {
   builderPropWaitConditionLabel: 'Wait condition (JSON)',
   builderPropWhileConditionLabel: 'Condition (JSON)',
   builderPropWhileMaxIterationsOptionalLabel: 'Max iterations (optional)',
+  builderValidationMissingTargetSelectorCandidate: 'Missing target selector candidate',
+  builderValidationMissingInputValue: 'Missing input value',
+  builderValidationMissingWaitCondition: 'Missing wait condition',
+  builderValidationMissingAssertCondition: 'Missing assert condition',
+  builderValidationMissingUrl: 'Missing URL',
+  builderValidationHttpMissingUrl: 'HTTP: missing URL',
+  builderValidationAssignInvalidPath: 'Assign: invalid path {0}',
+  builderValidationExtractNeedSaveVar: 'Extract: save variable is required',
+  builderValidationExtractNeedSelectorOrJs: 'Extract: selector or js is required',
+  builderValidationSwitchTabNeedOne: 'SwitchTab: tabId or URL/title contains is required',
+  builderValidationNeedEventType: 'Event type is required',
+  builderValidationNeedAtLeastOneBranch: 'At least one condition branch is required',
+  builderValidationBranchNeedExpression: 'Branch {0}: condition expression is required',
+  builderValidationNeedAttributeName: 'Attribute name is required',
+  builderValidationNeedElementSelector: 'Element selector is required',
+  builderValidationNeedSubflowId: 'Subflow ID is required',
+  builderValidationNeedExecuteFlowId: 'Target workflow is required',
+  builderValidationScriptNeedCodeWhenAssign:
+    'Script: code is required when save/assign is configured',
+  builderToastCannotConnectSelf: 'Cannot connect node to itself',
+  builderToastMaxIncomingEdges: 'This node allows up to {0} incoming edge(s)',
+  builderToastMaxOutgoingEdges: 'This node allows up to {0} outgoing edge(s)',
+  builderToastElkFallbackUsed: 'ELK auto-layout unavailable; fallback layout applied',
+  builderIfCaseLabel: 'Condition {0}',
+  builderSummaryUnconfiguredSelector: 'Selector not configured',
+  builderSummaryIfElseBranchCount: 'if/else branches: {0}{1}',
 
   // Builder widgets
   builderFieldKeySequenceHelp: 'Example: Backspace Enter or cmd+a',
@@ -560,6 +606,19 @@ const fallbackMessages: Record<string, string> = {
   builderEdgeEmptyText: 'No edge selected',
   builderFieldExpressionParseError: 'Expression parse error',
   builderFieldExpressionPlaceholder: 'e.g. vars.a > 0 && vars.flag',
+  rrNodeAssertNeedSelectorAndName: 'assert.attribute: selector and name are required',
+  rrNodeMissingAssertCondition: 'Missing assert condition',
+  rrNodeMissingTargetSelectorCandidate: 'Missing target selector candidate',
+  rrNodeMissingConditionOrBranch: 'Missing condition or branches',
+  rrNodeMissingTargetOrEventType: 'Target selector and event type are required',
+  rrNodeNeedTargetAndAttributeName: 'Target selector and attribute name are required',
+  rrNodeNeedSelectorAndSubflowId: 'selector and subflowId are required',
+  rrNodeNeedFlowId: 'flowId is required',
+  rrNodeMissingTargetOrInputValue: 'Missing target selector candidate or input value',
+  rrNodeForeachNeedListVarAndSubflowId: 'foreach: listVar and subflowId are required',
+  rrNodeWhileNeedConditionAndSubflowId: 'while: condition and subflowId are required',
+  rrNodeMissingUrl: 'Missing URL',
+  rrNodeMissingWaitCondition: 'Missing wait condition',
 
   // Sidepanel workflow status and builder node labels
   sidepanelWorkflowsStatusLabel: 'Status',

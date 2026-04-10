@@ -16,13 +16,13 @@ describe('getPopupNativeErrorGuidance', () => {
 
   it('returns host registration guidance for missing host errors', () => {
     const text = getPopupNativeErrorGuidance('Specified native messaging host not found.');
-    expect(text).toContain('Native host 未注册');
+    expect(text).toContain('Native host is not registered');
     expect(text).toContain('tabrix doctor --fix');
   });
 
   it('returns token guidance for unauthorized errors', () => {
     const text = getPopupNativeErrorGuidance('401 Unauthorized');
-    expect(text).toContain('Token');
+    expect(text).toMatch(/token/i);
     expect(text).toContain('Authorization');
   });
 

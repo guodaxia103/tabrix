@@ -21,7 +21,9 @@
 
     <div class="if-cases">
       <div v-for="(b, idx) in branches" :key="b.id" class="case-row">
-        <div class="case-label">{{ b.name || `条件${idx + 1}` }}</div>
+        <div class="case-label">{{
+          b.name || getMessage('builderIfCaseLabel', [String(idx + 1)])
+        }}</div>
         <Handle
           type="source"
           :position="Position.Right"
@@ -54,6 +56,7 @@ import type { NodeBase, Edge as EdgeV2 } from '@/entrypoints/background/record-r
 import { Handle, Position } from '@vue-flow/core';
 import { iconComp, getTypeLabel, nodeSubtitle } from './node-util';
 import ILucideShieldX from '~icons/lucide/shield-x';
+import { getMessage } from '@/utils/i18n';
 
 const props = defineProps<{
   id: string;

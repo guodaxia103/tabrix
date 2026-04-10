@@ -18,6 +18,7 @@
 
 import type { ElementLocator } from '@/common/web-editor-types';
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
+import { getMessage } from '@/utils/i18n';
 import { createElementLocator } from '../../core/locator';
 import type {
   FrameworkType,
@@ -898,7 +899,7 @@ export function createPropsPanel(options: PropsPanelOptions): PropsPanel {
 
       lastData = mergeResponseData(lastData, result.data);
       if (!result.ok) {
-        lastError = result.error ?? 'Props reset failed';
+        lastError = result.error ?? getMessage('webEditorPropsResetFailed');
       }
     } catch (err) {
       if (disposer.isDisposed || localSession !== sessionId) return;
@@ -926,20 +927,13 @@ export function createPropsPanel(options: PropsPanelOptions): PropsPanel {
 
     // Verify chrome runtime is available
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
-      lastError = 'Chrome runtime API not available';
+      lastError = getMessage('webEditorPropsChromeRuntimeUnavailable');
       renderMeta();
       return;
     }
 
     // Confirm with user
-    const confirmed = window.confirm(
-      'Props editing requires early injection to capture React renderers before they initialize.\n\n' +
-        'This will:\n' +
-        '• Register a content script for this site\n' +
-        '• Reload the page immediately\n\n' +
-        'After reload, enable the editor again to access full Props functionality.\n\n' +
-        'Continue?',
-    );
+    const confirmed = window.confirm(getMessage('webEditorPropsEarlyInjectionConfirm'));
     if (!confirmed) return;
 
     try {
@@ -948,7 +942,7 @@ export function createPropsPanel(options: PropsPanelOptions): PropsPanel {
       });
 
       if (!resp?.success) {
-        lastError = resp?.error ?? 'Failed to register early injection';
+        lastError = resp?.error ?? getMessage('webEditorPropsEarlyInjectionRegisterFailed');
         renderMeta();
       }
       // If successful, page will reload automatically
@@ -968,7 +962,7 @@ export function createPropsPanel(options: PropsPanelOptions): PropsPanel {
     if (!debugSource || !formatDebugSource(debugSource)) return;
 
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
-      lastError = 'Chrome runtime API not available';
+      lastError = getMessage('webEditorPropsChromeRuntimeUnavailable');
       renderMeta();
       return;
     }

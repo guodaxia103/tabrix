@@ -8,12 +8,19 @@ triggers (interval, once) * - Manual trigger support for 'manual' type triggers 
   <aside class="trigger-panel">
     <div class="panel-header">
       <div class="header-left">
-        <div class="header-title">Triggers</div>
+        <div class="header-title">{{ getMessage('builderTriggerPanelTitle') }}</div>
         <div class="header-sub">{{ flowId }}</div>
       </div>
       <div class="header-right">
-        <button class="btn-sm" type="button" :disabled="loading" @click="refresh"> Refresh </button>
-        <button class="btn-close" type="button" title="Close" @click="emit('close')">
+        <button class="btn-sm" type="button" :disabled="loading" @click="refresh">
+          {{ getMessage('builderTriggerPanelRefresh') }}
+        </button>
+        <button
+          class="btn-close"
+          type="button"
+          :title="getMessage('builderTriggerPanelClose')"
+          @click="emit('close')"
+        >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path
               d="m4 4 8 8M12 4 4 12"
@@ -30,14 +37,18 @@ triggers (interval, once) * - Manual trigger support for 'manual' type triggers 
       <!-- Create Section (interval/once only) -->
       <div class="form-section">
         <div class="section-header">
-          <div class="section-title">Add Trigger</div>
+          <div class="section-title">{{ getMessage('builderTriggerPanelAddTrigger') }}</div>
           <div class="section-actions">
-            <button class="btn-sm" type="button" @click="openCreate('interval')">+ Interval</button>
-            <button class="btn-sm" type="button" @click="openCreate('once')">+ Once</button>
+            <button class="btn-sm" type="button" @click="openCreate('interval')">
+              {{ getMessage('builderTriggerPanelAddInterval') }}
+            </button>
+            <button class="btn-sm" type="button" @click="openCreate('once')">
+              {{ getMessage('builderTriggerPanelAddOnce') }}
+            </button>
           </div>
         </div>
         <div class="hint">
-          Other types (url/cron/command/contextMenu/dom) are configured via trigger nodes.
+          {{ getMessage('builderTriggerPanelHintOtherTypes') }}
         </div>
       </div>
 
@@ -46,11 +57,15 @@ triggers (interval, once) * - Manual trigger support for 'manual' type triggers 
       <!-- Trigger List -->
       <div class="form-section">
         <div class="section-header">
-          <div class="section-title">Current Triggers ({{ triggers.length }})</div>
+          <div class="section-title">
+            {{ getMessage('builderTriggerPanelCurrentTriggers', [String(triggers.length)]) }}
+          </div>
         </div>
 
-        <div v-if="loading" class="muted">Loading...</div>
-        <div v-else-if="triggers.length === 0" class="muted">No triggers configured</div>
+        <div v-if="loading" class="muted">{{ getMessage('builderTriggerPanelLoading') }}</div>
+        <div v-else-if="triggers.length === 0" class="muted">
+          {{ getMessage('builderTriggerPanelEmpty') }}
+        </div>
 
         <div v-else class="trigger-list">
           <div v-for="trigger in sortedTriggers" :key="trigger.id" class="trigger-row">
@@ -74,7 +89,9 @@ triggers (interval, once) * - Manual trigger support for 'manual' type triggers 
                 class="toggle"
                 :class="{ readonly: ownerOf(trigger) === 'triggerNode' }"
                 :title="
-                  ownerOf(trigger) === 'triggerNode' ? 'Edit via trigger node in Builder' : ''
+                  ownerOf(trigger) === 'triggerNode'
+                    ? getMessage('builderTriggerPanelEditViaNode')
+                    : ''
                 "
               >
                 <input
@@ -83,7 +100,7 @@ triggers (interval, once) * - Manual trigger support for 'manual' type triggers 
                   :disabled="busyIds[trigger.id] || ownerOf(trigger) === 'triggerNode'"
                   @change="onToggleEnabled(trigger, ($event.target as HTMLInputElement).checked)"
                 />
-                <span>Enabled</span>
+                <span>{{ getMessage('builderTriggerPanelEnabled') }}</span>
               </label>
 
               <button
@@ -93,14 +110,14 @@ triggers (interval, once) * - Manual trigger support for 'manual' type triggers 
                 :disabled="busyIds[trigger.id] || !trigger.enabled"
                 @click="fireManual(trigger)"
               >
-                Fire
+                {{ getMessage('builderTriggerPanelFire') }}
               </button>
 
               <template v-if="isPanelManaged(trigger)">
                 <button
                   class="btn-icon-sm"
                   type="button"
-                  title="Edit"
+                  :title="getMessage('builderTriggerPanelEdit')"
                   :disabled="busyIds[trigger.id]"
                   @click="openEdit(trigger)"
                 >
@@ -119,7 +136,7 @@ triggers (interval, once) * - Manual trigger support for 'manual' type triggers 
                 <button
                   class="btn-icon-sm danger"
                   type="button"
-                  title="Delete"
+                  :title="getMessage('builderTriggerPanelDelete')"
                   :disabled="busyIds[trigger.id]"
                   @click="removePanelTrigger(trigger)"
                 >
@@ -161,22 +178,24 @@ triggers (interval, once) * - Manual trigger support for 'manual' type triggers 
         </div>
         <div class="rr-body">
           <div class="form-group">
-            <label class="form-label">Type</label>
+            <label class="form-label">{{ getMessage('builderTriggerPanelType') }}</label>
             <select class="form-select" v-model="editorKind" :disabled="editorMode === 'edit'">
-              <option value="interval">interval</option>
-              <option value="once">once</option>
+              <option value="interval">{{ getMessage('builderTriggerPanelKindInterval') }}</option>
+              <option value="once">{{ getMessage('builderTriggerPanelKindOnce') }}</option>
             </select>
           </div>
           <div class="form-group checkbox-group">
             <label class="checkbox-label">
               <input type="checkbox" v-model="editorEnabled" />
-              <span>Enabled</span>
+              <span>{{ getMessage('builderTriggerPanelEnabled') }}</span>
             </label>
           </div>
 
           <template v-if="editorKind === 'interval'">
             <div class="form-group">
-              <label class="form-label">Interval (minutes)</label>
+              <label class="form-label">{{
+                getMessage('builderTriggerPanelIntervalMinutes')
+              }}</label>
               <input
                 class="form-input"
                 type="number"
@@ -185,21 +204,23 @@ triggers (interval, once) * - Manual trigger support for 'manual' type triggers 
                 v-model.number="editorPeriodMinutes"
               />
             </div>
-            <div class="hint">Uses chrome.alarms.periodInMinutes for repeating triggers.</div>
+            <div class="hint">{{ getMessage('builderTriggerPanelIntervalHint') }}</div>
           </template>
 
           <template v-else>
             <div class="form-group">
-              <label class="form-label">Trigger Time</label>
+              <label class="form-label">{{ getMessage('builderTriggerPanelTriggerTime') }}</label>
               <input class="form-input" type="datetime-local" v-model="editorWhenLocal" />
             </div>
-            <div class="hint"> Will auto-disable after firing. Time is in local timezone. </div>
+            <div class="hint">{{ getMessage('builderTriggerPanelOnceHint') }}</div>
           </template>
         </div>
         <div class="rr-footer">
-          <button class="btn-cancel" type="button" @click="closeEditor">Cancel</button>
+          <button class="btn-cancel" type="button" @click="closeEditor">
+            {{ getMessage('builderTriggerPanelCancel') }}
+          </button>
           <button class="btn-primary" type="button" :disabled="editorSaving" @click="submitEditor">
-            Save
+            {{ getMessage('builderTriggerPanelSave') }}
           </button>
         </div>
       </div>
@@ -215,6 +236,7 @@ import type { JsonObject } from '@/entrypoints/background/record-replay-v3/domai
 import type { TriggerSpec } from '@/entrypoints/background/record-replay-v3/domain/triggers';
 import { useRRV3Rpc } from '@/entrypoints/shared/composables';
 import { toast } from '@/entrypoints/popup/components/builder/model/toast';
+import { getMessage } from '@/utils/i18n';
 
 // ==================== Types ====================
 
@@ -261,8 +283,15 @@ const editorPeriodMinutes = ref(5);
 const editorWhenLocal = ref('');
 
 const editorTitle = computed(() => {
-  const mode = editorMode.value === 'create' ? 'Create' : 'Edit';
-  return `${mode} ${editorKind.value} Trigger`;
+  const mode =
+    editorMode.value === 'create'
+      ? getMessage('builderTriggerPanelEditorModeCreate')
+      : getMessage('builderTriggerPanelEditorModeEdit');
+  const kind =
+    editorKind.value === 'interval'
+      ? getMessage('builderTriggerPanelKindInterval')
+      : getMessage('builderTriggerPanelKindOnce');
+  return getMessage('builderTriggerPanelEditorTitle', [mode, kind]);
 });
 
 // ==================== Utilities ====================
@@ -333,9 +362,9 @@ function ownerOf(trigger: TriggerSpec): TriggerOwner {
 function ownerLabel(owner: TriggerOwner): string {
   switch (owner) {
     case 'triggerNode':
-      return 'via trigger node';
+      return getMessage('builderTriggerPanelOwnerTriggerNode');
     case 'external':
-      return 'external';
+      return getMessage('builderTriggerPanelOwnerExternal');
     default:
       return '';
   }
@@ -348,34 +377,38 @@ function describeTrigger(trigger: TriggerSpec): string {
     case 'url': {
       const spec = trigger as Extract<TriggerSpec, { kind: 'url' }>;
       const rules = spec.match || [];
-      return `URL match rules: ${rules.length}`;
+      return getMessage('builderTriggerPanelDescUrlRules', [String(rules.length)]);
     }
     case 'cron': {
       const spec = trigger as Extract<TriggerSpec, { kind: 'cron' }>;
-      return spec.timezone ? `cron: ${spec.cron} (${spec.timezone})` : `cron: ${spec.cron}`;
+      return spec.timezone
+        ? getMessage('builderTriggerPanelDescCronWithTimezone', [spec.cron, spec.timezone])
+        : getMessage('builderTriggerPanelDescCron', [spec.cron]);
     }
     case 'interval': {
       const spec = trigger as Extract<TriggerSpec, { kind: 'interval' }>;
-      return `Every ${spec.periodMinutes} minute(s)`;
+      return getMessage('builderTriggerPanelDescInterval', [String(spec.periodMinutes)]);
     }
     case 'once': {
       const spec = trigger as Extract<TriggerSpec, { kind: 'once' }>;
-      return `At ${formatLocalDateTime(Number(spec.whenMs))}`;
+      return getMessage('builderTriggerPanelDescOnceAt', [
+        formatLocalDateTime(Number(spec.whenMs)),
+      ]);
     }
     case 'command': {
       const spec = trigger as Extract<TriggerSpec, { kind: 'command' }>;
-      return `commandKey: ${spec.commandKey}`;
+      return getMessage('builderTriggerPanelDescCommandKey', [spec.commandKey]);
     }
     case 'contextMenu': {
       const spec = trigger as Extract<TriggerSpec, { kind: 'contextMenu' }>;
-      return `title: ${spec.title}`;
+      return getMessage('builderTriggerPanelDescTitle', [spec.title]);
     }
     case 'dom': {
       const spec = trigger as Extract<TriggerSpec, { kind: 'dom' }>;
-      return `selector: ${spec.selector}`;
+      return getMessage('builderTriggerPanelDescSelector', [spec.selector]);
     }
     case 'manual':
-      return 'Manual trigger (fire via button)';
+      return getMessage('builderTriggerPanelDescManual');
     default:
       return '';
   }
@@ -428,7 +461,12 @@ async function fireManual(trigger: TriggerSpec): Promise<void> {
     const result = (await rpc.request('rr_v3.fireTrigger', {
       triggerId: trigger.id as TriggerId,
     })) as { runId?: string } | null;
-    toast(`Triggered: ${result?.runId ?? 'run enqueued'}`, 'info');
+    toast(
+      getMessage('builderTriggerPanelTriggered', [
+        result?.runId ?? getMessage('builderTriggerPanelRunEnqueued'),
+      ]),
+      'info',
+    );
   } catch (e) {
     toast(e instanceof Error ? e.message : String(e), 'error');
   } finally {
@@ -475,7 +513,7 @@ async function submitEditor(): Promise<void> {
 
   const flowId = String(props.flowId || '').trim();
   if (!flowId) {
-    toast('Flow ID is empty', 'error');
+    toast(getMessage('builderTriggerPanelFlowIdEmpty'), 'error');
     return;
   }
 
@@ -499,11 +537,11 @@ async function submitEditor(): Promise<void> {
     } else {
       const whenMs = datetimeLocalToUnixMs(editorWhenLocal.value);
       if (whenMs === null) {
-        toast('Invalid trigger time format', 'error');
+        toast(getMessage('builderTriggerPanelInvalidTriggerTime'), 'error');
         return;
       }
       if (whenMs < Date.now()) {
-        toast('Trigger time is in the past. It may fire immediately.', 'warn');
+        toast(getMessage('builderTriggerPanelTriggerTimeInPast'), 'warn');
       }
       payload = {
         kind: 'once',
@@ -534,7 +572,7 @@ async function submitEditor(): Promise<void> {
 async function removePanelTrigger(trigger: TriggerSpec): Promise<void> {
   if (!isPanelManaged(trigger)) return;
 
-  const confirmed = confirm(`Delete trigger?\n\n${trigger.id}`);
+  const confirmed = confirm(getMessage('builderTriggerPanelDeleteConfirm', [trigger.id]));
   if (!confirmed) return;
 
   if (busyIds.value[trigger.id]) return;

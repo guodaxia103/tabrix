@@ -93,6 +93,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: i18n check
+        run: pnpm run i18n:check
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Core tests
+        run: pnpm run test:core
+
+      - name: Production audit (high)
+        run: pnpm run audit
+
       - name: Build shared + native package
         run: pnpm --filter ./app/native-server build
 

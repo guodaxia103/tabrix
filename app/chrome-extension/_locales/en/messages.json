@@ -838,23 +838,23 @@
     "description": "Auto-synced key: popupRemoteRestoredLocalOnly"
   },
   "popupRemoteSecurityWarning": {
-    "message": "popupRemoteSecurityWarning",
+    "message": "Remote mode requires Bearer Token. A default token is being created automatically, or generate one manually in Token Management.",
     "description": "Auto-synced key: popupRemoteSecurityWarning"
   },
   "popupRemoteSummaryAutoCreating": {
-    "message": "popupRemoteSummaryAutoCreating",
+    "message": "Remote access is enabled. A default token is being created automatically.",
     "description": "Auto-synced key: popupRemoteSummaryAutoCreating"
   },
   "popupRemoteSummaryEnabledSecure": {
-    "message": "popupRemoteSummaryEnabledSecure",
+    "message": "Remote access is enabled (0.0.0.0). LAN clients can connect securely with Token.",
     "description": "Auto-synced key: popupRemoteSummaryEnabledSecure"
   },
   "popupRemoteSummaryLocalOnly": {
-    "message": "popupRemoteSummaryLocalOnly",
+    "message": "Currently local-only (127.0.0.1). Enable Remote Access to allow LAN clients to connect.",
     "description": "Auto-synced key: popupRemoteSummaryLocalOnly"
   },
   "popupRemoteSummaryNeedRunning": {
-    "message": "popupRemoteSummaryNeedRunning",
+    "message": "Connect and start the local service before toggling Remote Access.",
     "description": "Auto-synced key: popupRemoteSummaryNeedRunning"
   },
   "popupRemoteTab": {
@@ -862,20 +862,26 @@
     "description": "Auto-synced key: popupRemoteTab"
   },
   "popupStatusDetailConnectedNoService": {
-    "message": "popupStatusDetailConnectedNoService",
+    "message": "Native host is connected, but local MCP service is not ready. Click Refresh first; if it still fails, run `tabrix doctor` and reload extension.",
     "description": "Auto-synced key: popupStatusDetailConnectedNoService"
   },
   "popupStatusDetailDisconnected": {
-    "message": "popupStatusDetailDisconnected",
+    "message": "If Connect still fails, run `tabrix doctor --fix` and `tabrix register --force`, then fully restart Chrome.",
     "description": "Auto-synced key: popupStatusDetailDisconnected"
   },
   "popupStatusDetailDisconnectedWhileDaemon": {
-    "message": "popupStatusDetailDisconnectedWhileDaemon",
+    "message": "Local service is running, but browser channel is not connected. Click Connect to enable automation.",
     "description": "Auto-synced key: popupStatusDetailDisconnectedWhileDaemon"
   },
   "popupStatusDetailErrorDefault": {
-    "message": "popupStatusDetailErrorDefault",
-    "description": "Auto-synced key: popupStatusDetailErrorDefault"
+    "message": "Last connection error: $ARG1$. Try `tabrix doctor --fix`, then `tabrix register --force`, then fully restart Chrome and reload extension in chrome://extensions/.",
+    "description": "Auto-synced key: popupStatusDetailErrorDefault",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
   },
   "popupTabHintLocal": {
     "message": "For local clients like Cursor / Claude Desktop / CherryStudio / Windsurf",
@@ -914,7 +920,7 @@
     "description": "Auto-synced key: popupTroubleshootDoctorFixTitle"
   },
   "popupTroubleshootingGuideDesc": {
-    "message": "popupTroubleshootingGuideDesc",
+    "message": "Run these commands in order. Then fully restart Chrome and reload the extension in chrome://extensions/.",
     "description": "Auto-synced key: popupTroubleshootingGuideDesc"
   },
   "popupTroubleshootingGuideTitle": {
@@ -930,7 +936,7 @@
     "description": "Auto-synced key: popupTroubleshootRegisterForceTitle"
   },
   "popupTroubleshootRemotePersistNote": {
-    "message": "popupTroubleshootRemotePersistNote",
+    "message": "Use the Remote tab toggle by default. This command is only for daemon-based persistent remote mode.",
     "description": "Auto-synced key: popupTroubleshootRemotePersistNote"
   },
   "popupTroubleshootRemotePersistTitle": {
@@ -1078,15 +1084,15 @@
     "description": "Auto-synced key: tokenPageDays"
   },
   "tokenPageEmptyLocalOnly": {
-    "message": "tokenPageEmptyLocalOnly",
+    "message": "Local-only mode is active. Remote token is optional. Enable remote access to generate one here.",
     "description": "Auto-synced key: tokenPageEmptyLocalOnly"
   },
   "tokenPageEmptyRemoteEnabled": {
-    "message": "tokenPageEmptyRemoteEnabled",
+    "message": "No available token detected. Click \"Generate default token\" (default 7 days) before copying remote config.",
     "description": "Auto-synced key: tokenPageEmptyRemoteEnabled"
   },
   "tokenPageEnvTokenBadge": {
-    "message": "tokenPageEnvTokenBadge",
+    "message": "Provided by MCP_AUTH_TOKEN environment variable (cannot be refreshed here)",
     "description": "Auto-synced key: tokenPageEnvTokenBadge"
   },
   "tokenPageExpired": {
@@ -1102,7 +1108,7 @@
     "description": "Auto-synced key: tokenPageGenerateDefaultTokenButton"
   },
   "tokenPageLocalServiceUnavailable": {
-    "message": "tokenPageLocalServiceUnavailable",
+    "message": "Cannot reach local service. Ensure Native is connected and service is running.",
     "description": "Auto-synced key: tokenPageLocalServiceUnavailable"
   },
   "tokenPageNeverExpire": {
@@ -1114,7 +1120,7 @@
     "description": "Auto-synced key: tokenPageNewTokenTtlLabel"
   },
   "tokenPageNotesText": {
-    "message": "tokenPageNotesText",
+    "message": "You can set token validity days in the regenerate dialog. MCP_AUTH_TOKEN_TTL still controls default days on first auto-generation (default 7; 0 means never expire). Restart service after changing env vars.",
     "description": "Auto-synced key: tokenPageNotesText"
   },
   "tokenPageNotesTitle": {
@@ -1132,7 +1138,7 @@
     "description": "Auto-synced key: tokenPageReadTokenFailedHttp"
   },
   "tokenPageRefreshConfirmMessage": {
-    "message": "tokenPageRefreshConfirmMessage",
+    "message": "The old token will expire immediately. MCP clients on other devices must update Authorization. Set validity days for the new token below.",
     "description": "Auto-synced key: tokenPageRefreshConfirmMessage"
   },
   "tokenPageRefreshFailed": {
@@ -1328,15 +1334,15 @@
     "description": "Auto-synced key: sidepanelMarkerUpdateButton"
   },
   "sidepanelTriggerCreateNotImplemented": {
-    "message": "sidepanelTriggerCreateNotImplemented",
+    "message": "V3 Trigger management is not implemented yet, cannot create trigger for now.",
     "description": "Auto-synced key: sidepanelTriggerCreateNotImplemented"
   },
   "sidepanelTriggerEditNotImplemented": {
-    "message": "sidepanelTriggerEditNotImplemented",
+    "message": "V3 Trigger management is not implemented yet, cannot edit trigger for now.",
     "description": "Auto-synced key: sidepanelTriggerEditNotImplemented"
   },
   "sidepanelWorkflowCreateNotImplemented": {
-    "message": "sidepanelWorkflowCreateNotImplemented",
+    "message": "V3 Builder is not implemented yet, cannot create workflow for now.",
     "description": "Auto-synced key: sidepanelWorkflowCreateNotImplemented"
   },
   "sidepanelWorkflowDeleteConfirm": {
@@ -1344,7 +1350,7 @@
     "description": "Auto-synced key: sidepanelWorkflowDeleteConfirm"
   },
   "sidepanelWorkflowEditNotImplemented": {
-    "message": "sidepanelWorkflowEditNotImplemented",
+    "message": "V3 Builder is not implemented yet, cannot edit workflow for now.",
     "description": "Auto-synced key: sidepanelWorkflowEditNotImplemented"
   },
   "builderAutoLayoutTitle": {
@@ -2341,6 +2347,754 @@
   },
   "builderNodeTypeWhile": {
     "message": "Loop",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceLastErrorPrefix": {
+    "message": "Last connection error: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "popupNativeGuidanceForbiddenDiagnosis": {
+    "message": "Diagnosis: current extension ID is not in Native Messaging manifest.allowed_origins, or registry still points to an old manifest.",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceForbiddenSuggestion": {
+    "message": "Suggestion: run `tabrix doctor --fix`; if it still fails, run `tabrix register --force`, then fully restart Chrome and reload extension in chrome://extensions/.",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceHostMissingDiagnosis": {
+    "message": "Diagnosis: Native host is not registered, path is invalid, or host startup failed.",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceHostMissingSuggestion": {
+    "message": "Suggestion: run `tabrix doctor --fix`; if needed, run `tabrix register --force`.",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceAuthDiagnosis": {
+    "message": "Diagnosis: remote access token is missing, expired, or mismatched.",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceAuthSuggestion": {
+    "message": "Suggestion: refresh/copy token in Popup > Remote, and configure Authorization header in your MCP client.",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceUnknownSuggestion": {
+    "message": "Suggestion: run `tabrix doctor --fix`; if it still fails, run `tabrix register --force`, then fully restart Chrome.",
+    "description": "Auto-synced key"
+  },
+  "rrNodeAssertNeedSelectorAndName": {
+    "message": "assert.attribute: selector and name are required",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingAssertCondition": {
+    "message": "Missing assert condition",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingTargetSelectorCandidate": {
+    "message": "Missing target selector candidate",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingConditionOrBranch": {
+    "message": "Missing condition or branches",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingTargetOrEventType": {
+    "message": "Target selector and event type are required",
+    "description": "Auto-synced key"
+  },
+  "rrNodeNeedTargetAndAttributeName": {
+    "message": "Target selector and attribute name are required",
+    "description": "Auto-synced key"
+  },
+  "rrNodeNeedSelectorAndSubflowId": {
+    "message": "selector and subflowId are required",
+    "description": "Auto-synced key"
+  },
+  "rrNodeNeedFlowId": {
+    "message": "flowId is required",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingTargetOrInputValue": {
+    "message": "Missing target selector candidate or input value",
+    "description": "Auto-synced key"
+  },
+  "rrNodeForeachNeedListVarAndSubflowId": {
+    "message": "foreach: listVar and subflowId are required",
+    "description": "Auto-synced key"
+  },
+  "rrNodeWhileNeedConditionAndSubflowId": {
+    "message": "while: condition and subflowId are required",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingUrl": {
+    "message": "Missing URL",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingWaitCondition": {
+    "message": "Missing wait condition",
+    "description": "Auto-synced key"
+  },
+  "webEditorNoAgentProjectSelected": {
+    "message": "No Agent project selected. Open Side Panel -> AI Assistant and select/create a project first.",
+    "description": "Auto-synced key"
+  },
+  "agentProjectConfirmCreateMissingDir": {
+    "message": "Directory \"$ARG1$\" does not exist. Create it?",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "agentProjectConfirmSwitchExisting": {
+    "message": "A project already exists for \"$ARG1$\": $ARG2$. Switch to that project?",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "builderValidationMissingTargetSelectorCandidate": {
+    "message": "Missing target selector candidate",
+    "description": "Auto-synced key"
+  },
+  "builderValidationMissingInputValue": {
+    "message": "Missing input value",
+    "description": "Auto-synced key"
+  },
+  "builderValidationMissingWaitCondition": {
+    "message": "Missing wait condition",
+    "description": "Auto-synced key"
+  },
+  "builderValidationMissingAssertCondition": {
+    "message": "Missing assert condition",
+    "description": "Auto-synced key"
+  },
+  "builderValidationMissingUrl": {
+    "message": "Missing URL",
+    "description": "Auto-synced key"
+  },
+  "builderValidationHttpMissingUrl": {
+    "message": "HTTP: missing URL",
+    "description": "Auto-synced key"
+  },
+  "builderValidationAssignInvalidPath": {
+    "message": "Assign: invalid path $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderValidationExtractNeedSaveVar": {
+    "message": "Extract: save variable is required",
+    "description": "Auto-synced key"
+  },
+  "builderValidationExtractNeedSelectorOrJs": {
+    "message": "Extract: selector or js is required",
+    "description": "Auto-synced key"
+  },
+  "builderValidationSwitchTabNeedOne": {
+    "message": "SwitchTab: tabId or URL/title contains is required",
+    "description": "Auto-synced key"
+  },
+  "builderValidationNeedEventType": {
+    "message": "Event type is required",
+    "description": "Auto-synced key"
+  },
+  "builderValidationNeedAtLeastOneBranch": {
+    "message": "At least one condition branch is required",
+    "description": "Auto-synced key"
+  },
+  "builderValidationBranchNeedExpression": {
+    "message": "Branch $ARG1$: condition expression is required",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderValidationNeedAttributeName": {
+    "message": "Attribute name is required",
+    "description": "Auto-synced key"
+  },
+  "builderValidationNeedElementSelector": {
+    "message": "Element selector is required",
+    "description": "Auto-synced key"
+  },
+  "builderValidationNeedSubflowId": {
+    "message": "Subflow ID is required",
+    "description": "Auto-synced key"
+  },
+  "builderValidationNeedExecuteFlowId": {
+    "message": "Target workflow is required",
+    "description": "Auto-synced key"
+  },
+  "builderValidationScriptNeedCodeWhenAssign": {
+    "message": "Script: code is required when save/assign is configured",
+    "description": "Auto-synced key"
+  },
+  "builderToastCannotConnectSelf": {
+    "message": "Cannot connect node to itself",
+    "description": "Auto-synced key"
+  },
+  "builderToastMaxIncomingEdges": {
+    "message": "This node allows up to $ARG1$ incoming edge(s)",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderToastMaxOutgoingEdges": {
+    "message": "This node allows up to $ARG1$ outgoing edge(s)",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderToastElkFallbackUsed": {
+    "message": "ELK auto-layout unavailable; fallback layout applied",
+    "description": "Auto-synced key"
+  },
+  "builderIfCaseLabel": {
+    "message": "Condition $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderSummaryUnconfiguredSelector": {
+    "message": "Selector not configured",
+    "description": "Auto-synced key"
+  },
+  "builderSummaryIfElseBranchCount": {
+    "message": "if/else branches: $ARG1$$ARG2$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "agentChatComposerPlaceholder": {
+    "message": "Ask Tabrix to automate your browser...",
+    "description": "Auto-synced key"
+  },
+  "agentChatOpenProjectFailed": {
+    "message": "Failed to open project: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "sidepanelSessionRunning": {
+    "message": "Running",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionActionOpenProject": {
+    "message": "Open project",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionActionRename": {
+    "message": "Rename",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionActionDelete": {
+    "message": "Delete",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionDisplayNameFallback": {
+    "message": "Unnamed Session",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionTimeJustNow": {
+    "message": "just now",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionTimeMinutesAgo": {
+    "message": "$ARG1$m ago",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "sidepanelSessionTimeHoursAgo": {
+    "message": "$ARG1$h ago",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "sidepanelSessionTimeDaysAgo": {
+    "message": "$ARG1$d ago",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "sidepanelSessionThisSession": {
+    "message": "this session",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionDeleteConfirmByName": {
+    "message": "Delete \"$ARG1$\"?",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "sidepanelSessionMenuTitle": {
+    "message": "Sessions",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionMenuLoading": {
+    "message": "Loading sessions...",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionMenuEmpty": {
+    "message": "No sessions yet",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionMenuCreating": {
+    "message": "Creating...",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionMenuNew": {
+    "message": "+ New Session",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionDeleteConfirmGeneral": {
+    "message": "Delete this session? This cannot be undone.",
+    "description": "Auto-synced key"
+  },
+  "agentComposerDropImagesHere": {
+    "message": "Drop images here",
+    "description": "Auto-synced key"
+  },
+  "agentComposerRemoveImage": {
+    "message": "Remove image",
+    "description": "Auto-synced key"
+  },
+  "agentComposerExpandEditor": {
+    "message": "Expand editor",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipAttachImage": {
+    "message": "Attach image (drag, paste, or click)",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipSwitchModel": {
+    "message": "Switch model",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipReasoningEffort": {
+    "message": "Reasoning effort",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipResetConversation": {
+    "message": "Reset conversation",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipSessionSettings": {
+    "message": "Session settings",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStop": {
+    "message": "Stop",
+    "description": "Auto-synced key"
+  },
+  "agentComposerSend": {
+    "message": "Send",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStopRequest": {
+    "message": "Stop request",
+    "description": "Auto-synced key"
+  },
+  "agentComposerSendMessage": {
+    "message": "Send message",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipAttachImageShort": {
+    "message": "Attach image",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusSending": {
+    "message": "Sending...",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusStopping": {
+    "message": "Stopping...",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusStarting": {
+    "message": "Starting...",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusPreparing": {
+    "message": "Preparing...",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusWorking": {
+    "message": "Working...",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusReady": {
+    "message": "Ready",
+    "description": "Auto-synced key"
+  },
+  "agentComposerResetConfirm": {
+    "message": "Reset this conversation? All messages will be deleted and the session will start fresh.",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelTitle": {
+    "message": "Triggers",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelRefresh": {
+    "message": "Refresh",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelClose": {
+    "message": "Close",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelAddTrigger": {
+    "message": "Add Trigger",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelAddInterval": {
+    "message": "+ Interval",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelAddOnce": {
+    "message": "+ Once",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelHintOtherTypes": {
+    "message": "Other types (url/cron/command/contextMenu/dom) are configured via trigger nodes.",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelCurrentTriggers": {
+    "message": "Current Triggers ($ARG1$)",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelLoading": {
+    "message": "Loading...",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEmpty": {
+    "message": "No triggers configured",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEditViaNode": {
+    "message": "Edit via trigger node in Builder",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEnabled": {
+    "message": "Enabled",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelFire": {
+    "message": "Fire",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEdit": {
+    "message": "Edit",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelDelete": {
+    "message": "Delete",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelType": {
+    "message": "Type",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelKindInterval": {
+    "message": "interval",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelKindOnce": {
+    "message": "once",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelIntervalMinutes": {
+    "message": "Interval (minutes)",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelIntervalHint": {
+    "message": "Uses chrome.alarms.periodInMinutes for repeating triggers.",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelTriggerTime": {
+    "message": "Trigger Time",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelOnceHint": {
+    "message": "Will auto-disable after firing. Time is in local timezone.",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelCancel": {
+    "message": "Cancel",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelSave": {
+    "message": "Save",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEditorModeCreate": {
+    "message": "Create",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEditorModeEdit": {
+    "message": "Edit",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEditorTitle": {
+    "message": "$ARG1$ $ARG2$ Trigger",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "builderTriggerPanelOwnerTriggerNode": {
+    "message": "via trigger node",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelOwnerExternal": {
+    "message": "external",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelDescUrlRules": {
+    "message": "URL match rules: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescCronWithTimezone": {
+    "message": "cron: $ARG1$ ($ARG2$)",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "builderTriggerPanelDescCron": {
+    "message": "cron: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescInterval": {
+    "message": "Every $ARG1$ minute(s)",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescOnceAt": {
+    "message": "At $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescCommandKey": {
+    "message": "commandKey: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescTitle": {
+    "message": "title: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescSelector": {
+    "message": "selector: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescManual": {
+    "message": "Manual trigger (fire via button)",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelTriggered": {
+    "message": "Triggered: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelRunEnqueued": {
+    "message": "run enqueued",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelFlowIdEmpty": {
+    "message": "Flow ID is empty",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelInvalidTriggerTime": {
+    "message": "Invalid trigger time format",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelTriggerTimeInPast": {
+    "message": "Trigger time is in the past. It may fire immediately.",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelDeleteConfirm": {
+    "message": "Delete trigger?\\n\\n$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "webEditorPropsResetFailed": {
+    "message": "Props reset failed",
+    "description": "Auto-synced key"
+  },
+  "webEditorPropsChromeRuntimeUnavailable": {
+    "message": "Chrome runtime API not available",
+    "description": "Auto-synced key"
+  },
+  "webEditorPropsEarlyInjectionConfirm": {
+    "message": "Props editing requires early injection to capture React renderers before they initialize.\\n\\nThis will:\\n• Register a content script for this site\\n• Reload the page immediately\\n\\nAfter reload, enable the editor again to access full Props functionality.\\n\\nContinue?",
+    "description": "Auto-synced key"
+  },
+  "webEditorPropsEarlyInjectionRegisterFailed": {
+    "message": "Failed to register early injection",
+    "description": "Auto-synced key"
+  },
+  "agentChatFooterPreviewLabel": {
+    "message": "$ARG1$ Preview",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "Tabrix"
+      }
+    }
+  },
+  "agentComposerDrawerAriaLabel": {
+    "message": "Expanded editor",
+    "description": "Auto-synced key"
+  },
+  "agentComposerExpandedEditor": {
+    "message": "Expanded editor",
+    "description": "Auto-synced key"
+  },
+  "agentComposerPressModifierEnterToSend": {
+    "message": "Press $ARG1$+Enter to send",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "Ctrl"
+      }
+    }
+  },
+  "agentComposerCloseExpandedEditor": {
+    "message": "Close expanded editor",
     "description": "Auto-synced key"
   }
 }

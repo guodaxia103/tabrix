@@ -1,5 +1,6 @@
 import { TOOL_NAMES } from 'chrome-mcp-shared';
 import { handleCallTool } from '@/entrypoints/background/tools';
+import { getMessage } from '@/utils/i18n';
 import type { StepAssert } from '../types';
 import { expandTemplatesDeep } from '../rr-utils';
 import type { ExecCtx, ExecResult, NodeRuntime } from './types';
@@ -11,9 +12,9 @@ export const assertNode: NodeRuntime<StepAssert> = {
     if (ok && s.assert && 'attribute' in s.assert) {
       const a = s.assert.attribute || {};
       if (!a.selector || !a.name)
-        return { ok: false, errors: ['assert.attribute: 需提供 selector 与 name'] };
+        return { ok: false, errors: [getMessage('rrNodeAssertNeedSelectorAndName')] };
     }
-    return ok ? { ok } : { ok, errors: ['缺少断言条件'] };
+    return ok ? { ok } : { ok, errors: [getMessage('rrNodeMissingAssertCondition')] };
   },
   run: async (ctx: ExecCtx, step: StepAssert) => {
     const s = expandTemplatesDeep(step as StepAssert, ctx.vars) as any;

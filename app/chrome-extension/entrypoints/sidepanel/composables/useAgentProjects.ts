@@ -4,6 +4,7 @@
  */
 import { ref, computed, watch } from 'vue';
 import type { AgentProject, AgentStoredMessage } from 'chrome-mcp-shared';
+import { getMessage } from '@/utils/i18n';
 
 const STORAGE_KEY_SELECTED_PROJECT = 'agent-selected-project-id';
 
@@ -206,7 +207,7 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
       let allowCreate = false;
       if (validation.needsCreation) {
         const confirmed = confirm(
-          `目录 "${validation.absolute}" 不存在，是否创建？\n\nThe directory "${validation.absolute}" does not exist. Create it?`,
+          getMessage('agentProjectConfirmCreateMissingDir', [validation.absolute]),
         );
         if (!confirmed) {
           return null;
@@ -432,10 +433,10 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
       if (existingProject) {
         // Project already exists - select it instead of creating a new one
         const shouldSwitch = confirm(
-          `目录 "${validation.absolute}" 已存在对应的项目：${existingProject.name}\n\n` +
-            `是否切换到该项目？\n\n` +
-            `A project already exists for "${validation.absolute}": ${existingProject.name}\n` +
-            `Switch to that project?`,
+          getMessage('agentProjectConfirmSwitchExisting', [
+            validation.absolute,
+            existingProject.name,
+          ]),
         );
         if (shouldSwitch) {
           selectedProjectId.value = existingProject.id;
@@ -451,7 +452,7 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
       let allowCreate = false;
       if (validation.needsCreation) {
         const confirmed = confirm(
-          `目录 "${validation.absolute}" 不存在，是否创建？\n\nThe directory "${validation.absolute}" does not exist. Create it?`,
+          getMessage('agentProjectConfirmCreateMissingDir', [validation.absolute]),
         );
         if (!confirmed) {
           return null;

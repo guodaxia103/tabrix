@@ -1,3 +1,5 @@
+import { getMessage } from '@/utils/i18n';
+
 export type PopupNativeErrorCategory = 'forbidden' | 'host-missing' | 'auth' | 'unknown';
 
 export function classifyPopupNativeError(error: string): PopupNativeErrorCategory {
@@ -40,31 +42,31 @@ export function getPopupNativeErrorGuidance(error: string): string | null {
 
   if (category === 'forbidden') {
     return [
-      `最近一次连接错误: ${normalized}`,
-      '诊断结论：当前扩展 ID 不在生效的 Native Messaging manifest.allowed_origins 中，或注册表指向了旧清单。',
-      '建议：在终端执行 tabrix doctor --fix；若仍失败，执行 tabrix register --force，然后完全重启 Chrome 并在 chrome://extensions/ 重新加载扩展。',
+      getMessage('popupNativeGuidanceLastErrorPrefix', [normalized]),
+      getMessage('popupNativeGuidanceForbiddenDiagnosis'),
+      getMessage('popupNativeGuidanceForbiddenSuggestion'),
     ].join(' ');
   }
 
   if (category === 'host-missing') {
     return [
-      `最近一次连接错误: ${normalized}`,
-      '诊断结论：Native host 未注册、路径失效或宿主启动失败。',
-      '建议：执行 tabrix doctor --fix；必要时 tabrix register --force。',
+      getMessage('popupNativeGuidanceLastErrorPrefix', [normalized]),
+      getMessage('popupNativeGuidanceHostMissingDiagnosis'),
+      getMessage('popupNativeGuidanceHostMissingSuggestion'),
     ].join(' ');
   }
 
   if (category === 'auth') {
     return [
-      `最近一次连接错误: ${normalized}`,
-      '诊断结论：远程访问 Token 缺失、过期或不匹配。',
-      '建议：在扩展 Popup「远程」页刷新/复制 Token，并在客户端配置 Authorization 头。',
+      getMessage('popupNativeGuidanceLastErrorPrefix', [normalized]),
+      getMessage('popupNativeGuidanceAuthDiagnosis'),
+      getMessage('popupNativeGuidanceAuthSuggestion'),
     ].join(' ');
   }
 
   return [
-    `最近一次连接错误: ${normalized}`,
-    '建议：执行 tabrix doctor --fix 进行自动修复；仍失败时执行 tabrix register --force，然后完全重启 Chrome。',
+    getMessage('popupNativeGuidanceLastErrorPrefix', [normalized]),
+    getMessage('popupNativeGuidanceUnknownSuggestion'),
   ].join(' ');
 }
 

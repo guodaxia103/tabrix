@@ -20,8 +20,14 @@
     "format": "pnpm -r format",
     "clean:dist": "node ./scripts/clean-workspace.mjs dist",
     "clean:modules": "node ./scripts/clean-workspace.mjs modules",
-    "clean": "npm run clean:dist && npm run clean:modules",
+    "clean": "pnpm run clean:dist && pnpm run clean:modules",
     "typecheck": "pnpm -r --if-present typecheck",
+    "test:core": "pnpm -C app/native-server test && pnpm -C app/chrome-extension test",
+    "test:wasm": "pnpm -C packages/wasm-simd test",
+    "deps:outdated": "pnpm -r outdated",
+    "audit": "pnpm audit --prod --audit-level high",
+    "i18n:check": "node ./scripts/check-i18n.mjs",
+    "ci:check": "pnpm run i18n:check && pnpm run typecheck && pnpm run test:core && pnpm run audit",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -29,17 +35,23 @@
     "@commitlint/config-conventional": "^19.8.1",
     "@eslint/js": "^9.25.1",
     "@rolldown/binding-win32-x64-msvc": "1.0.0-rc.12",
-    "@typescript-eslint/eslint-plugin": "^8.32.0",
-    "@typescript-eslint/parser": "^8.32.0",
-    "eslint": "^9.26.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.1",
+    "@typescript-eslint/parser": "^8.58.1",
+    "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-vue": "^10.0.0",
     "globals": "^16.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.5.1",
-    "prettier": "^3.5.3",
+    "prettier": "^3.8.2",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.32.0",
+    "typescript-eslint": "^8.58.1",
     "vue-eslint-parser": "^10.1.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "hono": "4.12.12",
+      "@hono/node-server": "1.19.13"
+    }
   }
 }

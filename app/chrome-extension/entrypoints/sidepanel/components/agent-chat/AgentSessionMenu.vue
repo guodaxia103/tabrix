@@ -14,7 +14,7 @@
       class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider"
       :style="{ color: 'var(--ac-text-subtle, #a8a29e)' }"
     >
-      Sessions
+      {{ getMessage('sidepanelSessionMenuTitle') }}
     </div>
 
     <!-- Loading State -->
@@ -23,7 +23,7 @@
       class="px-3 py-4 text-center text-xs"
       :style="{ color: 'var(--ac-text-muted, #6e6e6e)' }"
     >
-      Loading sessions...
+      {{ getMessage('sidepanelSessionMenuLoading') }}
     </div>
 
     <!-- Empty State -->
@@ -32,7 +32,7 @@
       class="px-3 py-4 text-center text-xs"
       :style="{ color: 'var(--ac-text-muted, #6e6e6e)' }"
     >
-      No sessions yet
+      {{ getMessage('sidepanelSessionMenuEmpty') }}
     </div>
 
     <!-- Session List -->
@@ -109,7 +109,7 @@
                 color: 'var(--ac-text-muted, #6e6e6e)',
                 borderRadius: 'var(--ac-radius-button)',
               }"
-              title="Rename session"
+              :title="getMessage('sidepanelSessionActionRename')"
               @click.stop="startRename(session)"
             >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -128,7 +128,7 @@
                 color: 'var(--ac-danger, #dc2626)',
                 borderRadius: 'var(--ac-radius-button)',
               }"
-              title="Delete session"
+              :title="getMessage('sidepanelSessionActionDelete')"
               @click.stop="handleDeleteSession(session.id)"
             >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -168,7 +168,11 @@
       :disabled="isCreating"
       @click="handleNewSession"
     >
-      {{ isCreating ? 'Creating...' : '+ New Session' }}
+      {{
+        isCreating
+          ? getMessage('sidepanelSessionMenuCreating')
+          : getMessage('sidepanelSessionMenuNew')
+      }}
     </button>
 
     <!-- Error -->
@@ -181,6 +185,7 @@
 <script lang="ts" setup>
 import { ref, nextTick } from 'vue';
 import type { AgentSession } from 'chrome-mcp-shared';
+import { getMessage } from '@/utils/i18n';
 
 const props = defineProps<{
   open: boolean;
@@ -227,7 +232,7 @@ function getSessionDisplayName(session: AgentSession): string {
   if (session.name) {
     return session.name;
   }
-  return 'Unnamed Session';
+  return getMessage('sidepanelSessionDisplayNameFallback');
 }
 
 function formatDate(dateStr: string): string {
@@ -238,10 +243,10 @@ function formatDate(dateStr: string): string {
   const diffHours = Math.floor(diffMins / 60);
   const diffDays = Math.floor(diffHours / 24);
 
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffMins < 1) return getMessage('sidepanelSessionTimeJustNow');
+  if (diffMins < 60) return getMessage('sidepanelSessionTimeMinutesAgo', [String(diffMins)]);
+  if (diffHours < 24) return getMessage('sidepanelSessionTimeHoursAgo', [String(diffHours)]);
+  if (diffDays < 7) return getMessage('sidepanelSessionTimeDaysAgo', [String(diffDays)]);
   return date.toLocaleDateString();
 }
 
@@ -256,7 +261,7 @@ function handleNewSession(): void {
 }
 
 function handleDeleteSession(sessionId: string): void {
-  if (confirm('Delete this session? This cannot be undone.')) {
+  if (confirm(getMessage('sidepanelSessionDeleteConfirmGeneral'))) {
     emit('session:delete', sessionId);
   }
 }

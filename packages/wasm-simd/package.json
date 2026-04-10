@@ -28,7 +28,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-repo/chrome-mcp-server.git",
+    "url": "git+https://github.com/guodaxia103/tabrix.git",
     "directory": "packages/wasm-simd"
   }
 }

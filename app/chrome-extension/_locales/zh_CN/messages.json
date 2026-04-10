@@ -2348,5 +2348,753 @@
   "builderNodeTypeWhile": {
     "message": "循环",
     "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceLastErrorPrefix": {
+    "message": "最近一次连接错误: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "popupNativeGuidanceForbiddenDiagnosis": {
+    "message": "诊断结论：当前扩展 ID 不在生效的 Native Messaging manifest.allowed_origins 中，或注册表指向了旧清单。",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceForbiddenSuggestion": {
+    "message": "建议：在终端执行 tabrix doctor --fix；若仍失败，执行 tabrix register --force，然后完全重启 Chrome 并在 chrome://extensions/ 重新加载扩展。",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceHostMissingDiagnosis": {
+    "message": "诊断结论：Native host 未注册、路径失效或宿主启动失败。",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceHostMissingSuggestion": {
+    "message": "建议：执行 tabrix doctor --fix；必要时 tabrix register --force。",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceAuthDiagnosis": {
+    "message": "诊断结论：远程访问 Token 缺失、过期或不匹配。",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceAuthSuggestion": {
+    "message": "建议：在扩展 Popup「远程」页刷新/复制 Token，并在客户端配置 Authorization 头。",
+    "description": "Auto-synced key"
+  },
+  "popupNativeGuidanceUnknownSuggestion": {
+    "message": "建议：执行 tabrix doctor --fix 进行自动修复；仍失败时执行 tabrix register --force，然后完全重启 Chrome。",
+    "description": "Auto-synced key"
+  },
+  "rrNodeAssertNeedSelectorAndName": {
+    "message": "assert.attribute: 需提供 selector 与 name",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingAssertCondition": {
+    "message": "缺少断言条件",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingTargetSelectorCandidate": {
+    "message": "缺少目标选择器候选",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingConditionOrBranch": {
+    "message": "缺少条件或分支",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingTargetOrEventType": {
+    "message": "缺少目标选择器或事件类型",
+    "description": "Auto-synced key"
+  },
+  "rrNodeNeedTargetAndAttributeName": {
+    "message": "需提供目标选择器与属性名",
+    "description": "Auto-synced key"
+  },
+  "rrNodeNeedSelectorAndSubflowId": {
+    "message": "需提供 selector 与 subflowId",
+    "description": "Auto-synced key"
+  },
+  "rrNodeNeedFlowId": {
+    "message": "需提供 flowId",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingTargetOrInputValue": {
+    "message": "缺少目标选择器候选或输入值",
+    "description": "Auto-synced key"
+  },
+  "rrNodeForeachNeedListVarAndSubflowId": {
+    "message": "foreach: 需提供 listVar 与 subflowId",
+    "description": "Auto-synced key"
+  },
+  "rrNodeWhileNeedConditionAndSubflowId": {
+    "message": "while: 需提供 condition 与 subflowId",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingUrl": {
+    "message": "缺少 URL",
+    "description": "Auto-synced key"
+  },
+  "rrNodeMissingWaitCondition": {
+    "message": "缺少等待条件",
+    "description": "Auto-synced key"
+  },
+  "webEditorNoAgentProjectSelected": {
+    "message": "未选择 Agent 项目。请先在侧边栏 -> 智能助手 中选择或创建项目。",
+    "description": "Auto-synced key"
+  },
+  "agentProjectConfirmCreateMissingDir": {
+    "message": "目录 \"$ARG1$\" 不存在，是否创建？",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "agentProjectConfirmSwitchExisting": {
+    "message": "目录 \"$ARG1$\" 已存在对应的项目：$ARG2$。是否切换到该项目？",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "builderValidationMissingTargetSelectorCandidate": {
+    "message": "缺少目标选择器候选",
+    "description": "Auto-synced key"
+  },
+  "builderValidationMissingInputValue": {
+    "message": "缺少输入值",
+    "description": "Auto-synced key"
+  },
+  "builderValidationMissingWaitCondition": {
+    "message": "缺少等待条件",
+    "description": "Auto-synced key"
+  },
+  "builderValidationMissingAssertCondition": {
+    "message": "缺少断言条件",
+    "description": "Auto-synced key"
+  },
+  "builderValidationMissingUrl": {
+    "message": "缺少 URL",
+    "description": "Auto-synced key"
+  },
+  "builderValidationHttpMissingUrl": {
+    "message": "HTTP: 缺少 URL",
+    "description": "Auto-synced key"
+  },
+  "builderValidationAssignInvalidPath": {
+    "message": "Assign: 路径非法 $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderValidationExtractNeedSaveVar": {
+    "message": "Extract: 需填写保存变量名",
+    "description": "Auto-synced key"
+  },
+  "builderValidationExtractNeedSelectorOrJs": {
+    "message": "Extract: 需提供 selector 或 js",
+    "description": "Auto-synced key"
+  },
+  "builderValidationSwitchTabNeedOne": {
+    "message": "SwitchTab: 需提供 tabId 或 URL/标题包含",
+    "description": "Auto-synced key"
+  },
+  "builderValidationNeedEventType": {
+    "message": "需提供事件类型",
+    "description": "Auto-synced key"
+  },
+  "builderValidationNeedAtLeastOneBranch": {
+    "message": "需添加至少一个条件分支",
+    "description": "Auto-synced key"
+  },
+  "builderValidationBranchNeedExpression": {
+    "message": "分支$ARG1$: 需填写条件表达式",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderValidationNeedAttributeName": {
+    "message": "需提供属性名",
+    "description": "Auto-synced key"
+  },
+  "builderValidationNeedElementSelector": {
+    "message": "需提供元素选择器",
+    "description": "Auto-synced key"
+  },
+  "builderValidationNeedSubflowId": {
+    "message": "需提供子流 ID",
+    "description": "Auto-synced key"
+  },
+  "builderValidationNeedExecuteFlowId": {
+    "message": "需选择要执行的工作流",
+    "description": "Auto-synced key"
+  },
+  "builderValidationScriptNeedCodeWhenAssign": {
+    "message": "Script: 配置了保存/映射但缺少代码",
+    "description": "Auto-synced key"
+  },
+  "builderToastCannotConnectSelf": {
+    "message": "不能连接到自身",
+    "description": "Auto-synced key"
+  },
+  "builderToastMaxIncomingEdges": {
+    "message": "该节点最多允许 $ARG1$ 条入边",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderToastMaxOutgoingEdges": {
+    "message": "该节点最多允许 $ARG1$ 条出边",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderToastElkFallbackUsed": {
+    "message": "ELK 自动布局不可用，已使用备用布局",
+    "description": "Auto-synced key"
+  },
+  "builderIfCaseLabel": {
+    "message": "条件$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderSummaryUnconfiguredSelector": {
+    "message": "未配置选择器",
+    "description": "Auto-synced key"
+  },
+  "builderSummaryIfElseBranchCount": {
+    "message": "if/else 分支数 $ARG1$$ARG2$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "agentChatComposerPlaceholder": {
+    "message": "让 Tabrix 帮你自动化浏览器...",
+    "description": "Auto-synced key"
+  },
+  "agentChatOpenProjectFailed": {
+    "message": "打开项目失败：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "sidepanelSessionRunning": {
+    "message": "运行中",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionActionOpenProject": {
+    "message": "打开项目",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionActionRename": {
+    "message": "重命名",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionActionDelete": {
+    "message": "删除",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionDisplayNameFallback": {
+    "message": "未命名会话",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionTimeJustNow": {
+    "message": "刚刚",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionTimeMinutesAgo": {
+    "message": "$ARG1$分钟前",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "sidepanelSessionTimeHoursAgo": {
+    "message": "$ARG1$小时前",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "sidepanelSessionTimeDaysAgo": {
+    "message": "$ARG1$天前",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "sidepanelSessionThisSession": {
+    "message": "该会话",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionDeleteConfirmByName": {
+    "message": "删除“$ARG1$”？",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "sidepanelSessionMenuTitle": {
+    "message": "会话",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionMenuLoading": {
+    "message": "正在加载会话...",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionMenuEmpty": {
+    "message": "暂无会话",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionMenuCreating": {
+    "message": "创建中...",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionMenuNew": {
+    "message": "+ 新建会话",
+    "description": "Auto-synced key"
+  },
+  "sidepanelSessionDeleteConfirmGeneral": {
+    "message": "删除该会话？此操作不可恢复。",
+    "description": "Auto-synced key"
+  },
+  "agentComposerDropImagesHere": {
+    "message": "将图片拖拽到这里",
+    "description": "Auto-synced key"
+  },
+  "agentComposerRemoveImage": {
+    "message": "移除图片",
+    "description": "Auto-synced key"
+  },
+  "agentComposerExpandEditor": {
+    "message": "展开编辑器",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipAttachImage": {
+    "message": "添加图片（支持拖拽、粘贴或点击）",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipSwitchModel": {
+    "message": "切换模型",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipReasoningEffort": {
+    "message": "推理强度",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipResetConversation": {
+    "message": "重置会话",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipSessionSettings": {
+    "message": "会话设置",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStop": {
+    "message": "停止",
+    "description": "Auto-synced key"
+  },
+  "agentComposerSend": {
+    "message": "发送",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStopRequest": {
+    "message": "停止请求",
+    "description": "Auto-synced key"
+  },
+  "agentComposerSendMessage": {
+    "message": "发送消息",
+    "description": "Auto-synced key"
+  },
+  "agentComposerTooltipAttachImageShort": {
+    "message": "添加图片",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusSending": {
+    "message": "发送中...",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusStopping": {
+    "message": "停止中...",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusStarting": {
+    "message": "启动中...",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusPreparing": {
+    "message": "准备中...",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusWorking": {
+    "message": "处理中...",
+    "description": "Auto-synced key"
+  },
+  "agentComposerStatusReady": {
+    "message": "就绪",
+    "description": "Auto-synced key"
+  },
+  "agentComposerResetConfirm": {
+    "message": "重置当前会话？所有消息将被删除并重新开始。",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelTitle": {
+    "message": "触发器",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelRefresh": {
+    "message": "刷新",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelClose": {
+    "message": "关闭",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelAddTrigger": {
+    "message": "添加触发器",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelAddInterval": {
+    "message": "+ 间隔",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelAddOnce": {
+    "message": "+ 单次",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelHintOtherTypes": {
+    "message": "其他类型（url/cron/command/contextMenu/dom）请在触发器节点中配置。",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelCurrentTriggers": {
+    "message": "当前触发器（$ARG1$）",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelLoading": {
+    "message": "加载中...",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEmpty": {
+    "message": "尚未配置触发器",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEditViaNode": {
+    "message": "请在 Builder 的触发器节点中编辑",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEnabled": {
+    "message": "启用",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelFire": {
+    "message": "触发",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEdit": {
+    "message": "编辑",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelDelete": {
+    "message": "删除",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelType": {
+    "message": "类型",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelKindInterval": {
+    "message": "间隔",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelKindOnce": {
+    "message": "单次",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelIntervalMinutes": {
+    "message": "间隔（分钟）",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelIntervalHint": {
+    "message": "重复触发使用 chrome.alarms.periodInMinutes。",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelTriggerTime": {
+    "message": "触发时间",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelOnceHint": {
+    "message": "触发后会自动禁用。时间按本地时区处理。",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelCancel": {
+    "message": "取消",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelSave": {
+    "message": "保存",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEditorModeCreate": {
+    "message": "创建",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEditorModeEdit": {
+    "message": "编辑",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelEditorTitle": {
+    "message": "$ARG1$$ARG2$触发器",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "builderTriggerPanelOwnerTriggerNode": {
+    "message": "由触发器节点管理",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelOwnerExternal": {
+    "message": "外部触发器",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelDescUrlRules": {
+    "message": "URL 匹配规则：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescCronWithTimezone": {
+    "message": "cron：$ARG1$（$ARG2$）",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "builderTriggerPanelDescCron": {
+    "message": "cron：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescInterval": {
+    "message": "每 $ARG1$ 分钟触发一次",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescOnceAt": {
+    "message": "触发时间：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescCommandKey": {
+    "message": "命令键：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescTitle": {
+    "message": "标题：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescSelector": {
+    "message": "选择器：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelDescManual": {
+    "message": "手动触发（通过按钮触发）",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelTriggered": {
+    "message": "已触发：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderTriggerPanelRunEnqueued": {
+    "message": "运行已入队",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelFlowIdEmpty": {
+    "message": "Flow ID 为空",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelInvalidTriggerTime": {
+    "message": "触发时间格式无效",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelTriggerTimeInPast": {
+    "message": "触发时间早于当前时间，可能会立即触发。",
+    "description": "Auto-synced key"
+  },
+  "builderTriggerPanelDeleteConfirm": {
+    "message": "确认删除触发器？\\n\\n$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "webEditorPropsResetFailed": {
+    "message": "重置 Props 失败",
+    "description": "Auto-synced key"
+  },
+  "webEditorPropsChromeRuntimeUnavailable": {
+    "message": "Chrome runtime API 不可用",
+    "description": "Auto-synced key"
+  },
+  "webEditorPropsEarlyInjectionConfirm": {
+    "message": "Props 编辑需要提前注入，以便在 React 渲染器初始化前完成挂载。\\n\\n这将会：\\n• 为当前站点注册内容脚本\\n• 立即刷新页面\\n\\n刷新后，请重新开启编辑器以使用完整 Props 功能。\\n\\n是否继续？",
+    "description": "Auto-synced key"
+  },
+  "webEditorPropsEarlyInjectionRegisterFailed": {
+    "message": "注册提前注入失败",
+    "description": "Auto-synced key"
+  },
+  "agentChatFooterPreviewLabel": {
+    "message": "$ARG1$ 预览",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "Tabrix"
+      }
+    }
+  },
+  "agentComposerDrawerAriaLabel": {
+    "message": "展开编辑器",
+    "description": "Auto-synced key"
+  },
+  "agentComposerExpandedEditor": {
+    "message": "展开编辑器",
+    "description": "Auto-synced key"
+  },
+  "agentComposerPressModifierEnterToSend": {
+    "message": "按 $ARG1$+Enter 发送",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "Ctrl"
+      }
+    }
+  },
+  "agentComposerCloseExpandedEditor": {
+    "message": "关闭展开编辑器",
+    "description": "Auto-synced key"
   }
 }

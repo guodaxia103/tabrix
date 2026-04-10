@@ -23,7 +23,7 @@
       <AgentChatShell
         :error-message="chat.errorMessage.value"
         :usage="chat.lastUsage.value"
-        :footer-label="`${engineDisplayName} Preview`"
+        :footer-label="getMessage('agentChatFooterPreviewLabel', [engineDisplayName])"
         @error:dismiss="chat.errorMessage.value = null"
       >
         <!-- Header -->
@@ -64,7 +64,7 @@
             :cancelling="chat.cancelling.value"
             :can-cancel="!!chat.currentRequestId.value"
             :can-send="chat.canSend.value"
-            placeholder="Ask Claude to write code..."
+            :placeholder="getMessage('agentChatComposerPlaceholder')"
             :engine-name="currentEngineName"
             :selected-model="currentSessionModel"
             :available-models="currentAvailableModels"
@@ -213,6 +213,7 @@ import {
   getDefaultModelForCli,
 } from '@/common/agent-models';
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
+import { getMessage } from '@/utils/i18n';
 
 // Local UI state
 const selectedCli = ref('');
@@ -583,7 +584,7 @@ async function handleSessionOpenProject(sessionId: string): Promise<void> {
     // User has default preference, open directly
     const result = await openProjectPreference.openBySession(sessionId, defaultTarget);
     if (!result.success) {
-      alert(`Failed to open project: ${result.error}`);
+      alert(getMessage('agentChatOpenProjectFailed', [result.error ?? 'unknown']));
     }
   } else {
     // No default, show menu
@@ -621,7 +622,7 @@ async function handleOpenProjectSelect(target: OpenProjectTarget): Promise<void>
   }
 
   if (!result.success) {
-    alert(`Failed to open project: ${result.error}`);
+    alert(getMessage('agentChatOpenProjectFailed', [result.error ?? 'unknown']));
   }
 }
 

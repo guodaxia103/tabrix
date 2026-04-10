@@ -1,5 +1,6 @@
 import { TOOL_NAMES } from 'chrome-mcp-shared';
 import { handleCallTool } from '@/entrypoints/background/tools';
+import { getMessage } from '@/utils/i18n';
 import type { StepFill } from '../types';
 import { locateElement } from '../selector-engine';
 import { expandTemplatesDeep } from '../rr-utils';
@@ -8,7 +9,7 @@ import type { ExecCtx, ExecResult, NodeRuntime } from './types';
 export const fillNode: NodeRuntime<StepFill> = {
   validate: (step) => {
     const ok = !!(step as any).target?.candidates?.length && 'value' in (step as any);
-    return ok ? { ok } : { ok, errors: ['缺少目标选择器候选或输入值'] };
+    return ok ? { ok } : { ok, errors: [getMessage('rrNodeMissingTargetOrInputValue')] };
   },
   run: async (ctx: ExecCtx, step: StepFill) => {
     const s: any = step;

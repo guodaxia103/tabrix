@@ -1,5 +1,6 @@
 import type { NodeBase } from '@/entrypoints/background/record-replay/types';
 import { STEP_TYPES } from 'chrome-mcp-shared';
+import { getMessage } from '@/utils/i18n';
 
 export function validateNode(n: NodeBase): string[] {
   const errs: string[] = [];
@@ -10,29 +11,30 @@ export function validateNode(n: NodeBase): string[] {
     case STEP_TYPES.DBLCLICK:
     case 'fill': {
       const hasCandidate = !!c?.target?.candidates?.length;
-      if (!hasCandidate) errs.push('缺少目标选择器候选');
-      if (n.type === 'fill' && (!('value' in c) || c.value === undefined)) errs.push('缺少输入值');
+      if (!hasCandidate) errs.push(getMessage('builderValidationMissingTargetSelectorCandidate'));
+      if (n.type === 'fill' && (!('value' in c) || c.value === undefined))
+        errs.push(getMessage('builderValidationMissingInputValue'));
       break;
     }
     case STEP_TYPES.WAIT: {
-      if (!c?.condition) errs.push('缺少等待条件');
+      if (!c?.condition) errs.push(getMessage('builderValidationMissingWaitCondition'));
       break;
     }
     case STEP_TYPES.ASSERT: {
-      if (!c?.assert) errs.push('缺少断言条件');
+      if (!c?.assert) errs.push(getMessage('builderValidationMissingAssertCondition'));
       break;
     }
     case STEP_TYPES.NAVIGATE: {
-      if (!c?.url) errs.push('缺少 URL');
+      if (!c?.url) errs.push(getMessage('builderValidationMissingUrl'));
       break;
     }
     case STEP_TYPES.HTTP: {
-      if (!c?.url) errs.push('HTTP: 缺少 URL');
+      if (!c?.url) errs.push(getMessage('builderValidationHttpMissingUrl'));
       if (c?.assign && typeof c.assign === 'object') {
         const pathRe = /^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+|\[\d+\])*$/;
         for (const v of Object.values(c.assign)) {
           const s = String(v);
-          if (!pathRe.test(s)) errs.push(`Assign: 路径非法 ${s}`);
+          if (!pathRe.test(s)) errs.push(getMessage('builderValidationAssignInvalidPath', [s]));
         }
       }
       break;
@@ -42,13 +44,13 @@ export function validateNode(n: NodeBase): string[] {
       break;
     }
     case STEP_TYPES.EXTRACT: {
-      if (!c?.saveAs) errs.push('Extract: 需填写保存变量名');
-      if (!c?.selector && !c?.js) errs.push('Extract: 需提供 selector 或 js');
+      if (!c?.saveAs) errs.push(getMessage('builderValidationExtractNeedSaveVar'));
+      if (!c?.selector && !c?.js) errs.push(getMessage('builderValidationExtractNeedSelectorOrJs'));
       break;
     }
     case STEP_TYPES.SWITCH_TAB: {
       if (!c?.tabId && !c?.urlContains && !c?.titleContains)
-        errs.push('SwitchTab: 需提供 tabId 或 URL/标题包含');
+        errs.push(getMessage('builderValidationSwitchTabNeedOne'));
       break;
     }
     case STEP_TYPES.SCREENSHOT: {
@@ -57,27 +59,31 @@ export function validateNode(n: NodeBase): string[] {
     }
     case STEP_TYPES.TRIGGER_EVENT: {
       const hasCandidate = !!c?.target?.candidates?.length;
-      if (!hasCandidate) errs.push('缺少目标选择器候选');
-      if (!String(c?.event || '').trim()) errs.push('需提供事件类型');
+      if (!hasCandidate) errs.push(getMessage('builderValidationMissingTargetSelectorCandidate'));
+      if (!String(c?.event || '').trim()) errs.push(getMessage('builderValidationNeedEventType'));
       break;
     }
     case STEP_TYPES.IF: {
       const arr = Array.isArray(c?.branches) ? c.branches : [];
-      if (arr.length === 0) errs.push('需添加至少一个条件分支');
+      if (arr.length === 0) errs.push(getMessage('builderValidationNeedAtLeastOneBranch'));
       for (let i = 0; i < arr.length; i++) {
-        if (!String(arr[i]?.expr || '').trim()) errs.push(`分支${i + 1}: 需填写条件表达式`);
+        if (!String(arr[i]?.expr || '').trim())
+          errs.push(getMessage('builderValidationBranchNeedExpression', [String(i + 1)]));
       }
       break;
     }
     case STEP_TYPES.SET_ATTRIBUTE: {
       const hasCandidate = !!c?.target?.candidates?.length;
-      if (!hasCandidate) errs.push('缺少目标选择器候选');
-      if (!String(c?.name || '').trim()) errs.push('需提供属性名');
+      if (!hasCandidate) errs.push(getMessage('builderValidationMissingTargetSelectorCandidate'));
+      if (!String(c?.name || '').trim())
+        errs.push(getMessage('builderValidationNeedAttributeName'));
       break;
     }
     case STEP_TYPES.LOOP_ELEMENTS: {
-      if (!String(c?.selector || '').trim()) errs.push('需提供元素选择器');
-      if (!String(c?.subflowId || '').trim()) errs.push('需提供子流 ID');
+      if (!String(c?.selector || '').trim())
+        errs.push(getMessage('builderValidationNeedElementSelector'));
+      if (!String(c?.subflowId || '').trim())
+        errs.push(getMessage('builderValidationNeedSubflowId'));
       break;
     }
     case STEP_TYPES.SWITCH_FRAME: {
@@ -85,7 +91,8 @@ export function validateNode(n: NodeBase): string[] {
       break;
     }
     case STEP_TYPES.EXECUTE_FLOW: {
-      if (!String(c?.flowId || '').trim()) errs.push('需选择要执行的工作流');
+      if (!String(c?.flowId || '').trim())
+        errs.push(getMessage('builderValidationNeedExecuteFlowId'));
       break;
     }
     case STEP_TYPES.CLOSE_TAB: {
@@ -96,12 +103,12 @@ export function validateNode(n: NodeBase): string[] {
       // 若配置了 saveAs/assign，应提供 code
       const hasAssign = c?.assign && Object.keys(c.assign).length > 0;
       if ((c?.saveAs || hasAssign) && !String(c?.code || '').trim())
-        errs.push('Script: 配置了保存/映射但缺少代码');
+        errs.push(getMessage('builderValidationScriptNeedCodeWhenAssign'));
       if (hasAssign) {
         const pathRe = /^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+|\[\d+\])*$/;
         for (const v of Object.values(c.assign || {})) {
           const s = String(v);
-          if (!pathRe.test(s)) errs.push(`Assign: 路径非法 ${s}`);
+          if (!pathRe.test(s)) errs.push(getMessage('builderValidationAssignInvalidPath', [s]));
         }
       }
       break;

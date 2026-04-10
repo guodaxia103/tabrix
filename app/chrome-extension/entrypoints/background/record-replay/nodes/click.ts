@@ -1,5 +1,6 @@
 import { TOOL_NAMES } from 'chrome-mcp-shared';
 import { handleCallTool } from '@/entrypoints/background/tools';
+import { getMessage } from '@/utils/i18n';
 import type { Step } from '../types';
 import { locateElement } from '../selector-engine';
 import { expandTemplatesDeep } from '../rr-utils';
@@ -8,7 +9,7 @@ import type { ExecCtx, ExecResult, NodeRuntime } from './types';
 export const clickNode: NodeRuntime<any> = {
   validate: (step) => {
     const ok = !!(step as any).target?.candidates?.length;
-    return ok ? { ok } : { ok, errors: ['缺少目标选择器候选'] };
+    return ok ? { ok } : { ok, errors: [getMessage('rrNodeMissingTargetSelectorCandidate')] };
   },
   run: async (ctx: ExecCtx, step: Step) => {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });

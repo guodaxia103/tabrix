@@ -1,12 +1,13 @@
 import type { Step } from '../types';
 import type { ExecCtx, ExecResult, NodeRuntime } from './types';
+import { getMessage } from '@/utils/i18n';
 
 export const ifNode: NodeRuntime<any> = {
   validate: (step) => {
     const s = step as any;
     const hasBranches = Array.isArray(s.branches) && s.branches.length > 0;
     const ok = hasBranches || !!s.condition;
-    return ok ? { ok } : { ok, errors: ['缺少条件或分支'] };
+    return ok ? { ok } : { ok, errors: [getMessage('rrNodeMissingConditionOrBranch')] };
   },
   run: async (ctx: ExecCtx, step: Step) => {
     const s: any = step;

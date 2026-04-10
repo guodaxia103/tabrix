@@ -1,12 +1,13 @@
 import type { ExecCtx, ExecResult, NodeRuntime } from './types';
 import { ENGINE_CONSTANTS } from '../engine/constants';
+import { getMessage } from '@/utils/i18n';
 
 export const foreachNode: NodeRuntime<any> = {
   validate: (step) => {
     const s = step as any;
     const ok =
       typeof s.listVar === 'string' && s.listVar && typeof s.subflowId === 'string' && s.subflowId;
-    return ok ? { ok } : { ok, errors: ['foreach: 需提供 listVar 与 subflowId'] };
+    return ok ? { ok } : { ok, errors: [getMessage('rrNodeForeachNeedListVarAndSubflowId')] };
   },
   run: async (_ctx: ExecCtx, step) => {
     const s: any = step;
@@ -30,7 +31,7 @@ export const whileNode: NodeRuntime<any> = {
   validate: (step) => {
     const s = step as any;
     const ok = !!s.condition && typeof s.subflowId === 'string' && s.subflowId;
-    return ok ? { ok } : { ok, errors: ['while: 需提供 condition 与 subflowId'] };
+    return ok ? { ok } : { ok, errors: [getMessage('rrNodeWhileNeedConditionAndSubflowId')] };
   },
   run: async (_ctx: ExecCtx, step) => {
     const s: any = step;

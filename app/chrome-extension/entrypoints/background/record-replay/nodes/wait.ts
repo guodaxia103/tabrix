@@ -2,11 +2,12 @@ import type { StepWait } from '../types';
 import { waitForNetworkIdle, waitForNavigation } from '../rr-utils';
 import { expandTemplatesDeep } from '../rr-utils';
 import type { ExecCtx, ExecResult, NodeRuntime } from './types';
+import { getMessage } from '@/utils/i18n';
 
 export const waitNode: NodeRuntime<StepWait> = {
   validate: (step) => {
     const ok = !!(step as any).condition;
-    return ok ? { ok } : { ok, errors: ['缺少等待条件'] };
+    return ok ? { ok } : { ok, errors: [getMessage('rrNodeMissingWaitCondition')] };
   },
   run: async (ctx: ExecCtx, step: StepWait) => {
     const s = expandTemplatesDeep(step as StepWait, ctx.vars);
