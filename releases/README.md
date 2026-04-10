@@ -6,6 +6,11 @@
 
 请前往 [GitHub Releases](https://github.com/guodaxia103/tabrix/releases) 下载最新扩展资产（文件名形如 `tabrix-extension-vX.Y.Z.zip`）。
 
+说明：
+
+- 以 GitHub Releases 中的版本化资产为准（`tabrix-extension-vX.Y.Z.zip`）。
+- 仓库内 `releases/chrome-extension/latest/` 仅作为本地临时目录，不作为发布来源。
+
 ### 2. 安装步骤
 
 1. 解压下载的 zip 文件
