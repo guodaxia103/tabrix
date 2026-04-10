@@ -134,9 +134,36 @@ jobs:
         continue-on-error: true
         if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true')
         working-directory: app/native-server
+        shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --provenance
+        run: |
+          set +e
+
+          echo "Checking npm auth identity..."
+          npm whoami
+          AUTH_CODE=$?
+          if [ "${AUTH_CODE}" -ne 0 ]; then
+            echo "publish_code=${AUTH_CODE}" >> "$GITHUB_OUTPUT"
+            echo "::error::npm authentication failed. Please verify NPM_TOKEN."
+            exit "${AUTH_CODE}"
+          fi
+
+          echo "Publishing with provenance..."
+          npm publish --access public --provenance
+          PUBLISH_CODE=$?
+
+          if [ "${PUBLISH_CODE}" -ne 0 ]; then
+            echo "Provenance publish failed with code ${PUBLISH_CODE}. Retrying without provenance..."
+            npm publish --access public
+            PUBLISH_CODE=$?
+          fi
+
+          echo "publish_code=${PUBLISH_CODE}" >> "$GITHUB_OUTPUT"
+          if [ "${PUBLISH_CODE}" -ne 0 ]; then
+            echo "::error::npm publish failed with code ${PUBLISH_CODE}."
+            exit "${PUBLISH_CODE}"
+          fi
 
       - name: Skip npm publish in manual mode
         if: steps.npm_status.outputs.already_published == 'false' && github.event_name == 'workflow_dispatch' && github.event.inputs.publish_npm != 'true'
@@ -154,7 +181,7 @@ jobs:
           fail_on_unmatched_files: true
 
       - name: Mark workflow failed when npm publish expected but failed
-        if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true') && steps.npm_publish.outcome != 'success'
+        if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true') && steps.npm_publish.outputs.publish_code != '0'
         run: |
-          echo "::error::npm publish failed. Please verify NPM_TOKEN permissions and npm package ownership."
+          echo "::error::npm publish failed. Please verify NPM_TOKEN, npm package ownership, and provenance compatibility."
           exit 1
