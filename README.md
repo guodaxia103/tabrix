@@ -69,7 +69,7 @@ tabrix smoke
 }
 ```
 
-Client-specific configs (Claude Desktop, Cursor, Cline, Cherry Studio, Dify, etc.):
+Configs for popular AI assistants and MCP clients ([OpenClaw](https://github.com/openclaw/openclaw), [CoPaw](https://github.com/guodaxia103/copaw), Claude Desktop, Cursor, Cline, Cherry Studio, Dify, etc.):
 [Client Config Quick Reference](docs/CLIENT_CONFIG_QUICKREF.md)
 
 ## Core Capabilities

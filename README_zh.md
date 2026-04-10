@@ -69,7 +69,7 @@ tabrix smoke
 }
 ```
 
-各客户端配置（Claude Desktop、Cursor、Cline、Cherry Studio、Dify 等）见：
+主流 AI 助手与 MCP 客户端配置（[OpenClaw](https://github.com/openclaw/openclaw)、[CoPaw](https://github.com/guodaxia103/copaw)、Claude Desktop、Cursor、Cline、Cherry Studio、Dify 等）见：
 [客户端配置速查](docs/CLIENT_CONFIG_QUICKREF.md)
 
 ## 核心能力
