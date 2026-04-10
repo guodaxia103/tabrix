@@ -40,8 +40,36 @@ function hasWindowsAdminRights(): boolean {
 }
 
 program
+  .name('tabrix')
   .version(require('../package.json').version)
-  .description('Mcp Chrome Bridge - Local service for communicating with Chrome extension');
+  .usage('<command> [options]')
+  .showSuggestionAfterError()
+  .showHelpAfterError('\nRun `tabrix --help` to view all commands.')
+  .description('Tabrix CLI - local MCP bridge service for the Tabrix Chrome extension');
+
+program.addHelpText(
+  'after',
+  `
+Quick Start
+  tabrix setup
+  tabrix status
+  tabrix doctor
+  tabrix smoke
+
+Common Workflows
+  First install
+    tabrix setup
+
+  Diagnose and auto-fix
+    tabrix doctor --fix
+    tabrix report --copy
+
+  Daemon mode
+    tabrix daemon start
+    tabrix daemon status
+    tabrix daemon stop
+`,
+);
 
 // Guided first-time setup (register + next steps)
 program

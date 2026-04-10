@@ -1,6 +1,6 @@
 # 贡献指南 🤝
 
-感谢您对 Chrome MCP Server 项目的贡献兴趣！本文档为贡献者提供指南和信息。
+感谢您对 Tabrix 项目的贡献兴趣！本文档为贡献者提供指南和信息。
 
 ## 🎯 如何贡献
 
@@ -28,8 +28,8 @@
 1. **Fork 并克隆仓库**
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/chrome-mcp-server.git
-cd chrome-mcp-server
+git clone https://github.com/YOUR_USERNAME/tabrix.git
+cd tabrix
 ```
 
 2. **安装依赖**
@@ -52,7 +52,7 @@ npm run dev
 ## 🏗️ 项目结构
 
 ```
-chrome-mcp-server/
+tabrix/
 ├── app/
 │   ├── chrome-extension/     # Chrome 扩展 (WXT + Vue 3)
 │   │   ├── entrypoints/      # 后台脚本、弹窗、内容脚本
@@ -217,7 +217,7 @@ pnpm build
 
 ## 📄 许可证
 
-通过为 Chrome MCP Server 做贡献，您同意您的贡献将在 MIT 许可证下获得许可。
+通过为 Tabrix 做贡献，您同意您的贡献将在 MIT 许可证下获得许可。
 
 ## 🎯 贡献者指南
 
@@ -260,4 +260,4 @@ pnpm build
 - **贡献者徽章**：GitHub 个人资料上的贡献者徽章
 - **社区认可**：在社区讨论中的特别感谢
 
-感谢您考虑为 Chrome MCP Server 做贡献！您的参与使这个项目变得更好。
+感谢您考虑为 Tabrix 做贡献！您的参与使这个项目变得更好。

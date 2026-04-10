@@ -69,7 +69,7 @@ AI 客户端 ↔ stdin/stdout ↔ tabrix-stdio ↔ HTTP 127.0.0.1:12306/mcp
 Windows 需管理员权限：
 
 ```powershell
-netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow protocol=tcp localport=12306
+netsh advfirewall firewall add rule name="Tabrix MCP Bridge" dir=in action=allow protocol=tcp localport=12306
 ```
 
 ### 确认监听状态
@@ -85,7 +85,7 @@ netstat -ano | findstr :12306
 
 ### Token 认证
 
-监听 `0.0.0.0` 时，服务端会**自动生成 Token** 并持久化到 `~/.tabrix/auth-token.json`（默认 7 天过期，通过 `MCP_AUTH_TOKEN_TTL` 环境变量可配天数，`0` = 永不过期）。
+监听 `0.0.0.0` 时，远程请求必须携带 Bearer Token。Token 默认有效期 7 天，可通过 `MCP_AUTH_TOKEN_TTL` 环境变量调整（`0` = 永不过期）；也可在扩展 Popup「Token 管理」中重新生成时自定义有效天数。
 
 也可以通过 `MCP_AUTH_TOKEN` 环境变量手动指定 Token（此时自动生成不生效，Token 永不过期）。
 
@@ -107,7 +107,7 @@ Token 管理端点（仅本机可用）：
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "url": "http://<浏览器所在机器的局域网IP>:12306/mcp",
       "headers": {
         "Authorization": "Bearer <从 Popup 复制的 Token>"

@@ -72,6 +72,42 @@ tabrix smoke
 Configs for popular AI assistants and MCP clients ([OpenClaw](https://github.com/openclaw/openclaw), [CoPaw](https://github.com/guodaxia103/copaw), Claude Desktop, Cursor, Cline, Cherry Studio, Dify, etc.):
 [Client Config Quick Reference](docs/CLIENT_CONFIG_QUICKREF.md)
 
+## 🌐 Remote Control
+
+Typical remote MCP config:
+
+```json
+{
+  "mcpServers": {
+    "tabrix": {
+      "url": "http://<LAN_IP>:12306/mcp",
+      "headers": {
+        "Authorization": "Bearer <YOUR_TABRIX_TOKEN>"
+      }
+    }
+  }
+}
+```
+
+Turn on `Remote Access` in extension popup and expose:
+
+- `http://<LAN_IP>:12306/mcp`
+
+### Enable In 30 Seconds
+
+1. Open extension popup -> switch to `Remote` -> enable `Remote Access`
+2. Open `Token 管理` and copy current token (or click refresh)
+3. Paste LAN config to your MCP client and start remote automation
+
+### Security Default
+
+- Remote mode must use bearer-token authentication
+- Extension `Token 管理` page supports view/copy/refresh
+- Token validity is configurable:
+  - Set custom days in `Token 管理` -> `Refresh Token`
+  - Or set `MCP_AUTH_TOKEN_TTL` (`0` means never expire)
+- If `MCP_AUTH_TOKEN` env is set, env token always has priority
+
 ## Core Capabilities
 
 - Browser navigation and tab/window control
@@ -80,6 +116,34 @@ Configs for popular AI assistants and MCP clients ([OpenClaw](https://github.com
 - Network capture and request replay helpers
 - Screenshot, GIF recording, performance trace analysis
 - Bookmarks/history operations and JavaScript execution
+
+### CLI Commands
+
+Installed executables:
+
+```bash
+tabrix
+tabrix-stdio
+```
+
+Main `tabrix` subcommands (copy-ready):
+
+```bash
+tabrix setup
+tabrix register
+tabrix fix-permissions
+tabrix update-port <port>
+tabrix status
+tabrix doctor --fix
+tabrix smoke
+tabrix stdio-smoke
+tabrix report --copy
+tabrix daemon start
+tabrix daemon status
+tabrix daemon stop
+```
+
+Full command reference: [CLI.md](docs/CLI.md)
 
 Full tool list: [TOOLS API (EN)](docs/TOOLS.md) | [工具 API (中文)](docs/TOOLS_zh.md)
 
@@ -134,6 +198,7 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 
 ### For Users
 
+- [CLI Commands](docs/CLI.md)
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md)
 - [Transport Modes (HTTP / SSE / stdio)](docs/TRANSPORT.md)
 - [Popup Troubleshooting](docs/POPUP_TROUBLESHOOTING.md)

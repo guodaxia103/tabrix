@@ -68,11 +68,22 @@
       </div>
 
       <div v-else class="section muted">
-        <p
-          >暂无 Token 数据。请确认服务已启动且监听 <code>0.0.0.0</code> 或已设置
-          <code>MCP_AUTH_TOKEN</code>。</p
+        <p>{{ emptyStateText }}</p>
+        <button
+          type="button"
+          class="secondary-button"
+          :disabled="creatingDefaultToken"
+          @click="fetchToken"
+          >重试</button
         >
-        <button type="button" class="secondary-button" @click="fetchToken">重试</button>
+        <button
+          v-if="isRemoteEnabled"
+          type="button"
+          class="secondary-button"
+          :disabled="creatingDefaultToken"
+          @click="generateDefaultToken"
+          >{{ creatingDefaultToken ? '生成中…' : '生成默认 Token' }}</button
+        >
       </div>
 
       <div class="section">
@@ -160,12 +171,22 @@ const emit = defineEmits<{
 const tokenInfo = ref<TokenInfo | null>(null);
 const tokenVisible = ref(false);
 const refreshing = ref(false);
+const creatingDefaultToken = ref(false);
 /** 重新生成时使用的有效天数（与上方输入同步） */
 const refreshTtlDays = ref(7);
 const loadError = ref('');
 const showRefreshConfirm = ref(false);
 const tick = ref(0);
+const hasAttemptedAutoCreate = ref(false);
 let tickTimer: ReturnType<typeof setInterval> | null = null;
+const isRemoteEnabled = computed(() => Boolean(props.lanIp));
+
+const emptyStateText = computed(() => {
+  if (isRemoteEnabled.value) {
+    return '未检测到可用 Token。可点击下方「生成默认 Token」（默认 7 天有效期）后再复制远程配置。';
+  }
+  return '当前为本机访问模式，远程 Token 为可选项。开启远程访问后可在此生成 Token。';
+});
 
 function maskedToken(token: string): string {
   if (token.length <= 8) return token;
@@ -216,7 +237,7 @@ const remoteConfigJson = computed(() => {
   if (tok) {
     chromeMcp.headers = { Authorization: `Bearer ${tok}` };
   }
-  return JSON.stringify({ mcpServers: { 'chrome-mcp': chromeMcp } }, null, 2);
+  return JSON.stringify({ mcpServers: { tabrix: chromeMcp } }, null, 2);
 });
 
 async function copyText(text: string): Promise<void> {
@@ -224,6 +245,32 @@ async function copyText(text: string): Promise<void> {
     await navigator.clipboard.writeText(text);
   } catch {
     /* ignore */
+  }
+}
+
+async function requestNewToken(ttlDays?: number, silent = false): Promise<TokenInfo | null> {
+  try {
+    const payload = ttlDays === undefined ? {} : { ttlDays };
+    const res = await fetch(`${props.baseUrl}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      if (!silent) {
+        const errJson = await res.json().catch(() => null);
+        const msg = errJson?.message || errJson?.status || res.status;
+        loadError.value = `刷新失败：${msg}`;
+      }
+      return null;
+    }
+    const json = await res.json();
+    return json?.data ?? null;
+  } catch {
+    if (!silent) {
+      loadError.value = '刷新请求失败';
+    }
+    return null;
   }
 }
 
@@ -238,6 +285,18 @@ async function fetchToken(): Promise<void> {
     }
     const json = await res.json();
     tokenInfo.value = json?.data ?? null;
+    if (tokenInfo.value) {
+      hasAttemptedAutoCreate.value = false;
+      return;
+    }
+    if (isRemoteEnabled.value && !hasAttemptedAutoCreate.value) {
+      hasAttemptedAutoCreate.value = true;
+      const created = await requestNewToken(undefined, true);
+      if (created) {
+        tokenInfo.value = created;
+        emit('token-changed');
+      }
+    }
   } catch {
     loadError.value = '无法连接本地服务，请确认已连接 Native 且服务运行中。';
     tokenInfo.value = null;
@@ -248,28 +307,30 @@ async function onConfirmRefresh(): Promise<void> {
   refreshing.value = true;
   const ttlDays = refreshTtlDaysClamped.value;
   try {
-    const res = await fetch(`${props.baseUrl}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ttlDays }),
-    });
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => null);
-      const msg = errJson?.message || errJson?.status || res.status;
-      loadError.value = `刷新失败：${msg}`;
-      return;
-    }
-    const json = await res.json();
-    tokenInfo.value = json?.data ?? null;
+    const data = await requestNewToken(ttlDays);
+    if (!data) return;
+    tokenInfo.value = data;
     if (tokenInfo.value?.ttlDays != null) {
       refreshTtlDays.value = tokenInfo.value.ttlDays;
     }
     emit('token-changed');
     showRefreshConfirm.value = false;
-  } catch {
-    loadError.value = '刷新请求失败';
   } finally {
     refreshing.value = false;
+  }
+}
+
+async function generateDefaultToken(): Promise<void> {
+  creatingDefaultToken.value = true;
+  loadError.value = '';
+  try {
+    const data = await requestNewToken();
+    if (!data) return;
+    tokenInfo.value = data;
+    hasAttemptedAutoCreate.value = false;
+    emit('token-changed');
+  } finally {
+    creatingDefaultToken.value = false;
   }
 }
 
@@ -287,6 +348,14 @@ onUnmounted(() => {
 watch(
   () => props.baseUrl,
   () => {
+    void fetchToken();
+  },
+);
+
+watch(
+  () => props.lanIp,
+  () => {
+    hasAttemptedAutoCreate.value = false;
     void fetchToken();
   },
 );

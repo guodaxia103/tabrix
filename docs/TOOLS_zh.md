@@ -1,4 +1,4 @@
-# Chrome MCP Server API 参考 📚
+# Tabrix API 参考 📚
 
 所有可用工具及其参数的完整参考（与 `packages/shared/src/tools.ts` 中的 `TOOL_SCHEMAS` 一致）。
 

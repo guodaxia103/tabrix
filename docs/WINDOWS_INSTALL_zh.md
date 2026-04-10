@@ -1,6 +1,6 @@
-# windows 安装指南 🔧
+# Windows 安装指南 🔧
 
-Chrome MCP Server 在windows电脑的详细安装和配置步骤
+Tabrix 在 Windows 电脑上的详细安装和配置步骤
 
 ## 📋 安装
 
@@ -36,7 +36,7 @@ npm install -g @tabrix/tabrix@latest
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "type": "streamable-http",
       "url": "http://127.0.0.1:12306/mcp"
     }

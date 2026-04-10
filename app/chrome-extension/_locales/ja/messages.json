@@ -1,9 +1,9 @@
 {
   "extensionName": {
-    "message": "Chrome MCPサーバー"
+    "message": "Tabrix"
   },
   "extensionDescription": {
-    "message": "自身のChromeブラウザの機能を外部に公開します"
+    "message": "自分のChromeブラウザをMCPサービスとして公開します"
   },
   "nativeServerConfigLabel": {
     "message": "ネイティブサーバー設定"

@@ -199,7 +199,7 @@ robocopy .\app\chrome-extension\.output\chrome-mv3 C:\stable-ext /MIR
 **修复**（以管理员身份运行 PowerShell）：
 
 ```powershell
-netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow protocol=tcp localport=12306
+netsh advfirewall firewall add rule name="Tabrix MCP Bridge" dir=in action=allow protocol=tcp localport=12306
 ```
 
 验证：
@@ -225,7 +225,7 @@ netstat -ano | findstr :12306
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "url": "http://<局域网IP>:12306/mcp",
       "headers": {
         "Authorization": "Bearer <从 Popup 复制的 Token>"

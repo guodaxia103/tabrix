@@ -1,10 +1,10 @@
 {
   "extensionName": {
-    "message": "chrome-mcp-server",
+    "message": "Tabrix",
     "description": "Erweiterungsname"
   },
   "extensionDescription": {
-    "message": "Stellt Browser-Funktionen mit Ihrem eigenen Chrome zur Verfügung",
+    "message": "Stellt Ihren eigenen Chrome-Browser als MCP-Dienst bereit",
     "description": "Erweiterungsbeschreibung"
   },
   "nativeServerConfigLabel": {

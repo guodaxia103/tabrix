@@ -119,6 +119,58 @@ describe('服务器测试', () => {
     expect(typeof response.body.data.execution.lastSessionId).toBe('string');
   });
 
+  describe('Token 管理接口（本机）', () => {
+    beforeAll(() => {
+      delete process.env.MCP_AUTH_TOKEN;
+      delete process.env.MCP_AUTH_TOKEN_TTL;
+      setTokenData(null);
+    });
+
+    afterAll(() => {
+      setTokenData(null);
+      delete process.env.MCP_AUTH_TOKEN;
+      delete process.env.MCP_AUTH_TOKEN_TTL;
+    });
+
+    test('POST /auth/refresh 支持自定义 ttlDays=1', async () => {
+      const now = Date.now();
+      const res = await supertest(Server.getInstance().server)
+        .post('/auth/refresh')
+        .send({ ttlDays: 1 })
+        .expect(200)
+        .expect('Content-Type', /json/);
+
+      expect(res.body.status).toBe('ok');
+      expect(res.body.data.ttlDays).toBe(1);
+      expect(typeof res.body.data.token).toBe('string');
+      expect(res.body.data.token.length).toBeGreaterThan(10);
+      expect(typeof res.body.data.expiresAt).toBe('number');
+      expect(res.body.data.expiresAt).toBeGreaterThan(now + 23 * 60 * 60 * 1000);
+      expect(res.body.data.expiresAt).toBeLessThan(now + 25 * 60 * 60 * 1000);
+    });
+
+    test('POST /auth/refresh 支持 ttlDays=0（永不过期）', async () => {
+      const res = await supertest(Server.getInstance().server)
+        .post('/auth/refresh')
+        .send({ ttlDays: 0 })
+        .expect(200);
+
+      expect(res.body.status).toBe('ok');
+      expect(res.body.data.ttlDays).toBe(0);
+      expect(res.body.data.expiresAt).toBeNull();
+    });
+
+    test('POST /auth/refresh 非法 ttlDays 返回 400', async () => {
+      const res = await supertest(Server.getInstance().server)
+        .post('/auth/refresh')
+        .send({ ttlDays: -1 })
+        .expect(400);
+
+      expect(res.body.status).toBe('error');
+      expect(res.body.message).toContain('ttlDays');
+    });
+  });
+
   test('POST /mcp initialize 可以连续创建多个独立会话', async () => {
     const initializeRequest = {
       jsonrpc: '2.0',

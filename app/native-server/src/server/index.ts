@@ -245,7 +245,13 @@ export class Server {
           message: 'Forbidden – auth management is only available from localhost.',
         });
       }
-      const info = tokenManager.info();
+      let info = tokenManager.info();
+      const host = SERVER_CONFIG.HOST;
+      const isWildcard = host === '0.0.0.0' || host === '::';
+      if (!info && isWildcard) {
+        tokenManager.resolve();
+        info = tokenManager.info();
+      }
       if (!info) {
         return reply.status(HTTP_STATUS.OK).send({ status: 'ok', data: null });
       }

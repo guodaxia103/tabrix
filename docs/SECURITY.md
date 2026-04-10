@@ -1,6 +1,6 @@
 # Security Considerations
 
-> Chrome MCP Server gives AI assistants access to your **real, logged-in browser**. This is the core value proposition — and also the primary risk surface.
+> Tabrix gives AI assistants access to your **real, logged-in browser**. This is the core value proposition — and also the primary risk surface.
 
 ## Indirect Prompt Injection
 

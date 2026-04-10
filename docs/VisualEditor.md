@@ -1,7 +1,7 @@
 # A Visual Editor for Claude Code & Codex
 
 **How to enable:**
-`Right Click > Chrome MCP Server > Toggle Web Editing Mode`
+`Right Click > Tabrix > Toggle Web Editing Mode`
 **Shortcut:** `Cmd/Ctrl` + `Shift` + `O`
 
 ### Interactive Sizing & Layout Adjustment

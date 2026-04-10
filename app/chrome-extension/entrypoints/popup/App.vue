@@ -4,7 +4,7 @@
     <div v-show="currentView === 'home'" class="home-view">
       <div class="header">
         <div class="header-content">
-          <h1 class="header-title">Chrome MCP Server</h1>
+          <h1 class="header-title">Tabrix</h1>
         </div>
       </div>
       <div class="content">
@@ -131,13 +131,7 @@
                   </label>
                 </div>
                 <div class="remote-toggle-desc">
-                  {{
-                    connectionState !== ConnectionState.RUNNING
-                      ? '需先连接并启动服务后才能切换远程访问。'
-                      : remoteAccessEnabled
-                        ? '当前监听 0.0.0.0，允许局域网设备访问。'
-                        : '当前仅本机访问（127.0.0.1）。开启后可在局域网中访问。'
-                  }}
+                  {{ remoteAccessSummary }}
                 </div>
                 <div v-if="remoteToggleCopiedText" class="remote-toggle-copied">
                   {{ remoteToggleCopiedText }}
@@ -429,7 +423,7 @@
             Fix
           </button>
         </div>
-        <p class="footer-text">chrome mcp server for ai</p>
+        <p class="footer-text">tabrix mcp browser service</p>
       </div>
     </div>
 
@@ -898,6 +892,18 @@ const isWildcardHost = computed(() => {
   return host === '0.0.0.0' || host === '::';
 });
 const remoteAccessEnabled = computed(() => isWildcardHost.value);
+const remoteAccessSummary = computed(() => {
+  if (connectionState.value !== ConnectionState.RUNNING) {
+    return '需先连接并启动服务后才能切换远程访问。';
+  }
+  if (!remoteAccessEnabled.value) {
+    return '当前仅本机访问（127.0.0.1）。开启远程访问后，局域网设备即可接入 Tabrix。';
+  }
+  if (authEnabled.value || tokenInfo.value) {
+    return '远程访问已开启（0.0.0.0），局域网设备可通过 Token 安全接入。';
+  }
+  return '远程访问已开启，正在自动创建默认 Token。';
+});
 
 const lanIpAddress = computed(() => {
   return isWildcardHost.value ? serverStatus.value.networkAddresses?.[0] || null : null;
@@ -908,7 +914,7 @@ const authEnabled = computed(() => serverStatus.value.authEnabled === true);
 const remoteSecurityWarning = computed(() => {
   if (activeConfigTab.value !== 'remote') return '';
   if (isWildcardHost.value && !authEnabled.value && !tokenInfo.value) {
-    return '远程访问已开启但未设置 Token，局域网内任何设备可无认证控制浏览器。';
+    return '远程模式必须携带 Bearer Token。正在自动创建默认 Token，你也可以在「Token 管理」手动生成并复制配置。';
   }
   return '';
 });
@@ -923,15 +929,57 @@ interface TokenInfo {
 
 const tokenInfo = ref<TokenInfo | null>(null);
 
-async function fetchTokenInfo(): Promise<void> {
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function createDefaultRemoteToken(): Promise<boolean> {
+  try {
+    const res = await fetch(`${getServerBaseUrl()}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) return false;
+    const json = await res.json();
+    tokenInfo.value = json?.data ?? null;
+    if (!tokenInfo.value) return false;
+    await refreshServerStatus();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function fetchTokenInfo(options: { autoCreateWhenMissing?: boolean } = {}): Promise<void> {
+  const { autoCreateWhenMissing = false } = options;
   try {
     const res = await fetch(`${getServerBaseUrl()}/auth/token`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      tokenInfo.value = null;
+      return;
+    }
     const json = await res.json();
     tokenInfo.value = json?.data ?? null;
   } catch {
     tokenInfo.value = null;
   }
+
+  if (autoCreateWhenMissing && remoteAccessEnabled.value && !tokenInfo.value) {
+    await createDefaultRemoteToken();
+  }
+}
+
+async function ensureRemoteTokenReady(maxAttempts = 6): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i += 1) {
+    await fetchTokenInfo({ autoCreateWhenMissing: true });
+    if (tokenInfo.value) {
+      return true;
+    }
+    await refreshServerStatus();
+    await waitMs(250);
+  }
+  return Boolean(tokenInfo.value);
 }
 
 const configTabs: Array<{ id: ConfigTabId; label: string }> = [
@@ -941,7 +989,7 @@ const configTabs: Array<{ id: ConfigTabId; label: string }> = [
 ];
 
 watch(activeConfigTab, (tab) => {
-  if (tab === 'remote') fetchTokenInfo();
+  if (tab === 'remote') fetchTokenInfo({ autoCreateWhenMissing: true });
 });
 
 const activeConfigTabHint = computed(() => {
@@ -966,7 +1014,7 @@ const activeConfigJson = computed(() => {
       return JSON.stringify(
         {
           mcpServers: {
-            'chrome-mcp': {
+            tabrix: {
               url: `http://127.0.0.1:${port}/mcp`,
             },
           },
@@ -978,7 +1026,7 @@ const activeConfigJson = computed(() => {
       return JSON.stringify(
         {
           mcpServers: {
-            'chrome-mcp': {
+            tabrix: {
               command: 'tabrix-stdio',
             },
           },
@@ -990,14 +1038,14 @@ const activeConfigJson = computed(() => {
       const remoteHost = lanIp || '<局域网IP>';
       const config: any = {
         mcpServers: {
-          'chrome-mcp': {
+          tabrix: {
             url: `http://${remoteHost}:${port}/mcp`,
           },
         },
       };
       const tok = tokenInfo.value?.token;
       if (tok) {
-        config.mcpServers['chrome-mcp'].headers = {
+        config.mcpServers.tabrix.headers = {
           Authorization: `Bearer ${tok}`,
         };
       }
@@ -1183,13 +1231,13 @@ const statusDetailText = computed(() => {
     daemonReachable.value &&
     serverStatus.value.isRunning
   ) {
-    return '检测到本机守护进程正在运行，但扩展尚未连接。若需浏览器自动化工具，请打开 Chrome 并点击 Connect 建立扩展通道。';
+    return '本机服务运行中，但浏览器通道未连接。点击 Connect 即可启用自动化。';
   }
   if (state === ConnectionState.CONNECTED) {
-    return 'Native host 已连接，但本地 MCP 服务尚未就绪。可先点「刷新」；仍失败时在终端执行 tabrix doctor，核对端口与防火墙，并在 chrome://extensions/ 重新加载本扩展。';
+    return 'Native host 已连接，但本地 MCP 服务尚未就绪。先点「刷新」；若仍失败执行 tabrix doctor 并重新加载扩展。';
   }
   if (state === ConnectionState.DISCONNECTED) {
-    return '点击连接后如果仍无法启动，请确认扩展已重新加载，且本地 native host manifest 已重新注册。若希望无浏览器时保持服务在线，可执行 tabrix daemon start。';
+    return '点击 Connect 后仍失败时，执行 tabrix doctor --fix 和 tabrix register --force，再完全重启 Chrome。';
   }
   return '';
 });
@@ -1742,6 +1790,7 @@ const remoteToggling = ref(false);
 const toggleRemoteAccess = async () => {
   if (remoteToggling.value) return;
   const enable = !remoteAccessEnabled.value;
+  const hadTokenBefore = Boolean(tokenInfo.value);
   remoteToggling.value = true;
   remoteToggleCopiedText.value = enable ? '正在开启远程访问…' : '正在关闭远程访问…';
 
@@ -1758,11 +1807,21 @@ const toggleRemoteAccess = async () => {
       return;
     }
 
-    await new Promise((r) => setTimeout(r, 800));
+    await waitMs(800);
     await refreshServerStatus();
-    if (enable) await fetchTokenInfo();
+    if (enable) {
+      await ensureRemoteTokenReady();
+    } else {
+      tokenInfo.value = null;
+    }
 
-    remoteToggleCopiedText.value = enable ? '✅ 远程访问已开启' : '✅ 已恢复仅本机访问';
+    if (!enable) {
+      remoteToggleCopiedText.value = '✅ 已恢复仅本机访问';
+    } else if (!hadTokenBefore && tokenInfo.value) {
+      remoteToggleCopiedText.value = '✅ 远程访问已开启，已生成默认 Token';
+    } else {
+      remoteToggleCopiedText.value = '✅ 远程访问已开启';
+    }
     setTimeout(() => {
       remoteToggleCopiedText.value = '';
     }, 2500);

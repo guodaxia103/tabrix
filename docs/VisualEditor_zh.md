@@ -1,6 +1,6 @@
 ## 让Claude Code/Codex也能使用的可视化编辑器
 
-如何开启：`右键 > chrome mcp server > 切换网页编辑模式`
+如何开启：`右键 > Tabrix > 切换网页编辑模式`
 或者快捷键： `cmd/ctrl + shift + o`
 
 ### 交互式尺寸与排版调整

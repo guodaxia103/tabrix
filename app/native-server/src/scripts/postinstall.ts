@@ -6,6 +6,7 @@ import path from 'path';
 import { execSync } from 'child_process';
 import { COMMAND_NAME } from './constant';
 import { colorText, tryRegisterUserLevelHost, writeNodePathFile } from './utils';
+import { tokenManager } from '../server/auth';
 
 // Check if this script is run directly
 const isDirectRun = require.main === module;
@@ -240,6 +241,39 @@ async function tryRegisterNativeHost(): Promise<void> {
 }
 
 /**
+ * Ensure a usable default auth token exists after global install.
+ * Priority is unchanged: MCP_AUTH_TOKEN env var always wins.
+ */
+function ensureDefaultAuthToken(): void {
+  if (process.env.MCP_AUTH_TOKEN) {
+    if (verboseInstallDebug) {
+      console.log(colorText('MCP_AUTH_TOKEN detected; skip local token generation', 'blue'));
+    }
+    return;
+  }
+
+  const tokenFilePath = path.join(os.homedir(), '.tabrix', 'auth-token.json');
+  const hadTokenFile = fs.existsSync(tokenFilePath);
+
+  try {
+    const data = tokenManager.resolve();
+    if (!hadTokenFile) {
+      const ttlText = data.expiresAt === null ? 'never expires' : `${data.ttlDays ?? 7} days`;
+      console.log(colorText(`✓ Prepared default auth token (TTL: ${ttlText})`, 'green'));
+    } else if (verboseInstallDebug) {
+      console.log(colorText('Existing auth token file found; keeping current token', 'blue'));
+    }
+  } catch (error) {
+    console.warn(
+      colorText(
+        `⚠️ Unable to prepare default auth token: ${error instanceof Error ? error.message : String(error)}`,
+        'yellow',
+      ),
+    );
+  }
+}
+
+/**
  * 打印手动安装指南
  */
 function printManualInstructions(): void {
@@ -314,6 +348,10 @@ async function main(): Promise<void> {
 
   // Write Node.js path for run_host scripts to use
   writeNodePathFile(path.join(__dirname, '..'));
+
+  if (isGlobalInstall) {
+    ensureDefaultAuthToken();
+  }
 
   // If global installation, try automatic registration
   if (isGlobalInstall) {

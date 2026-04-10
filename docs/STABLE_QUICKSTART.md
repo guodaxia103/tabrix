@@ -11,7 +11,7 @@ npm install -g @tabrix/tabrix@latest
 If you are developing from source, build and register from the repo:
 
 ```powershell
-cd D:\projects\ai\codex\mcp-chrome
+cd <path-to-tabrix-repo>
 pnpm install
 pnpm --filter ./app/native-server build
 node app\native-server\dist\cli.js register
@@ -28,13 +28,13 @@ node app\native-server\dist\cli.js register
 For source builds, the unpacked extension output is:
 
 ```powershell
-D:\projects\ai\codex\mcp-chrome\app\chrome-extension\.output\chrome-mv3
+<path-to-tabrix-repo>\app\chrome-extension\.output\chrome-mv3
 ```
 
 The extension build now ensures a local `CHROME_EXTENSION_KEY` in:
 
 ```powershell
-D:\projects\ai\codex\mcp-chrome\app\chrome-extension\.env
+<path-to-tabrix-repo>\app\chrome-extension\.env
 ```
 
 That key keeps the unpacked extension ID stable across rebuilds on the same machine.
@@ -79,7 +79,7 @@ For Streamable HTTP clients:
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "type": "streamableHttp",
       "url": "http://127.0.0.1:12306/mcp"
     }
@@ -128,12 +128,12 @@ To allow other machines or Docker containers to connect via LAN:
 
 1. Open the extension popup → **Remote** tab → toggle the **remote access switch** to ON. The server immediately restarts on `0.0.0.0` — no browser restart needed. The preference is saved to `~/.tabrix/config.json` and survives reconnects / browser restarts.
 
-2. A Token is **auto-generated** on first remote enable and saved to `~/.tabrix/auth-token.json`. The popup will show the full MCP config (including `Authorization` header) once remote is enabled.
+2. Open popup -> **Token 管理** and confirm/copy your current token. You can set custom validity days when refreshing the token (`0` means never expire). The popup shows full MCP config including `Authorization` header.
 
 3. Allow the port through your firewall (Windows example):
 
 ```powershell
-netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow protocol=tcp localport=12306
+netsh advfirewall firewall add rule name="Tabrix MCP Bridge" dir=in action=allow protocol=tcp localport=12306
 ```
 
 4. The popup auto-detects your LAN IP. Copy the displayed config to the remote machine:
@@ -141,7 +141,7 @@ netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "url": "http://<your-lan-ip>:12306/mcp",
       "headers": {
         "Authorization": "Bearer <token-from-popup>"
@@ -153,7 +153,7 @@ netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow
 
 5. Check the popup's "Connected clients" list to verify the remote connection
 
-> **Advanced**: You can also set `MCP_HTTP_HOST=0.0.0.0` as an OS environment variable to override the config file (useful for daemon mode). Token auto-expires in 7 days (configure via `MCP_AUTH_TOKEN_TTL`). Localhost requests bypass token auth.
+> **Advanced**: You can also set `MCP_HTTP_HOST=0.0.0.0` as an OS environment variable to override the config file (useful for daemon mode). Default token TTL is 7 days (configure via `MCP_AUTH_TOKEN_TTL` or set in popup refresh dialog). Localhost requests bypass token auth.
 
 ## 7. Troubleshooting order
 
@@ -194,13 +194,13 @@ If `doctor` shows Chrome is loading a different unpacked directory than the one 
 Recommended stable unpacked directory:
 
 ```powershell
-D:\projects\ai\chrome-mcp-server-1.0.0
+<stable-extension-dir>
 ```
 
 Recommended sync command:
 
 ```powershell
-robocopy D:\projects\ai\codex\mcp-chrome\app\chrome-extension\.output\chrome-mv3 D:\projects\ai\chrome-mcp-server-1.0.0 /MIR
+robocopy <path-to-tabrix-repo>\app\chrome-extension\.output\chrome-mv3 <stable-extension-dir> /MIR
 ```
 
 After syncing:
@@ -217,7 +217,7 @@ Look for:
 If Chrome forgets the unpacked extension after restart, remove stale old entries in `chrome://extensions/`, then load the same stable directory again:
 
 ```powershell
-D:\projects\ai\chrome-mcp-server-1.0.0
+<stable-extension-dir>
 ```
 
 Do not keep switching between multiple unpacked build folders.
@@ -229,4 +229,4 @@ Do not keep switching between multiple unpacked build folders.
 
 For the current Phase 0 validation checklist, see:
 
-- [Phase 0 Test Matrix](D:/projects/ai/codex/mcp-chrome/docs/PHASE0_TEST_MATRIX.md)
+- [Phase 0 Test Matrix](PHASE0_TEST_MATRIX.md)

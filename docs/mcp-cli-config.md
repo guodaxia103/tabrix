@@ -1,10 +1,10 @@
 # CLI MCP Configuration Guide
 
-This guide explains how to configure Codex CLI and Claude Code to connect to the Chrome MCP Server.
+This guide explains how to configure Codex CLI and Claude Code to connect to Tabrix.
 
 ## Overview
 
-The Chrome MCP Server exposes its MCP interface at `http://127.0.0.1:12306/mcp` (default port).
+Tabrix exposes its MCP interface at `http://127.0.0.1:12306/mcp` (default port).
 Both Codex CLI and Claude Code can connect to this endpoint to use Chrome browser control tools.
 
 ## Codex CLI Configuration
@@ -16,7 +16,7 @@ Add the following to your `~/.codex/config.json`:
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "url": "http://127.0.0.1:12306/mcp"
     }
   }
@@ -40,7 +40,7 @@ Add the following to your `~/.claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "url": "http://127.0.0.1:12306/mcp"
     }
   }
@@ -54,9 +54,9 @@ If you prefer stdio-based MCP communication:
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "command": "node",
-      "args": ["/path/to/mcp-chrome/dist/mcp/mcp-server-stdio.js"]
+      "args": ["/path/to/tabrix/dist/mcp/mcp-server-stdio.js"]
     }
   }
 }
@@ -64,7 +64,7 @@ If you prefer stdio-based MCP communication:
 
 ## Verifying Connection
 
-After configuration, the CLI tools should be able to see and use Chrome MCP tools such as:
+After configuration, the CLI tools should be able to see and use Tabrix tools such as:
 
 - `chrome_get_windows_and_tabs` - Get browser window and tab information
 - `chrome_navigate` - Navigate to a URL

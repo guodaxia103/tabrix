@@ -23,7 +23,7 @@
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "type": "streamableHttp",
       "url": "http://127.0.0.1:12306/mcp"
     }
@@ -38,7 +38,7 @@
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "url": "http://127.0.0.1:12306/mcp"
     }
   }
@@ -48,7 +48,7 @@
 ### Claude Code (CLI)
 
 ```bash
-claude mcp add chrome-mcp --transport http http://127.0.0.1:12306/mcp
+claude mcp add tabrix --transport http http://127.0.0.1:12306/mcp
 ```
 
 或手动编辑 `~/.claude.json`：
@@ -56,7 +56,7 @@ claude mcp add chrome-mcp --transport http http://127.0.0.1:12306/mcp
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "url": "http://127.0.0.1:12306/mcp"
     }
   }
@@ -70,7 +70,7 @@ claude mcp add chrome-mcp --transport http http://127.0.0.1:12306/mcp
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "url": "http://127.0.0.1:12306/mcp"
     }
   }
@@ -84,7 +84,7 @@ claude mcp add chrome-mcp --transport http http://127.0.0.1:12306/mcp
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "type": "streamableHttp",
       "url": "http://127.0.0.1:12306/mcp"
     }
@@ -99,7 +99,7 @@ claude mcp add chrome-mcp --transport http http://127.0.0.1:12306/mcp
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "serverUrl": "http://127.0.0.1:12306/mcp"
     }
   }
@@ -139,7 +139,7 @@ pnpm list -g @tabrix/tabrix
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "command": "tabrix-stdio"
     }
   }
@@ -153,7 +153,7 @@ pnpm list -g @tabrix/tabrix
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "command": "node",
       "args": ["/path/to/node_modules/@tabrix/tabrix/dist/mcp/mcp-server-stdio.js"]
     }
@@ -166,7 +166,7 @@ pnpm list -g @tabrix/tabrix
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "command": "npx",
       "args": ["-p", "@tabrix/tabrix", "tabrix-stdio"]
     }
@@ -184,7 +184,7 @@ pnpm list -g @tabrix/tabrix
 | ----------------------------- | ------------------------------------------------------------------------------------------------ | ------------ |
 | `MCP_HTTP_PORT`               | MCP HTTP 端口                                                                                    | `12306`      |
 | `MCP_HTTP_HOST`               | 监听地址覆盖（优先级高于 `~/.tabrix/config.json`；推荐用扩展开关代替）                           | `127.0.0.1`  |
-| `MCP_AUTH_TOKEN`              | 远程访问 Bearer Token（可选，不设则自动生成并存到 `~/.tabrix/auth-token.json`）                  | （自动生成） |
+| `MCP_AUTH_TOKEN`              | 远程访问 Bearer Token（可选，设置后优先使用该值）                                                | （未设置）   |
 | `MCP_AUTH_TOKEN_TTL`          | Token 过期天数（`0` = 永不过期）                                                                 | `7`          |
 | `MCP_ALLOWED_WORKSPACE_BASE`  | 额外允许的工作目录                                                                               | （无）       |
 | `CHROME_MCP_NODE_PATH`        | 覆盖 Node.js 可执行文件路径                                                                      | （自动检测） |
@@ -246,7 +246,7 @@ $env:MCP_HTTP_HOST = "0.0.0.0"
 
 **第二步：确认 Token 认证**
 
-开启远程后，服务端会**自动生成 Token** 并持久化到 `~/.tabrix/auth-token.json`。扩展 Popup 的「远程」Tab 会自动显示包含 `Authorization` 头的完整配置。
+开启远程后，请在扩展 Popup 的「Token 管理」页面确认当前 Token，并复制包含 `Authorization` 头的完整配置。你可以在“重新生成 Token”时自定义有效天数（`0` = 永不过期）。
 
 也可通过环境变量手动指定：
 
@@ -260,7 +260,7 @@ $env:MCP_HTTP_HOST = "0.0.0.0"
 **第三步：开放 Windows 防火墙**（管理员 PowerShell）
 
 ```powershell
-netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow protocol=tcp localport=12306
+netsh advfirewall firewall add rule name="Tabrix MCP Bridge" dir=in action=allow protocol=tcp localport=12306
 ```
 
 **第四步：在远程 AI 客户端中配置**
@@ -272,7 +272,7 @@ netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "url": "http://192.168.1.100:12306/mcp",
       "headers": {
         "Authorization": "Bearer your-secret-token"
@@ -291,14 +291,14 @@ netsh advfirewall firewall add rule name="MCP Chrome Bridge" dir=in action=allow
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "url": "http://host.docker.internal:12306/mcp"
     }
   }
 }
 ```
 
-> Token 默认 7 天过期，可通过 `MCP_AUTH_TOKEN_TTL` 调整。Popup 远程 Tab 提供"重新生成"按钮。
+> Token 默认 7 天过期；可通过 `MCP_AUTH_TOKEN_TTL` 调整默认值，或在 Popup「Token 管理」中重新生成并自定义有效天数。
 
 ---
 

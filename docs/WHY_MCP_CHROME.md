@@ -1,10 +1,10 @@
-# Why mcp-chrome?（与同类方案对比）
+# Why Tabrix?（与同类方案对比）
 
 > 精简版对比说明，用于快速定位使用场景与边界。
 
 ## 三个核心差异
 
-| 维度          | mcp-chrome                                                            | Playwright MCP / browser-use 等                          |
+| 维度          | Tabrix                                                                | Playwright MCP / browser-use 等                          |
 | ------------- | --------------------------------------------------------------------- | -------------------------------------------------------- |
 | **浏览器**    | 你日常使用的 **真实 Chrome**，继承全部登录态                          | 独立 Chromium/Playwright 实例，通常 **无已登录 session** |
 | **AI 客户端** | 任意支持 **MCP** 的客户端（Cursor、Claude Desktop、CoPaw、OpenClaw…） | 多为库/SDK，需自行集成                                   |
@@ -24,4 +24,4 @@
 
 ## 一句话
 
-**mcp-chrome = 把「你已经登录好的 Chrome」通过 MCP 交给 AI 操作**；不是再开一个干净浏览器，而是复用真实会话。
+**Tabrix = 把「你已经登录好的 Chrome」通过 MCP 交给 AI 操作**；不是再开一个干净浏览器，而是复用真实会话。

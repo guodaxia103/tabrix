@@ -5,10 +5,7 @@
   "main": "dist/index.js",
   "bin": {
     "tabrix": "./dist/cli.js",
-    "mcp-chrome-bridge": "./dist/cli.js",
-    "chrome-mcp-bridge": "./dist/cli.js",
-    "tabrix-stdio": "./dist/mcp/mcp-server-stdio.js",
-    "mcp-chrome-stdio": "./dist/mcp/mcp-server-stdio.js"
+    "tabrix-stdio": "./dist/mcp/mcp-server-stdio.js"
   },
   "scripts": {
     "dev": "nodemon --watch src --ext ts,js,json --ignore dist/ --exec \"npm run build && npm run register:dev\"",

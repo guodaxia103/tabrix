@@ -1,4 +1,4 @@
-# Chrome MCP Server API Reference 📚
+# Tabrix API Reference 📚
 
 Complete reference for all available tools and their parameters.
 

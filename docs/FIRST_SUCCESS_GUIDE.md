@@ -50,7 +50,7 @@ tabrix doctor
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "url": "http://127.0.0.1:12306/mcp"
     }
   }
@@ -62,7 +62,7 @@ tabrix doctor
 ```json
 {
   "mcpServers": {
-    "chrome-mcp": {
+    "tabrix": {
       "type": "streamableHttp",
       "url": "http://127.0.0.1:12306/mcp"
     }
@@ -73,7 +73,7 @@ tabrix doctor
 **Claude Code CLI**：
 
 ```bash
-claude mcp add chrome-mcp --transport http http://127.0.0.1:12306/mcp
+claude mcp add tabrix --transport http http://127.0.0.1:12306/mcp
 ```
 
 > 更多客户端配置见 [配置速查卡](CLIENT_CONFIG_QUICKREF.md)。

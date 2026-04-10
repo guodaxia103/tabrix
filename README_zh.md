@@ -72,6 +72,41 @@ tabrix smoke
 主流 AI 助手与 MCP 客户端配置（[OpenClaw](https://github.com/openclaw/openclaw)、[CoPaw](https://github.com/guodaxia103/copaw)、Claude Desktop、Cursor、Cline、Cherry Studio、Dify 等）见：
 [客户端配置速查](docs/CLIENT_CONFIG_QUICKREF.md)
 
+## 🌐 远程控制
+
+远程客户端配置示例：
+
+```json
+{
+  "mcpServers": {
+    "tabrix": {
+      "url": "http://<局域网IP>:12306/mcp",
+      "headers": {
+        "Authorization": "Bearer <YOUR_TABRIX_TOKEN>"
+      }
+    }
+  }
+}
+```
+
+在扩展弹窗开启 `远程访问` 后，MCP 服务会监听：
+
+- `http://<局域网IP>:12306/mcp`
+
+### 30 秒开启远程
+
+1. 打开扩展弹窗 -> 切换到 `远程` -> 打开 `远程访问`
+2. 进入 `Token 管理`，复制当前 Token（或手动刷新）
+3. 将上方远程配置粘贴到 MCP 客户端，开始远程自动化
+
+### 认证与有效期
+
+- 远程模式必须使用 Bearer Token 认证
+- 扩展 `Token 管理` 页面可查看、复制、刷新 Token
+- Token 有效期可自定义：在扩展 `Token 管理` -> `重新生成 Token` 中设置有效天数（`0` 表示永不过期）
+- 也可通过环境变量 `MCP_AUTH_TOKEN_TTL` 设置默认有效天数
+- 若设置环境变量 `MCP_AUTH_TOKEN`，则始终以该 Token 为准
+
 ## 核心能力
 
 - 浏览器导航、标签页/窗口管理
@@ -80,6 +115,34 @@ tabrix smoke
 - 网络捕获与请求重放辅助
 - 截图、GIF 录制、性能追踪分析
 - 书签/历史记录操作与 JS 执行
+
+### CLI 命令总览
+
+安装后会提供这些可执行命令（可直接复制）：
+
+```bash
+tabrix
+tabrix-stdio
+```
+
+`tabrix` 主要子命令（可整段复制执行）：
+
+```bash
+tabrix setup
+tabrix register
+tabrix fix-permissions
+tabrix update-port <port>
+tabrix status
+tabrix doctor --fix
+tabrix smoke
+tabrix stdio-smoke
+tabrix report --copy
+tabrix daemon start
+tabrix daemon status
+tabrix daemon stop
+```
+
+完整命令文档见：[CLI_zh.md](docs/CLI_zh.md)
 
 完整工具清单：
 [工具 API (中文)](docs/TOOLS_zh.md) | [TOOLS API (EN)](docs/TOOLS.md)
@@ -134,6 +197,7 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 
 ### 用户文档
 
+- [CLI 命令参考](docs/CLI_zh.md)
 - [快速入门](docs/STABLE_QUICKSTART.md)
 - [传输模式 (HTTP / SSE / stdio)](docs/TRANSPORT.md)
 - [Popup 排障](docs/POPUP_TROUBLESHOOTING.md)

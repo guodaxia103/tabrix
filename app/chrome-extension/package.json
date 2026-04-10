@@ -1,9 +1,9 @@
 {
   "name": "chrome-mcp-server",
-  "description": "a chrome extension to use your own chrome as a mcp server",
+  "description": "Tabrix browser extension to expose Chrome capabilities as an MCP service",
   "author": "guodaxia103",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.3",
   "type": "module",
   "scripts": {
     "ensure:key": "node ./scripts/ensure-extension-key.cjs",

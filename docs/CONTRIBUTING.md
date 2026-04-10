@@ -1,6 +1,6 @@
 # Contributing Guide 🤝
 
-Thank you for your interest in contributing to Chrome MCP Server! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to Tabrix! This document provides guidelines and information for contributors.
 
 ## 🎯 How to Contribute
 
@@ -28,8 +28,8 @@ We welcome contributions in many forms:
 1. **Fork and clone the repository**
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/chrome-mcp-server.git
-cd chrome-mcp-server
+git clone https://github.com/YOUR_USERNAME/tabrix.git
+cd tabrix
 ```
 
 2. **Install dependencies**
@@ -52,7 +52,7 @@ npm run dev
 ## 🏗️ Project Structure
 
 ```
-chrome-mcp-server/
+tabrix/
 ├── app/
 │   ├── chrome-extension/     # Chrome extension (WXT + Vue 3)
 │   │   ├── entrypoints/      # Background scripts, popup, content scripts
@@ -217,7 +217,7 @@ pnpm build
 
 ## 📄 License
 
-By contributing to Chrome MCP Server, you agree that your contributions will be licensed under the MIT License.
+By contributing to Tabrix, you agree that your contributions will be licensed under the MIT License.
 
 ## 🎯 Contributor Guidelines
 
@@ -260,4 +260,4 @@ We value every contribution, no matter how big or small. Contributors will be re
 - **Contributor badges**: Contributor badges on GitHub profiles
 - **Community recognition**: Special thanks in community discussions
 
-Thank you for considering contributing to Chrome MCP Server! Your participation makes this project better.
+Thank you for considering contributing to Tabrix! Your participation makes this project better.

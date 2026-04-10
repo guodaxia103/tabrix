@@ -1,10 +1,10 @@
 {
   "extensionName": {
-    "message": "chrome-mcp-server",
+    "message": "Tabrix",
     "description": "확장 프로그램 이름"
   },
   "extensionDescription": {
-    "message": "크롬 브라우저와 연동하여 브라우저 기능을 제어하는 MCP 서버입니다.",
+    "message": "내 Chrome 브라우저를 MCP 서비스로 노출합니다.",
     "description": "확장 프로그램 설명"
   },
   "nativeServerConfigLabel": {

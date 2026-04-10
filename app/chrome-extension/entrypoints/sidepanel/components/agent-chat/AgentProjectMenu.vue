@@ -191,7 +191,7 @@
           @change="handleChromeMcpChange"
         />
         <span class="text-xs" :style="{ color: 'var(--ac-text, #1a1a1a)' }">
-          Enable Chrome MCP Server
+          Enable Tabrix MCP Bridge
         </span>
       </label>
     </div>
