@@ -109,17 +109,16 @@ Contributions are welcome from both first-time contributors and maintainers.
 - Cross-platform install and packaging quality
 - Benchmarking and regression test coverage
 
-## Commercial Direction
+## Community First (Current Phase)
 
-Tabrix is open source under MIT and is being built with long-term commercial viability in mind.
+Our current priority is community growth and project reputation:
 
-Near-term product direction:
+- Lower onboarding friction for new users and contributors
+- Keep release quality high with transparent changelogs and issue triage
+- Improve reliability across platforms and MCP clients
+- Build an open roadmap with active maintainer feedback
 
-- Operational reliability for enterprise workflows
-- Governance, observability, and permission controls
-- Deployment profiles for individual, team, and managed environments
-
-If you are interested in design partnership or enterprise adoption, open a discussion in this repository.
+Long-term, once adoption and ecosystem maturity are in place, we may explore sustainable paths that remain compatible with the open-source community.
 
 ## Project Origin and Credits
 
