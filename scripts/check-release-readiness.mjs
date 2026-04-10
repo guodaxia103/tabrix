@@ -46,6 +46,12 @@ function appendGitHubOutput(name, value) {
   fs.appendFileSync(outputFile, `${name}=${value}\n`, 'utf8');
 }
 
+function findWorkspaceProtocolDeps(dependencies = {}) {
+  return Object.entries(dependencies)
+    .filter(([, version]) => typeof version === 'string' && version.startsWith('workspace:'))
+    .map(([name, version]) => `${name}@${version}`);
+}
+
 function fail(errors) {
   console.error('release readiness check failed:');
   for (const error of errors) console.error(`- ${error}`);
@@ -72,6 +78,13 @@ if (nativePkg.name !== '@tabrix/tabrix') {
 
 if (sharedPkg.name !== '@tabrix/shared') {
   errors.push(`Unexpected shared package name: ${sharedPkg.name}`);
+}
+
+const workspaceProtocolDeps = findWorkspaceProtocolDeps(nativePkg.dependencies);
+if (workspaceProtocolDeps.length > 0) {
+  errors.push(
+    `Native package has workspace protocol dependencies, which break npm installs: ${workspaceProtocolDeps.join(', ')}`,
+  );
 }
 
 if (rootPkg.version !== nativePkg.version) {
@@ -134,3 +147,5 @@ appendGitHubOutput('tag', resolvedTag);
 appendGitHubOutput('package_name', nativePkg.name);
 appendGitHubOutput('version', nativePkg.version);
 appendGitHubOutput('notes_file', selectedNotesFile);
+appendGitHubOutput('shared_package_name', sharedPkg.name);
+appendGitHubOutput('shared_version', sharedPkg.version);

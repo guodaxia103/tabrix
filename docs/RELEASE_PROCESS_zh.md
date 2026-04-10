@@ -5,6 +5,7 @@
 ## 版本策略
 
 - 对外发布主包：`@tabrix/tabrix`
+- 运行时共享包：`@tabrix/shared`
 - 根工作区版本（`package.json`）必须与 `@tabrix/tabrix` 一致
 - `@tabrix/extension` 版本必须与 `@tabrix/tabrix` 一致
 - 发布 Tag 仅允许以下格式：
@@ -47,7 +48,8 @@ git push origin vX.Y.Z
 
 - 发布元数据校验
 - 质量闸门检查
-- npm 发布（Token 或 Trusted Publishing 模式）
+- 若 npm 不存在 `@tabrix/shared`，先发布共享包
+- 再发布 `@tabrix/tabrix`（Token 或 Trusted Publishing 模式）
 - 上传扩展 zip 与 npm tarball 到 GitHub Release
 
 ## 手动发布（workflow_dispatch）

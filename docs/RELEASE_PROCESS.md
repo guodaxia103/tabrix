@@ -5,6 +5,7 @@ This document defines the standard release process for the Tabrix repository.
 ## Versioning Policy
 
 - Canonical release package: `@tabrix/tabrix`
+- Runtime shared package: `@tabrix/shared`
 - Root workspace version (`package.json`) must match `@tabrix/tabrix` version.
 - `@tabrix/extension` version must match `@tabrix/tabrix` version.
 - Release tags must use one of:
@@ -47,7 +48,8 @@ git push origin vX.Y.Z
 
 - validate release metadata
 - run quality gates
-- publish to npm (token or trusted publishing mode)
+- publish `@tabrix/shared` first if missing in npm registry
+- publish `@tabrix/tabrix` (token or trusted publishing mode)
 - upload extension zip and npm tarball to GitHub Release
 
 ## Manual Release (workflow_dispatch)

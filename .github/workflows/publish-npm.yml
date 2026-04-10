@@ -78,6 +78,10 @@ jobs:
       - name: Build shared + native package
         run: pnpm --filter @tabrix/tabrix build
 
+      - name: Clean previous extension zip artifacts
+        shell: bash
+        run: rm -f app/chrome-extension/.output/*-chrome.zip
+
       - name: Build extension zip
         run: pnpm --filter @tabrix/extension zip
 
@@ -92,10 +96,18 @@ jobs:
         id: assets
         shell: bash
         run: |
+          set -euo pipefail
+
           VERSION="${{ steps.meta.outputs.version }}"
           mkdir -p artifacts
 
-          EXT_ZIP="$(ls app/chrome-extension/.output/*-chrome.zip | head -n 1)"
+          mapfile -t EXT_ZIPS < <(find app/chrome-extension/.output -maxdepth 1 -type f -name '*-chrome.zip' | sort)
+          if [ "${#EXT_ZIPS[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one extension zip after build, found ${#EXT_ZIPS[@]}."
+            printf '%s\n' "${EXT_ZIPS[@]}"
+            exit 1
+          fi
+          EXT_ZIP="${EXT_ZIPS[0]}"
           NPM_TGZ="${{ steps.pack.outputs.npm_tgz_path }}"
 
           cp "${EXT_ZIP}" "artifacts/tabrix-extension-v${VERSION}.zip"
@@ -116,16 +128,89 @@ jobs:
             echo "already_published=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check shared package publication status
+        id: shared_status
+        if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true')
+        shell: bash
+        run: |
+          SHARED_NAME="${{ steps.meta.outputs.shared_package_name }}"
+          SHARED_VERSION="${{ steps.meta.outputs.shared_version }}"
+          if npm view "${SHARED_NAME}@${SHARED_VERSION}" version >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish shared package to npm
+        id: shared_publish
+        continue-on-error: true
+        if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true') && steps.shared_status.outputs.already_published == 'false'
+        working-directory: packages/shared
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set +e
+
+          if [ -n "${NODE_AUTH_TOKEN}" ]; then
+            npm whoami >/dev/null 2>&1
+            AUTH_CODE=$?
+            if [ "${AUTH_CODE}" -ne 0 ]; then
+              echo "publish_code=${AUTH_CODE}" >> "$GITHUB_OUTPUT"
+              echo "::error::npm auth failed before shared package publish."
+              exit "${AUTH_CODE}"
+            fi
+          fi
+
+          npm publish --access public --provenance
+          PUBLISH_CODE=$?
+          if [ "${PUBLISH_CODE}" -ne 0 ] && [ -n "${NODE_AUTH_TOKEN}" ]; then
+            npm publish --access public
+            PUBLISH_CODE=$?
+          fi
+
+          echo "publish_code=${PUBLISH_CODE}" >> "$GITHUB_OUTPUT"
+          if [ "${PUBLISH_CODE}" -ne 0 ]; then
+            echo "::error::Failed to publish shared package."
+            exit "${PUBLISH_CODE}"
+          fi
+
+      - name: Verify shared package availability
+        if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true') && steps.shared_status.outputs.already_published == 'false' && steps.shared_publish.outputs.publish_code == '0'
+        shell: bash
+        run: |
+          SHARED_NAME="${{ steps.meta.outputs.shared_package_name }}"
+          SHARED_VERSION="${{ steps.meta.outputs.shared_version }}"
+
+          for i in {1..12}; do
+            if npm view "${SHARED_NAME}@${SHARED_VERSION}" version >/dev/null 2>&1; then
+              echo "Shared package is visible."
+              exit 0
+            fi
+            echo "Attempt ${i}/12: shared package not visible yet, waiting 10s..."
+            sleep 10
+          done
+
+          echo "::error::Shared package ${SHARED_NAME}@${SHARED_VERSION} is not visible after publish."
+          exit 1
+
       - name: Publish to npm
         id: npm_publish
         continue-on-error: true
-        if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true')
+        if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true') && (steps.shared_status.outputs.already_published == 'true' || steps.shared_publish.outputs.publish_code == '0')
         working-directory: app/native-server
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set +e
+
+          npm config get registry
+          npm ping
+          PING_CODE=$?
+          if [ "${PING_CODE}" -ne 0 ]; then
+            echo "::warning::npm ping failed before publish (code=${PING_CODE})."
+          fi
 
           if [ -n "${NODE_AUTH_TOKEN}" ]; then
             echo "Publish mode: token (NPM_TOKEN)"
@@ -163,6 +248,28 @@ jobs:
             fi
             exit "${PUBLISH_CODE}"
           fi
+
+      - name: Print npm debug logs on publish failure
+        if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true') && steps.npm_publish.outputs.publish_code != '0'
+        shell: bash
+        run: |
+          if [ -d "$HOME/.npm/_logs" ]; then
+            echo "npm debug logs:"
+            ls -la "$HOME/.npm/_logs" || true
+            LATEST_LOG="$(ls -1t "$HOME/.npm/_logs"/*-debug-*.log 2>/dev/null | head -n 1 || true)"
+            if [ -n "$LATEST_LOG" ]; then
+              echo "---- tail: $LATEST_LOG ----"
+              tail -n 200 "$LATEST_LOG" || true
+            fi
+          else
+            echo "No npm debug log directory found."
+          fi
+
+      - name: Mark workflow failed when shared package publish expected but failed
+        if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true') && steps.shared_status.outputs.already_published == 'false' && steps.shared_publish.outputs.publish_code != '0'
+        run: |
+          echo "::error::Shared package publish failed. Verify npm ownership and token/trusted publishing setup for ${{ steps.meta.outputs.shared_package_name }}."
+          exit 1
 
       - name: Skip npm publish in manual mode
         if: steps.npm_status.outputs.already_published == 'false' && github.event_name == 'workflow_dispatch' && github.event.inputs.publish_npm != 'true'
