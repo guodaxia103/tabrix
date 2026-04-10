@@ -4,7 +4,14 @@
     <div v-show="currentView === 'home'" class="home-view">
       <div class="header">
         <div class="header-content">
-          <h1 class="header-title">Tabrix</h1>
+          <div class="header-meta">
+            <h1 class="header-title">Tabrix</h1>
+            <p class="header-subtitle">{{ getMessage('extensionDescription') }}</p>
+          </div>
+          <div class="header-status-chip" :title="getStatusText()">
+            <span :class="['header-status-dot', getStatusClass()]"></span>
+            <span class="header-status-text">{{ getStatusText() }}</span>
+          </div>
         </div>
       </div>
       <div class="content">
@@ -2416,31 +2423,93 @@ onUnmounted(() => {
 
 <style scoped>
 .popup-container {
-  background: #f1f5f9;
+  background:
+    radial-gradient(circle at 12% -10%, rgba(217, 119, 87, 0.18), transparent 48%),
+    radial-gradient(circle at 88% -18%, rgba(30, 64, 175, 0.14), transparent 44%),
+    linear-gradient(165deg, #f8fafc 0%, #eef2ff 52%, #f8fafc 100%);
   border-radius: 24px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 22px 50px -24px rgba(15, 23, 42, 0.5);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    'Segoe UI Variable', 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
 }
 
 .header {
   flex-shrink: 0;
-  padding-left: 20px;
+  padding: 18px 20px 6px;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.header-meta {
+  min-width: 0;
 }
 
 .header-title {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 25px;
+  font-weight: 760;
+  letter-spacing: -0.02em;
   color: #1e293b;
   margin: 0;
+}
+
+.header-subtitle {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.header-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 180px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.header-status-dot {
+  height: 8px;
+  width: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.header-status-dot.bg-emerald-500 {
+  background-color: #10b981;
+}
+
+.header-status-dot.bg-red-500 {
+  background-color: #ef4444;
+}
+
+.header-status-dot.bg-yellow-500 {
+  background-color: #eab308;
+}
+
+.header-status-dot.bg-gray-500 {
+  background-color: #6b7280;
+}
+
+.header-status-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-button {
@@ -2460,7 +2529,7 @@ onUnmounted(() => {
 
 .content {
   flex-grow: 1;
-  padding: 8px 24px;
+  padding: 10px 20px 14px;
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -2478,16 +2547,21 @@ onUnmounted(() => {
 }
 
 .status-label {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   color: #64748b;
-  margin-bottom: 8px;
+  margin: 0;
 }
 
 .status-info {
   display: flex;
   align-items: center;
   gap: 8px;
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 10px;
 }
 
 .status-dot {
@@ -2513,7 +2587,7 @@ onUnmounted(() => {
 }
 
 .status-text {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #1e293b;
 }
@@ -2588,7 +2662,7 @@ onUnmounted(() => {
 }
 
 .section {
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .secondary-button {
@@ -2633,10 +2707,12 @@ onUnmounted(() => {
 }
 
 .section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #475569;
+  margin: 0 0 10px;
 }
 .current-model-card {
   background: linear-gradient(135deg, #faf5ff, #f3e8ff);
@@ -2774,13 +2850,14 @@ onUnmounted(() => {
 }
 
 .config-card {
-  background: var(--ac-surface, white);
-  border-radius: var(--ac-radius-card, 12px);
-  box-shadow: var(--ac-shadow-card, 0 1px 3px rgba(0, 0, 0, 0.08));
-  padding: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, #ffffff 100%);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 14px;
+  box-shadow: 0 10px 22px -20px rgba(15, 23, 42, 0.65);
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 .semantic-engine-card {
   background: white;
@@ -2829,23 +2906,28 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .refresh-status-button {
-  background: none;
-  border: none;
+  background: rgba(241, 245, 249, 0.95);
+  border: 1px solid #dbe4ef;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 14px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   color: #64748b;
-  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
 }
 
 .refresh-status-button:hover {
-  background: #f1f5f9;
-  color: #374151;
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #334155;
+  transform: translateY(-1px);
 }
 
 .status-timestamp {
@@ -3333,29 +3415,31 @@ onUnmounted(() => {
 }
 
 .copy-config-button {
-  background: none;
-  border: none;
+  background: rgba(241, 245, 249, 0.92);
+  border: 1px solid #dbe4ef;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
   color: #64748b;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
 .copy-config-button:hover {
-  background: #f1f5f9;
-  color: #374151;
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #334155;
 }
 
 .mcp-config-content {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 10px;
+  padding: 10px;
   overflow-x: auto;
 }
 
@@ -3416,16 +3500,17 @@ onUnmounted(() => {
   color: var(--ac-accent-contrast, white);
   font-weight: 600;
   padding: 12px 16px;
-  border-radius: var(--ac-radius-button, 8px);
+  border-radius: 10px;
   border: none;
   cursor: pointer;
   transition: all var(--ac-motion-fast, 120ms) ease;
-  box-shadow: var(--ac-shadow-card, 0 1px 3px rgba(0, 0, 0, 0.08));
+  box-shadow: 0 12px 18px -12px rgba(217, 119, 87, 0.7);
 }
 
 .connect-button:hover:not(:disabled) {
   background: var(--ac-accent-hover, #c4664a);
-  box-shadow: var(--ac-shadow-float, 0 4px 20px -2px rgba(0, 0, 0, 0.05));
+  transform: translateY(-1px);
+  box-shadow: 0 16px 24px -14px rgba(196, 102, 74, 0.72);
 }
 
 .connect-button:disabled {
@@ -3648,11 +3733,28 @@ onUnmounted(() => {
   }
 
   .header {
-    padding: 24px 20px 12px;
+    padding: 14px 16px 6px;
+  }
+
+  .header-content {
+    align-items: center;
+  }
+
+  .header-subtitle {
+    display: none;
+  }
+
+  .header-status-chip {
+    max-width: 132px;
+    padding: 4px 8px;
+  }
+
+  .header-status-text {
+    font-size: 10px;
   }
 
   .content {
-    padding: 8px 20px;
+    padding: 8px 16px 12px;
   }
 
   .stats-grid {
@@ -3684,21 +3786,22 @@ onUnmounted(() => {
   display: flex;
   gap: 12px;
   justify-content: flex-start;
-  padding: 16px;
-  background: var(--ac-surface, white);
-  border-radius: var(--ac-radius-card, 12px);
-  box-shadow: var(--ac-shadow-card, 0 1px 3px rgba(0, 0, 0, 0.08));
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, #ffffff 100%);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 14px;
+  box-shadow: 0 10px 22px -20px rgba(15, 23, 42, 0.65);
 }
 
 .rr-icon-btn {
-  width: 48px;
-  height: 48px;
+  width: 46px;
+  height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--ac-surface-muted, #f2f0eb);
-  border: none;
-  border-radius: var(--ac-radius-button, 8px);
+  border: 1px solid transparent;
+  border-radius: 10px;
   color: var(--ac-text-muted, #6e6e6e);
   cursor: pointer;
   transition: all var(--ac-motion-fast, 120ms) ease;
@@ -3706,7 +3809,8 @@ onUnmounted(() => {
 
 .rr-icon-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: var(--ac-shadow-float, 0 4px 20px -2px rgba(0, 0, 0, 0.05));
+  border-color: rgba(148, 163, 184, 0.35);
+  box-shadow: 0 10px 16px -12px rgba(15, 23, 42, 0.58);
 }
 
 .rr-icon-btn:disabled {
@@ -3850,9 +3954,10 @@ onUnmounted(() => {
 
 /* 管理入口卡片样式 */
 .entry-card {
-  background: var(--ac-surface, white);
-  border-radius: var(--ac-radius-card, 12px);
-  box-shadow: var(--ac-shadow-card, 0 1px 3px rgba(0, 0, 0, 0.08));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, #ffffff 100%);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 14px;
+  box-shadow: 0 10px 22px -20px rgba(15, 23, 42, 0.65);
   overflow: hidden;
 }
 
@@ -3861,7 +3966,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 13px 14px;
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--ac-border, #e7e5e4);
@@ -3875,7 +3980,7 @@ onUnmounted(() => {
 }
 
 .entry-item:hover {
-  background: var(--ac-hover-bg, #f5f5f4);
+  background: rgba(241, 245, 249, 0.86);
 }
 
 .entry-icon {
