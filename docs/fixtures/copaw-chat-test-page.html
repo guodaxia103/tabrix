@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CoPaw Chat Test Page</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 2rem;
+        line-height: 1.5;
+      }
+      label,
+      button {
+        display: block;
+        margin-top: 1rem;
+      }
+      #result {
+        margin-top: 1.5rem;
+        padding: 0.75rem;
+        border: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>CoPaw Browser Validation</h1>
+    <p id="intro">This page is used for CoPaw chat-visible browser tests.</p>
+
+    <label for="keyword">Keyword</label>
+    <input id="keyword" name="keyword" type="text" value="" />
+
+    <button id="submit" type="button">Submit</button>
+
+    <div id="result">pending</div>
+
+    <script>
+      const input = document.getElementById('keyword');
+      const result = document.getElementById('result');
+      document.getElementById('submit').addEventListener('click', () => {
+        result.textContent = `submitted:${input.value || 'empty'}`;
+      });
+    </script>
+  </body>
+</html>

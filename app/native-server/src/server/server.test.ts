@@ -1,0 +1,372 @@
+import { describe, expect, test, afterAll, beforeAll } from '@jest/globals';
+import supertest from 'supertest';
+import Server from './index';
+import { SERVER_CONFIG } from '../constant';
+import { sessionManager } from '../execution/session-manager';
+import { tokenManager } from './auth';
+import type { TokenData } from './auth';
+
+/** 非本机 IP，用于触发 onRequest 中的 Bearer 校验分支 */
+const REMOTE_CLIENT_IP = '192.168.99.1';
+const REMOTE_BEARER_TOKEN = 'jest-remote-bearer-test-token';
+
+function setTokenData(data: TokenData | null): void {
+  (tokenManager as unknown as { data: TokenData | null }).data = data;
+}
+
+describe('服务器测试', () => {
+  // 启动服务器测试实例
+  beforeAll(async () => {
+    await Server.getInstance().ready();
+  });
+
+  // 关闭服务器
+  afterAll(async () => {
+    await Server.stop();
+  });
+
+  test('GET /ping 应返回正确响应', async () => {
+    const response = await supertest(Server.getInstance().server)
+      .get('/ping')
+      .expect(200)
+      .expect('Content-Type', /json/);
+
+    expect(response.body).toEqual({
+      status: 'ok',
+      message: 'pong',
+    });
+  });
+
+  test('GET /status 应返回运行状态快照', async () => {
+    sessionManager.reset();
+    const response = await supertest(Server.getInstance().server)
+      .get('/status')
+      .expect(200)
+      .expect('Content-Type', /json/);
+
+    expect(response.body.status).toBe('ok');
+    expect(response.body.data).toMatchObject({
+      isRunning: false,
+      host: SERVER_CONFIG.HOST,
+      port: null,
+      authEnabled: false,
+      nativeHostAttached: false,
+    });
+    expect(response.body.data.transports).toMatchObject({
+      total: 0,
+      streamableHttp: 0,
+    });
+    expect(response.body.data.execution).toMatchObject({
+      tasks: {
+        total: 0,
+        pending: 0,
+        running: 0,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+      },
+      sessions: {
+        total: 0,
+        starting: 0,
+        running: 0,
+        completed: 0,
+        failed: 0,
+        aborted: 0,
+      },
+      lastSessionId: null,
+    });
+    expect(Array.isArray(response.body.data.transports.sessionIds)).toBe(true);
+  });
+
+  test('GET /status 应暴露 execution 快照', async () => {
+    sessionManager.reset();
+    const task = sessionManager.createTask({
+      taskType: 'browser-action',
+      title: 'Status snapshot test',
+      intent: 'Verify execution summary exposure',
+      origin: 'server-test',
+    });
+    sessionManager.startSession({
+      taskId: task.taskId,
+      transport: 'mcp',
+      clientName: 'jest',
+    });
+
+    const response = await supertest(Server.getInstance().server)
+      .get('/status')
+      .expect(200)
+      .expect('Content-Type', /json/);
+
+    expect(response.body.status).toBe('ok');
+    expect(response.body.data.execution).toMatchObject({
+      tasks: {
+        total: 1,
+        pending: 0,
+        running: 1,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+      },
+      sessions: {
+        total: 1,
+        starting: 0,
+        running: 1,
+        completed: 0,
+        failed: 0,
+        aborted: 0,
+      },
+    });
+    expect(typeof response.body.data.execution.lastSessionId).toBe('string');
+  });
+
+  test('POST /mcp initialize 可以连续创建多个独立会话', async () => {
+    const initializeRequest = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: {
+          name: 'phase0-test-client',
+          version: '1.0.0',
+        },
+      },
+    };
+
+    const firstResponse = await supertest(Server.getInstance().server)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Content-Type', 'application/json')
+      .send(initializeRequest)
+      .expect(200);
+
+    const secondResponse = await supertest(Server.getInstance().server)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Content-Type', 'application/json')
+      .send({ ...initializeRequest, id: 2 })
+      .expect(200);
+
+    const firstSessionId = firstResponse.headers['mcp-session-id'];
+    const secondSessionId = secondResponse.headers['mcp-session-id'];
+
+    expect(firstSessionId).toBeTruthy();
+    expect(secondSessionId).toBeTruthy();
+    expect(firstSessionId).not.toEqual(secondSessionId);
+
+    const d1 = await supertest(Server.getInstance().server)
+      .delete('/mcp')
+      .set('mcp-session-id', String(firstSessionId));
+    const d2 = await supertest(Server.getInstance().server)
+      .delete('/mcp')
+      .set('mcp-session-id', String(secondSessionId));
+    expect([200, 204]).toContain(d1.status);
+    expect([200, 204]).toContain(d2.status);
+  });
+
+  test('GET /mcp 无 mcp-session-id 应返回 SSE 会话错误说明', async () => {
+    const res = await supertest(Server.getInstance().server)
+      .get('/mcp')
+      .set('Accept', 'text/event-stream')
+      .expect(400);
+
+    expect(res.body?.error).toContain('mcp-session-id');
+    expect(res.body?.error).toContain('POST /mcp');
+  });
+
+  test('并行 streamable-http 会话与 /status 计数一致并可逐个删除', async () => {
+    const initializeRequest = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'parallel-http-test', version: '1.0.0' },
+      },
+    };
+
+    const r1 = await supertest(Server.getInstance().server)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Content-Type', 'application/json')
+      .send(initializeRequest)
+      .expect(200);
+    const r2 = await supertest(Server.getInstance().server)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Content-Type', 'application/json')
+      .send({ ...initializeRequest, id: 2 })
+      .expect(200);
+
+    const id1 = String(r1.headers['mcp-session-id'] || '');
+    const id2 = String(r2.headers['mcp-session-id'] || '');
+    expect(id1.length).toBeGreaterThan(0);
+    expect(id2.length).toBeGreaterThan(0);
+    expect(id1).not.toEqual(id2);
+
+    const status = await supertest(Server.getInstance().server).get('/status').expect(200);
+    expect(status.body.data.transports.total).toBeGreaterThanOrEqual(2);
+    expect(status.body.data.transports.streamableHttp).toBeGreaterThanOrEqual(2);
+    expect(status.body.data.transports.sessionIds).toEqual(expect.arrayContaining([id1, id2]));
+
+    const del1 = await supertest(Server.getInstance().server)
+      .delete('/mcp')
+      .set('mcp-session-id', id1);
+    const del2 = await supertest(Server.getInstance().server)
+      .delete('/mcp')
+      .set('mcp-session-id', id2);
+    expect([200, 204]).toContain(del1.status);
+    expect([200, 204]).toContain(del2.status);
+  });
+
+  /**
+   * 放在其它用例之后：先启用 MCP_AUTH_TOKEN + resolve()，再对 inject 设置 remoteAddress，
+   * 覆盖「远程访问必须带有效 Bearer」的 HTTP 层行为（本机 IP 仍豁免）。
+   */
+  describe('远程 IP + Bearer（TokenManager 已启用）', () => {
+    beforeAll(() => {
+      process.env.MCP_AUTH_TOKEN = REMOTE_BEARER_TOKEN;
+      setTokenData(null);
+      tokenManager.resolve();
+    });
+
+    afterAll(() => {
+      delete process.env.MCP_AUTH_TOKEN;
+      setTokenData(null);
+    });
+
+    test('本机请求仍可不携带 Bearer 访问受保护路由', async () => {
+      const res = await supertest(Server.getInstance().server).get('/agent/engines').expect(200);
+      expect(res.body).toHaveProperty('engines');
+    });
+
+    test('远程 IP 访问公开路径 /ping、/status 无需 Bearer', async () => {
+      const app = Server.getInstance();
+      const ping = await app.inject({
+        method: 'GET',
+        url: '/ping',
+        remoteAddress: REMOTE_CLIENT_IP,
+      });
+      expect(ping.statusCode).toBe(200);
+      const status = await app.inject({
+        method: 'GET',
+        url: '/status',
+        remoteAddress: REMOTE_CLIENT_IP,
+      });
+      expect(status.statusCode).toBe(200);
+      expect(JSON.parse(status.body).data.authEnabled).toBe(true);
+    });
+
+    test('远程 IP 无 Authorization 访问 POST /mcp 返回 401', async () => {
+      const app = Server.getInstance();
+      const initializeRequest = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'remote-auth-test', version: '1.0.0' },
+        },
+      };
+      const res = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: {
+          accept: 'application/json, text/event-stream',
+          'content-type': 'application/json',
+        },
+        payload: initializeRequest,
+      });
+      expect(res.statusCode).toBe(401);
+      const body = JSON.parse(res.body as string);
+      expect(body.message).toContain('Unauthorized');
+    });
+
+    test('远程 IP Bearer 错误时返回 401', async () => {
+      const app = Server.getInstance();
+      const res = await app.inject({
+        method: 'GET',
+        url: '/agent/engines',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: { authorization: 'Bearer wrong-token' },
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    test('远程 IP 携带正确 Bearer 可访问 GET /agent/engines 与 POST /mcp initialize', async () => {
+      const app = Server.getInstance();
+      const authHeaders = { authorization: `Bearer ${REMOTE_BEARER_TOKEN}` };
+
+      const engines = await app.inject({
+        method: 'GET',
+        url: '/agent/engines',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: authHeaders,
+      });
+      expect(engines.statusCode).toBe(200);
+      expect(JSON.parse(engines.body as string)).toHaveProperty('engines');
+
+      const initializeRequest = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'remote-bearer-ok', version: '1.0.0' },
+        },
+      };
+      const mcp = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: {
+          ...authHeaders,
+          accept: 'application/json, text/event-stream',
+          'content-type': 'application/json',
+        },
+        payload: initializeRequest,
+      });
+      expect(mcp.statusCode).toBe(200);
+      expect(mcp.headers['mcp-session-id']).toBeTruthy();
+
+      const sid = String(mcp.headers['mcp-session-id']);
+      const del = await app.inject({
+        method: 'DELETE',
+        url: '/mcp',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: {
+          ...authHeaders,
+          'mcp-session-id': sid,
+        },
+      });
+      expect([200, 204]).toContain(del.statusCode);
+    });
+
+    test('远程 IP 在 token 已过期时即使 Bearer 正确也返回 401', async () => {
+      const app = Server.getInstance();
+      const previous = (tokenManager as unknown as { data: TokenData | null }).data;
+      (tokenManager as unknown as { data: TokenData | null }).data = {
+        token: REMOTE_BEARER_TOKEN,
+        createdAt: 0,
+        expiresAt: Date.now() - 1000,
+      };
+      try {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/agent/engines',
+          remoteAddress: REMOTE_CLIENT_IP,
+          headers: { authorization: `Bearer ${REMOTE_BEARER_TOKEN}` },
+        });
+        expect(res.statusCode).toBe(401);
+        expect(JSON.parse(res.body as string).message).toContain('expired');
+      } finally {
+        (tokenManager as unknown as { data: TokenData | null }).data = previous;
+      }
+    });
+  });
+});

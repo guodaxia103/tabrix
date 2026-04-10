@@ -1,0 +1,59 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+.output
+stats.html
+stats-*.json
+.wxt
+web-ext.config.ts
+dist
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.onnx
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Prevent npm metadata pollution
+false/
+metadata-v1.3/
+registry.npmmirror.com/
+registry.npmjs.com/
+
+other/
+tools_optimize.md
+Agents.md
+CLAUDE.md
+
+**/*/coverage/*
+
+.docs/
+.claude/
+
+# Internal planning docs (not for public repo)
+.omx/
+docs/COPAW.md
+docs/DELIVERABLE_HANDOFF_zh.md
+docs/PHASE0_TOOL_VALIDATION_MATRIX.md
+docs/PRODUCT_STRATEGY.md
+docs/PROGRAM0_TASK_LIST.md
+docs/PROGRAM1_*.md
+app/chrome-extension/entrypoints/web-editor-v2/attr-ui-refactor.md

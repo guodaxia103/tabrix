@@ -1,0 +1,118 @@
+export enum NATIVE_MESSAGE_TYPE {
+  START = 'start',
+  STARTED = 'started',
+  STOP = 'stop',
+  STOPPED = 'stopped',
+  PING = 'ping',
+  PONG = 'pong',
+  ERROR = 'error',
+}
+
+export const NATIVE_SERVER_PORT = 12306;
+
+// Timeout constants (in milliseconds)
+export const TIMEOUTS = {
+  DEFAULT_REQUEST_TIMEOUT: 15000,
+  EXTENSION_REQUEST_TIMEOUT: 20000,
+  PROCESS_DATA_TIMEOUT: 20000,
+} as const;
+
+// Server configuration
+export const MCP_HTTP_HOST_ENV = 'MCP_HTTP_HOST';
+export const MCP_AUTH_TOKEN_ENV = 'MCP_AUTH_TOKEN';
+
+import { getPersistedHost } from '../host-config';
+
+/**
+ * Resolve listen host with priority:
+ *   1. MCP_HTTP_HOST env var (explicit override for advanced users / daemon)
+ *   2. ~/.tabrix/config.json "host" (persisted user preference from extension toggle)
+ *   3. Default: '127.0.0.1'
+ */
+function resolveListenHost(): string {
+  const envHost = process.env[MCP_HTTP_HOST_ENV];
+  if (envHost) {
+    const allowed = ['127.0.0.1', '0.0.0.0', 'localhost', '::'];
+    if (allowed.includes(envHost)) return envHost;
+  }
+  return getPersistedHost() || '127.0.0.1';
+}
+
+export const SERVER_CONFIG = {
+  get HOST() {
+    return resolveListenHost();
+  },
+  /**
+   * CORS origin whitelist - only allow Chrome/Firefox extensions and local debugging.
+   * Use RegExp patterns for extension origins, string for exact match.
+   */
+  CORS_ORIGIN: [/^chrome-extension:\/\//, /^moz-extension:\/\//, 'http://127.0.0.1'] as (
+    | RegExp
+    | string
+  )[],
+  LOGGER_ENABLED: false,
+};
+
+// HTTP Status codes
+export const HTTP_STATUS = {
+  OK: 200,
+  CREATED: 201,
+  NO_CONTENT: 204,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  NOT_FOUND: 404,
+  INTERNAL_SERVER_ERROR: 500,
+  GATEWAY_TIMEOUT: 504,
+} as const;
+
+// Error messages
+export const ERROR_MESSAGES = {
+  NATIVE_HOST_NOT_AVAILABLE: 'Native host connection not established.',
+  SERVER_NOT_RUNNING: 'Server is not actively running.',
+  REQUEST_TIMEOUT: 'Request to extension timed out.',
+  INVALID_MCP_REQUEST: 'Invalid MCP request or session.',
+  STALE_MCP_SESSION:
+    'MCP session not found (possibly expired after server restart). ' +
+    'Send a new POST /mcp initialize request without mcp-session-id to create a fresh session.',
+  INVALID_SESSION_ID: 'Invalid or missing MCP session ID.',
+  INTERNAL_SERVER_ERROR: 'Internal Server Error',
+  MCP_SESSION_DELETION_ERROR: 'Internal server error during MCP session deletion.',
+  MCP_REQUEST_PROCESSING_ERROR: 'Internal server error during MCP request processing.',
+  /** Shown when GET /mcp is used without a valid streamable-http session (SSE stream). */
+  INVALID_SSE_SESSION:
+    'Invalid or missing MCP session ID for SSE (GET /mcp). ' +
+    'First POST /mcp with an initialize request and send the returned mcp-session-id on this GET. ' +
+    'Or use GET /sse for the classic MCP SSE transport.',
+} as const;
+
+// ============================================================
+// Chrome MCP Server Configuration
+// ============================================================
+
+/**
+ * Environment variables for dynamically resolving the local MCP HTTP endpoint.
+ * CHROME_MCP_PORT is the preferred source; MCP_HTTP_PORT is kept for backward compatibility.
+ */
+export const CHROME_MCP_PORT_ENV = 'CHROME_MCP_PORT';
+export const MCP_HTTP_PORT_ENV = 'MCP_HTTP_PORT';
+
+/**
+ * Get the actual port the Chrome MCP server is listening on.
+ * Priority: CHROME_MCP_PORT env > MCP_HTTP_PORT env > NATIVE_SERVER_PORT default
+ */
+export function getChromeMcpPort(): number {
+  const raw = process.env[CHROME_MCP_PORT_ENV] || process.env[MCP_HTTP_PORT_ENV];
+  const port = raw ? Number.parseInt(String(raw), 10) : NaN;
+  return Number.isFinite(port) && port > 0 && port <= 65535 ? port : NATIVE_SERVER_PORT;
+}
+
+/**
+ * Get the full URL to the local Chrome MCP HTTP endpoint.
+ * When listening on 0.0.0.0 / ::, the advertised URL still uses 127.0.0.1
+ * so that local MCP clients can connect.
+ */
+export function getChromeMcpUrl(): string {
+  const host = SERVER_CONFIG.HOST;
+  const clientHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+  return `http://${clientHost}:${getChromeMcpPort()}/mcp`;
+}

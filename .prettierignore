@@ -1,0 +1,35 @@
+# 构建输出目录
+dist
+.output
+.wxt
+
+# 依赖
+node_modules
+
+# 日志
+logs
+*.log
+
+# 缓存
+.cache
+.temp
+
+# 编辑器配置
+.vscode
+!.vscode/extensions.json
+.idea
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 打包文件
+*.zip
+*.tar.gz
+
+# 统计文件
+stats.html
+stats-*.json
+
+# 锁文件
+pnpm-lock.yaml

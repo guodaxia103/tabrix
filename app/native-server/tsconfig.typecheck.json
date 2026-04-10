@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "isolatedModules": true,
+    "rootDir": "../..",
+    "paths": {
+      "chrome-devtools-frontend/*": ["src/shims/devtools.d.ts"],
+      "chrome-mcp-shared": ["../../packages/shared/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*", "../../packages/shared/src/**/*"]
+}
