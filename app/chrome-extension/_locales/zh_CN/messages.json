@@ -1352,5 +1352,421 @@
   "sidepanelWorkflowEditNotImplemented": {
     "message": "V3 Builder 尚未实现，暂时无法编辑工作流",
     "description": "自动同步键: sidepanelWorkflowEditNotImplemented"
+  },
+  "builderAutoLayoutTitle": {
+    "message": "自动排版",
+    "description": "Auto-synced key"
+  },
+  "builderDescriptionLabel": {
+    "message": "描述",
+    "description": "Auto-synced key"
+  },
+  "builderDescriptionPlaceholder": {
+    "message": "可选描述",
+    "description": "Auto-synced key"
+  },
+  "builderEditingPrefix": {
+    "message": "编辑：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderEditorTitle": {
+    "message": "工作流编辑器",
+    "description": "Auto-synced key"
+  },
+  "builderExportButton": {
+    "message": "导出",
+    "description": "Auto-synced key"
+  },
+  "builderExportFailed": {
+    "message": "导出失败：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderExportTitle": {
+    "message": "导出 JSON",
+    "description": "Auto-synced key"
+  },
+  "builderFallbackApplied": {
+    "message": "已应用回退建议：提升 $ARG1$ 优先级",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderFitViewTitle": {
+    "message": "自适应视图",
+    "description": "Auto-synced key"
+  },
+  "builderFlowNotFound": {
+    "message": "工作流 \"$ARG1$\" 未找到，已创建新工作流",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderImportButton": {
+    "message": "导入",
+    "description": "Auto-synced key"
+  },
+  "builderImportFailed": {
+    "message": "导入失败：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderImportNoFlow": {
+    "message": "导入失败：未找到工作流数据",
+    "description": "Auto-synced key"
+  },
+  "builderImportTitle": {
+    "message": "导入 JSON",
+    "description": "Auto-synced key"
+  },
+  "builderLoadFailed": {
+    "message": "加载工作流失败：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderManageTriggersTitle": {
+    "message": "管理触发器",
+    "description": "Auto-synced key"
+  },
+  "builderNameLabel": {
+    "message": "名称",
+    "description": "Auto-synced key"
+  },
+  "builderNamePlaceholder": {
+    "message": "工作流名称",
+    "description": "Auto-synced key"
+  },
+  "builderNewFlowName": {
+    "message": "新建工作流",
+    "description": "Auto-synced key"
+  },
+  "builderNewFlowTitle": {
+    "message": "新建工作流",
+    "description": "Auto-synced key"
+  },
+  "builderRedoTitle": {
+    "message": "重做 (Cmd/Ctrl+Shift+Z)",
+    "description": "Auto-synced key"
+  },
+  "builderRenameButton": {
+    "message": "重命名",
+    "description": "Auto-synced key"
+  },
+  "builderRenameDialogTitle": {
+    "message": "重命名工作流",
+    "description": "Auto-synced key"
+  },
+  "builderRenameFlowTitle": {
+    "message": "重命名工作流",
+    "description": "Auto-synced key"
+  },
+  "builderRunAllTitle": {
+    "message": "从头回放整流",
+    "description": "Auto-synced key"
+  },
+  "builderRunButton": {
+    "message": "运行",
+    "description": "Auto-synced key"
+  },
+  "builderRunFailed": {
+    "message": "运行失败：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderRunFromSelectedButton": {
+    "message": "从选中运行",
+    "description": "Auto-synced key"
+  },
+  "builderRunFromSelectedTitle": {
+    "message": "从选中节点回放",
+    "description": "Auto-synced key"
+  },
+  "builderSaveFailed": {
+    "message": "保存失败：$ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderSavedStatus": {
+    "message": "已保存",
+    "description": "Auto-synced key"
+  },
+  "builderSavingStatus": {
+    "message": "保存中…",
+    "description": "Auto-synced key"
+  },
+  "builderScheduleConvertFailed": {
+    "message": "节点 $ARG1$ 的定时 #$ARG2$: 无法转换为 cron（type=$ARG3$），已跳过",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      },
+      "arg3": {
+        "content": "$3",
+        "example": "3"
+      }
+    }
+  },
+  "builderScheduleOnceUnsupported": {
+    "message": "节点 $ARG1$ 的定时 #$ARG2$: V3 暂不支持一次性定时（once），已跳过",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "builderTip": {
+    "message": "工作流可视化编排",
+    "description": "Auto-synced key"
+  },
+  "builderTriggersButton": {
+    "message": "触发器",
+    "description": "Auto-synced key"
+  },
+  "builderUndo": {
+    "message": "撤销",
+    "description": "Auto-synced key"
+  },
+  "builderUndoTitle": {
+    "message": "撤销 (Cmd/Ctrl+Z)",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelCommonSettingsTitle": {
+    "message": "通用设置",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelConfigErrorTitle": {
+    "message": "⚠️ 配置错误",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelDeleteNodeTitle": {
+    "message": "删除节点",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelEmptyLine1": {
+    "message": "选择一个节点",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelEmptyLine2": {
+    "message": "查看和编辑属性",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelExtractNeedSaveVar": {
+    "message": "需填写保存变量名",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelExtractNeedSelectorOrJs": {
+    "message": "需提供 selector 或 js",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelNodeNameLabel": {
+    "message": "节点名称",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelNodeNamePlaceholder": {
+    "message": "输入节点名称",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelNodePropertiesTitle": {
+    "message": "节点属性",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelPromptNewSubflowId": {
+    "message": "请输入新子流ID",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelScreenshotOnFailLabel": {
+    "message": "失败时截图",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelTimeoutLabel": {
+    "message": "超时 (ms)",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelTimeoutPlaceholder": {
+    "message": "默认使用全局超时",
+    "description": "Auto-synced key"
+  },
+  "triggerAddSchedule": {
+    "message": "+ 添加定时",
+    "description": "Auto-synced key"
+  },
+  "triggerAddUrlRule": {
+    "message": "+ 添加匹配",
+    "description": "Auto-synced key"
+  },
+  "triggerCommandHint": {
+    "message": "提示：Chrome 扩展快捷键需要在 manifest 里固定声明，无法运行时动态添加。",
+    "description": "Auto-synced key"
+  },
+  "triggerCommandLabel": {
+    "message": "命令键（需预先在 manifest commands 中声明）",
+    "description": "Auto-synced key"
+  },
+  "triggerCommandPlaceholder": {
+    "message": "例如 run_quick_trigger_1",
+    "description": "Auto-synced key"
+  },
+  "triggerCommandTitle": {
+    "message": "快捷键",
+    "description": "Auto-synced key"
+  },
+  "triggerContextMenuDefaultTitle": {
+    "message": "运行工作流",
+    "description": "Auto-synced key"
+  },
+  "triggerContextMenuLabel": {
+    "message": "标题",
+    "description": "Auto-synced key"
+  },
+  "triggerContextMenuPlaceholder": {
+    "message": "菜单标题",
+    "description": "Auto-synced key"
+  },
+  "triggerContextMenuTitle": {
+    "message": "右键菜单",
+    "description": "Auto-synced key"
+  },
+  "triggerContextScopeLabel": {
+    "message": "作用范围",
+    "description": "Auto-synced key"
+  },
+  "triggerDescriptionOptional": {
+    "message": "描述（可选）",
+    "description": "Auto-synced key"
+  },
+  "triggerDescriptionPlaceholder": {
+    "message": "说明此触发器的用途",
+    "description": "Auto-synced key"
+  },
+  "triggerDomAppear": {
+    "message": "出现时触发",
+    "description": "Auto-synced key"
+  },
+  "triggerDomDebounceLabel": {
+    "message": "去抖(ms)",
+    "description": "Auto-synced key"
+  },
+  "triggerDomOnce": {
+    "message": "仅触发一次",
+    "description": "Auto-synced key"
+  },
+  "triggerDomSelectorLabel": {
+    "message": "选择器",
+    "description": "Auto-synced key"
+  },
+  "triggerDomTitle": {
+    "message": "DOM 变化",
+    "description": "Auto-synced key"
+  },
+  "triggerEnabled": {
+    "message": "启用触发器",
+    "description": "Auto-synced key"
+  },
+  "triggerModeCommand": {
+    "message": "快捷键",
+    "description": "Auto-synced key"
+  },
+  "triggerModeContextMenu": {
+    "message": "右键菜单",
+    "description": "Auto-synced key"
+  },
+  "triggerModeDom": {
+    "message": "DOM 变化",
+    "description": "Auto-synced key"
+  },
+  "triggerModeManual": {
+    "message": "手动",
+    "description": "Auto-synced key"
+  },
+  "triggerModeSchedule": {
+    "message": "定时",
+    "description": "Auto-synced key"
+  },
+  "triggerModeUrl": {
+    "message": "访问 URL",
+    "description": "Auto-synced key"
+  },
+  "triggerModesTitle": {
+    "message": "触发方式",
+    "description": "Auto-synced key"
+  },
+  "triggerScheduleWhenPlaceholder": {
+    "message": "5 或 09:00 或 2025-01-01T10:00:00",
+    "description": "Auto-synced key"
+  },
+  "triggerSummaryNote": {
+    "message": "说明：触发器会在保存工作流时同步到后台触发表（URL/右键/快捷键/DOM）和计划任务（间隔/每天/一次）。",
+    "description": "Auto-synced key"
+  },
+  "triggerUrlMatchTitle": {
+    "message": "访问 URL 匹配",
+    "description": "Auto-synced key"
+  },
+  "triggerUrlRuleDomainContains": {
+    "message": "域名包含",
+    "description": "Auto-synced key"
+  },
+  "triggerUrlRulePathPrefix": {
+    "message": "路径前缀",
+    "description": "Auto-synced key"
+  },
+  "triggerUrlRulePlaceholder": {
+    "message": "例如 https://example.com/app",
+    "description": "Auto-synced key"
+  },
+  "triggerUrlRuleUrlPrefix": {
+    "message": "前缀 URL",
+    "description": "Auto-synced key"
   }
 }

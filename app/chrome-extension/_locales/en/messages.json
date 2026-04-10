@@ -1346,5 +1346,421 @@
   "sidepanelWorkflowEditNotImplemented": {
     "message": "sidepanelWorkflowEditNotImplemented",
     "description": "Auto-synced key: sidepanelWorkflowEditNotImplemented"
+  },
+  "builderAutoLayoutTitle": {
+    "message": "Auto layout",
+    "description": "Auto-synced key"
+  },
+  "builderDescriptionLabel": {
+    "message": "Description",
+    "description": "Auto-synced key"
+  },
+  "builderDescriptionPlaceholder": {
+    "message": "Optional description",
+    "description": "Auto-synced key"
+  },
+  "builderEditingPrefix": {
+    "message": "Editing: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderEditorTitle": {
+    "message": "Workflow Editor",
+    "description": "Auto-synced key"
+  },
+  "builderExportButton": {
+    "message": "Export",
+    "description": "Auto-synced key"
+  },
+  "builderExportFailed": {
+    "message": "Export failed: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderExportTitle": {
+    "message": "Export JSON",
+    "description": "Auto-synced key"
+  },
+  "builderFallbackApplied": {
+    "message": "Fallback applied: promoted $ARG1$ priority",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderFitViewTitle": {
+    "message": "Fit view",
+    "description": "Auto-synced key"
+  },
+  "builderFlowNotFound": {
+    "message": "Workflow \"$ARG1$\" not found; created a new workflow",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderImportButton": {
+    "message": "Import",
+    "description": "Auto-synced key"
+  },
+  "builderImportFailed": {
+    "message": "Import failed: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderImportNoFlow": {
+    "message": "Import failed: no workflow data found",
+    "description": "Auto-synced key"
+  },
+  "builderImportTitle": {
+    "message": "Import JSON",
+    "description": "Auto-synced key"
+  },
+  "builderLoadFailed": {
+    "message": "Failed to load workflow: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderManageTriggersTitle": {
+    "message": "Manage triggers",
+    "description": "Auto-synced key"
+  },
+  "builderNameLabel": {
+    "message": "Name",
+    "description": "Auto-synced key"
+  },
+  "builderNamePlaceholder": {
+    "message": "Workflow name",
+    "description": "Auto-synced key"
+  },
+  "builderNewFlowName": {
+    "message": "New Workflow",
+    "description": "Auto-synced key"
+  },
+  "builderNewFlowTitle": {
+    "message": "New Workflow",
+    "description": "Auto-synced key"
+  },
+  "builderRedoTitle": {
+    "message": "Redo (Cmd/Ctrl+Shift+Z)",
+    "description": "Auto-synced key"
+  },
+  "builderRenameButton": {
+    "message": "Rename",
+    "description": "Auto-synced key"
+  },
+  "builderRenameDialogTitle": {
+    "message": "Rename Workflow",
+    "description": "Auto-synced key"
+  },
+  "builderRenameFlowTitle": {
+    "message": "Rename workflow",
+    "description": "Auto-synced key"
+  },
+  "builderRunAllTitle": {
+    "message": "Run full workflow",
+    "description": "Auto-synced key"
+  },
+  "builderRunButton": {
+    "message": "Run",
+    "description": "Auto-synced key"
+  },
+  "builderRunFailed": {
+    "message": "Run failed: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderRunFromSelectedButton": {
+    "message": "Run from selected",
+    "description": "Auto-synced key"
+  },
+  "builderRunFromSelectedTitle": {
+    "message": "Replay from selected node",
+    "description": "Auto-synced key"
+  },
+  "builderSaveFailed": {
+    "message": "Save failed: $ARG1$",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "builderSavedStatus": {
+    "message": "Saved",
+    "description": "Auto-synced key"
+  },
+  "builderSavingStatus": {
+    "message": "Saving...",
+    "description": "Auto-synced key"
+  },
+  "builderScheduleConvertFailed": {
+    "message": "Node $ARG1$ schedule #$ARG2$: cannot convert to cron (type=$ARG3$), skipped",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      },
+      "arg3": {
+        "content": "$3",
+        "example": "3"
+      }
+    }
+  },
+  "builderScheduleOnceUnsupported": {
+    "message": "Node $ARG1$ schedule #$ARG2$: one-time schedule (once) is not supported in V3, skipped",
+    "description": "Auto-synced key",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      },
+      "arg2": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "builderTip": {
+    "message": "Visual workflow orchestration",
+    "description": "Auto-synced key"
+  },
+  "builderTriggersButton": {
+    "message": "Triggers",
+    "description": "Auto-synced key"
+  },
+  "builderUndo": {
+    "message": "Undo",
+    "description": "Auto-synced key"
+  },
+  "builderUndoTitle": {
+    "message": "Undo (Cmd/Ctrl+Z)",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelCommonSettingsTitle": {
+    "message": "Common Settings",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelConfigErrorTitle": {
+    "message": "Configuration Errors",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelDeleteNodeTitle": {
+    "message": "Delete node",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelEmptyLine1": {
+    "message": "Select a node",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelEmptyLine2": {
+    "message": "to view and edit properties",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelExtractNeedSaveVar": {
+    "message": "Save variable name is required",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelExtractNeedSelectorOrJs": {
+    "message": "Provide selector or js",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelNodeNameLabel": {
+    "message": "Node Name",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelNodeNamePlaceholder": {
+    "message": "Enter node name",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelNodePropertiesTitle": {
+    "message": "Node Properties",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelPromptNewSubflowId": {
+    "message": "Enter new subflow ID",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelScreenshotOnFailLabel": {
+    "message": "Capture screenshot on failure",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelTimeoutLabel": {
+    "message": "Timeout (ms)",
+    "description": "Auto-synced key"
+  },
+  "propertyPanelTimeoutPlaceholder": {
+    "message": "Use global timeout by default",
+    "description": "Auto-synced key"
+  },
+  "triggerAddSchedule": {
+    "message": "+ Add schedule",
+    "description": "Auto-synced key"
+  },
+  "triggerAddUrlRule": {
+    "message": "+ Add rule",
+    "description": "Auto-synced key"
+  },
+  "triggerCommandHint": {
+    "message": "Tip: Chrome extension shortcuts must be declared in manifest and cannot be added dynamically at runtime.",
+    "description": "Auto-synced key"
+  },
+  "triggerCommandLabel": {
+    "message": "Command key (must be declared in manifest commands)",
+    "description": "Auto-synced key"
+  },
+  "triggerCommandPlaceholder": {
+    "message": "e.g. run_quick_trigger_1",
+    "description": "Auto-synced key"
+  },
+  "triggerCommandTitle": {
+    "message": "Shortcut",
+    "description": "Auto-synced key"
+  },
+  "triggerContextMenuDefaultTitle": {
+    "message": "Run Workflow",
+    "description": "Auto-synced key"
+  },
+  "triggerContextMenuLabel": {
+    "message": "Title",
+    "description": "Auto-synced key"
+  },
+  "triggerContextMenuPlaceholder": {
+    "message": "Menu title",
+    "description": "Auto-synced key"
+  },
+  "triggerContextMenuTitle": {
+    "message": "Context Menu",
+    "description": "Auto-synced key"
+  },
+  "triggerContextScopeLabel": {
+    "message": "Scope",
+    "description": "Auto-synced key"
+  },
+  "triggerDescriptionOptional": {
+    "message": "Description (Optional)",
+    "description": "Auto-synced key"
+  },
+  "triggerDescriptionPlaceholder": {
+    "message": "Describe what this trigger is for",
+    "description": "Auto-synced key"
+  },
+  "triggerDomAppear": {
+    "message": "Trigger when appears",
+    "description": "Auto-synced key"
+  },
+  "triggerDomDebounceLabel": {
+    "message": "Debounce (ms)",
+    "description": "Auto-synced key"
+  },
+  "triggerDomOnce": {
+    "message": "Trigger only once",
+    "description": "Auto-synced key"
+  },
+  "triggerDomSelectorLabel": {
+    "message": "Selector",
+    "description": "Auto-synced key"
+  },
+  "triggerDomTitle": {
+    "message": "DOM Changes",
+    "description": "Auto-synced key"
+  },
+  "triggerEnabled": {
+    "message": "Enable trigger",
+    "description": "Auto-synced key"
+  },
+  "triggerModeCommand": {
+    "message": "Shortcut",
+    "description": "Auto-synced key"
+  },
+  "triggerModeContextMenu": {
+    "message": "Context menu",
+    "description": "Auto-synced key"
+  },
+  "triggerModeDom": {
+    "message": "DOM changes",
+    "description": "Auto-synced key"
+  },
+  "triggerModeManual": {
+    "message": "Manual",
+    "description": "Auto-synced key"
+  },
+  "triggerModeSchedule": {
+    "message": "Schedule",
+    "description": "Auto-synced key"
+  },
+  "triggerModeUrl": {
+    "message": "Visit URL",
+    "description": "Auto-synced key"
+  },
+  "triggerModesTitle": {
+    "message": "Trigger Modes",
+    "description": "Auto-synced key"
+  },
+  "triggerScheduleWhenPlaceholder": {
+    "message": "5 or 09:00 or 2025-01-01T10:00:00",
+    "description": "Auto-synced key"
+  },
+  "triggerSummaryNote": {
+    "message": "Note: Triggers are synced to background trigger registry (URL/context menu/shortcut/DOM) and schedules (interval/daily/once) when saving workflow.",
+    "description": "Auto-synced key"
+  },
+  "triggerUrlMatchTitle": {
+    "message": "URL Match Rules",
+    "description": "Auto-synced key"
+  },
+  "triggerUrlRuleDomainContains": {
+    "message": "Domain contains",
+    "description": "Auto-synced key"
+  },
+  "triggerUrlRulePathPrefix": {
+    "message": "Path prefix",
+    "description": "Auto-synced key"
+  },
+  "triggerUrlRulePlaceholder": {
+    "message": "e.g. https://example.com/app",
+    "description": "Auto-synced key"
+  },
+  "triggerUrlRuleUrlPrefix": {
+    "message": "URL prefix",
+    "description": "Auto-synced key"
   }
 }

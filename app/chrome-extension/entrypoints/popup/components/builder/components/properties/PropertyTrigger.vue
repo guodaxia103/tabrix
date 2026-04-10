@@ -2,54 +2,64 @@
   <div class="form-section">
     <div class="form-group checkbox-group">
       <label class="checkbox-label"
-        ><input type="checkbox" v-model="cfg.enabled" /> 启用触发器</label
+        ><input type="checkbox" v-model="cfg.enabled" /> {{ getMessage('triggerEnabled') }}</label
       >
     </div>
     <div class="form-group">
-      <label class="form-label">描述（可选）</label>
-      <input class="form-input" v-model="cfg.description" placeholder="说明此触发器的用途" />
+      <label class="form-label">{{ getMessage('triggerDescriptionOptional') }}</label>
+      <input
+        class="form-input"
+        v-model="cfg.description"
+        :placeholder="getMessage('triggerDescriptionPlaceholder')"
+      />
     </div>
   </div>
 
   <div class="divider"></div>
 
   <div class="form-section">
-    <div class="section-header"><span class="section-title">触发方式</span></div>
+    <div class="section-header"
+      ><span class="section-title">{{ getMessage('triggerModesTitle') }}</span></div
+    >
     <div class="form-group checkbox-group">
       <label class="checkbox-label"
-        ><input type="checkbox" v-model="cfg.modes.manual" /> 手动</label
+        ><input type="checkbox" v-model="cfg.modes.manual" />
+        {{ getMessage('triggerModeManual') }}</label
       >
       <label class="checkbox-label"
-        ><input type="checkbox" v-model="cfg.modes.url" /> 访问 URL</label
+        ><input type="checkbox" v-model="cfg.modes.url" /> {{ getMessage('triggerModeUrl') }}</label
       >
       <label class="checkbox-label"
-        ><input type="checkbox" v-model="cfg.modes.contextMenu" /> 右键菜单</label
+        ><input type="checkbox" v-model="cfg.modes.contextMenu" />
+        {{ getMessage('triggerModeContextMenu') }}</label
       >
       <label class="checkbox-label"
-        ><input type="checkbox" v-model="cfg.modes.command" /> 快捷键</label
+        ><input type="checkbox" v-model="cfg.modes.command" />
+        {{ getMessage('triggerModeCommand') }}</label
       >
       <label class="checkbox-label"
-        ><input type="checkbox" v-model="cfg.modes.dom" /> DOM 变化</label
+        ><input type="checkbox" v-model="cfg.modes.dom" /> {{ getMessage('triggerModeDom') }}</label
       >
       <label class="checkbox-label"
-        ><input type="checkbox" v-model="cfg.modes.schedule" /> 定时</label
+        ><input type="checkbox" v-model="cfg.modes.schedule" />
+        {{ getMessage('triggerModeSchedule') }}</label
       >
     </div>
   </div>
 
   <div v-if="cfg.modes.url" class="form-section">
-    <div class="section-title">访问 URL 匹配</div>
+    <div class="section-title">{{ getMessage('triggerUrlMatchTitle') }}</div>
     <div class="selector-list">
       <div v-for="(r, i) in urlRules" :key="i" class="selector-item">
         <select class="form-select-sm" v-model="r.kind">
-          <option value="url">前缀 URL</option>
-          <option value="domain">域名包含</option>
-          <option value="path">路径前缀</option>
+          <option value="url">{{ getMessage('triggerUrlRuleUrlPrefix') }}</option>
+          <option value="domain">{{ getMessage('triggerUrlRuleDomainContains') }}</option>
+          <option value="path">{{ getMessage('triggerUrlRulePathPrefix') }}</option>
         </select>
         <input
           class="form-input-sm flex-1"
           v-model="r.value"
-          placeholder="例如 https://example.com/app"
+          :placeholder="getMessage('triggerUrlRulePlaceholder')"
         />
         <button class="btn-icon-sm" @click="move(urlRules, i, -1)" :disabled="i === 0">↑</button>
         <button
@@ -61,17 +71,23 @@
         <button class="btn-icon-sm danger" @click="urlRules.splice(i, 1)">×</button>
       </div>
     </div>
-    <button class="btn-sm" @click="urlRules.push({ kind: 'url', value: '' })">+ 添加匹配</button>
+    <button class="btn-sm" @click="urlRules.push({ kind: 'url', value: '' })">
+      {{ getMessage('triggerAddUrlRule') }}
+    </button>
   </div>
 
   <div v-if="cfg.modes.contextMenu" class="form-section">
-    <div class="section-title">右键菜单</div>
+    <div class="section-title">{{ getMessage('triggerContextMenuTitle') }}</div>
     <div class="form-group">
-      <label class="form-label">标题</label>
-      <input class="form-input" v-model="cfg.contextMenu.title" placeholder="菜单标题" />
+      <label class="form-label">{{ getMessage('triggerContextMenuLabel') }}</label>
+      <input
+        class="form-input"
+        v-model="cfg.contextMenu.title"
+        :placeholder="getMessage('triggerContextMenuPlaceholder')"
+      />
     </div>
     <div class="form-group">
-      <label class="form-label">作用范围</label>
+      <label class="form-label">{{ getMessage('triggerContextScopeLabel') }}</label>
       <div class="checkbox-group">
         <label class="checkbox-label" v-for="c in menuContexts" :key="c">
           <input type="checkbox" :value="c" v-model="cfg.contextMenu.contexts" /> {{ c }}
@@ -81,55 +97,59 @@
   </div>
 
   <div v-if="cfg.modes.command" class="form-section">
-    <div class="section-title">快捷键</div>
+    <div class="section-title">{{ getMessage('triggerCommandTitle') }}</div>
     <div class="form-group">
-      <label class="form-label">命令键（需预先在 manifest commands 中声明）</label>
+      <label class="form-label">{{ getMessage('triggerCommandLabel') }}</label>
       <input
         class="form-input"
         v-model="cfg.command.commandKey"
-        placeholder="例如 run_quick_trigger_1"
+        :placeholder="getMessage('triggerCommandPlaceholder')"
       />
     </div>
-    <div class="text-xs text-slate-500" style="padding: 0 20px"
-      >提示：Chrome 扩展快捷键需要在 manifest 里固定声明，无法运行时动态添加。</div
-    >
+    <div class="text-xs text-slate-500" style="padding: 0 20px">{{
+      getMessage('triggerCommandHint')
+    }}</div>
   </div>
 
   <div v-if="cfg.modes.dom" class="form-section">
-    <div class="section-title">DOM 变化</div>
+    <div class="section-title">{{ getMessage('triggerDomTitle') }}</div>
     <div class="form-group">
-      <label class="form-label">选择器</label>
+      <label class="form-label">{{ getMessage('triggerDomSelectorLabel') }}</label>
       <input class="form-input" v-model="cfg.dom.selector" placeholder="#app .item" />
     </div>
     <div class="form-group checkbox-group">
       <label class="checkbox-label"
-        ><input type="checkbox" v-model="cfg.dom.appear" /> 出现时触发</label
+        ><input type="checkbox" v-model="cfg.dom.appear" />
+        {{ getMessage('triggerDomAppear') }}</label
       >
       <label class="checkbox-label"
-        ><input type="checkbox" v-model="cfg.dom.once" /> 仅触发一次</label
+        ><input type="checkbox" v-model="cfg.dom.once" /> {{ getMessage('triggerDomOnce') }}</label
       >
     </div>
     <div class="form-group">
-      <label class="form-label">去抖(ms)</label>
+      <label class="form-label">{{ getMessage('triggerDomDebounceLabel') }}</label>
       <input class="form-input" type="number" min="0" v-model.number="cfg.dom.debounceMs" />
     </div>
   </div>
 
   <div v-if="cfg.modes.schedule" class="form-section">
-    <div class="section-title">定时</div>
+    <div class="section-title">{{ getMessage('scheduleTitle') }}</div>
     <div class="selector-list">
       <div v-for="(s, i) in schedules" :key="i" class="selector-item">
         <select class="form-select-sm" v-model="s.type">
-          <option value="interval">间隔(分钟)</option>
-          <option value="daily">每天(HH:mm)</option>
-          <option value="once">一次(ISO时间)</option>
+          <option value="interval">{{ getMessage('scheduleTypeInterval') }}</option>
+          <option value="daily">{{ getMessage('scheduleTypeDaily') }}</option>
+          <option value="once">{{ getMessage('scheduleTypeOnce') }}</option>
         </select>
         <input
           class="form-input-sm flex-1"
           v-model="s.when"
-          placeholder="5 或 09:00 或 2025-01-01T10:00:00"
+          :placeholder="getMessage('triggerScheduleWhenPlaceholder')"
         />
-        <label class="checkbox-label"><input type="checkbox" v-model="s.enabled" /> 启用</label>
+        <label class="checkbox-label"
+          ><input type="checkbox" v-model="s.enabled" />
+          {{ getMessage('scheduleEnabledLabel') }}</label
+        >
         <button class="btn-icon-sm" @click="move(schedules, i, -1)" :disabled="i === 0">↑</button>
         <button
           class="btn-icon-sm"
@@ -140,24 +160,25 @@
         <button class="btn-icon-sm danger" @click="schedules.splice(i, 1)">×</button>
       </div>
     </div>
-    <button class="btn-sm" @click="schedules.push({ type: 'interval', when: '5', enabled: true })"
-      >+ 添加定时</button
+    <button
+      class="btn-sm"
+      @click="schedules.push({ type: 'interval', when: '5', enabled: true })"
+      >{{ getMessage('triggerAddSchedule') }}</button
     >
   </div>
 
   <div class="divider"></div>
   <div class="form-section">
-    <div class="text-xs text-slate-500" style="padding: 0 20px"
-      >说明：
-      触发器会在保存工作流时同步到后台触发表（URL/右键/快捷键/DOM）和计划任务（间隔/每天/一次）。
-    </div>
+    <div class="text-xs text-slate-500" style="padding: 0 20px">{{
+      getMessage('triggerSummaryNote')
+    }}</div>
   </div>
 </template>
 
 <script lang="ts" setup>
- 
 import { computed } from 'vue';
 import type { NodeBase } from '@/entrypoints/background/record-replay/types';
+import { getMessage } from '@/utils/i18n';
 
 const props = defineProps<{ node: NodeBase }>();
 
@@ -175,7 +196,11 @@ function ensure() {
     };
   if (!n.config.url) n.config.url = { rules: [] };
   if (!n.config.contextMenu)
-    n.config.contextMenu = { title: '运行工作流', contexts: ['all'], enabled: false };
+    n.config.contextMenu = {
+      title: getMessage('triggerContextMenuDefaultTitle'),
+      contexts: ['all'],
+      enabled: false,
+    };
   if (!n.config.command) n.config.command = { commandKey: '', enabled: false };
   if (!n.config.dom)
     n.config.dom = { selector: '', appear: true, once: true, debounceMs: 800, enabled: false };
