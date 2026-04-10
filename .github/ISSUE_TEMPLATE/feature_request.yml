@@ -1,0 +1,44 @@
+name: Feature Request
+description: Propose a new capability or enhancement
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Great ideas make Tabrix better for everyone.
+        Please focus on user value and practical usage.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What user pain does this solve?
+      placeholder: Describe the current limitation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      placeholder: Describe the feature and expected UX/API behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      placeholder: Any workarounds or alternative approaches?
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who benefits and how?
+      placeholder: e.g. New users, extension developers, MCP client integrators
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-check
+      options:
+        - label: I searched existing issues and discussions for duplicates.
+          required: true

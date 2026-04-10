@@ -99,6 +99,8 @@ tabrix smoke
 欢迎首次贡献者和长期维护者共同参与。
 
 - 贡献指南：[CONTRIBUTING_zh.md](docs/CONTRIBUTING_zh.md)
+- 新手任务入口：[good first issue 列表](https://github.com/guodaxia103/tabrix/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22)
+- 社区讨论区：[GitHub Discussions](https://github.com/guodaxia103/tabrix/discussions)
 - 架构说明：[ARCHITECTURE_zh.md](docs/ARCHITECTURE_zh.md)
 - 安全模型：[SECURITY.md](docs/SECURITY.md)
 - 错误码：[ERROR_CODES.md](docs/ERROR_CODES.md)

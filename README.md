@@ -98,6 +98,8 @@ If you want to co-build any roadmap item, open an issue with label proposal and 
 Contributions are welcome from both first-time contributors and maintainers.
 
 - Start here: [Contributing Guide](docs/CONTRIBUTING.md)
+- Good first issues: [Start with beginner-friendly tasks](https://github.com/guodaxia103/tabrix/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22)
+- Community discussions: [GitHub Discussions](https://github.com/guodaxia103/tabrix/discussions)
 - Architecture: [ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Security model: [SECURITY.md](docs/SECURITY.md)
 - Error codes: [ERROR_CODES.md](docs/ERROR_CODES.md)

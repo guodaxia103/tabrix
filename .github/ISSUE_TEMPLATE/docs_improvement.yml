@@ -1,0 +1,26 @@
+name: Docs Improvement
+description: Suggest documentation fixes or clarity improvements
+title: "[Docs] "
+labels:
+  - documentation
+body:
+  - type: textarea
+    id: location
+    attributes:
+      label: Document Location
+      description: Which file or section?
+      placeholder: e.g. README.md quick start, docs/STABLE_QUICKSTART.md
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: What is unclear or incorrect?
+      placeholder: Describe the problem in current docs.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested Improvement
+      placeholder: Propose the exact wording or structure change.
