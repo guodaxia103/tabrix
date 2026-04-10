@@ -2,6 +2,8 @@
 
 Release date: 2026-04-10
 
+> Note (current install line): package distribution is now `@tabrix/tabrix` (migrated after initial 2.0.0 train).
+
 ## Context
 
 Tabrix is a community-maintained continuation of the original open-source project [`hangwin/mcp-chrome`](https://github.com/hangwin/mcp-chrome).
@@ -49,8 +51,8 @@ Baseline used for this release note:
 ## Added
 
 - Latest-install standardization:
-  - `npm install -g tabrix@latest`
-  - `pnpm install -g tabrix@latest`
+  - `npm install -g @tabrix/tabrix@latest`
+  - `pnpm install -g @tabrix/tabrix@latest`
 - Automated npm publishing workflow based on Git tags (`v*` / `tabrix-v*`).
 - Portable assistant skill renamed and aligned to Tabrix: `skills/tabrix_browser`.
 

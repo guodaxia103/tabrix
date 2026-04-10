@@ -69,7 +69,7 @@ If the npm package is installed correctly, a file named `com.tabrix.nativehost.j
 4. **Check if you have execution permissions**
    You need to check your installation path (if unclear, open the manifest file in step 2, the path field shows the installation directory). For example, if the Mac installation path is as follows:
 
-`xxx/node_modules/tabrix/dist/run_host.sh`
+`xxx/node_modules/@tabrix/tabrix/dist/run_host.sh`
 
 Check if this script has execution permissions. Run to fix:
 

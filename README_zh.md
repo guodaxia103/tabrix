@@ -200,13 +200,13 @@ tabrix daemon remove-autostart
 
 ```sh
 # npm 查看方式
-npm list -g tabrix
+npm list -g @tabrix/tabrix
 # pnpm 查看方式
-pnpm list -g tabrix
+pnpm list -g @tabrix/tabrix
 ```
 
 假设上面的命令输出的路径是：/Users/xxx/Library/pnpm/global/5
-那么你的最终路径就是：/Users/xxx/Library/pnpm/global/5/node_modules/tabrix/dist/mcp/mcp-server-stdio.js
+那么你的最终路径就是：/Users/xxx/Library/pnpm/global/5/node_modules/@tabrix/tabrix/dist/mcp/mcp-server-stdio.js
 
 2. 把下面的配置替换成你刚刚得到的最终路径
 
@@ -217,7 +217,7 @@ pnpm list -g tabrix
       "command": "npx",
       "args": [
         "node",
-        "/Users/xxx/Library/pnpm/global/5/node_modules/tabrix/dist/mcp/mcp-server-stdio.js"
+        "/Users/xxx/Library/pnpm/global/5/node_modules/@tabrix/tabrix/dist/mcp/mcp-server-stdio.js"
       ]
     }
   }

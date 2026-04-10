@@ -59,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Latest-install standardization for public users: `npm install -g tabrix@latest` and `pnpm install -g tabrix@latest`.
+- Latest-install standardization for public users: `npm install -g @tabrix/tabrix@latest` and `pnpm install -g @tabrix/tabrix@latest`.
 - Git tag based npm auto-publish workflow (`v*` / `tabrix-v*`) with provenance.
 - Portable assistant skill renamed to `tabrix_browser` and linked in README.
 

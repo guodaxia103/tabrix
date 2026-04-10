@@ -67,7 +67,7 @@ mac路径： /Users/xxx/Library/Application\ Support/Google/Chrome/NativeMessagi
 {
   "name": "com.tabrix.nativehost",
   "description": "Node.js Host for Browser Bridge Extension",
-  "path": "/Users/xxx/Library/pnpm/global/5/.pnpm/tabrix@1.0.23/node_modules/tabrix/dist/run_host.sh",
+  "path": "/Users/xxx/Library/pnpm/global/5/.pnpm/@tabrix+tabrix@2.0.3/node_modules/@tabrix/tabrix/dist/run_host.sh",
   "type": "stdio",
   "allowed_origins": ["chrome-extension://hbdgbgagpkpjffpklnamcljpakneikee/"]
 }

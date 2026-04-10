@@ -176,7 +176,7 @@ tabrix daemon stop
 
 ```powershell
 # 查看 stdio 入口文件路径
-npm list -g tabrix
+npm list -g @tabrix/tabrix
 ```
 
 通过标准：

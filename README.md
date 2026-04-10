@@ -200,13 +200,13 @@ If your client only supports stdio connection method, please use the following a
 
 ```sh
 # npm check method
-npm list -g tabrix
+npm list -g @tabrix/tabrix
 # pnpm check method
-pnpm list -g tabrix
+pnpm list -g @tabrix/tabrix
 ```
 
 Assuming the command above outputs the path: /Users/xxx/Library/pnpm/global/5
-Then your final path would be: /Users/xxx/Library/pnpm/global/5/node_modules/tabrix/dist/mcp/mcp-server-stdio.js
+Then your final path would be: /Users/xxx/Library/pnpm/global/5/node_modules/@tabrix/tabrix/dist/mcp/mcp-server-stdio.js
 
 2. Replace the configuration below with the final path you just obtained
 
@@ -217,7 +217,7 @@ Then your final path would be: /Users/xxx/Library/pnpm/global/5/node_modules/tab
       "command": "npx",
       "args": [
         "node",
-        "/Users/xxx/Library/pnpm/global/5/node_modules/tabrix/dist/mcp/mcp-server-stdio.js"
+        "/Users/xxx/Library/pnpm/global/5/node_modules/@tabrix/tabrix/dist/mcp/mcp-server-stdio.js"
       ]
     }
   }

@@ -6,7 +6,7 @@
 ## 前置条件
 
 1. Chrome 扩展已加载并点击 **Connect**
-2. `tabrix` 已全局安装（`npm i -g tabrix@latest`）
+2. `tabrix` 已全局安装（`npm i -g @tabrix/tabrix@latest`）
 3. 运行 `tabrix doctor` 确认一切正常
 
 ---
@@ -125,16 +125,16 @@ claude mcp add chrome-mcp --transport http http://127.0.0.1:12306/mcp
 
 ```bash
 # npm
-npm list -g tabrix
-# 输出路径 + /node_modules/tabrix/dist/mcp/mcp-server-stdio.js
+npm list -g @tabrix/tabrix
+# 输出路径 + /node_modules/@tabrix/tabrix/dist/mcp/mcp-server-stdio.js
 
 # pnpm
-pnpm list -g tabrix
+pnpm list -g @tabrix/tabrix
 ```
 
 ### 全局安装后直接使用（推荐）
 
-`npm i -g tabrix@latest` 后，`tabrix-stdio` 命令即可用：
+`npm i -g @tabrix/tabrix@latest` 后，`tabrix-stdio` 命令即可用：
 
 ```json
 {
@@ -155,7 +155,7 @@ pnpm list -g tabrix
   "mcpServers": {
     "chrome-mcp": {
       "command": "node",
-      "args": ["/path/to/node_modules/tabrix/dist/mcp/mcp-server-stdio.js"]
+      "args": ["/path/to/node_modules/@tabrix/tabrix/dist/mcp/mcp-server-stdio.js"]
     }
   }
 }
@@ -168,7 +168,7 @@ pnpm list -g tabrix
   "mcpServers": {
     "chrome-mcp": {
       "command": "npx",
-      "args": ["-p", "tabrix", "tabrix-stdio"]
+      "args": ["-p", "@tabrix/tabrix", "tabrix-stdio"]
     }
   }
 }
