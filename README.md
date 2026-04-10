@@ -10,7 +10,7 @@ Turn real Chrome into an MCP-native AI execution layer.
 
 Tabrix is a Chrome extension + local native server that lets any MCP client operate your daily browser session safely and efficiently, with your existing logins, cookies, and browsing context.
 
-**Documentation**: [English](README.md) | [中文](README_zh.md)
+**Documentation**: [English](README.md) | [Chinese](README_zh.md)
 
 ---
 
@@ -96,15 +96,15 @@ Turn on `Remote Access` in extension popup and expose:
 ### Enable In 30 Seconds
 
 1. Open extension popup -> switch to `Remote` -> enable `Remote Access`
-2. Open `Token 管理` and copy current token (or click refresh)
+2. Open `Token Management` and copy current token (or click refresh)
 3. Paste LAN config to your MCP client and start remote automation
 
 ### Security Default
 
 - Remote mode must use bearer-token authentication
-- Extension `Token 管理` page supports view/copy/refresh
+- Extension `Token Management` page supports view/copy/refresh
 - Token validity is configurable:
-  - Set custom days in `Token 管理` -> `Refresh Token`
+  - Set custom days in `Token Management` -> `Refresh Token`
   - Or set `MCP_AUTH_TOKEN_TTL` (`0` means never expire)
 - If `MCP_AUTH_TOKEN` env is set, env token always has priority
 
@@ -200,7 +200,7 @@ tabrix daemon stop
 
 Full command reference: [CLI.md](docs/CLI.md)
 
-Full tool list: [TOOLS API (EN)](docs/TOOLS.md) | [工具 API (中文)](docs/TOOLS_zh.md)
+Full tool list: [TOOLS API (EN)](docs/TOOLS.md) | [TOOLS API (ZH)](docs/TOOLS_zh.md)
 
 ## Roadmap (Open Source + Product)
 
