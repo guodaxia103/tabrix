@@ -100,6 +100,8 @@ Tabrix is a Chrome extension-based **Model Context Protocol (MCP) server** that 
 
 Download link: https://github.com/guodaxia103/tabrix/releases
 
+Recommended asset name in each release: `tabrix-extension-vX.Y.Z.zip`
+
 2. **Install tabrix globally**
 
 npm

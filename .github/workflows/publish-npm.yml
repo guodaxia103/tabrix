@@ -1,4 +1,4 @@
-name: Publish Tabrix To npm
+name: Release Tabrix
 
 on:
   push:
@@ -6,17 +6,30 @@ on:
       - 'v*'
       - 'tabrix-v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release (example: v2.0.0)'
+        required: true
+        type: string
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout manual tag
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          git checkout "refs/tags/${{ github.event.inputs.tag }}"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -30,30 +43,96 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          EXPECTED="${TAG#tabrix-v}"
+          EXPECTED="${EXPECTED#v}"
+          ACTUAL="$(node -p "require('./app/native-server/package.json').version")"
+
+          echo "Tag: ${TAG}"
+          echo "Expected version: ${EXPECTED}"
+          echo "Package version: ${ACTUAL}"
+
+          if [ "${EXPECTED}" != "${ACTUAL}" ]; then
+            echo "Version mismatch: tag=${EXPECTED}, package=${ACTUAL}"
+            exit 1
+          fi
+
+          NOTES_CANDIDATE="docs/RELEASE_NOTES_v${ACTUAL}.md"
+          if [ -f "${NOTES_CANDIDATE}" ]; then
+            NOTES_FILE="${NOTES_CANDIDATE}"
+          else
+            NOTES_FILE="docs/CHANGELOG.md"
+          fi
+
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${ACTUAL}" >> "$GITHUB_OUTPUT"
+          echo "notes_file=${NOTES_FILE}" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build shared + native package
         run: pnpm --filter tabrix build
 
-      - name: Validate tag matches package version
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Build extension zip
+        run: pnpm --filter chrome-mcp-server zip
+
+      - name: Pack npm tarball
         shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          EXPECTED="${TAG#tabrix-v}"
-          EXPECTED="${EXPECTED#v}"
-          ACTUAL="$(node -p "require('./app/native-server/package.json').version")"
-          echo "Tag: ${TAG}"
-          echo "Expected version: ${EXPECTED}"
-          echo "Package version: ${ACTUAL}"
-          if [ "$EXPECTED" != "$ACTUAL" ]; then
-            echo "Version mismatch: tag=${EXPECTED}, package=${ACTUAL}"
-            exit 1
+          cd app/native-server
+          npm pack
+
+      - name: Prepare release assets
+        id: assets
+        shell: bash
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          mkdir -p artifacts
+
+          EXT_ZIP="$(ls app/chrome-extension/.output/*-chrome.zip | head -n 1)"
+          NPM_TGZ="app/native-server/tabrix-${VERSION}.tgz"
+
+          cp "${EXT_ZIP}" "artifacts/tabrix-extension-v${VERSION}.zip"
+          cp "${NPM_TGZ}" "artifacts/tabrix-v${VERSION}.tgz"
+
+          echo "extension_asset=artifacts/tabrix-extension-v${VERSION}.zip" >> "$GITHUB_OUTPUT"
+          echo "npm_asset=artifacts/tabrix-v${VERSION}.tgz" >> "$GITHUB_OUTPUT"
+
+      - name: Check npm publication status
+        id: npm_status
+        shell: bash
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          if npm view "tabrix@${VERSION}" version >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish to npm
+        if: steps.npm_status.outputs.already_published == 'false'
         working-directory: app/native-server
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public --provenance
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: Tabrix ${{ steps.meta.outputs.tag }}
+          body_path: ${{ steps.meta.outputs.notes_file }}
+          files: |
+            ${{ steps.assets.outputs.extension_asset }}
+            ${{ steps.assets.outputs.npm_asset }}
+          fail_on_unmatched_files: true

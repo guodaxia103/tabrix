@@ -4,7 +4,7 @@
 
 ### 1. 下载扩展
 
-下载 [tabrix-extension-latest.zip](/releases/chrome-extension/latest/chrome-mcp-server-lastest.zip)
+请前往 [GitHub Releases](https://github.com/guodaxia103/tabrix/releases) 下载最新扩展资产（文件名形如 `tabrix-extension-vX.Y.Z.zip`）。
 
 ### 2. 安装步骤
 

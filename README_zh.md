@@ -99,6 +99,8 @@ Tabrix 是一个基于 Chrome 插件的 **模型上下文协议 (MCP) 服务器*
 
 下载地址：https://github.com/guodaxia103/tabrix/releases
 
+建议优先下载每个版本中的扩展资产：`tabrix-extension-vX.Y.Z.zip`
+
 2. **全局安装tabrix**
 
 npm
