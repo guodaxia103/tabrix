@@ -26,26 +26,21 @@ Tabrix 来源于开源项目 [`hangwin/mcp-chrome`](https://github.com/hangwin/m
 - 每个重要版本都会提供明确的变更说明。
 - 在可行范围内保持向后兼容，降低迁移成本。
 
-## 🔔 Tabrix 2.0.2（2026-04-10）
+## 🔔 Tabrix 2.0.3（2026-04-10）
 
-完整说明见：[Release Notes v2.0.2](docs/RELEASE_NOTES_v2.0.2.md)
+完整说明见：[Release Notes v2.0.3](docs/RELEASE_NOTES_v2.0.3.md)
 
 ### 新增
 
-- npm 包名切换为 scoped 形式：`@tabrix/tabrix`，便于组织级稳定发布。
+- 发布工作流新增 npm 发布后可见性校验（自动轮询 npm registry）。
 
 ### 变更
 
-- 安装命令切换为 scoped 包：
-  - `npm install -g @tabrix/tabrix@latest`
-  - `pnpm install -g @tabrix/tabrix@latest`
-- 发布工作流改为从 `app/native-server/package.json` 动态读取包名和版本。
-- npm 打包产物改为按 `npm pack` 实际输出动态识别，不再写死文件名。
+- 在包元数据中新增明确的 npm `publishConfig`（公开访问与 registry）。
 
 ### 修复
 
-- 修复 scoped 包场景下的 npm 发布状态检测问题。
-- 增强发布诊断（`npm whoami` 预检 + provenance 失败后回退发布尝试）。
+- 修复“发布成功但 npm 侧短时间不可见”导致的假成功问题。
 
 ---
 
@@ -408,7 +403,7 @@ https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
 
 ### 用户文档
 
-- [Release Notes v2.0.2](docs/RELEASE_NOTES_v2.0.2.md) — scoped 包迁移与发布稳定性说明
+- [Release Notes v2.0.3](docs/RELEASE_NOTES_v2.0.3.md) — npm 可见性校验与发布链路加固
 - [为什么选 mcp-chrome？(vs Playwright / browser-use)](docs/WHY_MCP_CHROME.md) — 定位与取舍
 - [快速入门](docs/STABLE_QUICKSTART.md) — 安装、验证、首次成功
 - [工具 API (中文)](docs/TOOLS_zh.md) | [TOOLS API (EN)](docs/TOOLS.md) — 完整工具参考

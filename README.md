@@ -28,26 +28,21 @@ Special thanks to all original maintainers and contributors for building the fou
 - We will publish release notes for every significant version.
 - We will keep practical backward compatibility whenever possible.
 
-## 🔔 Tabrix 2.0.2 (2026-04-10)
+## 🔔 Tabrix 2.0.3 (2026-04-10)
 
-Full notes: [Release Notes v2.0.2](docs/RELEASE_NOTES_v2.0.2.md)
+Full notes: [Release Notes v2.0.3](docs/RELEASE_NOTES_v2.0.3.md)
 
 ### Added
 
-- Scoped npm package name for stable org publishing: `@tabrix/tabrix`.
+- Post-publish npm visibility verification in release workflow.
 
 ### Changed
 
-- Install commands now use the scoped package:
-  - `npm install -g @tabrix/tabrix@latest`
-  - `pnpm install -g @tabrix/tabrix@latest`
-- Release workflow now resolves package name/version dynamically from `app/native-server/package.json`.
-- npm pack artifact detection now uses actual `npm pack` output instead of hard-coded file names.
+- Added explicit npm `publishConfig` (`access: public`, npm registry URL) in package metadata.
 
 ### Fixed
 
-- Fixed npm publication status checks for scoped packages.
-- Improved publish diagnostics (`npm whoami` precheck and provenance fallback publish attempt).
+- Reduced false-positive release success when npm package visibility lags after publish.
 
 ---
 
@@ -409,7 +404,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### For Users
 
-- [Release Notes v2.0.2](docs/RELEASE_NOTES_v2.0.2.md) — scoped package migration and publish reliability
+- [Release Notes v2.0.3](docs/RELEASE_NOTES_v2.0.3.md) — npm visibility verification and release hardening
 - [Why mcp-chrome? (vs Playwright / browser-use)](docs/WHY_MCP_CHROME.md) — positioning and tradeoffs
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md) — install, verify, first success
 - [TOOLS API (EN)](docs/TOOLS.md) | [工具 API (中文)](docs/TOOLS_zh.md) — complete tool reference
