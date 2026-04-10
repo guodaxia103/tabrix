@@ -10,7 +10,7 @@
 </template>
 
 <script lang="ts" setup>
-import type { AgentMessage } from 'chrome-mcp-shared';
+import type { AgentMessage } from '@tabrix/shared';
 import MessageItem from './MessageItem.vue';
 
 defineProps<{

@@ -12,7 +12,7 @@ import type {
   AgentStatusEvent,
   AgentCliPreference,
   AgentUsageStats,
-} from 'chrome-mcp-shared';
+} from '@tabrix/shared';
 
 /**
  * Request lifecycle state.

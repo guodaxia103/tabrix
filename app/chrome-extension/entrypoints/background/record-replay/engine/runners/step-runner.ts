@@ -7,7 +7,7 @@
  */
 
 import type { Flow, Step, StepClick } from '../../types';
-import { STEP_TYPES } from 'chrome-mcp-shared';
+import { STEP_TYPES } from '@tabrix/shared';
 import type { ExecCtx, ExecResult } from '../../nodes';
 import { RunLogger } from '../logging/run-logger';
 import { withRetry } from '../policies/retry';

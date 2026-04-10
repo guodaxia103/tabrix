@@ -5,7 +5,7 @@
     "rootDir": "../..",
     "paths": {
       "chrome-devtools-frontend/*": ["src/shims/devtools.d.ts"],
-      "chrome-mcp-shared": ["../../packages/shared/src/index.ts"]
+      "@tabrix/shared": ["../../packages/shared/src/index.ts"]
     }
   },
   "include": ["src/**/*", "../../packages/shared/src/**/*"]

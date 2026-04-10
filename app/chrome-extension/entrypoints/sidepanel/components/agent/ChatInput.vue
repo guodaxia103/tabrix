@@ -63,7 +63,7 @@
 
 <script lang="ts" setup>
 import { ref, watch } from 'vue';
-import type { AgentAttachment } from 'chrome-mcp-shared';
+import type { AgentAttachment } from '@tabrix/shared';
 import AttachmentPreview from './AttachmentPreview.vue';
 
 const props = defineProps<{

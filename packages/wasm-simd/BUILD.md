@@ -28,7 +28,7 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
    npm run build
 
    # 或者从任何地方使用 pnpm filter
-   pnpm --filter @chrome-mcp/wasm-simd build
+   pnpm --filter @tabrix/wasm-simd build
    ```
 
 3. **开发模式构建**：

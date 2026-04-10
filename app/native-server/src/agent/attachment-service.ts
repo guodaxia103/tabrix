@@ -12,11 +12,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type {
-  AgentAttachment,
-  AttachmentMetadata,
-  AttachmentProjectStats,
-} from 'chrome-mcp-shared';
+import type { AgentAttachment, AttachmentMetadata, AttachmentProjectStats } from '@tabrix/shared';
 import { getAgentDataDir } from './storage';
 
 // ============================================================

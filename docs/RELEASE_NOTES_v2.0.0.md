@@ -66,7 +66,7 @@ Baseline used for this release note:
 
 ## Fixed
 
-- Fixed npm publish/install risk by replacing workspace dependency with semver dependency for `chrome-mcp-shared`.
+- Fixed npm publish/install risk by replacing workspace dependency with semver dependency for `@tabrix/shared`.
 - Added compatibility fallback for remote-access message types when shared enum versions differ.
 
 ## Migration Notes

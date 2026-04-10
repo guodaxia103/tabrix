@@ -1,4 +1,4 @@
-# @chrome-mcp/wasm-simd
+# @tabrix/wasm-simd
 
 SIMD-optimized WebAssembly math functions for high-performance vector operations.
 

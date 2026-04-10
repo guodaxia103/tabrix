@@ -38,5 +38,5 @@ v2.0.4 focuses on remote-control onboarding speed and documentation consistency 
 ## Validation
 
 - `pnpm --filter @tabrix/tabrix typecheck`
-- `pnpm --filter chrome-mcp-server typecheck`
+- `pnpm --filter @tabrix/extension typecheck`
 - `pnpm --filter @tabrix/tabrix test -- src/server/server.test.ts`

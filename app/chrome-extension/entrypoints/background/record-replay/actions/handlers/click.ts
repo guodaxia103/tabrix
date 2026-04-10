@@ -9,7 +9,7 @@
  */
 
 import { handleCallTool } from '@/entrypoints/background/tools';
-import { TOOL_NAMES } from 'chrome-mcp-shared';
+import { TOOL_NAMES } from '@tabrix/shared';
 import { ENGINE_CONSTANTS } from '../../engine/constants';
 import {
   maybeQuickWaitForNav,

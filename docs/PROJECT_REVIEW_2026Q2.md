@@ -35,7 +35,7 @@ Tabrix has evolved from a browser bridge into a product-shaped MCP execution pla
 ### Technical Debt / Risks
 
 - Security baseline required dependency hardening (drizzle + hono chain).
-- Workspace dependency consistency needed alignment (`chrome-mcp-shared`).
+- Workspace dependency consistency needed alignment (`@tabrix/shared`).
 - 일부 user-visible strings were still hardcoded in runtime modules.
 
 ### Recommended Architectural Priorities

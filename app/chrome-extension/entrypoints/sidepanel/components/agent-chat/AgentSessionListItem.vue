@@ -188,7 +188,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, nextTick, watch } from 'vue';
-import type { AgentSession } from 'chrome-mcp-shared';
+import type { AgentSession } from '@tabrix/shared';
 import { getMessage } from '@/utils/i18n';
 
 // =============================================================================

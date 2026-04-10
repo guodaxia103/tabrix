@@ -8,7 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { eq, asc, and, count } from 'drizzle-orm';
-import type { AgentRole, AgentStoredMessage } from 'chrome-mcp-shared';
+import type { AgentRole, AgentStoredMessage } from '@tabrix/shared';
 import { getDb, messages, type MessageRow } from './db';
 
 // ============================================================

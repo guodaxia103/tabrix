@@ -72,7 +72,7 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue';
-import type { AgentProject, AgentEngineInfo } from 'chrome-mcp-shared';
+import type { AgentProject, AgentEngineInfo } from '@tabrix/shared';
 import {
   getModelsForCli,
   getDefaultModelForCli,

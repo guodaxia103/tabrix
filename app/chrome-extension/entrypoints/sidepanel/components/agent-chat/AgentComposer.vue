@@ -411,7 +411,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, nextTick, toRef } from 'vue';
-import type { CodexReasoningEffort } from 'chrome-mcp-shared';
+import type { CodexReasoningEffort } from '@tabrix/shared';
 import type { ModelDefinition } from '@/common/agent-models';
 import { getMessage } from '@/utils/i18n';
 import type { AttachmentWithPreview } from '../../composables/useAttachments';

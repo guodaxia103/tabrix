@@ -15,7 +15,7 @@
 ```powershell
 pnpm lint
 pnpm typecheck
-pnpm --filter chrome-mcp-server test
+pnpm --filter @tabrix/extension test
 pnpm --filter tabrix test
 pnpm build
 ```
@@ -206,7 +206,7 @@ npm list -g @tabrix/tabrix
 
 本仓库在 `2026-04-08` 已重新实测通过：
 
-- `pnpm --filter chrome-mcp-server build`
+- `pnpm --filter @tabrix/extension build`
 - `pnpm build`
 - `node app\native-server\dist\cli.js status --json`
 - `node app\native-server\dist\cli.js doctor --json`

@@ -7,9 +7,9 @@ import {
   nodesToSteps as sharedNodesToSteps,
   stepsToNodes as sharedStepsToNodes,
   topoOrder as sharedTopoOrder,
-} from 'chrome-mcp-shared';
-import { STEP_TYPES } from 'chrome-mcp-shared';
-import { EDGE_LABELS } from 'chrome-mcp-shared';
+} from '@tabrix/shared';
+import { STEP_TYPES } from '@tabrix/shared';
+import { EDGE_LABELS } from '@tabrix/shared';
 import { getMessage } from '@/utils/i18n';
 
 export function newId(prefix: string) {

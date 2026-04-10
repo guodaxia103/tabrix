@@ -1,5 +1,5 @@
 {
-  "name": "@chrome-mcp/wasm-simd",
+  "name": "@tabrix/wasm-simd",
   "version": "0.1.0",
   "description": "SIMD-optimized WebAssembly math functions for Chrome MCP",
   "main": "pkg/simd_math.js",

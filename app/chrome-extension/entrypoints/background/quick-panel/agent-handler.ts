@@ -13,8 +13,8 @@
  * @see https://developer.chrome.com/docs/extensions/mv3/service_workers/
  */
 
-import type { AgentActRequest, RealtimeEvent } from 'chrome-mcp-shared';
-import { NativeMessageType } from 'chrome-mcp-shared';
+import type { AgentActRequest, RealtimeEvent } from '@tabrix/shared';
+import { NativeMessageType } from '@tabrix/shared';
 
 import { NATIVE_HOST, STORAGE_KEYS } from '@/common/constants';
 import {

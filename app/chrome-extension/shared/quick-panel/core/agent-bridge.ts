@@ -28,7 +28,7 @@
  * ```
  */
 
-import type { RealtimeEvent } from 'chrome-mcp-shared';
+import type { RealtimeEvent } from '@tabrix/shared';
 
 import {
   BACKGROUND_MESSAGE_TYPES,

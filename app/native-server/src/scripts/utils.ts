@@ -365,7 +365,7 @@ function getSecurePreferencesPath(browser: BrowserType): string | null {
 }
 
 function looksLikeChromeMcpExtensionPath(candidatePath: string): boolean {
-  return /(chrome-mcp-server|tabrix|mcp-chrome)/i.test(candidatePath);
+  return /(tabrix|mcp-chrome)/i.test(candidatePath);
 }
 
 export function discoverLoadedExtensionOrigins(targetBrowsers?: BrowserType[]): {

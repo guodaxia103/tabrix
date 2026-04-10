@@ -83,7 +83,7 @@
 </template>
 
 <script lang="ts" setup>
-import type { OpenProjectTarget } from 'chrome-mcp-shared';
+import type { OpenProjectTarget } from '@tabrix/shared';
 
 defineProps<{
   open: boolean;

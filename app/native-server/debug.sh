@@ -1,7 +1,7 @@
 #!/bin/bash
 # 获取脚本所在的绝对目录
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG_DIR="/Users/hang/code/tencent/ai/chrome-mcp-server/app/native-server/dist/logs" # 或者你选择的、确定有写入权限的目录
+LOG_DIR="/Users/hang/code/tencent/ai/tabrix/app/native-server/dist/logs" # 或者你选择的、确定有写入权限的目录
 
 # 获取当前时间戳用于日志文件名，避免覆盖
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")

@@ -6,7 +6,7 @@ import {
   CODEX_AUTO_INSTRUCTIONS,
   DEFAULT_CODEX_CONFIG,
   type CodexEngineConfig,
-} from 'chrome-mcp-shared';
+} from '@tabrix/shared';
 import type { AgentEngine, EngineExecutionContext, EngineInitOptions } from './types';
 import type { AgentMessage, RealtimeEvent } from '../types';
 import { AgentToolBridge } from '../tool-bridge';

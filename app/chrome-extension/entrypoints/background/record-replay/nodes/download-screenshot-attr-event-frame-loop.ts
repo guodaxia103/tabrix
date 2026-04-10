@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from 'chrome-mcp-shared';
+import { TOOL_NAMES } from '@tabrix/shared';
 import { handleCallTool } from '@/entrypoints/background/tools';
 import { getMessage } from '@/utils/i18n';
 import type { ExecCtx, ExecResult, NodeRuntime } from './types';

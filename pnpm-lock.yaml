@@ -66,6 +66,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@3.25.76)
+      '@tabrix/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@vue-flow/background':
         specifier: ^1.3.2
         version: 1.3.2(@vue-flow/core@1.48.2(vue@3.5.32(typescript@5.9.3)))(vue@3.5.32(typescript@5.9.3))
@@ -81,9 +84,6 @@ importers:
       '@xenova/transformers':
         specifier: ^2.17.2
         version: 2.17.2
-      chrome-mcp-shared:
-        specifier: workspace:*
-        version: link:../../packages/shared
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
@@ -160,6 +160,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@3.25.76)
+      '@tabrix/shared':
+        specifier: workspace:^1.0.2
+        version: link:../../packages/shared
       '@types/node-fetch':
         specifier: '2'
         version: 2.6.13
@@ -172,9 +175,6 @@ importers:
       chrome-devtools-frontend:
         specifier: ^1.0.1299282
         version: 1.0.1608868
-      chrome-mcp-shared:
-        specifier: workspace:^1.0.2
-        version: link:../../packages/shared
       commander:
         specifier: ^13.1.0
         version: 13.1.0

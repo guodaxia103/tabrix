@@ -1,5 +1,5 @@
 // constants.ts — centralized engine constants and labels
-import { EDGE_LABELS } from 'chrome-mcp-shared';
+import { EDGE_LABELS } from '@tabrix/shared';
 
 export const ENGINE_CONSTANTS = {
   DEFAULT_WAIT_MS: 5000,

@@ -48,7 +48,7 @@ export interface SessionOptionsConfig {
    * Optional Codex-specific configuration overrides.
    * Only applicable when using CodexEngine.
    */
-  codexConfig?: Partial<import('chrome-mcp-shared').CodexEngineConfig>;
+  codexConfig?: Partial<import('@tabrix/shared').CodexEngineConfig>;
 }
 
 /**

@@ -47,7 +47,7 @@ pnpm --filter tabrix dev
 3. 启动 Chrome 扩展开发环境
 
 ```bash
-pnpm --filter chrome-mcp-server dev
+pnpm --filter @tabrix/extension dev
 ```
 
 ### 构建

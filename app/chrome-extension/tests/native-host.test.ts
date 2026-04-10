@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { NativeMessageType } from 'chrome-mcp-shared';
+import { NativeMessageType } from '@tabrix/shared';
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import { STORAGE_KEYS } from '@/common/constants';
 

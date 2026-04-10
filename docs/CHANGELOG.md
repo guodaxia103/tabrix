@@ -71,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Resolved npm publish/install risk by replacing workspace dependency with semver dependency for `chrome-mcp-shared`.
+- Resolved npm publish/install risk by replacing workspace dependency with semver dependency for `@tabrix/shared`.
 - Added compatibility fallback for remote-access message enums across shared package versions.
 
 ### Notes

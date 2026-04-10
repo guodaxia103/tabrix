@@ -1,7 +1,7 @@
 import { stdin, stdout } from 'process';
 import { Server } from './server';
 import { v4 as uuidv4 } from 'uuid';
-import { NativeMessageType } from 'chrome-mcp-shared';
+import { NativeMessageType } from '@tabrix/shared';
 import { TIMEOUTS, NATIVE_SERVER_PORT, MCP_HTTP_HOST_ENV } from './constant';
 import { setPersistedHost } from './host-config';
 import fileHandler from './file-handler';
