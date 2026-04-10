@@ -379,7 +379,7 @@ https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
 
 ### AI 助手文档
 
-- [AI 助手技能包（跨客户端通用）](skills/chrome_mcp_browser/SKILL.md) — 任意 MCP 客户端可用的操作手册
+- [AI 助手技能包（跨客户端通用）](skills/tabrix_browser/SKILL.md) — 任意 MCP 客户端可用的操作手册
 
 ### 开发者文档
 

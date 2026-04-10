@@ -1,13 +1,13 @@
 ---
-name: chrome_mcp_browser
-description: Use the Chrome MCP (mcp-chrome) tools to operate the user's real Chrome — tabs, navigation, page content, forms, and diagnostics. Prefer structured page reads over screenshots; handle connection and timeout failures with clear user guidance.
+name: tabrix_browser
+description: Use Tabrix tools to operate the user's real Chrome - tabs, navigation, page content, forms, and diagnostics. Prefer structured page reads over screenshots; handle connection and timeout failures with clear user guidance.
 metadata:
   version: 1
 ---
 
-# Chrome MCP 浏览器技能
+# Tabrix 浏览器技能
 
-面向 **任意 MCP 客户端**（Cursor、Claude、CoPaw、OpenClaw 等）。本机需已安装并连接 [mcp-chrome](https://github.com/guodaxia103/tabrix)（扩展 + `tabrix`）。
+面向 **任意 MCP 客户端**（Cursor、Claude、OpenClaw 等）。本机需已安装并连接 [Tabrix](https://github.com/guodaxia103/tabrix)（扩展 + `tabrix`）。
 
 ## 最短成功路径
 

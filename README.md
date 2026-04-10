@@ -380,7 +380,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### For AI Assistants
 
-- [AI assistant skill (portable)](skills/chrome_mcp_browser/SKILL.md) — playbook for any MCP client
+- [AI assistant skill (portable)](skills/tabrix_browser/SKILL.md) — playbook for any MCP client
 
 ### For Developers & Contributors
 
