@@ -28,6 +28,8 @@ Tabrix 来源于开源项目 [`hangwin/mcp-chrome`](https://github.com/hangwin/m
 
 ## 🔔 Tabrix 2.0（2026-04-10）
 
+完整说明见：[Release Notes v2.0.0](docs/RELEASE_NOTES_v2.0.0.md)
+
 ### 新增
 
 - 统一最新安装方式：`npm install -g tabrix@latest` 与 `pnpm install -g tabrix@latest`。
@@ -404,6 +406,7 @@ https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
 
 ### 用户文档
 
+- [Release Notes v2.0.0](docs/RELEASE_NOTES_v2.0.0.md) — 新增能力、修复项、迁移说明
 - [为什么选 mcp-chrome？(vs Playwright / browser-use)](docs/WHY_MCP_CHROME.md) — 定位与取舍
 - [快速入门](docs/STABLE_QUICKSTART.md) — 安装、验证、首次成功
 - [工具 API (中文)](docs/TOOLS_zh.md) | [TOOLS API (EN)](docs/TOOLS.md) — 完整工具参考

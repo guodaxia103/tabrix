@@ -30,6 +30,8 @@ Special thanks to all original maintainers and contributors for building the fou
 
 ## 🔔 Tabrix 2.0 (2026-04-10)
 
+Full notes: [Release Notes v2.0.0](docs/RELEASE_NOTES_v2.0.0.md)
+
 ### Added
 
 - Standardized latest-install flow: `npm install -g tabrix@latest` and `pnpm install -g tabrix@latest`.
@@ -405,6 +407,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### For Users
 
+- [Release Notes v2.0.0](docs/RELEASE_NOTES_v2.0.0.md) — new features, fixes, migration notes
 - [Why mcp-chrome? (vs Playwright / browser-use)](docs/WHY_MCP_CHROME.md) — positioning and tradeoffs
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md) — install, verify, first success
 - [TOOLS API (EN)](docs/TOOLS.md) | [工具 API (中文)](docs/TOOLS_zh.md) — complete tool reference
