@@ -1,18 +1,31 @@
 {
   "name": "tabrix-monorepo",
-  "version": "2.0.0",
+  "version": "2.0.4",
   "private": true,
   "author": "guodaxia103",
   "type": "module",
+  "packageManager": "pnpm@10.22.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guodaxia103/tabrix.git"
+  },
+  "bugs": {
+    "url": "https://github.com/guodaxia103/tabrix/issues"
+  },
+  "homepage": "https://github.com/guodaxia103/tabrix#readme",
   "scripts": {
     "build:shared": "pnpm --filter @tabrix/shared build",
-    "build:native": "pnpm --filter tabrix build",
+    "build:native": "pnpm --filter @tabrix/tabrix build",
     "build:extension": "pnpm --filter @tabrix/extension build",
     "build:wasm": "pnpm --filter @tabrix/wasm-simd build && pnpm run copy:wasm",
-    "build": "pnpm run build:shared && pnpm --parallel --filter @tabrix/extension --filter tabrix run build:direct",
+    "build": "pnpm run build:shared && pnpm --parallel --filter @tabrix/extension --filter @tabrix/tabrix run build:direct",
     "copy:wasm": "node ./scripts/copy-wasm.mjs",
     "dev:shared": "pnpm --filter @tabrix/shared dev",
-    "dev:native": "pnpm --filter tabrix dev",
+    "dev:native": "pnpm --filter @tabrix/tabrix dev",
     "dev:extension": "pnpm --filter @tabrix/extension dev",
     "dev": "pnpm --filter @tabrix/shared build && pnpm -r --parallel dev",
     "lint": "pnpm -r --if-present lint",
