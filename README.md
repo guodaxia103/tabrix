@@ -47,6 +47,7 @@ tabrix register
 ### 2) Install Chrome Extension
 
 Download from [Releases](https://github.com/guodaxia103/tabrix/releases), then load the `tabrix-extension-vX.Y.Z.zip` unpacked folder at `chrome://extensions`.
+After loading, open the extension popup and click `Connect` once.
 
 ### 3) Verify Environment
 

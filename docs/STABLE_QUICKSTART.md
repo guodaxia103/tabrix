@@ -128,7 +128,7 @@ To allow other machines or Docker containers to connect via LAN:
 
 1. Open the extension popup → **Remote** tab → toggle the **remote access switch** to ON. The server immediately restarts on `0.0.0.0` — no browser restart needed. The preference is saved to `~/.tabrix/config.json` and survives reconnects / browser restarts.
 
-2. Open popup -> **Token 管理** and confirm/copy your current token. You can set custom validity days when refreshing the token (`0` means never expire). The popup shows full MCP config including `Authorization` header.
+2. Open popup -> **Token Management** and confirm/copy your current token. You can set custom validity days when refreshing the token (`0` means never expire). The popup shows full MCP config including `Authorization` header.
 
 3. Allow the port through your firewall (Windows example):
 

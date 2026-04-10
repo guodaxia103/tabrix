@@ -1016,6 +1016,20 @@ async function ensureRemoteTokenReady(maxAttempts = 6): Promise<boolean> {
   return Boolean(tokenInfo.value);
 }
 
+async function waitForRemoteAccessState(
+  expectedEnabled: boolean,
+  maxAttempts = 8,
+): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i += 1) {
+    await refreshServerStatus();
+    if (remoteAccessEnabled.value === expectedEnabled) {
+      return true;
+    }
+    await waitMs(200);
+  }
+  return remoteAccessEnabled.value === expectedEnabled;
+}
+
 const configTabs: Array<{ id: ConfigTabId; label: string }> = [
   { id: 'local', label: getMessage('popupLocalTab') },
   { id: 'stdio', label: 'stdio' },
@@ -1884,8 +1898,8 @@ const toggleRemoteAccess = async () => {
       return;
     }
 
-    await waitMs(800);
-    await refreshServerStatus();
+    await waitMs(400);
+    await waitForRemoteAccessState(enable);
     if (enable) {
       await ensureRemoteTokenReady();
     } else {

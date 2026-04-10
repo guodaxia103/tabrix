@@ -736,15 +736,35 @@ export const initNativeHostListener = () => {
 
     if (msgType === 'set_remote_access') {
       const enable = typeof message === 'object' ? !!message.enable : false;
-      if (!nativePort) {
-        sendResponse({ success: false, error: 'Native host not connected' });
-        return true;
-      }
-      nativePort.postMessage({
-        type: 'set_remote_access',
-        payload: { enable },
+      (async () => {
+        if (!nativePort) {
+          await ensureNativeConnected('ui_set_remote_access');
+        }
+
+        if (!nativePort) {
+          sendResponse({ success: false, error: 'Native host not connected' });
+          return;
+        }
+
+        try {
+          nativePort.postMessage({
+            type: 'set_remote_access',
+            payload: { enable },
+          });
+          sendResponse({ success: true });
+        } catch (error) {
+          await setLastNativeError(error);
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })().catch((error) => {
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
-      sendResponse({ success: true });
       return true;
     }
 

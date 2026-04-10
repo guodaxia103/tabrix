@@ -47,6 +47,7 @@ tabrix register
 ### 2) 安装 Chrome 扩展
 
 从 [Releases](https://github.com/guodaxia103/tabrix/releases) 下载版本资产，优先使用 `tabrix-extension-vX.Y.Z.zip`，在 `chrome://extensions` 中以“加载已解压扩展程序”方式安装。
+安装后请打开扩展弹窗并点击一次 `Connect` 完成连接。
 
 ### 3) 本地校验
 
