@@ -1,6 +1,6 @@
 # Why mcp-chrome?（与同类方案对比）
 
-> 精简版；完整战略分析见 [PRODUCT_STRATEGY.md](./PRODUCT_STRATEGY.md)。
+> 精简版对比说明，用于快速定位使用场景与边界。
 
 ## 三个核心差异
 

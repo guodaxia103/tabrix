@@ -26,8 +26,6 @@ Tabrix is a Chrome extension-based **Model Context Protocol (MCP) server** that 
 ## 📘 Stable Ops Guides
 
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md)
-- [CoPaw Integration Guide](docs/COPAW.md)
-- [Phase 0 Tool Validation Matrix](docs/PHASE0_TOOL_VALIDATION_MATRIX.md)
 
 ## ✨ Core Features
 
@@ -379,7 +377,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Client Configuration Quick Reference](docs/CLIENT_CONFIG_QUICKREF.md) — copy-paste configs for 7 MCP clients
 - [Popup Troubleshooting](docs/POPUP_TROUBLESHOOTING.md) — status dot meanings and fixes
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — common issue solutions
-- [CoPaw Integration Guide](docs/COPAW.md) — use with CoPaw AI client
 
 ### For AI Assistants
 

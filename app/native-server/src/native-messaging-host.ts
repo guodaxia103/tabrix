@@ -6,6 +6,11 @@ import { TIMEOUTS, NATIVE_SERVER_PORT, MCP_HTTP_HOST_ENV } from './constant';
 import { setPersistedHost } from './host-config';
 import fileHandler from './file-handler';
 
+const NATIVE_MESSAGE_SET_REMOTE_ACCESS =
+  (NativeMessageType as Record<string, string>).SET_REMOTE_ACCESS ?? 'set_remote_access';
+const NATIVE_MESSAGE_REMOTE_ACCESS_CHANGED =
+  (NativeMessageType as Record<string, string>).REMOTE_ACCESS_CHANGED ?? 'remote_access_changed';
+
 interface PendingRequest {
   resolve: (value: any) => void;
   reject: (reason?: any) => void;
@@ -132,7 +137,7 @@ export class NativeMessagingHost {
         case 'ping_from_extension':
           this.sendMessage({ type: 'pong_to_extension' });
           break;
-        case NativeMessageType.SET_REMOTE_ACCESS:
+        case NATIVE_MESSAGE_SET_REMOTE_ACCESS:
           await this.handleSetRemoteAccess(message.payload?.enable ?? false);
           break;
         case 'file_operation':
@@ -308,7 +313,7 @@ export class NativeMessagingHost {
 
       const snapshot = this.associatedServer.getStatusSnapshot();
       this.sendMessage({
-        type: NativeMessageType.REMOTE_ACCESS_CHANGED,
+        type: NATIVE_MESSAGE_REMOTE_ACCESS_CHANGED,
         payload: {
           enabled: enable,
           host: snapshot.host,

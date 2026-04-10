@@ -25,8 +25,6 @@ Tabrix 是一个基于 Chrome 插件的 **模型上下文协议 (MCP) 服务器*
 
 - [快速入门](docs/STABLE_QUICKSTART.md)
 - [发布前检查清单](docs/RELEASE_READINESS_CHECKLIST_zh.md)
-- [CoPaw 集成指南](docs/COPAW.md)
-- [Phase 0 工具验证矩阵](docs/PHASE0_TOOL_VALIDATION_MATRIX.md)
 
 ## ✨ 核心特性
 
@@ -378,7 +376,6 @@ https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
 - [客户端配置速查卡](docs/CLIENT_CONFIG_QUICKREF.md) — 7 种 MCP 客户端配置，复制即用
 - [Popup 状态排障表](docs/POPUP_TROUBLESHOOTING.md) — 状态圆点含义与修复方法
 - [故障排除](docs/TROUBLESHOOTING_zh.md) — 常见问题解决方案
-- [CoPaw 集成指南](docs/COPAW.md) — 与 CoPaw AI 客户端配合使用
 
 ### AI 助手文档
 
