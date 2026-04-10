@@ -1899,17 +1899,20 @@ const testNativeConnection = async () => {
         }
       } else {
         nativeConnectionStatus.value = 'disconnected';
-        console.error('Connection failed', {
-          success: response?.success,
-          connected: response?.connected,
-          lastError: response?.lastError,
-          raw: response,
-        });
+        const normalizedReason =
+          normalizeNativeLastError(response?.lastError) ??
+          normalizeNativeLastError(response?.error) ??
+          getMessage('popupStatusDetailDisconnected');
+        console.error(`[Tabrix] Native connection failed: ${normalizedReason}`);
+        if (response !== undefined) {
+          console.debug('[Tabrix] Native connection response:', response);
+        }
         await refreshServerStatus();
       }
     }
   } catch (error) {
-    console.error('Connection test failed:', error);
+    const normalizedError = normalizeNativeLastError(error) ?? getMessage('unknownErrorMessage');
+    console.error(`[Tabrix] Connection test failed: ${normalizedError}`);
     applyDisconnectedPopupSnapshot();
     await refreshStandaloneDaemonStatus();
   } finally {
