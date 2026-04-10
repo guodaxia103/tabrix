@@ -1,7 +1,7 @@
 {
   "name": "chrome-mcp-server",
   "description": "a chrome extension to use your own chrome as a mcp server",
-  "author": "hangye",
+  "author": "guodaxia103",
   "private": true,
   "version": "1.0.0",
   "type": "module",

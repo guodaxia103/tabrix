@@ -21,7 +21,7 @@
     "cosine-similarity",
     "vector-operations"
   ],
-  "author": "hangye",
+  "author": "guodaxia103",
   "license": "MIT",
   "devDependencies": {
     "rimraf": "^5.0.0"
