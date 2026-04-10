@@ -3,6 +3,7 @@
 
 import type { NodeBase } from '@/entrypoints/background/record-replay/types';
 import { summarizeNode as summarize } from '../../model/transforms';
+import { getMessage } from '@/utils/i18n';
 import ILucideMousePointerClick from '~icons/lucide/mouse-pointer-click';
 import ILucideEdit3 from '~icons/lucide/edit-3';
 import ILucideKeyboard from '~icons/lucide/keyboard';
@@ -87,26 +88,26 @@ export function iconComp(t?: string) {
 
 export function getTypeLabel(type?: string) {
   const labels: Record<string, string> = {
-    trigger: '触发器',
-    click: '点击',
-    fill: '填充',
-    navigate: '导航',
-    wait: '等待',
-    extract: '提取',
+    trigger: getMessage('builderNodeTypeTrigger'),
+    click: getMessage('builderNodeTypeClick'),
+    fill: getMessage('builderNodeTypeFill'),
+    navigate: getMessage('builderNodeTypeNavigate'),
+    wait: getMessage('builderNodeTypeWait'),
+    extract: getMessage('builderNodeTypeExtract'),
     http: 'HTTP',
-    script: '脚本',
-    if: '条件',
-    foreach: '循环',
-    assert: '断言',
-    key: '键盘',
-    drag: '拖拽',
-    dblclick: '双击',
-    openTab: '打开标签',
-    switchTab: '切换标签',
-    closeTab: '关闭标签',
-    delay: '延迟',
-    scroll: '滚动',
-    while: '循环',
+    script: getMessage('builderNodeTypeScript'),
+    if: getMessage('builderNodeTypeIf'),
+    foreach: getMessage('builderNodeTypeForeach'),
+    assert: getMessage('builderNodeTypeAssert'),
+    key: getMessage('builderNodeTypeKey'),
+    drag: getMessage('builderNodeTypeDrag'),
+    dblclick: getMessage('builderNodeTypeDblclick'),
+    openTab: getMessage('builderNodeTypeOpenTab'),
+    switchTab: getMessage('builderNodeTypeSwitchTab'),
+    closeTab: getMessage('builderNodeTypeCloseTab'),
+    delay: getMessage('builderNodeTypeDelay'),
+    scroll: getMessage('builderNodeTypeScroll'),
+    while: getMessage('builderNodeTypeWhile'),
   };
   return labels[String(type || '')] || type || '';
 }

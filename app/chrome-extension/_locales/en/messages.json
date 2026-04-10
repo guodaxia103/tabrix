@@ -2234,5 +2234,113 @@
   "builderFieldExpressionPlaceholder": {
     "message": "e.g. vars.a > 0 && vars.flag",
     "description": "Auto-synced key"
+  },
+  "sidepanelWorkflowsStatusLabel": {
+    "message": "Status",
+    "description": "Auto-synced key"
+  },
+  "sidepanelWorkflowsDurationLabel": {
+    "message": "Duration",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusQueued": {
+    "message": "Queued",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusRunning": {
+    "message": "Running",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusPaused": {
+    "message": "Paused",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusSucceeded": {
+    "message": "Succeeded",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusFailed": {
+    "message": "Failed",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusCanceled": {
+    "message": "Canceled",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeTrigger": {
+    "message": "Trigger",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeClick": {
+    "message": "Click",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeFill": {
+    "message": "Fill",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeNavigate": {
+    "message": "Navigate",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeWait": {
+    "message": "Wait",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeExtract": {
+    "message": "Extract",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeScript": {
+    "message": "Script",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeIf": {
+    "message": "Condition",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeForeach": {
+    "message": "Loop",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeAssert": {
+    "message": "Assert",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeKey": {
+    "message": "Keyboard",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeDrag": {
+    "message": "Drag",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeDblclick": {
+    "message": "Double click",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeOpenTab": {
+    "message": "Open tab",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeSwitchTab": {
+    "message": "Switch tab",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeCloseTab": {
+    "message": "Close tab",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeDelay": {
+    "message": "Delay",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeScroll": {
+    "message": "Scroll",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeWhile": {
+    "message": "Loop",
+    "description": "Auto-synced key"
   }
 }

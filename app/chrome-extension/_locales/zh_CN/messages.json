@@ -2240,5 +2240,113 @@
   "builderFieldExpressionPlaceholder": {
     "message": "例如 vars.a > 0 && vars.flag",
     "description": "Auto-synced key"
+  },
+  "sidepanelWorkflowsStatusLabel": {
+    "message": "状态",
+    "description": "Auto-synced key"
+  },
+  "sidepanelWorkflowsDurationLabel": {
+    "message": "耗时",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusQueued": {
+    "message": "排队中",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusRunning": {
+    "message": "运行中",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusPaused": {
+    "message": "已暂停",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusSucceeded": {
+    "message": "成功",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusFailed": {
+    "message": "失败",
+    "description": "Auto-synced key"
+  },
+  "sidepanelRunStatusCanceled": {
+    "message": "已取消",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeTrigger": {
+    "message": "触发器",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeClick": {
+    "message": "点击",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeFill": {
+    "message": "填充",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeNavigate": {
+    "message": "导航",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeWait": {
+    "message": "等待",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeExtract": {
+    "message": "提取",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeScript": {
+    "message": "脚本",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeIf": {
+    "message": "条件",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeForeach": {
+    "message": "循环",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeAssert": {
+    "message": "断言",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeKey": {
+    "message": "键盘",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeDrag": {
+    "message": "拖拽",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeDblclick": {
+    "message": "双击",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeOpenTab": {
+    "message": "打开标签",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeSwitchTab": {
+    "message": "切换标签",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeCloseTab": {
+    "message": "关闭标签",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeDelay": {
+    "message": "延迟",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeScroll": {
+    "message": "滚动",
+    "description": "Auto-synced key"
+  },
+  "builderNodeTypeWhile": {
+    "message": "循环",
+    "description": "Auto-synced key"
   }
 }

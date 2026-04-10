@@ -723,7 +723,7 @@ const runFlow = async (flowId: string) => {
       options: { ...runOptions, ...ov, returnLogs: true },
     });
     if (!(res && res.success)) {
-      console.warn('回放失败');
+      console.warn('Playback failed');
       return;
     }
     // If failed, open builder and focus the failed node
@@ -744,7 +744,7 @@ const runFlow = async (flowId: string) => {
       }
     } catch {}
   } catch (e) {
-    console.error('回放失败:', e);
+    console.error('Playback failed:', e);
   }
 };
 
@@ -1167,7 +1167,7 @@ async function toggleWebEditor() {
   try {
     await chrome.runtime.sendMessage({ type: BACKGROUND_MESSAGE_TYPES.WEB_EDITOR_TOGGLE });
   } catch (error) {
-    console.warn('切换网页编辑模式失败:', error);
+    console.warn('Failed to toggle web editor mode:', error);
   }
 }
 
@@ -1176,7 +1176,7 @@ async function toggleElementMarker() {
     // 获取当前活动tab
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) {
-      console.warn('无法获取当前tab');
+      console.warn('Cannot get current tab');
       return;
     }
 
@@ -1186,7 +1186,7 @@ async function toggleElementMarker() {
       tabId: tab.id,
     });
   } catch (error) {
-    console.warn('开启元素标注失败:', error);
+    console.warn('Failed to start element marker:', error);
   }
 }
 
@@ -1500,7 +1500,7 @@ const saveSemanticEngineState = async () => {
 
     await chrome.storage.local.set({ semanticEngineState });
   } catch (error) {
-    console.error('保存语义引擎状态失败:', error);
+    console.error('Failed to save semantic engine state:', error);
   }
 };
 
@@ -1682,7 +1682,7 @@ const updatePort = async (event: Event) => {
       showPortHint(`Failed to connect on port ${newPort}. Please check and retry.`, 5000);
     }
   } catch (error) {
-    console.error('端口切换重连失败:', error);
+    console.error('Failed to reconnect after port change:', error);
     applyDisconnectedPopupSnapshot();
     await refreshStandaloneDaemonStatus();
     showPortHint(
@@ -1700,7 +1700,7 @@ const checkNativeConnection = async () => {
     nativeConnectionStatus.value = response?.connected ? 'connected' : 'disconnected';
     await refreshStandaloneDaemonStatus();
   } catch (error) {
-    console.error('检测 Native 连接状态失败:', error);
+    console.error('Failed to detect Native connection status:', error);
     applyDisconnectedPopupSnapshot();
     await refreshStandaloneDaemonStatus();
   }
@@ -1725,7 +1725,7 @@ const checkServerStatus = async () => {
     await refreshStandaloneDaemonStatus();
     await fetchConnectedClients();
   } catch (error) {
-    console.error('检测服务器状态失败:', error);
+    console.error('Failed to detect server status:', error);
     applyDisconnectedPopupSnapshot();
     await refreshStandaloneDaemonStatus();
   }
@@ -1750,7 +1750,7 @@ const refreshServerStatus = async () => {
     await refreshStandaloneDaemonStatus();
     await fetchConnectedClients();
   } catch (error) {
-    console.error('刷新服务器状态失败:', error);
+    console.error('Failed to refresh server status:', error);
     applyDisconnectedPopupSnapshot();
     await refreshStandaloneDaemonStatus();
   }
@@ -1765,7 +1765,7 @@ const copyMcpConfig = async () => {
       copyButtonText.value = getMessage('copyConfigButton');
     }, 2000);
   } catch (error) {
-    console.error('复制配置失败:', error);
+    console.error('Failed to copy config:', error);
     copyButtonText.value = '❌' + getMessage('networkErrorMessage');
 
     setTimeout(() => {
@@ -1783,7 +1783,7 @@ const copyRepairCommand = async () => {
       repairCommandButtonText.value = getMessage('popupCopyRepairCommand');
     }, 2000);
   } catch (error) {
-    console.error('复制修复命令失败:', error);
+    console.error('Failed to copy repair command:', error);
     repairCommandButtonText.value = getMessage('popupCopyFailed');
     setTimeout(() => {
       repairCommandButtonText.value = getMessage('popupCopyRepairCommand');
@@ -1801,7 +1801,7 @@ const copyTroubleshootingCommand = async (command: string) => {
       }
     }, 2000);
   } catch (error) {
-    console.error('复制排查命令失败:', error);
+    console.error('Failed to copy troubleshooting command:', error);
   }
 };
 
@@ -1813,7 +1813,7 @@ const copyTroubleshootingScript = async () => {
       copiedTroubleshootingScript.value = false;
     }, 2200);
   } catch (error) {
-    console.error('复制完整排障脚本失败:', error);
+    console.error('Failed to copy full troubleshooting script:', error);
     copiedTroubleshootingScript.value = false;
   }
 };
@@ -1861,7 +1861,7 @@ const toggleRemoteAccess = async () => {
       remoteToggleCopiedText.value = '';
     }, 2500);
   } catch (error) {
-    console.error('切换远程访问失败:', error);
+    console.error('Failed to toggle remote access:', error);
     remoteToggleCopiedText.value = `❌ ${getMessage('popupToggleFailedPrefix')} ${error instanceof Error ? error.message : String(error)}`;
     setTimeout(() => {
       remoteToggleCopiedText.value = '';
@@ -1879,7 +1879,7 @@ const testNativeConnection = async () => {
       await chrome.runtime.sendMessage({ type: 'disconnect_native' });
       await refreshServerStatus();
     } else {
-      console.log(`尝试连接到端口: ${nativeServerPort.value}`);
+      console.log(`Trying to connect to port: ${nativeServerPort.value}`);
 
       const response = await chrome.runtime.sendMessage({
         type: 'connectNative',
@@ -1892,14 +1892,14 @@ const testNativeConnection = async () => {
         await refreshServerStatus();
         const isStillConnected = String(nativeConnectionStatus.value) === 'connected';
         if (isStillConnected) {
-          console.log('连接成功:', response);
+          console.log('Connected:', response);
           await savePortPreference(nativeServerPort.value);
         } else {
           console.warn('Native host disconnected before status settled:', response);
         }
       } else {
         nativeConnectionStatus.value = 'disconnected';
-        console.error('连接失败', {
+        console.error('Connection failed', {
           success: response?.success,
           connected: response?.connected,
           lastError: response?.lastError,
@@ -1909,7 +1909,7 @@ const testNativeConnection = async () => {
       }
     }
   } catch (error) {
-    console.error('测试连接失败:', error);
+    console.error('Connection test failed:', error);
     applyDisconnectedPopupSnapshot();
     await refreshStandaloneDaemonStatus();
   } finally {
@@ -1986,7 +1986,7 @@ const loadModelPreference = async () => {
       semanticEngineStatus.value = 'idle';
     }
   } catch (error) {
-    console.error('❌ 加载模型偏好失败:', error);
+    console.error('Failed to load model preference:', error);
   }
 };
 
@@ -1994,7 +1994,7 @@ const saveModelPreference = async (model: ModelPreset) => {
   try {
     await chrome.storage.local.set({ selectedModel: model });
   } catch (error) {
-    console.error('保存模型偏好失败:', error);
+    console.error('Failed to save model preference:', error);
   }
 };
 
@@ -2002,16 +2002,16 @@ const saveVersionPreference = async (version: 'full' | 'quantized' | 'compressed
   try {
     await chrome.storage.local.set({ selectedVersion: version });
   } catch (error) {
-    console.error('保存版本偏好失败:', error);
+    console.error('Failed to save version preference:', error);
   }
 };
 
 const savePortPreference = async (port: number) => {
   try {
     await chrome.storage.local.set({ nativeServerPort: port });
-    console.log(`端口偏好已保存: ${port}`);
+    console.log(`Port preference saved: ${port}`);
   } catch (error) {
-    console.error('保存端口偏好失败:', error);
+    console.error('Failed to save port preference:', error);
   }
 };
 
@@ -2020,10 +2020,10 @@ const loadPortPreference = async () => {
     const result = await chrome.storage.local.get(['nativeServerPort']);
     if (result.nativeServerPort) {
       nativeServerPort.value = result.nativeServerPort;
-      console.log(`端口偏好已加载: ${result.nativeServerPort}`);
+      console.log(`Loaded port preference: ${result.nativeServerPort}`);
     }
   } catch (error) {
-    console.error('加载端口偏好失败:', error);
+    console.error('Failed to load port preference:', error);
   }
 };
 
@@ -2038,7 +2038,7 @@ const saveModelState = async () => {
 
     await chrome.storage.local.set({ modelState });
   } catch (error) {
-    console.error('保存模型状态失败:', error);
+    console.error('Failed to save model state:', error);
   }
 };
 
@@ -2077,7 +2077,7 @@ const startModelStatusMonitoring = () => {
         }
       }
     } catch (error) {
-      console.error('获取模型状态失败:', error);
+      console.error('Failed to get model state:', error);
     }
   }, 1000);
 };
@@ -2260,7 +2260,7 @@ const switchModel = async (newModel: ModelPreset) => {
       currentModel.value = newModel;
       modelSwitchProgress.value = getMessage('successNotification');
       console.log(
-        '模型切换成功:',
+        'Model switch succeeded:',
         newModel,
         'version: quantized',
         'dimension:',
@@ -2278,7 +2278,7 @@ const switchModel = async (newModel: ModelPreset) => {
       throw new Error(response?.error || 'Model switch failed');
     }
   } catch (error: any) {
-    console.error('模型切换失败:', error);
+    console.error('Model switch failed:', error);
     modelSwitchProgress.value = `Model switch failed: ${error?.message || 'Unknown error'}`;
 
     modelInitializationStatus.value = 'error';
