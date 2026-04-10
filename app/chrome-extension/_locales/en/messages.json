@@ -77,13 +77,25 @@
       }
     }
   },
+  "serviceRunningShort": {
+    "message": "Running",
+    "description": "Short status text: service running"
+  },
   "serviceNotConnectedStatus": {
     "message": "Service Not Connected",
     "description": "Service not connected status"
   },
+  "serviceNotConnectedShort": {
+    "message": "Not Connected",
+    "description": "Short status text: service not connected"
+  },
   "connectedServiceNotStartedStatus": {
     "message": "Connected, Service Not Started",
     "description": "Connected but service not started status"
+  },
+  "connectedServiceNotStartedShort": {
+    "message": "Service Not Ready",
+    "description": "Short status text: connected but service not started"
   },
   "mcpServerConfigLabel": {
     "message": "MCP Configuration",
@@ -872,6 +884,10 @@
   "popupStatusDetailDisconnectedWhileDaemon": {
     "message": "Local service is running, but browser channel is not connected. Click Connect to enable automation.",
     "description": "Auto-synced key: popupStatusDetailDisconnectedWhileDaemon"
+  },
+  "popupStatusHintTapConnect": {
+    "message": "Click Connect to enable automation.",
+    "description": "Auto-synced key: popupStatusHintTapConnect"
   },
   "popupStatusDetailErrorDefault": {
     "message": "Last connection error: $ARG1$. Try `tabrix doctor --fix`, then `tabrix register --force`, then fully restart Chrome and reload extension in chrome://extensions/.",

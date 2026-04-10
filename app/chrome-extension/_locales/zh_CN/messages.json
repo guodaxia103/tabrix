@@ -77,13 +77,25 @@
       }
     }
   },
+  "serviceRunningShort": {
+    "message": "运行中",
+    "description": "状态行短文本：服务运行中"
+  },
   "serviceNotConnectedStatus": {
     "message": "服务未连接",
     "description": "服务未连接状态"
   },
+  "serviceNotConnectedShort": {
+    "message": "未连接",
+    "description": "状态行短文本：服务未连接"
+  },
   "connectedServiceNotStartedStatus": {
     "message": "已连接，服务未启动",
     "description": "已连接但服务未启动状态"
+  },
+  "connectedServiceNotStartedShort": {
+    "message": "服务未就绪",
+    "description": "状态行短文本：已连接但服务未启动"
   },
   "mcpServerConfigLabel": {
     "message": "MCP 配置",
@@ -872,6 +884,10 @@
   "popupStatusDetailDisconnectedWhileDaemon": {
     "message": "本机服务运行中，但浏览器通道未连接。点击 Connect 即可启用自动化。",
     "description": "自动同步键: popupStatusDetailDisconnectedWhileDaemon"
+  },
+  "popupStatusHintTapConnect": {
+    "message": "点击 Connect 即可启用自动化。",
+    "description": "自动同步键: popupStatusHintTapConnect"
   },
   "popupStatusDetailErrorDefault": {
     "message": "最近一次连接错误: $ARG1$。建议先执行 tabrix doctor --fix，再执行 tabrix register --force，随后完全重启 Chrome 并在 chrome://extensions/ 重新加载扩展。",

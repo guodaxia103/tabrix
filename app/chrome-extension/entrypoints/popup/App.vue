@@ -5,42 +5,51 @@
       <div class="header">
         <div class="header-content">
           <div class="header-meta">
-            <h1 class="header-title">Tabrix</h1>
-            <p class="header-subtitle">{{ getMessage('extensionDescription') }}</p>
+            <div class="header-mainline">
+              <h1 class="header-title">Tabrix</h1>
+              <span class="header-separator">·</span>
+              <p class="header-context">{{ getMessage('nativeServerConfigLabel') }}</p>
+            </div>
           </div>
-          <div class="header-status-chip" :title="getStatusText()">
-            <span :class="['header-status-dot', getStatusClass()]"></span>
-            <span class="header-status-text">{{ getStatusText() }}</span>
+          <div class="header-actions">
+            <button
+              class="header-refresh-button"
+              @click="refreshOverview"
+              :title="getMessage('refreshStatusButton')"
+            >
+              <RefreshIcon className="icon-small" />
+            </button>
+            <div class="header-status-chip" :title="getStatusText()">
+              <span :class="['header-status-dot', getStatusClass()]"></span>
+              <span class="header-status-text">{{ getStatusText() }}</span>
+            </div>
           </div>
         </div>
       </div>
       <div class="content">
         <!-- 服务配置卡片 -->
         <div class="section">
-          <h2 class="section-title">{{ getMessage('nativeServerConfigLabel') }}</h2>
           <div class="config-card">
             <div class="status-section">
-              <div class="status-header">
-                <p class="status-label">{{ getMessage('runningStatusLabel') }}</p>
-                <button
-                  class="refresh-status-button"
-                  @click="refreshServerStatus"
-                  :title="getMessage('refreshStatusButton')"
-                >
-                  <RefreshIcon className="icon-small" />
-                </button>
-              </div>
-              <div class="status-info">
+              <div class="status-inline">
                 <span :class="['status-dot', getStatusClass()]"></span>
-                <span class="status-text">{{ getStatusText() }}</span>
+                <span class="status-text">{{ statusHeadlineText }}</span>
+                <span v-if="statusInlinePort" class="status-inline-meta"
+                  >· {{ getMessage('connectionPortLabel') }} {{ statusInlinePort }}</span
+                >
+                <span v-if="serverStatus.lastUpdated" class="status-inline-meta">
+                  · {{ new Date(serverStatus.lastUpdated).toLocaleTimeString() }}
+                </span>
               </div>
-              <div v-if="serverStatus.lastUpdated" class="status-timestamp">
-                {{ getMessage('lastUpdatedLabel') }}
-                {{ new Date(serverStatus.lastUpdated).toLocaleTimeString() }}
-              </div>
-              <div v-if="statusDetailText" class="status-detail">
+              <div
+                v-if="statusDetailText"
+                :class="['status-detail', `status-detail-${statusDetailLevel}`]"
+              >
                 <div>{{ statusDetailText }}</div>
-                <div class="status-detail-actions">
+                <div
+                  v-if="repairCommandText || showTroubleshootingEntry"
+                  class="status-detail-actions"
+                >
                   <button
                     v-if="repairCommandText"
                     class="repair-command-button"
@@ -48,7 +57,11 @@
                   >
                     {{ repairCommandButtonText }}
                   </button>
-                  <button class="repair-guide-button" @click="showTroubleshootingDialog = true">
+                  <button
+                    v-if="showTroubleshootingEntry"
+                    class="repair-guide-button"
+                    @click="showTroubleshootingDialog = true"
+                  >
                     {{ getMessage('popupOpenTroubleshootingGuide') }}
                   </button>
                 </div>
@@ -1132,6 +1145,30 @@ const availableModels = computed(() => {
 });
 
 const getStatusClass = () => stateToStatusClass(connectionState.value);
+const statusInlinePort = computed(() => {
+  if (connectionState.value !== ConnectionState.RUNNING) return '';
+  return String(serverStatus.value.port || nativeServerPort.value || '');
+});
+const statusHeadlineText = computed(() => {
+  switch (connectionState.value) {
+    case ConnectionState.RUNNING:
+      return getMessage('serviceRunningShort');
+    case ConnectionState.CONNECTED:
+      return getMessage('connectedServiceNotStartedShort');
+    case ConnectionState.CONNECTING:
+      return getMessage('detectingStatus');
+    case ConnectionState.ERROR:
+    case ConnectionState.DISCONNECTED:
+      return getMessage('serviceNotConnectedShort');
+    case ConnectionState.UNKNOWN:
+    default:
+      return getMessage('detectingStatus');
+  }
+});
+const statusDetailLevel = computed(() =>
+  connectionState.value === ConnectionState.ERROR ? 'error' : 'info',
+);
+const showTroubleshootingEntry = computed(() => connectionState.value === ConnectionState.ERROR);
 
 // Open sidepanel and close popup
 async function openSidepanelAndClose(tab: string) {
@@ -1252,13 +1289,10 @@ const statusDetailText = computed(() => {
     daemonReachable.value &&
     serverStatus.value.isRunning
   ) {
-    return getMessage('popupStatusDetailDisconnectedWhileDaemon');
+    return getMessage('popupStatusHintTapConnect');
   }
-  if (state === ConnectionState.CONNECTED) {
-    return getMessage('popupStatusDetailConnectedNoService');
-  }
-  if (state === ConnectionState.DISCONNECTED) {
-    return getMessage('popupStatusDetailDisconnected');
+  if (state === ConnectionState.CONNECTED || state === ConnectionState.DISCONNECTED) {
+    return getMessage('popupStatusHintTapConnect');
   }
   return '';
 });
@@ -1267,12 +1301,6 @@ const repairCommandText = computed(() => {
   const state = connectionState.value;
   if (state === ConnectionState.ERROR && lastNativeError.value) {
     return getPopupRepairCommand(lastNativeError.value);
-  }
-  if (state === ConnectionState.CONNECTED) {
-    return 'tabrix status';
-  }
-  if (state === ConnectionState.DISCONNECTED) {
-    return 'tabrix doctor --fix && tabrix register --force';
   }
   return null;
 });
@@ -1760,6 +1788,13 @@ const refreshServerStatus = async () => {
     console.error('Failed to refresh server status:', error);
     applyDisconnectedPopupSnapshot();
     await refreshStandaloneDaemonStatus();
+  }
+};
+
+const refreshOverview = async () => {
+  await refreshServerStatus();
+  if (activeConfigTab.value === 'remote') {
+    await fetchTokenInfo({ autoCreateWhenMissing: true });
   }
 };
 
@@ -2438,13 +2473,16 @@ onUnmounted(() => {
 
 .header {
   flex-shrink: 0;
-  padding: 18px 20px 6px;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(248, 250, 252, 0.55) 100%);
+  backdrop-filter: blur(8px);
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
 }
 
@@ -2452,19 +2490,61 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-.header-title {
-  font-size: 25px;
-  font-weight: 760;
-  letter-spacing: -0.02em;
-  color: #1e293b;
-  margin: 0;
+.header-mainline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
-.header-subtitle {
-  margin: 3px 0 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: #64748b;
+.header-title {
+  font-size: 34px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #1e293b;
+  margin: 0;
+  text-shadow: 0 4px 10px rgba(30, 41, 59, 0.08);
+}
+
+.header-separator {
+  color: #94a3b8;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.header-context {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #334155;
+  letter-spacing: 0.02em;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-refresh-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.header-refresh-button:hover {
+  color: #0f172a;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px -16px rgba(15, 23, 42, 0.75);
 }
 
 .header-status-chip {
@@ -2529,7 +2609,7 @@ onUnmounted(() => {
 
 .content {
   flex-grow: 1;
-  padding: 10px 20px 14px;
+  padding: 8px 16px 14px;
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -2546,27 +2626,20 @@ onUnmounted(() => {
   margin-bottom: 20px;
 }
 
-.status-label {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: #64748b;
-  margin: 0;
-}
-
-.status-info {
+.status-inline {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(248, 250, 252, 0.92);
+  flex-wrap: wrap;
+  background: rgba(248, 250, 252, 0.95);
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 8px 10px;
+  border-radius: 12px;
+  padding: 9px 10px;
 }
 
 .status-dot {
-  height: 8px;
-  width: 8px;
+  height: 9px;
+  width: 9px;
   border-radius: 50%;
 }
 
@@ -2588,8 +2661,13 @@ onUnmounted(() => {
 
 .status-text {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   color: #1e293b;
+}
+
+.status-inline-meta {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .model-label {
@@ -2902,13 +2980,6 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-.status-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
 .refresh-status-button {
   background: rgba(241, 245, 249, 0.95);
   border: 1px solid #dbe4ef;
@@ -2930,22 +3001,25 @@ onUnmounted(() => {
   transform: translateY(-1px);
 }
 
-.status-timestamp {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-top: 4px;
-}
-
 .status-detail {
   margin-top: 8px;
   font-size: 12px;
   line-height: 1.5;
-  color: #8b5e34;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.16);
   border-radius: 10px;
   padding: 8px 10px;
   word-break: break-word;
+}
+
+.status-detail-info {
+  color: #334155;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+}
+
+.status-detail-error {
+  color: #8b5e34;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.16);
 }
 
 .status-detail-actions {
@@ -3733,19 +3807,23 @@ onUnmounted(() => {
   }
 
   .header {
-    padding: 14px 16px 6px;
+    padding: 10px 12px 8px;
   }
 
-  .header-content {
-    align-items: center;
+  .header-mainline {
+    gap: 6px;
   }
 
-  .header-subtitle {
-    display: none;
+  .header-title {
+    font-size: 30px;
+  }
+
+  .header-context {
+    font-size: 13px;
   }
 
   .header-status-chip {
-    max-width: 132px;
+    max-width: 120px;
     padding: 4px 8px;
   }
 
@@ -3754,7 +3832,7 @@ onUnmounted(() => {
   }
 
   .content {
-    padding: 8px 16px 12px;
+    padding: 8px 12px 12px;
   }
 
   .stats-grid {
