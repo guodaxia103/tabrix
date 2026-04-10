@@ -1762,5 +1762,477 @@
   "triggerUrlRuleUrlPrefix": {
     "message": "URL prefix",
     "description": "Auto-synced key"
+  },
+  "builderPropAddButton": {
+    "message": "Add",
+    "description": "Auto-synced key"
+  },
+  "builderPropAddSelectorButton": {
+    "message": "+ Add selector",
+    "description": "Auto-synced key"
+  },
+  "builderPropAssertConditionLabel": {
+    "message": "Assert condition (JSON)",
+    "description": "Auto-synced key"
+  },
+  "builderPropAssertFailStrategyLabel": {
+    "message": "Failure strategy",
+    "description": "Auto-synced key"
+  },
+  "builderPropCloseTabIdsLabel": {
+    "message": "Tab IDs (JSON array, optional)",
+    "description": "Auto-synced key"
+  },
+  "builderPropCloseTabUrlLabel": {
+    "message": "Close by URL (optional)",
+    "description": "Auto-synced key"
+  },
+  "builderPropCloseTabUrlPlaceholder": {
+    "message": "Substring match URL",
+    "description": "Auto-synced key"
+  },
+  "builderPropConfigSectionTitle": {
+    "message": "Configuration",
+    "description": "Auto-synced key"
+  },
+  "builderPropCreateSubflowButton": {
+    "message": "Create subflow",
+    "description": "Auto-synced key"
+  },
+  "builderPropCssSelectorPlaceholder": {
+    "message": "CSS selector",
+    "description": "Auto-synced key"
+  },
+  "builderPropDefault60000Placeholder": {
+    "message": "Default 60000",
+    "description": "Auto-synced key"
+  },
+  "builderPropDefaultDownloadPlaceholder": {
+    "message": "Default download",
+    "description": "Auto-synced key"
+  },
+  "builderPropDefaultElementsPlaceholder": {
+    "message": "Default elements",
+    "description": "Auto-synced key"
+  },
+  "builderPropDefaultItemPlaceholder": {
+    "message": "Default item",
+    "description": "Auto-synced key"
+  },
+  "builderPropDelayMsLabel": {
+    "message": "Delay (ms)",
+    "description": "Auto-synced key"
+  },
+  "builderPropDeleteButton": {
+    "message": "Delete",
+    "description": "Auto-synced key"
+  },
+  "builderPropDeleteTitle": {
+    "message": "Delete",
+    "description": "Auto-synced key"
+  },
+  "builderPropDownloadFilenameContainsLabel": {
+    "message": "Filename contains (optional)",
+    "description": "Auto-synced key"
+  },
+  "builderPropDownloadWaitCompleteLabel": {
+    "message": "Wait for download completion",
+    "description": "Auto-synced key"
+  },
+  "builderPropDragEndSelectorTitle": {
+    "message": "End selector",
+    "description": "Auto-synced key"
+  },
+  "builderPropDragHint": {
+    "message": "Tip: path is usually auto-generated during recording; you can leave it empty when creating manually.",
+    "description": "Auto-synced key"
+  },
+  "builderPropDragStartSelectorTitle": {
+    "message": "Start selector",
+    "description": "Auto-synced key"
+  },
+  "builderPropElementSelectorLabel": {
+    "message": "Element selector",
+    "description": "Auto-synced key"
+  },
+  "builderPropExecuteFlowArgsLabel": {
+    "message": "Arguments (JSON)",
+    "description": "Auto-synced key"
+  },
+  "builderPropExecuteFlowInlineLabel": {
+    "message": "Inline execution (share context variables)",
+    "description": "Auto-synced key"
+  },
+  "builderPropExecuteFlowTargetLabel": {
+    "message": "Target workflow",
+    "description": "Auto-synced key"
+  },
+  "builderPropExtractAttributeLabel": {
+    "message": "Attribute",
+    "description": "Auto-synced key"
+  },
+  "builderPropExtractAttributePlaceholder": {
+    "message": "text/textContent or attribute name",
+    "description": "Auto-synced key"
+  },
+  "builderPropExtractCustomJsLabel": {
+    "message": "Custom JS (return value)",
+    "description": "Auto-synced key"
+  },
+  "builderPropExtractSelectorOptionalLabel": {
+    "message": "Element selector (optional)",
+    "description": "Auto-synced key"
+  },
+  "builderPropFillValueLabel": {
+    "message": "Input value",
+    "description": "Auto-synced key"
+  },
+  "builderPropFillValuePlaceholder": {
+    "message": "Supports {variable_name} format",
+    "description": "Auto-synced key"
+  },
+  "builderPropForeachItemVarLabel": {
+    "message": "Loop item variable name",
+    "description": "Auto-synced key"
+  },
+  "builderPropForeachListVarLabel": {
+    "message": "List variable",
+    "description": "Auto-synced key"
+  },
+  "builderPropHttpFormDataHint": {
+    "message": "Supports short array form: [[\"file\",\"url:https://...\",\"a.png\"],[\"metadata\",\"value\"]]",
+    "description": "Auto-synced key"
+  },
+  "builderPropHttpFormDataLabel": {
+    "message": "FormData (JSON, optional, overrides Body when provided)",
+    "description": "Auto-synced key"
+  },
+  "builderPropHttpMethodLabel": {
+    "message": "HTTP method",
+    "description": "Auto-synced key"
+  },
+  "builderPropIfBranchNamePlaceholder": {
+    "message": "Branch name (optional)",
+    "description": "Auto-synced key"
+  },
+  "builderPropIfDescription": {
+    "message": "Define branches using expressions, with variables and common comparison operators.",
+    "description": "Auto-synced key"
+  },
+  "builderPropIfElseDescription": {
+    "message": "Else branch (no expression; matches when all above conditions are false)",
+    "description": "Auto-synced key"
+  },
+  "builderPropIfInsertVariable": {
+    "message": "Insert variable",
+    "description": "Auto-synced key"
+  },
+  "builderPropIfOperator": {
+    "message": "Operator",
+    "description": "Auto-synced key"
+  },
+  "builderPropInputJsonPlaceholder": {
+    "message": "Input JSON",
+    "description": "Auto-synced key"
+  },
+  "builderPropJsonFormatError": {
+    "message": "Invalid JSON format",
+    "description": "Auto-synced key"
+  },
+  "builderPropKeySequenceLabel": {
+    "message": "Key sequence",
+    "description": "Auto-synced key"
+  },
+  "builderPropKeySequencePlaceholder": {
+    "message": "e.g. Backspace Enter or cmd+a",
+    "description": "Auto-synced key"
+  },
+  "builderPropLoopElementsListVarLabel": {
+    "message": "List variable name",
+    "description": "Auto-synced key"
+  },
+  "builderPropNumberPlaceholder": {
+    "message": "Number",
+    "description": "Auto-synced key"
+  },
+  "builderPropOffsetXLabel": {
+    "message": "Offset X",
+    "description": "Auto-synced key"
+  },
+  "builderPropOffsetYLabel": {
+    "message": "Offset Y",
+    "description": "Auto-synced key"
+  },
+  "builderPropOpenTabNewWindowLabel": {
+    "message": "New window",
+    "description": "Auto-synced key"
+  },
+  "builderPropPleaseSelect": {
+    "message": "Please select",
+    "description": "Auto-synced key"
+  },
+  "builderPropRequiredSuffix": {
+    "message": "is required",
+    "description": "Auto-synced key"
+  },
+  "builderPropSaveAsVariableLabel": {
+    "message": "Save as variable",
+    "description": "Auto-synced key"
+  },
+  "builderPropSaveAsVariableOptionalLabel": {
+    "message": "Save as variable (optional)",
+    "description": "Auto-synced key"
+  },
+  "builderPropSaveToVariableLabel": {
+    "message": "Save to variable",
+    "description": "Auto-synced key"
+  },
+  "builderPropScreenshotFullPageLabel": {
+    "message": "Full page screenshot",
+    "description": "Auto-synced key"
+  },
+  "builderPropScreenshotSaveAsPlaceholder": {
+    "message": "Variable name, e.g. shot",
+    "description": "Auto-synced key"
+  },
+  "builderPropScreenshotSelectorOptionalLabel": {
+    "message": "Element selector (optional)",
+    "description": "Auto-synced key"
+  },
+  "builderPropScreenshotSelectorPlaceholder": {
+    "message": "Leave empty to capture viewport or full page",
+    "description": "Auto-synced key"
+  },
+  "builderPropScriptAssignLabel": {
+    "message": "Result field mapping",
+    "description": "Auto-synced key"
+  },
+  "builderPropScriptCodeLabel": {
+    "message": "Code",
+    "description": "Auto-synced key"
+  },
+  "builderPropScriptWhenLabel": {
+    "message": "Execution timing",
+    "description": "Auto-synced key"
+  },
+  "builderPropScriptWorldLabel": {
+    "message": "Execution world",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollContainerHint": {
+    "message": "Container must support scrollTo(top,left)",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollContainerSelectorTitle": {
+    "message": "Container selector",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollModeContainer": {
+    "message": "Container offset",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollModeElement": {
+    "message": "Scroll to element",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollModeLabel": {
+    "message": "Mode",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollModeOffset": {
+    "message": "Window offset",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollTargetElementTitle": {
+    "message": "Target element",
+    "description": "Auto-synced key"
+  },
+  "builderPropSelectFromPageButton": {
+    "message": "Select from page",
+    "description": "Auto-synced key"
+  },
+  "builderPropSelectorTitle": {
+    "message": "Selector",
+    "description": "Auto-synced key"
+  },
+  "builderPropSelectorValuePlaceholder": {
+    "message": "Selector value",
+    "description": "Auto-synced key"
+  },
+  "builderPropSetAttrNameLabel": {
+    "message": "Attribute name",
+    "description": "Auto-synced key"
+  },
+  "builderPropSetAttrNamePlaceholder": {
+    "message": "e.g. value/src/disabled",
+    "description": "Auto-synced key"
+  },
+  "builderPropSetAttrRemoveLabel": {
+    "message": "Remove attribute",
+    "description": "Auto-synced key"
+  },
+  "builderPropSetAttrValueLabel": {
+    "message": "Attribute value (leave empty and check remove to delete)",
+    "description": "Auto-synced key"
+  },
+  "builderPropSetAttrValuePlaceholder": {
+    "message": "Attribute value",
+    "description": "Auto-synced key"
+  },
+  "builderPropSpecNotFoundHint": {
+    "message": "No NodeSpec provided for this node yet; fallback default property panel is used.",
+    "description": "Auto-synced key"
+  },
+  "builderPropSpecNotFoundTitle": {
+    "message": "Node spec not found",
+    "description": "Auto-synced key"
+  },
+  "builderPropSubflowIdLabel": {
+    "message": "Subflow ID",
+    "description": "Auto-synced key"
+  },
+  "builderPropSubflowPlaceholder": {
+    "message": "Select or create subflow",
+    "description": "Auto-synced key"
+  },
+  "builderPropSubstringMatchPlaceholder": {
+    "message": "Substring match",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchFrameHint": {
+    "message": "Available for same-origin/injectable frames; leave empty to return to top-level page",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchFrameIndexLabel": {
+    "message": "Match by index (from 0, sub-frames only)",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchFrameIndexPlaceholder": {
+    "message": "Index number",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchFrameUrlContainsLabel": {
+    "message": "Match by URL contains (preferred)",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchFrameUrlPlaceholder": {
+    "message": "Substring contained in frame URL",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchTabIdOptionalLabel": {
+    "message": "Tab ID (optional)",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchTabNeedOneHint": {
+    "message": "Provide tabId or URL/title contains",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchTabTitleContainsOptionalLabel": {
+    "message": "Title contains (optional)",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchTabUrlContainsOptionalLabel": {
+    "message": "URL contains (optional)",
+    "description": "Auto-synced key"
+  },
+  "builderPropTimeoutMsCompactLabel": {
+    "message": "Timeout (ms)",
+    "description": "Auto-synced key"
+  },
+  "builderPropTriggerEventBubblesLabel": {
+    "message": "Bubbles",
+    "description": "Auto-synced key"
+  },
+  "builderPropTriggerEventCancelableLabel": {
+    "message": "Cancelable",
+    "description": "Auto-synced key"
+  },
+  "builderPropTriggerEventTypeLabel": {
+    "message": "Event type",
+    "description": "Auto-synced key"
+  },
+  "builderPropTriggerEventTypePlaceholder": {
+    "message": "e.g. input/change/mouseover",
+    "description": "Auto-synced key"
+  },
+  "builderPropUrlAddressLabel": {
+    "message": "URL",
+    "description": "Auto-synced key"
+  },
+  "builderPropUrlAddressOptionalLabel": {
+    "message": "URL (optional)",
+    "description": "Auto-synced key"
+  },
+  "builderPropVariableNamePlaceholder": {
+    "message": "Variable name",
+    "description": "Auto-synced key"
+  },
+  "builderPropWaitConditionLabel": {
+    "message": "Wait condition (JSON)",
+    "description": "Auto-synced key"
+  },
+  "builderPropWhileConditionLabel": {
+    "message": "Condition (JSON)",
+    "description": "Auto-synced key"
+  },
+  "builderPropWhileMaxIterationsOptionalLabel": {
+    "message": "Max iterations (optional)",
+    "description": "Auto-synced key"
+  },
+  "builderFieldKeySequenceHelp": {
+    "message": "Example: Backspace Enter or cmd+a",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorHelp": {
+    "message": "You can enter a CSS selector, or click Pick to select an element on the page",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorNoActiveTabError": {
+    "message": "No active tab found",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorNoValidSelectorError": {
+    "message": "No valid selector generated, please input manually",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorPickButton": {
+    "message": "Pick",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorPickFailedError": {
+    "message": "Pick failed",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorPickFromPageTitle": {
+    "message": "Pick from page",
+    "description": "Auto-synced key"
+  },
+  "builderKveAddMappingButton": {
+    "message": "Add mapping",
+    "description": "Auto-synced key"
+  },
+  "builderKveResultPathPlaceholder": {
+    "message": "Result path (e.g. data.items[0].id)",
+    "description": "Auto-synced key"
+  },
+  "builderKveVarNamePlaceholder": {
+    "message": "Variable name",
+    "description": "Auto-synced key"
+  },
+  "builderEdgeDeleteTitle": {
+    "message": "Delete edge",
+    "description": "Auto-synced key"
+  },
+  "builderEdgeEmptyText": {
+    "message": "No edge selected",
+    "description": "Auto-synced key"
+  },
+  "builderFieldExpressionParseError": {
+    "message": "Expression parse error",
+    "description": "Auto-synced key"
+  },
+  "builderFieldExpressionPlaceholder": {
+    "message": "e.g. vars.a > 0 && vars.flag",
+    "description": "Auto-synced key"
   }
 }

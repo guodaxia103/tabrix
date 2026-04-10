@@ -1,7 +1,7 @@
 <template>
   <div class="form-section">
     <div class="form-group">
-      <label class="form-label">条件 (JSON)</label>
+      <label class="form-label">{{ getMessage('builderPropWhileConditionLabel') }}</label>
       <textarea
         class="form-textarea"
         v-model="whileJson"
@@ -10,16 +10,20 @@
       ></textarea>
     </div>
     <div class="form-group">
-      <label class="form-label">子流 ID</label>
+      <label class="form-label">{{ getMessage('builderPropSubflowIdLabel') }}</label>
       <input
         class="form-input"
         v-model="(node as any).config.subflowId"
-        placeholder="选择或新建子流"
+        :placeholder="getMessage('builderPropSubflowPlaceholder')"
       />
-      <button class="btn-sm" style="margin-top: 8px" @click="onCreateSubflow">新建子流</button>
+      <button class="btn-sm" style="margin-top: 8px" @click="onCreateSubflow">{{
+        getMessage('builderPropCreateSubflowButton')
+      }}</button>
     </div>
     <div class="form-group">
-      <label class="form-label">最大迭代次数（可选）</label>
+      <label class="form-label">{{
+        getMessage('builderPropWhileMaxIterationsOptionalLabel')
+      }}</label>
       <input
         class="form-input"
         type="number"
@@ -31,9 +35,9 @@
 </template>
 
 <script lang="ts" setup>
- 
 import { computed } from 'vue';
 import type { NodeBase } from '@/entrypoints/background/record-replay/types';
+import { getMessage } from '@/utils/i18n';
 
 const props = defineProps<{ node: NodeBase }>();
 const emit = defineEmits<{ (e: 'create-subflow', id: string): void }>();
@@ -57,7 +61,7 @@ const whileJson = computed({
 });
 
 function onCreateSubflow() {
-  const id = prompt('请输入新子流ID');
+  const id = prompt(getMessage('propertyPanelPromptNewSubflowId'));
   if (!id) return;
   emit('create-subflow', id);
   const n = props.node as any;

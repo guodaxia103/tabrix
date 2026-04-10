@@ -1,33 +1,41 @@
 <template>
   <div class="form-section">
     <div class="form-group">
-      <label class="form-label">文件名包含（可选）</label>
+      <label class="form-label">{{ getMessage('builderPropDownloadFilenameContainsLabel') }}</label>
       <input
         class="form-input"
         v-model="(node as any).config.filenameContains"
-        placeholder="子串匹配文件名或URL"
+        :placeholder="getMessage('builderPropSubstringMatchPlaceholder')"
       />
     </div>
     <div class="form-group">
-      <label class="form-label">超时(ms)</label>
-      <input class="form-input" v-model="(node as any).config.timeoutMs" placeholder="默认 60000" />
+      <label class="form-label">{{ getMessage('builderPropTimeoutMsCompactLabel') }}</label>
+      <input
+        class="form-input"
+        v-model="(node as any).config.timeoutMs"
+        :placeholder="getMessage('builderPropDefault60000Placeholder')"
+      />
     </div>
     <div class="form-group checkbox-group">
       <label class="checkbox-label"
         ><input type="checkbox" v-model="(node as any).config.waitForComplete" />
-        等待下载完成</label
+        {{ getMessage('builderPropDownloadWaitCompleteLabel') }}</label
       >
     </div>
     <div class="form-group">
-      <label class="form-label">保存到变量</label>
-      <input class="form-input" v-model="(node as any).config.saveAs" placeholder="默认 download" />
+      <label class="form-label">{{ getMessage('builderPropSaveToVariableLabel') }}</label>
+      <input
+        class="form-input"
+        v-model="(node as any).config.saveAs"
+        :placeholder="getMessage('builderPropDefaultDownloadPlaceholder')"
+      />
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
- 
 import type { NodeBase } from '@/entrypoints/background/record-replay/types';
+import { getMessage } from '@/utils/i18n';
 defineProps<{ node: NodeBase }>();
 </script>
 

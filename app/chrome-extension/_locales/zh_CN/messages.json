@@ -1768,5 +1768,477 @@
   "triggerUrlRuleUrlPrefix": {
     "message": "前缀 URL",
     "description": "Auto-synced key"
+  },
+  "builderPropAddButton": {
+    "message": "新增",
+    "description": "Auto-synced key"
+  },
+  "builderPropAddSelectorButton": {
+    "message": "+ 添加选择器",
+    "description": "Auto-synced key"
+  },
+  "builderPropAssertConditionLabel": {
+    "message": "断言条件 (JSON)",
+    "description": "Auto-synced key"
+  },
+  "builderPropAssertFailStrategyLabel": {
+    "message": "失败策略",
+    "description": "Auto-synced key"
+  },
+  "builderPropCloseTabIdsLabel": {
+    "message": "Tab IDs（JSON 数组，可选）",
+    "description": "Auto-synced key"
+  },
+  "builderPropCloseTabUrlLabel": {
+    "message": "按 URL 关闭（可选）",
+    "description": "Auto-synced key"
+  },
+  "builderPropCloseTabUrlPlaceholder": {
+    "message": "子串匹配 URL",
+    "description": "Auto-synced key"
+  },
+  "builderPropConfigSectionTitle": {
+    "message": "配置",
+    "description": "Auto-synced key"
+  },
+  "builderPropCreateSubflowButton": {
+    "message": "新建子流",
+    "description": "Auto-synced key"
+  },
+  "builderPropCssSelectorPlaceholder": {
+    "message": "CSS 选择器",
+    "description": "Auto-synced key"
+  },
+  "builderPropDefault60000Placeholder": {
+    "message": "默认 60000",
+    "description": "Auto-synced key"
+  },
+  "builderPropDefaultDownloadPlaceholder": {
+    "message": "默认 download",
+    "description": "Auto-synced key"
+  },
+  "builderPropDefaultElementsPlaceholder": {
+    "message": "默认 elements",
+    "description": "Auto-synced key"
+  },
+  "builderPropDefaultItemPlaceholder": {
+    "message": "默认 item",
+    "description": "Auto-synced key"
+  },
+  "builderPropDelayMsLabel": {
+    "message": "延迟 (ms)",
+    "description": "Auto-synced key"
+  },
+  "builderPropDeleteButton": {
+    "message": "删除",
+    "description": "Auto-synced key"
+  },
+  "builderPropDeleteTitle": {
+    "message": "删除",
+    "description": "Auto-synced key"
+  },
+  "builderPropDownloadFilenameContainsLabel": {
+    "message": "文件名包含（可选）",
+    "description": "Auto-synced key"
+  },
+  "builderPropDownloadWaitCompleteLabel": {
+    "message": "等待下载完成",
+    "description": "Auto-synced key"
+  },
+  "builderPropDragEndSelectorTitle": {
+    "message": "终点选择器",
+    "description": "Auto-synced key"
+  },
+  "builderPropDragHint": {
+    "message": "提示：路径（path）通常在录制时自动生成，手动创建时可留空。",
+    "description": "Auto-synced key"
+  },
+  "builderPropDragStartSelectorTitle": {
+    "message": "起点选择器",
+    "description": "Auto-synced key"
+  },
+  "builderPropElementSelectorLabel": {
+    "message": "元素选择器",
+    "description": "Auto-synced key"
+  },
+  "builderPropExecuteFlowArgsLabel": {
+    "message": "传参 (JSON)",
+    "description": "Auto-synced key"
+  },
+  "builderPropExecuteFlowInlineLabel": {
+    "message": "内联执行（共享上下文变量）",
+    "description": "Auto-synced key"
+  },
+  "builderPropExecuteFlowTargetLabel": {
+    "message": "目标工作流",
+    "description": "Auto-synced key"
+  },
+  "builderPropExtractAttributeLabel": {
+    "message": "属性",
+    "description": "Auto-synced key"
+  },
+  "builderPropExtractAttributePlaceholder": {
+    "message": "text/textContent 或属性名",
+    "description": "Auto-synced key"
+  },
+  "builderPropExtractCustomJsLabel": {
+    "message": "自定义 JS（返回值）",
+    "description": "Auto-synced key"
+  },
+  "builderPropExtractSelectorOptionalLabel": {
+    "message": "元素选择器（可选）",
+    "description": "Auto-synced key"
+  },
+  "builderPropFillValueLabel": {
+    "message": "输入值",
+    "description": "Auto-synced key"
+  },
+  "builderPropFillValuePlaceholder": {
+    "message": "支持 {变量名} 格式",
+    "description": "Auto-synced key"
+  },
+  "builderPropForeachItemVarLabel": {
+    "message": "循环项变量名",
+    "description": "Auto-synced key"
+  },
+  "builderPropForeachListVarLabel": {
+    "message": "列表变量",
+    "description": "Auto-synced key"
+  },
+  "builderPropHttpFormDataHint": {
+    "message": "支持简洁数组形式：[[\"file\",\"url:https://...\",\"a.png\"],[\"metadata\",\"value\"]]",
+    "description": "Auto-synced key"
+  },
+  "builderPropHttpFormDataLabel": {
+    "message": "FormData (JSON，可选，提供时覆盖 Body)",
+    "description": "Auto-synced key"
+  },
+  "builderPropHttpMethodLabel": {
+    "message": "请求方法",
+    "description": "Auto-synced key"
+  },
+  "builderPropIfBranchNamePlaceholder": {
+    "message": "分支名称（可选）",
+    "description": "Auto-synced key"
+  },
+  "builderPropIfDescription": {
+    "message": "使用表达式定义分支，支持变量与常见比较运算符。",
+    "description": "Auto-synced key"
+  },
+  "builderPropIfElseDescription": {
+    "message": "Else 分支（无需表达式，将匹配以上条件都不成立时）",
+    "description": "Auto-synced key"
+  },
+  "builderPropIfInsertVariable": {
+    "message": "插入变量",
+    "description": "Auto-synced key"
+  },
+  "builderPropIfOperator": {
+    "message": "运算符",
+    "description": "Auto-synced key"
+  },
+  "builderPropInputJsonPlaceholder": {
+    "message": "输入 JSON",
+    "description": "Auto-synced key"
+  },
+  "builderPropJsonFormatError": {
+    "message": "JSON 格式错误",
+    "description": "Auto-synced key"
+  },
+  "builderPropKeySequenceLabel": {
+    "message": "按键序列",
+    "description": "Auto-synced key"
+  },
+  "builderPropKeySequencePlaceholder": {
+    "message": "如 Backspace Enter 或 cmd+a",
+    "description": "Auto-synced key"
+  },
+  "builderPropLoopElementsListVarLabel": {
+    "message": "列表变量名",
+    "description": "Auto-synced key"
+  },
+  "builderPropNumberPlaceholder": {
+    "message": "数字",
+    "description": "Auto-synced key"
+  },
+  "builderPropOffsetXLabel": {
+    "message": "偏移 X",
+    "description": "Auto-synced key"
+  },
+  "builderPropOffsetYLabel": {
+    "message": "偏移 Y",
+    "description": "Auto-synced key"
+  },
+  "builderPropOpenTabNewWindowLabel": {
+    "message": "新窗口",
+    "description": "Auto-synced key"
+  },
+  "builderPropPleaseSelect": {
+    "message": "请选择",
+    "description": "Auto-synced key"
+  },
+  "builderPropRequiredSuffix": {
+    "message": "必填",
+    "description": "Auto-synced key"
+  },
+  "builderPropSaveAsVariableLabel": {
+    "message": "保存为变量",
+    "description": "Auto-synced key"
+  },
+  "builderPropSaveAsVariableOptionalLabel": {
+    "message": "保存为变量（可选）",
+    "description": "Auto-synced key"
+  },
+  "builderPropSaveToVariableLabel": {
+    "message": "保存到变量",
+    "description": "Auto-synced key"
+  },
+  "builderPropScreenshotFullPageLabel": {
+    "message": "全页截图",
+    "description": "Auto-synced key"
+  },
+  "builderPropScreenshotSaveAsPlaceholder": {
+    "message": "变量名，例如 shot",
+    "description": "Auto-synced key"
+  },
+  "builderPropScreenshotSelectorOptionalLabel": {
+    "message": "元素选择器（可选）",
+    "description": "Auto-synced key"
+  },
+  "builderPropScreenshotSelectorPlaceholder": {
+    "message": "为空则截取可视区或全页",
+    "description": "Auto-synced key"
+  },
+  "builderPropScriptAssignLabel": {
+    "message": "结果字段映射",
+    "description": "Auto-synced key"
+  },
+  "builderPropScriptCodeLabel": {
+    "message": "代码",
+    "description": "Auto-synced key"
+  },
+  "builderPropScriptWhenLabel": {
+    "message": "执行时机",
+    "description": "Auto-synced key"
+  },
+  "builderPropScriptWorldLabel": {
+    "message": "执行环境",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollContainerHint": {
+    "message": "容器需支持 scrollTo(top,left)",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollContainerSelectorTitle": {
+    "message": "容器选择器",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollModeContainer": {
+    "message": "容器偏移",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollModeElement": {
+    "message": "滚动到元素",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollModeLabel": {
+    "message": "模式",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollModeOffset": {
+    "message": "窗口偏移",
+    "description": "Auto-synced key"
+  },
+  "builderPropScrollTargetElementTitle": {
+    "message": "目标元素",
+    "description": "Auto-synced key"
+  },
+  "builderPropSelectFromPageButton": {
+    "message": "从页面选择",
+    "description": "Auto-synced key"
+  },
+  "builderPropSelectorTitle": {
+    "message": "选择器",
+    "description": "Auto-synced key"
+  },
+  "builderPropSelectorValuePlaceholder": {
+    "message": "选择器值",
+    "description": "Auto-synced key"
+  },
+  "builderPropSetAttrNameLabel": {
+    "message": "属性名",
+    "description": "Auto-synced key"
+  },
+  "builderPropSetAttrNamePlaceholder": {
+    "message": "如 value/src/disabled 等",
+    "description": "Auto-synced key"
+  },
+  "builderPropSetAttrRemoveLabel": {
+    "message": "删除属性",
+    "description": "Auto-synced key"
+  },
+  "builderPropSetAttrValueLabel": {
+    "message": "属性值（留空并勾选删除则移除）",
+    "description": "Auto-synced key"
+  },
+  "builderPropSetAttrValuePlaceholder": {
+    "message": "属性值",
+    "description": "Auto-synced key"
+  },
+  "builderPropSpecNotFoundHint": {
+    "message": "该节点尚未提供 NodeSpec，已回退到默认属性面板。",
+    "description": "Auto-synced key"
+  },
+  "builderPropSpecNotFoundTitle": {
+    "message": "未找到节点规范",
+    "description": "Auto-synced key"
+  },
+  "builderPropSubflowIdLabel": {
+    "message": "子流 ID",
+    "description": "Auto-synced key"
+  },
+  "builderPropSubflowPlaceholder": {
+    "message": "选择或新建子流",
+    "description": "Auto-synced key"
+  },
+  "builderPropSubstringMatchPlaceholder": {
+    "message": "子串匹配",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchFrameHint": {
+    "message": "同源/可注入 frame 可用；留空则回到顶级页面",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchFrameIndexLabel": {
+    "message": "按索引匹配（从 0 起，仅子 frame）",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchFrameIndexPlaceholder": {
+    "message": "索引数字",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchFrameUrlContainsLabel": {
+    "message": "按 URL 包含匹配（优先）",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchFrameUrlPlaceholder": {
+    "message": "frame URL 包含的字符串",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchTabIdOptionalLabel": {
+    "message": "Tab ID（可选）",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchTabNeedOneHint": {
+    "message": "需提供 tabId 或 URL/标题包含",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchTabTitleContainsOptionalLabel": {
+    "message": "标题包含（可选）",
+    "description": "Auto-synced key"
+  },
+  "builderPropSwitchTabUrlContainsOptionalLabel": {
+    "message": "URL 包含（可选）",
+    "description": "Auto-synced key"
+  },
+  "builderPropTimeoutMsCompactLabel": {
+    "message": "超时(ms)",
+    "description": "Auto-synced key"
+  },
+  "builderPropTriggerEventBubblesLabel": {
+    "message": "冒泡",
+    "description": "Auto-synced key"
+  },
+  "builderPropTriggerEventCancelableLabel": {
+    "message": "可取消",
+    "description": "Auto-synced key"
+  },
+  "builderPropTriggerEventTypeLabel": {
+    "message": "事件类型",
+    "description": "Auto-synced key"
+  },
+  "builderPropTriggerEventTypePlaceholder": {
+    "message": "如 input/change/mouseover",
+    "description": "Auto-synced key"
+  },
+  "builderPropUrlAddressLabel": {
+    "message": "URL 地址",
+    "description": "Auto-synced key"
+  },
+  "builderPropUrlAddressOptionalLabel": {
+    "message": "URL 地址（可选）",
+    "description": "Auto-synced key"
+  },
+  "builderPropVariableNamePlaceholder": {
+    "message": "变量名",
+    "description": "Auto-synced key"
+  },
+  "builderPropWaitConditionLabel": {
+    "message": "等待条件 (JSON)",
+    "description": "Auto-synced key"
+  },
+  "builderPropWhileConditionLabel": {
+    "message": "条件 (JSON)",
+    "description": "Auto-synced key"
+  },
+  "builderPropWhileMaxIterationsOptionalLabel": {
+    "message": "最大迭代次数（可选）",
+    "description": "Auto-synced key"
+  },
+  "builderFieldKeySequenceHelp": {
+    "message": "示例：Backspace Enter 或 cmd+a",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorHelp": {
+    "message": "可输入 CSS 选择器，或点击“拾取”在页面中选择元素",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorNoActiveTabError": {
+    "message": "未找到活动页签",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorNoValidSelectorError": {
+    "message": "未生成有效选择器，请手动输入",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorPickButton": {
+    "message": "拾取",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorPickFailedError": {
+    "message": "拾取失败",
+    "description": "Auto-synced key"
+  },
+  "builderFieldSelectorPickFromPageTitle": {
+    "message": "从页面拾取",
+    "description": "Auto-synced key"
+  },
+  "builderKveAddMappingButton": {
+    "message": "添加映射",
+    "description": "Auto-synced key"
+  },
+  "builderKveResultPathPlaceholder": {
+    "message": "结果路径（如 data.items[0].id）",
+    "description": "Auto-synced key"
+  },
+  "builderKveVarNamePlaceholder": {
+    "message": "变量名",
+    "description": "Auto-synced key"
+  },
+  "builderEdgeDeleteTitle": {
+    "message": "删除边",
+    "description": "Auto-synced key"
+  },
+  "builderEdgeEmptyText": {
+    "message": "未选择边",
+    "description": "Auto-synced key"
+  },
+  "builderFieldExpressionParseError": {
+    "message": "表达式解析错误",
+    "description": "Auto-synced key"
+  },
+  "builderFieldExpressionPlaceholder": {
+    "message": "例如 vars.a > 0 && vars.flag",
+    "description": "Auto-synced key"
   }
 }

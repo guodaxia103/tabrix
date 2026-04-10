@@ -3,20 +3,24 @@
     <SelectorEditor :node="node" :allowPick="true" />
     <div class="form-section">
       <div class="form-group" data-field="fill.value">
-        <label class="form-label">输入值</label>
-        <VarInput v-model="value" :variables="variables" placeholder="支持 {变量名} 格式" />
+        <label class="form-label">{{ getMessage('builderPropFillValueLabel') }}</label>
+        <VarInput
+          v-model="value"
+          :variables="variables"
+          :placeholder="getMessage('builderPropFillValuePlaceholder')"
+        />
       </div>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
- 
 import { computed } from 'vue';
 import type { NodeBase } from '@/entrypoints/background/record-replay/types';
 import type { VariableOption } from '@/entrypoints/popup/components/builder/model/variables';
 import SelectorEditor from './SelectorEditor.vue';
 import VarInput from '@/entrypoints/popup/components/builder/widgets/VarInput.vue';
+import { getMessage } from '@/utils/i18n';
 
 const props = defineProps<{ node: NodeBase; variables?: VariableOption[] }>();
 const variables = computed<VariableOption[]>(() => (props.variables || []).slice());

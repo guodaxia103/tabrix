@@ -1,38 +1,52 @@
 <template>
   <div class="form-section">
     <div class="form-group">
-      <label class="form-label">元素选择器</label>
-      <input class="form-input" v-model="(node as any).config.selector" placeholder="CSS 选择器" />
+      <label class="form-label">{{ getMessage('builderPropElementSelectorLabel') }}</label>
+      <input
+        class="form-input"
+        v-model="(node as any).config.selector"
+        :placeholder="getMessage('builderPropCssSelectorPlaceholder')"
+      />
     </div>
     <div class="form-group">
-      <label class="form-label">列表变量名</label>
-      <input class="form-input" v-model="(node as any).config.saveAs" placeholder="默认 elements" />
+      <label class="form-label">{{ getMessage('builderPropLoopElementsListVarLabel') }}</label>
+      <input
+        class="form-input"
+        v-model="(node as any).config.saveAs"
+        :placeholder="getMessage('builderPropDefaultElementsPlaceholder')"
+      />
     </div>
     <div class="form-group">
-      <label class="form-label">循环项变量名</label>
-      <input class="form-input" v-model="(node as any).config.itemVar" placeholder="默认 item" />
+      <label class="form-label">{{ getMessage('builderPropForeachItemVarLabel') }}</label>
+      <input
+        class="form-input"
+        v-model="(node as any).config.itemVar"
+        :placeholder="getMessage('builderPropDefaultItemPlaceholder')"
+      />
     </div>
     <div class="form-group">
-      <label class="form-label">子流 ID</label>
+      <label class="form-label">{{ getMessage('builderPropSubflowIdLabel') }}</label>
       <input
         class="form-input"
         v-model="(node as any).config.subflowId"
-        placeholder="选择或新建子流"
+        :placeholder="getMessage('builderPropSubflowPlaceholder')"
       />
-      <button class="btn-sm" style="margin-top: 8px" @click="onCreateSubflow">新建子流</button>
+      <button class="btn-sm" style="margin-top: 8px" @click="onCreateSubflow">{{
+        getMessage('builderPropCreateSubflowButton')
+      }}</button>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
- 
 import type { NodeBase } from '@/entrypoints/background/record-replay/types';
+import { getMessage } from '@/utils/i18n';
 
 const props = defineProps<{ node: NodeBase }>();
 const emit = defineEmits<{ (e: 'create-subflow', id: string): void }>();
 
 function onCreateSubflow() {
-  const id = prompt('请输入新子流ID');
+  const id = prompt(getMessage('propertyPanelPromptNewSubflowId'));
   if (!id) return;
   emit('create-subflow', id);
   const n = props.node as any;

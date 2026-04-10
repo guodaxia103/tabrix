@@ -8,12 +8,13 @@
 <script lang="ts" setup>
 import { ref, watchEffect } from 'vue';
 import { evalExpression } from '@/entrypoints/background/record-replay/engine/utils/expression';
+import { getMessage } from '@/utils/i18n';
 
 const props = defineProps<{ modelValue?: string; field?: any }>();
 const emit = defineEmits<{ (e: 'update:modelValue', v?: string): void }>();
 const text = ref<string>(props.modelValue ?? '');
 const err = ref<string>('');
-const placeholder = props.field?.placeholder || 'e.g. vars.a > 0 && vars.flag';
+const placeholder = props.field?.placeholder || getMessage('builderFieldExpressionPlaceholder');
 
 function onInput(ev: any) {
   const v = String(ev?.target?.value ?? '');
@@ -25,7 +26,7 @@ function onInput(ev: any) {
     }
     err.value = '';
   } catch (e: any) {
-    err.value = '表达式解析错误';
+    err.value = getMessage('builderFieldExpressionParseError');
   }
   emit('update:modelValue', v);
 }
