@@ -66,8 +66,10 @@ jobs:
           EXPECTED="${TAG#tabrix-v}"
           EXPECTED="${EXPECTED#v}"
           ACTUAL="$(node -p "require('./app/native-server/package.json').version")"
+          PACKAGE_NAME="$(node -p "require('./app/native-server/package.json').name")"
 
           echo "Tag: ${TAG}"
+          echo "Package name: ${PACKAGE_NAME}"
           echo "Expected version: ${EXPECTED}"
           echo "Package version: ${ACTUAL}"
 
@@ -84,6 +86,7 @@ jobs:
           fi
 
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "package_name=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
           echo "version=${ACTUAL}" >> "$GITHUB_OUTPUT"
           echo "notes_file=${NOTES_FILE}" >> "$GITHUB_OUTPUT"
 
@@ -91,16 +94,17 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build shared + native package
-        run: pnpm --filter tabrix build
+        run: pnpm --filter ./app/native-server build
 
       - name: Build extension zip
         run: pnpm --filter chrome-mcp-server zip
 
       - name: Pack npm tarball
+        id: pack
         shell: bash
         run: |
-          cd app/native-server
-          npm pack
+          PACKAGE_TGZ="$(cd app/native-server && npm pack --silent | tail -n 1)"
+          echo "npm_tgz_path=app/native-server/${PACKAGE_TGZ}" >> "$GITHUB_OUTPUT"
 
       - name: Prepare release assets
         id: assets
@@ -110,7 +114,7 @@ jobs:
           mkdir -p artifacts
 
           EXT_ZIP="$(ls app/chrome-extension/.output/*-chrome.zip | head -n 1)"
-          NPM_TGZ="app/native-server/tabrix-${VERSION}.tgz"
+          NPM_TGZ="${{ steps.pack.outputs.npm_tgz_path }}"
 
           cp "${EXT_ZIP}" "artifacts/tabrix-extension-v${VERSION}.zip"
           cp "${NPM_TGZ}" "artifacts/tabrix-v${VERSION}.tgz"
@@ -123,7 +127,8 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
-          if npm view "tabrix@${VERSION}" version >/dev/null 2>&1; then
+          PACKAGE_NAME="${{ steps.meta.outputs.package_name }}"
+          if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
             echo "already_published=true" >> "$GITHUB_OUTPUT"
           else
             echo "already_published=false" >> "$GITHUB_OUTPUT"

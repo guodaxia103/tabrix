@@ -5,7 +5,7 @@ This guide is the shortest path to a stable local setup on Windows with the curr
 ## 1. Install the bridge
 
 ```powershell
-npm install -g tabrix@latest
+npm install -g @tabrix/tabrix@latest
 ```
 
 If you are developing from source, build and register from the repo:
@@ -13,7 +13,7 @@ If you are developing from source, build and register from the repo:
 ```powershell
 cd D:\projects\ai\codex\mcp-chrome
 pnpm install
-pnpm --filter tabrix build
+pnpm --filter ./app/native-server build
 node app\native-server\dist\cli.js register
 ```
 

@@ -65,7 +65,7 @@
 
 | 原因                          | 修复方法                                                  |
 | ----------------------------- | --------------------------------------------------------- |
-| `tabrix` 未安装               | `npm install -g tabrix@latest`                            |
+| `tabrix` 未安装               | `npm install -g @tabrix/tabrix@latest`                    |
 | Native host manifest 未注册   | `tabrix register`                                         |
 | 注册的 manifest 路径失效      | 重新运行 `tabrix register`（升级或移动安装目录后常见）    |
 | Chrome 扩展未正确加载         | `chrome://extensions/` → 开启开发者模式 → 重新加载扩展    |
@@ -76,7 +76,7 @@
 **快速排障流程**：
 
 ```
-1. 确认 tabrix 已安装：npm list -g tabrix
+1. 确认 tabrix 已安装：npm list -g @tabrix/tabrix
 2. 重新注册：tabrix register
 3. 在 chrome://extensions/ 重新加载扩展
 4. 点击 Connect

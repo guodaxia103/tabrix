@@ -26,25 +26,26 @@ Tabrix 来源于开源项目 [`hangwin/mcp-chrome`](https://github.com/hangwin/m
 - 每个重要版本都会提供明确的变更说明。
 - 在可行范围内保持向后兼容，降低迁移成本。
 
-## 🔔 Tabrix 2.0.1（2026-04-10）
+## 🔔 Tabrix 2.0.2（2026-04-10）
 
-完整说明见：[Release Notes v2.0.1](docs/RELEASE_NOTES_v2.0.1.md)
+完整说明见：[Release Notes v2.0.2](docs/RELEASE_NOTES_v2.0.2.md)
 
 ### 新增
 
-- GitHub Actions 手动发布新增 `publish_npm` 输入（手动触发默认 `false`）。
+- npm 包名切换为 scoped 形式：`@tabrix/tabrix`，便于组织级稳定发布。
 
 ### 变更
 
-- 发布工作流改为通过 `actions/checkout` 直接按 tag ref 检出。
-- 发布安装步骤改为 `pnpm install --frozen-lockfile --ignore-scripts`。
-- 增加 Node 24 Actions 运行时偏好，提升兼容性。
+- 安装命令切换为 scoped 包：
+  - `npm install -g @tabrix/tabrix@latest`
+  - `pnpm install -g @tabrix/tabrix@latest`
+- 发布工作流改为从 `app/native-server/package.json` 动态读取包名和版本。
+- npm 打包产物改为按 `npm pack` 实际输出动态识别，不再写死文件名。
 
 ### 修复
 
-- 修复手动按 tag 触发时 checkout 阶段失败的问题。
-- 修复安装阶段因生命周期脚本依赖预构建产物导致失败的问题。
-- 即使 npm 发布失败，也可先完成 GitHub Release 资产发布。
+- 修复 scoped 包场景下的 npm 发布状态检测问题。
+- 增强发布诊断（`npm whoami` 预检 + provenance 失败后回退发布尝试）。
 
 ---
 
@@ -105,7 +106,7 @@ Tabrix 是一个基于 Chrome 插件的 **模型上下文协议 (MCP) 服务器*
 npm
 
 ```bash
-npm install -g tabrix@latest
+npm install -g @tabrix/tabrix@latest
 ```
 
 pnpm
@@ -113,10 +114,10 @@ pnpm
 ```bash
 # 方法1：全局启用脚本（推荐）
 pnpm config set enable-pre-post-scripts true
-pnpm install -g tabrix@latest
+pnpm install -g @tabrix/tabrix@latest
 
 # 方法2：如果 postinstall 没有运行，手动注册
-pnpm install -g tabrix@latest
+pnpm install -g @tabrix/tabrix@latest
 tabrix register
 ```
 
@@ -407,7 +408,7 @@ https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
 
 ### 用户文档
 
-- [Release Notes v2.0.1](docs/RELEASE_NOTES_v2.0.1.md) — 发布链路稳定性与发布说明
+- [Release Notes v2.0.2](docs/RELEASE_NOTES_v2.0.2.md) — scoped 包迁移与发布稳定性说明
 - [为什么选 mcp-chrome？(vs Playwright / browser-use)](docs/WHY_MCP_CHROME.md) — 定位与取舍
 - [快速入门](docs/STABLE_QUICKSTART.md) — 安装、验证、首次成功
 - [工具 API (中文)](docs/TOOLS_zh.md) | [TOOLS API (EN)](docs/TOOLS.md) — 完整工具参考

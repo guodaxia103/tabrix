@@ -47,10 +47,10 @@ tabrix register
 ```powershell
 # 方法 1：开启 postinstall（推荐）
 pnpm config set enable-pre-post-scripts true
-pnpm install -g tabrix@latest
+pnpm install -g @tabrix/tabrix@latest
 
 # 方法 2：手动注册
-pnpm install -g tabrix@latest
+pnpm install -g @tabrix/tabrix@latest
 tabrix register
 ```
 

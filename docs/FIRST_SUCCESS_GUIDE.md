@@ -7,7 +7,7 @@
 ## 第一步：安装 tabrix（1 分钟）
 
 ```bash
-npm install -g tabrix@latest
+npm install -g @tabrix/tabrix@latest
 ```
 
 安装成功后运行：

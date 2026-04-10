@@ -13,7 +13,7 @@ Chrome MCP Server 在windows电脑的详细安装和配置步骤
 确保电脑上已经安装了node，如果没安装请自行先安装
 
 ```bash
-npm install -g tabrix@latest
+npm install -g @tabrix/tabrix@latest
 ```
 
 3. **加载 Chrome 扩展**

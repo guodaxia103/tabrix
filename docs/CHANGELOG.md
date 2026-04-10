@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.0.2] - 2026-04-10
+
+### Added
+
+- Scoped package identity for npm publishing: `@tabrix/tabrix`.
+- Release workflow npm diagnostics with auth precheck (`npm whoami`) and provenance fallback publish path.
+
+### Changed
+
+- Install command docs migrated to scoped package usage.
+- Release workflow now resolves package name/version dynamically from `app/native-server/package.json`.
+- Tarball detection now follows real `npm pack` output instead of hard-coded names.
+
+### Fixed
+
+- Fixed npm publication status checks for scoped package names.
+- Reduced npm publish failures related to unscoped package ownership ambiguity.
+
 ## [v2.0.1] - 2026-04-10
 
 ### Added

@@ -28,25 +28,26 @@ Special thanks to all original maintainers and contributors for building the fou
 - We will publish release notes for every significant version.
 - We will keep practical backward compatibility whenever possible.
 
-## 🔔 Tabrix 2.0.1 (2026-04-10)
+## 🔔 Tabrix 2.0.2 (2026-04-10)
 
-Full notes: [Release Notes v2.0.1](docs/RELEASE_NOTES_v2.0.1.md)
+Full notes: [Release Notes v2.0.2](docs/RELEASE_NOTES_v2.0.2.md)
 
 ### Added
 
-- Manual release input `publish_npm` in GitHub Actions (`false` by default for manual runs).
+- Scoped npm package name for stable org publishing: `@tabrix/tabrix`.
 
 ### Changed
 
-- Release workflow now checks out tag refs directly via `actions/checkout`.
-- Release install step now uses `pnpm install --frozen-lockfile --ignore-scripts`.
-- Added Node 24 actions runtime preference for forward compatibility.
+- Install commands now use the scoped package:
+  - `npm install -g @tabrix/tabrix@latest`
+  - `pnpm install -g @tabrix/tabrix@latest`
+- Release workflow now resolves package name/version dynamically from `app/native-server/package.json`.
+- npm pack artifact detection now uses actual `npm pack` output instead of hard-coded file names.
 
 ### Fixed
 
-- Fixed manual tag dispatch failures in release workflow checkout stage.
-- Fixed install-stage failures caused by lifecycle scripts requiring prebuilt artifacts.
-- Ensured GitHub Release assets can still be published before npm publish failure is surfaced.
+- Fixed npm publication status checks for scoped packages.
+- Improved publish diagnostics (`npm whoami` precheck and provenance fallback publish attempt).
 
 ---
 
@@ -106,7 +107,7 @@ Recommended asset name in each release: `tabrix-extension-vX.Y.Z.zip`
 npm
 
 ```bash
-npm install -g tabrix@latest
+npm install -g @tabrix/tabrix@latest
 ```
 
 pnpm
@@ -114,10 +115,10 @@ pnpm
 ```bash
 # Method 1: Enable scripts globally (recommended)
 pnpm config set enable-pre-post-scripts true
-pnpm install -g tabrix@latest
+pnpm install -g @tabrix/tabrix@latest
 
 # Method 2: Manual registration (if postinstall doesn't run)
-pnpm install -g tabrix@latest
+pnpm install -g @tabrix/tabrix@latest
 tabrix register
 ```
 
@@ -408,7 +409,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### For Users
 
-- [Release Notes v2.0.1](docs/RELEASE_NOTES_v2.0.1.md) — release pipeline stability and publish notes
+- [Release Notes v2.0.2](docs/RELEASE_NOTES_v2.0.2.md) — scoped package migration and publish reliability
 - [Why mcp-chrome? (vs Playwright / browser-use)](docs/WHY_MCP_CHROME.md) — positioning and tradeoffs
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md) — install, verify, first success
 - [TOOLS API (EN)](docs/TOOLS.md) | [工具 API (中文)](docs/TOOLS_zh.md) — complete tool reference
