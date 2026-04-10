@@ -1,0 +1,19 @@
+{
+  "version": "0.2",
+  "language": "en,zh-CN",
+  "ignorePaths": ["node_modules", "pnpm-lock.yaml", "dist", ".git"],
+  "words": [
+    "tabrix",
+    "modelcontextprotocol",
+    "offscreen",
+    "sidepanel",
+    "webview",
+    "devtools",
+    "wasm",
+    "hnswlib",
+    "tsup",
+    "pnpm",
+    "copaw",
+    "openclaw"
+  ]
+}
