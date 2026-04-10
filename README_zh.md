@@ -26,26 +26,25 @@ Tabrix 来源于开源项目 [`hangwin/mcp-chrome`](https://github.com/hangwin/m
 - 每个重要版本都会提供明确的变更说明。
 - 在可行范围内保持向后兼容，降低迁移成本。
 
-## 🔔 Tabrix 2.0（2026-04-10）
+## 🔔 Tabrix 2.0.1（2026-04-10）
 
-完整说明见：[Release Notes v2.0.0](docs/RELEASE_NOTES_v2.0.0.md)
+完整说明见：[Release Notes v2.0.1](docs/RELEASE_NOTES_v2.0.1.md)
 
 ### 新增
 
-- 统一最新安装方式：`npm install -g tabrix@latest` 与 `pnpm install -g tabrix@latest`。
-- 新增基于 Git Tag 触发的 npm 自动发布流程（`v*` / `tabrix-v*`）。
-- 通用 AI 助手技能重命名并对齐为 `skills/tabrix_browser`。
+- GitHub Actions 手动发布新增 `publish_npm` 输入（手动触发默认 `false`）。
 
 ### 变更
 
-- 包名与主命令由 `mcp-chrome-bridge` 升级为 `tabrix`。
-- 保留兼容别名（`mcp-chrome-bridge`、`mcp-chrome-stdio`）以减少迁移成本。
-- 仓库链接、文档引用与公开目录结构已统一到 Tabrix 品牌。
+- 发布工作流改为通过 `actions/checkout` 直接按 tag ref 检出。
+- 发布安装步骤改为 `pnpm install --frozen-lockfile --ignore-scripts`。
+- 增加 Node 24 Actions 运行时偏好，提升兼容性。
 
 ### 修复
 
-- 修复发布风险：`chrome-mcp-shared` 依赖从 workspace 改为 semver，保证 npm 发布后可安装。
-- 修复远程访问消息枚举版本差异导致的兼容性问题（增加回退处理）。
+- 修复手动按 tag 触发时 checkout 阶段失败的问题。
+- 修复安装阶段因生命周期脚本依赖预构建产物导致失败的问题。
+- 即使 npm 发布失败，也可先完成 GitHub Release 资产发布。
 
 ---
 
@@ -408,7 +407,7 @@ https://github.com/user-attachments/assets/83de4008-bb7e-494d-9b0f-98325cfea592
 
 ### 用户文档
 
-- [Release Notes v2.0.0](docs/RELEASE_NOTES_v2.0.0.md) — 新增能力、修复项、迁移说明
+- [Release Notes v2.0.1](docs/RELEASE_NOTES_v2.0.1.md) — 发布链路稳定性与发布说明
 - [为什么选 mcp-chrome？(vs Playwright / browser-use)](docs/WHY_MCP_CHROME.md) — 定位与取舍
 - [快速入门](docs/STABLE_QUICKSTART.md) — 安装、验证、首次成功
 - [工具 API (中文)](docs/TOOLS_zh.md) | [TOOLS API (EN)](docs/TOOLS.md) — 完整工具参考

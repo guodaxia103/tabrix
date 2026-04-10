@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.0.1] - 2026-04-10
+
+### Added
+
+- Manual release input `publish_npm` in GitHub Actions (`false` by default for manual runs).
+
+### Changed
+
+- Release workflow now checks out tag refs directly via `actions/checkout`.
+- Release install step now uses `pnpm install --frozen-lockfile --ignore-scripts`.
+- Added Node 24 actions runtime preference for workflow compatibility.
+
+### Fixed
+
+- Fixed manual tag dispatch failures in release workflow checkout stage.
+- Fixed install-stage failure caused by lifecycle scripts requiring prebuilt artifacts.
+- Ensured GitHub Release asset publishing can complete before npm publish failure is surfaced.
+
 ## [v2.0.0] - 2026-04-10
 
 ### Added

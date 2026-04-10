@@ -130,6 +130,8 @@ jobs:
           fi
 
       - name: Publish to npm
+        id: npm_publish
+        continue-on-error: true
         if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true')
         working-directory: app/native-server
         env:
@@ -150,3 +152,9 @@ jobs:
             ${{ steps.assets.outputs.extension_asset }}
             ${{ steps.assets.outputs.npm_asset }}
           fail_on_unmatched_files: true
+
+      - name: Mark workflow failed when npm publish expected but failed
+        if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true') && steps.npm_publish.outcome != 'success'
+        run: |
+          echo "::error::npm publish failed. Please verify NPM_TOKEN permissions and npm package ownership."
+          exit 1

@@ -28,26 +28,25 @@ Special thanks to all original maintainers and contributors for building the fou
 - We will publish release notes for every significant version.
 - We will keep practical backward compatibility whenever possible.
 
-## 🔔 Tabrix 2.0 (2026-04-10)
+## 🔔 Tabrix 2.0.1 (2026-04-10)
 
-Full notes: [Release Notes v2.0.0](docs/RELEASE_NOTES_v2.0.0.md)
+Full notes: [Release Notes v2.0.1](docs/RELEASE_NOTES_v2.0.1.md)
 
 ### Added
 
-- Standardized latest-install flow: `npm install -g tabrix@latest` and `pnpm install -g tabrix@latest`.
-- Automated npm release workflow triggered by Git tags (`v*` / `tabrix-v*`).
-- Portable assistant skill renamed and aligned to Tabrix: `skills/tabrix_browser`.
+- Manual release input `publish_npm` in GitHub Actions (`false` by default for manual runs).
 
 ### Changed
 
-- Rebranded package and command from `mcp-chrome-bridge` to `tabrix`.
-- Kept compatibility aliases for existing users (`mcp-chrome-bridge`, `mcp-chrome-stdio`).
-- Updated repository references, docs links, and public-facing project structure.
+- Release workflow now checks out tag refs directly via `actions/checkout`.
+- Release install step now uses `pnpm install --frozen-lockfile --ignore-scripts`.
+- Added Node 24 actions runtime preference for forward compatibility.
 
 ### Fixed
 
-- Resolved package publishing risk caused by workspace dependency (`chrome-mcp-shared` now uses semver range).
-- Added compatibility fallback for remote-access message types when shared enum versions differ.
+- Fixed manual tag dispatch failures in release workflow checkout stage.
+- Fixed install-stage failures caused by lifecycle scripts requiring prebuilt artifacts.
+- Ensured GitHub Release assets can still be published before npm publish failure is surfaced.
 
 ---
 
@@ -409,7 +408,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### For Users
 
-- [Release Notes v2.0.0](docs/RELEASE_NOTES_v2.0.0.md) — new features, fixes, migration notes
+- [Release Notes v2.0.1](docs/RELEASE_NOTES_v2.0.1.md) — release pipeline stability and publish notes
 - [Why mcp-chrome? (vs Playwright / browser-use)](docs/WHY_MCP_CHROME.md) — positioning and tradeoffs
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md) — install, verify, first success
 - [TOOLS API (EN)](docs/TOOLS.md) | [工具 API (中文)](docs/TOOLS_zh.md) — complete tool reference
