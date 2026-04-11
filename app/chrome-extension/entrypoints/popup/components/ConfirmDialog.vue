@@ -23,15 +23,15 @@
       </div>
 
       <div class="dialog-actions">
-        <button class="dialog-button cancel-button" @click="$emit('cancel')">
-          {{ cancelText }}
-        </button>
         <button
           class="dialog-button confirm-button"
           :disabled="isConfirming"
           @click="$emit('confirm')"
         >
           {{ isConfirming ? confirmingText : confirmText }}
+        </button>
+        <button class="dialog-button cancel-button" @click="$emit('cancel')">
+          {{ cancelText }}
         </button>
       </div>
     </div>
@@ -198,20 +198,21 @@ defineEmits<Emits>();
 
 .dialog-actions {
   display: flex;
-  gap: 8px;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: stretch;
   margin-top: 12px;
 }
 
 .dialog-button {
-  padding: 10px 14px;
+  width: 100%;
+  padding: 12px 14px;
   border: 1px solid transparent;
   border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.18s ease;
-  min-width: 96px;
 }
 
 .cancel-button {
@@ -228,10 +229,12 @@ defineEmits<Emits>();
   background: var(--cd-confirm-bg);
   color: var(--cd-confirm-text);
   border: none;
+  box-shadow: 0 10px 18px -16px rgba(220, 38, 38, 0.8);
 }
 
 .confirm-button:hover:not(:disabled) {
   filter: brightness(1.03);
+  transform: translateY(-1px);
 }
 
 .confirm-button:disabled {
@@ -251,13 +254,12 @@ defineEmits<Emits>();
   }
 
   .dialog-actions {
-    gap: 6px;
-    flex-direction: column-reverse;
+    gap: 8px;
   }
 
   .dialog-button {
-    width: 100%;
-    min-width: 0;
+    padding: 11px 14px;
+    font-size: 14px;
   }
 }
 

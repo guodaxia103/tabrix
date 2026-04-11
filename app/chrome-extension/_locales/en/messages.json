@@ -1158,7 +1158,7 @@
     "description": "Auto-synced key: tokenPageReadTokenFailedHttp"
   },
   "tokenPageRefreshConfirmMessage": {
-    "message": "The old token expires immediately. Confirm clients using this token can be updated right away.",
+    "message": "The old token expires immediately. Ensure clients can update quickly after regeneration.",
     "description": "Auto-synced key: tokenPageRefreshConfirmMessage"
   },
   "tokenPageRefreshFailed": {
@@ -1176,19 +1176,19 @@
     "description": "Auto-synced key: tokenPageRefreshRequestFailed"
   },
   "tokenPageRegenerateConfirmButton": {
-    "message": "Confirm regenerate",
+    "message": "Generate New Token",
     "description": "Auto-synced key: tokenPageRegenerateConfirmButton"
   },
   "tokenPageRegenerateConfirmItem": {
-    "message": "Ready to update all clients using this token",
+    "message": "Make sure all clients can replace Authorization promptly",
     "description": "Auto-synced key: tokenPageRegenerateConfirmItem"
   },
   "tokenPageRegenerateConfirmTitle": {
-    "message": "Regenerate Token?",
+    "message": "Regenerate Access Token?",
     "description": "Auto-synced key: tokenPageRegenerateConfirmTitle"
   },
   "tokenPageRegenerateConfirmWarning": {
-    "message": "This action cannot be undone.",
+    "message": "The old token cannot be restored.",
     "description": "Auto-synced key: tokenPageRegenerateConfirmWarning"
   },
   "tokenPageRegenerateTokenButton": {
@@ -1242,7 +1242,7 @@
     "description": "Auto-synced key: tokenPageTtlDaysLabel"
   },
   "tokenPageTtlHint": {
-    "message": "0 = never expires, max 3650",
+    "message": "0 means never expire, max 3650 days",
     "description": "Auto-synced key: tokenPageTtlHint"
   },
   "sidepanelMarkerAddTitle": {

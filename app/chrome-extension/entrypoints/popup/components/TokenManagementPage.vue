@@ -118,14 +118,6 @@
           >
         </div>
       </section>
-
-      <section class="notes-card">
-        <button type="button" class="notes-toggle" @click="showNotes = !showNotes">
-          <h3 class="section-title">{{ getMessage('tokenPageNotesTitle') }}</h3>
-          <span class="notes-toggle-icon">{{ showNotes ? '−' : '+' }}</span>
-        </button>
-        <p v-if="showNotes" class="help-text">{{ getMessage('tokenPageNotesText') }}</p>
-      </section>
     </div>
 
     <ConfirmDialog
@@ -157,8 +149,8 @@
               class="refresh-ttl-input"
               @click.stop
             />
-            <span class="refresh-ttl-hint">{{ getMessage('tokenPageTtlHint') }}</span>
           </div>
+          <p class="refresh-ttl-hint">{{ getMessage('tokenPageTtlHint') }}</p>
         </div>
       </template>
     </ConfirmDialog>
@@ -198,7 +190,6 @@ const refreshTtlDays = ref(7);
 const loadError = ref('');
 const showRefreshConfirm = ref(false);
 const tick = ref(0);
-const showNotes = ref(false);
 const hasAttemptedAutoCreate = ref(false);
 let tickTimer: ReturnType<typeof setInterval> | null = null;
 const isRemoteEnabled = computed(() => Boolean(props.lanIp));
@@ -481,9 +472,8 @@ watch(
 
 .refresh-ttl-row {
   display: flex;
-  flex-wrap: nowrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .refresh-ttl-input {
@@ -498,6 +488,7 @@ watch(
 }
 
 .refresh-ttl-hint {
+  margin: 8px 0 0;
   font-size: 12px;
   color: var(--tm-text-muted);
 }
@@ -513,8 +504,7 @@ watch(
 }
 
 .token-card,
-.empty-card,
-.notes-card {
+.empty-card {
   border: 1px solid var(--tm-border);
   background: linear-gradient(180deg, var(--tm-surface) 0%, var(--tm-surface-muted) 100%);
   border-radius: 14px;
@@ -603,6 +593,7 @@ watch(
 
 .meta-grid {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -614,6 +605,10 @@ watch(
   padding: 8px 10px;
   display: grid;
   gap: 3px;
+}
+
+.meta-item:first-child {
+  grid-column: 1 / -1;
 }
 
 .meta-label {
@@ -684,37 +679,6 @@ watch(
   flex-wrap: wrap;
 }
 
-.notes-toggle {
-  width: 100%;
-  background: transparent;
-  border: none;
-  padding: 0;
-  margin: 0 0 4px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-}
-
-.notes-toggle-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  border: 1px solid var(--tm-border);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--tm-text-muted);
-  font-weight: 700;
-}
-
-.help-text {
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--tm-text-muted);
-  margin: 0;
-}
-
 .popup-container[data-agent-theme='dark-console'] .token-management-page {
   --tm-page-bg: rgba(2, 8, 23, 0.95);
   --tm-surface: rgba(6, 20, 39, 0.9);
@@ -742,5 +706,15 @@ watch(
 .popup-container[data-agent-theme='dark-console'] .danger-button {
   background: linear-gradient(180deg, #dc2626 0%, #be123c 100%);
   border-color: rgba(251, 113, 133, 0.62);
+}
+
+@media (max-width: 360px) {
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .meta-item:first-child {
+    grid-column: auto;
+  }
 }
 </style>

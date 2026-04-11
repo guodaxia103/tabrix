@@ -1158,7 +1158,7 @@
     "description": "自动同步键: tokenPageReadTokenFailedHttp"
   },
   "tokenPageRefreshConfirmMessage": {
-    "message": "旧 Token 会立即失效，请确认使用该 Token 的客户端可及时更新。",
+    "message": "执行后旧 Token 立即失效，请确认客户端可在短时间内完成更新。",
     "description": "自动同步键: tokenPageRefreshConfirmMessage"
   },
   "tokenPageRefreshFailed": {
@@ -1176,19 +1176,19 @@
     "description": "自动同步键: tokenPageRefreshRequestFailed"
   },
   "tokenPageRegenerateConfirmButton": {
-    "message": "确认重新生成",
+    "message": "确认并生成新 Token",
     "description": "自动同步键: tokenPageRegenerateConfirmButton"
   },
   "tokenPageRegenerateConfirmItem": {
-    "message": "已准备更新使用该 Token 的客户端",
+    "message": "确保所有使用方可及时替换 Authorization",
     "description": "自动同步键: tokenPageRegenerateConfirmItem"
   },
   "tokenPageRegenerateConfirmTitle": {
-    "message": "重新生成 Token？",
+    "message": "重新生成访问 Token？",
     "description": "自动同步键: tokenPageRegenerateConfirmTitle"
   },
   "tokenPageRegenerateConfirmWarning": {
-    "message": "此操作不可撤销。",
+    "message": "旧 Token 无法恢复。",
     "description": "自动同步键: tokenPageRegenerateConfirmWarning"
   },
   "tokenPageRegenerateTokenButton": {
@@ -1242,7 +1242,7 @@
     "description": "自动同步键: tokenPageTtlDaysLabel"
   },
   "tokenPageTtlHint": {
-    "message": "0 = 永不过期，最大 3650",
+    "message": "0 为永不过期，最大 3650 天",
     "description": "自动同步键: tokenPageTtlHint"
   },
   "sidepanelMarkerAddTitle": {
