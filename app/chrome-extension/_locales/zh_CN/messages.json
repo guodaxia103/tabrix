@@ -8,7 +8,7 @@
     "description": "扩展描述"
   },
   "nativeServerConfigLabel": {
-    "message": "Native Server 配置",
+    "message": "服务配置",
     "description": "本地服务器设置的主要节标题"
   },
   "semanticEngineLabel": {
@@ -102,7 +102,7 @@
     "description": "MCP 配置节标签"
   },
   "connectionPortLabel": {
-    "message": "连接端口",
+    "message": "端口",
     "description": "连接端口输入标签"
   },
   "refreshStatusButton": {
@@ -802,7 +802,7 @@
     "description": "自动同步键: popupNetworkLocalLabel"
   },
   "popupNoConnectedClients": {
-    "message": "暂无 MCP 客户端连接",
+    "message": "暂无客户端连接",
     "description": "自动同步键: popupNoConnectedClients"
   },
   "popupOpenDocs": {
@@ -836,6 +836,10 @@
   "popupRemoteConfigHint": {
     "message": "开启远程访问后将显示可供远程客户端使用的 MCP 配置。",
     "description": "自动同步键: popupRemoteConfigHint"
+  },
+  "popupConfigNeedsConnection": {
+    "message": "连接成功后显示配置",
+    "description": "连接成功前的 MCP 配置占位提示"
   },
   "popupRemoteEnabled": {
     "message": "✅ 远程访问已开启",
@@ -882,11 +886,11 @@
     "description": "自动同步键: popupStatusDetailDisconnected"
   },
   "popupStatusDetailDisconnectedWhileDaemon": {
-    "message": "本机服务运行中，但浏览器通道未连接。点击 Connect 即可启用自动化。",
+    "message": "本机服务运行中，但浏览器通道未连接。点击「连接」即可启用自动化。",
     "description": "自动同步键: popupStatusDetailDisconnectedWhileDaemon"
   },
   "popupStatusHintTapConnect": {
-    "message": "点击 Connect 即可启用自动化。",
+    "message": "点击「连接」即可启用自动化。",
     "description": "自动同步键: popupStatusHintTapConnect"
   },
   "popupStatusDetailErrorDefault": {

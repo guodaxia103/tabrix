@@ -129,6 +129,26 @@ function normalizePort(value: unknown): number | null {
   return port;
 }
 
+function isAddressInUseError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('eaddrinuse') || normalized.includes('address already in use');
+}
+
+function parseAddressInUsePort(message: string): number | null {
+  const explicitHostMatch = message.match(/:(\d{2,5})(?:\b|$)/);
+  if (explicitHostMatch?.[1]) {
+    const parsed = normalizePort(explicitHostMatch[1]);
+    if (parsed) return parsed;
+  }
+
+  const genericPortMatch = message.match(/\bport\s*[:=]?\s*(\d{2,5})\b/i);
+  if (genericPortMatch?.[1]) {
+    return normalizePort(genericPortMatch[1]);
+  }
+
+  return null;
+}
+
 // ==================== Reconnect Utilities ====================
 
 /**
@@ -324,6 +344,62 @@ async function markServerStopped(reason: string, connectionId?: number): Promise
 
   broadcastServerStatusChange(nextStatus);
   console.debug(`${LOG_PREFIX} Server marked stopped (${reason})`);
+}
+
+async function probeRunningServerStatus(port: number): Promise<ServerStatus | null> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/status`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as
+      | {
+          status?: string;
+          data?: {
+            isRunning?: boolean;
+            port?: number;
+            host?: string;
+            networkAddresses?: string[];
+            authEnabled?: boolean;
+          };
+        }
+      | undefined;
+
+    if (!payload?.data?.isRunning) return null;
+
+    return {
+      isRunning: true,
+      port: normalizePort(payload.data.port) ?? port,
+      host: payload.data.host,
+      networkAddresses: payload.data.networkAddresses,
+      authEnabled: payload.data.authEnabled,
+      lastUpdated: Date.now(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function tryRecoverAddressInUseStatus(nativeError: string): Promise<boolean> {
+  if (!isAddressInUseError(nativeError)) return false;
+
+  const parsedPort = parseAddressInUsePort(nativeError);
+  const fallbackPort = normalizePort(currentServerStatus.port) ?? NATIVE_HOST.DEFAULT_PORT;
+  const candidatePort = parsedPort ?? fallbackPort;
+  const recoveredStatus = await probeRunningServerStatus(candidatePort);
+  if (!recoveredStatus) return false;
+
+  currentServerStatus = recoveredStatus;
+  await clearLastNativeError();
+  await saveServerStatus(recoveredStatus);
+  broadcastServerStatusChange(recoveredStatus);
+  resetReconnectState();
+  console.info(
+    `${LOG_PREFIX} Detected existing server on port ${recoveredStatus.port}; treated as running.`,
+  );
+  return true;
 }
 
 function getEffectiveServerStatus(): ServerStatus {
@@ -552,8 +628,11 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         );
       } else if (message.type === NativeMessageType.ERROR_FROM_NATIVE_HOST) {
         const nativeError = message.payload?.message || 'Unknown error';
-        console.error('Error from native host:', nativeError);
-        void setLastNativeError(nativeError);
+        const recovered = await tryRecoverAddressInUseStatus(nativeError);
+        if (!recovered) {
+          console.error('Error from native host:', nativeError);
+          void setLastNativeError(nativeError);
+        }
       } else if (message.type === 'file_operation_response') {
         // Forward file operation response back to the requesting tool
         chrome.runtime.sendMessage(message).catch(() => {

@@ -19,10 +19,6 @@
             >
               <RefreshIcon className="icon-small" />
             </button>
-            <div class="header-status-chip" :title="getStatusText()">
-              <span :class="['header-status-dot', getStatusClass()]"></span>
-              <span class="header-status-text">{{ getStatusText() }}</span>
-            </div>
           </div>
         </div>
       </div>
@@ -37,8 +33,8 @@
                 <span v-if="statusInlinePort" class="status-inline-meta"
                   >· {{ getMessage('connectionPortLabel') }} {{ statusInlinePort }}</span
                 >
-                <span v-if="serverStatus.lastUpdated" class="status-inline-meta">
-                  · {{ new Date(serverStatus.lastUpdated).toLocaleTimeString() }}
+                <span v-if="statusUpdatedTimeText" class="status-inline-meta">
+                  · {{ getMessage('lastUpdatedLabel') }} {{ statusUpdatedTimeText }}
                 </span>
               </div>
               <div
@@ -123,7 +119,11 @@
             <div v-if="showMcpConfig" class="mcp-config-section">
               <div class="mcp-config-header">
                 <p class="mcp-config-label">{{ getMessage('popupMcpConfigLabel') }}</p>
-                <button class="copy-config-button" @click="copyMcpConfig">
+                <button
+                  class="copy-config-button"
+                  :disabled="!canCopyActiveConfig"
+                  @click="copyMcpConfig"
+                >
                   {{ copyButtonText }}
                 </button>
               </div>
@@ -135,9 +135,6 @@
                   @click="activeConfigTab = tab.id"
                   >{{ tab.label }}</button
                 >
-              </div>
-              <div v-if="activeConfigTabHint" class="mcp-config-hint">
-                {{ activeConfigTabHint }}
               </div>
               <div v-if="activeConfigTab === 'remote'" class="remote-toggle-card">
                 <div class="remote-toggle-header">
@@ -164,7 +161,7 @@
               <div v-if="remoteSecurityWarning" class="mcp-security-warning">
                 {{ remoteSecurityWarning }}
               </div>
-              <template v-if="activeConfigTab !== 'remote' || remoteAccessEnabled">
+              <template v-if="canShowActiveConfig">
                 <div class="mcp-config-content">
                   <pre class="mcp-config-json">{{ activeConfigJson }}</pre>
                 </div>
@@ -178,9 +175,9 @@
                   </template>
                 </div>
               </template>
-              <div v-else class="remote-disabled-hint">{{
-                getMessage('popupRemoteConfigHint')
-              }}</div>
+              <div v-else class="remote-disabled-hint">
+                {{ activeConfigUnavailableHint }}
+              </div>
             </div>
             <div class="port-section">
               <label for="port" class="port-label">{{ getMessage('connectionPortLabel') }}</label>
@@ -1040,17 +1037,15 @@ watch(activeConfigTab, (tab) => {
   if (tab === 'remote') fetchTokenInfo({ autoCreateWhenMissing: true });
 });
 
-const activeConfigTabHint = computed(() => {
-  switch (activeConfigTab.value) {
-    case 'local':
-      return getMessage('popupTabHintLocal');
-    case 'stdio':
-      return getMessage('popupTabHintStdio');
-    case 'remote':
-      return getMessage('popupTabHintRemote');
-    default:
-      return '';
-  }
+const canExposeConfigJson = computed(() => connectionState.value === ConnectionState.RUNNING);
+const canShowActiveConfig = computed(
+  () =>
+    canExposeConfigJson.value && (activeConfigTab.value !== 'remote' || remoteAccessEnabled.value),
+);
+const canCopyActiveConfig = computed(() => canShowActiveConfig.value);
+const activeConfigUnavailableHint = computed(() => {
+  if (!canExposeConfigJson.value) return getMessage('popupConfigNeedsConnection');
+  return getMessage('popupRemoteConfigHint');
 });
 
 const activeConfigJson = computed(() => {
@@ -1162,6 +1157,10 @@ const getStatusClass = () => stateToStatusClass(connectionState.value);
 const statusInlinePort = computed(() => {
   if (connectionState.value !== ConnectionState.RUNNING) return '';
   return String(serverStatus.value.port || nativeServerPort.value || '');
+});
+const statusUpdatedTimeText = computed(() => {
+  if (!serverStatus.value.lastUpdated) return '';
+  return new Date(serverStatus.value.lastUpdated).toLocaleTimeString();
 });
 const statusHeadlineText = computed(() => {
   switch (connectionState.value) {
@@ -1813,6 +1812,13 @@ const refreshOverview = async () => {
 };
 
 const copyMcpConfig = async () => {
+  if (!canCopyActiveConfig.value) {
+    copyButtonText.value = getMessage('popupConfigNeedsConnection');
+    setTimeout(() => {
+      copyButtonText.value = getMessage('copyConfigButton');
+    }, 1500);
+    return;
+  }
   try {
     await navigator.clipboard.writeText(activeConfigJson.value);
     copyButtonText.value = '✅' + getMessage('configCopiedNotification');
@@ -2487,7 +2493,7 @@ onUnmounted(() => {
 
 .header {
   flex-shrink: 0;
-  padding: 14px 18px 10px;
+  padding: 12px 16px 9px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.8);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(248, 250, 252, 0.55) 100%);
   backdrop-filter: blur(8px);
@@ -2497,21 +2503,25 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .header-meta {
+  flex: 1;
   min-width: 0;
 }
 
 .header-mainline {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .header-title {
-  font-size: 34px;
+  font-size: 24px;
   font-weight: 760;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -2522,22 +2532,26 @@ onUnmounted(() => {
 
 .header-separator {
   color: #94a3b8;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .header-context {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   color: #334155;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .header-refresh-button {
@@ -2565,8 +2579,8 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 180px;
-  padding: 5px 9px;
+  max-width: 128px;
+  padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.24);
   background: rgba(255, 255, 255, 0.62);
@@ -2598,8 +2612,8 @@ onUnmounted(() => {
 }
 
 .header-status-text {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: #334155;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2623,7 +2637,7 @@ onUnmounted(() => {
 
 .content {
   flex-grow: 1;
-  padding: 8px 16px 14px;
+  padding: 8px 14px 12px;
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -2645,10 +2659,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  background: rgba(248, 250, 252, 0.95);
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 9px 10px;
+  background: #f8fafc;
+  border: 1px solid #dbe3ef;
+  border-radius: 11px;
+  padding: 8px 10px;
 }
 
 .status-dot {
@@ -2674,13 +2688,13 @@ onUnmounted(() => {
 }
 
 .status-text {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: #1e293b;
 }
 
 .status-inline-meta {
-  font-size: 12px;
+  font-size: 13px;
   color: #64748b;
 }
 
@@ -2754,7 +2768,7 @@ onUnmounted(() => {
 }
 
 .section {
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .secondary-button {
@@ -2944,12 +2958,12 @@ onUnmounted(() => {
 .config-card {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, #ffffff 100%);
   border: 1px solid rgba(226, 232, 240, 0.95);
-  border-radius: 14px;
+  border-radius: 15px;
   box-shadow: 0 10px 22px -20px rgba(15, 23, 42, 0.65);
-  padding: 14px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 .semantic-engine-card {
   background: white;
@@ -3213,8 +3227,8 @@ onUnmounted(() => {
 }
 
 .connected-clients-label {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   color: #64748b;
   margin: 0;
 }
@@ -3297,7 +3311,7 @@ onUnmounted(() => {
 
 .mcp-config-section {
   border-top: 1px solid #f1f5f9;
-  padding-top: 8px;
+  padding-top: 10px;
 }
 
 .mcp-config-header {
@@ -3310,7 +3324,7 @@ onUnmounted(() => {
 .mcp-config-tabs {
   display: flex;
   gap: 4px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   background: #f1f5f9;
   border-radius: 8px;
   padding: 3px;
@@ -3318,9 +3332,9 @@ onUnmounted(() => {
 
 .mcp-tab {
   flex: 1;
-  padding: 5px 8px;
-  font-size: 12px;
-  font-weight: 500;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 600;
   color: #64748b;
   background: transparent;
   border: none;
@@ -3336,17 +3350,17 @@ onUnmounted(() => {
 }
 
 .mcp-tab.active {
-  color: #1e293b;
-  background: white;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  color: #0f172a;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
   font-weight: 600;
 }
 
 .mcp-config-hint {
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: 12px;
+  color: #64748b;
   margin-bottom: 6px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .remote-toggle-card {
@@ -3523,18 +3537,26 @@ onUnmounted(() => {
   color: #334155;
 }
 
+.copy-config-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: #eef2f7;
+  color: #94a3b8;
+  border-color: #dbe4ef;
+}
+
 .mcp-config-content {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 10px;
+  background: #f8fbff;
+  border: 1px solid #d7e2ef;
+  border-radius: 11px;
+  padding: 12px;
   overflow-x: auto;
 }
 
 .mcp-config-json {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.55;
   color: #374151;
   margin: 0;
   white-space: pre;
@@ -3544,12 +3566,12 @@ onUnmounted(() => {
 .port-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .port-label {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   color: #64748b;
 }
 
@@ -3559,7 +3581,7 @@ onUnmounted(() => {
   border-radius: 8px;
   border: 1px solid #d1d5db;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  padding: 12px;
+  padding: 10px 12px;
   font-size: 14px;
   background: #f8fafc;
 }
@@ -3870,6 +3892,12 @@ onUnmounted(() => {
 
   .stats-value {
     font-size: 24px;
+  }
+}
+
+@media (max-width: 420px) {
+  .header-title {
+    font-size: 22px;
   }
 }
 

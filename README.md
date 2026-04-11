@@ -16,10 +16,21 @@ Tabrix is a Chrome extension + local native server that lets any MCP client oper
 
 ## Why Tabrix
 
-- Real browser session, not a clean-room browser process
-- Model/client agnostic (works with any MCP-compatible assistant)
-- Local-first architecture for privacy-sensitive workflows
-- Production-focused diagnostics (`tabrix status`, `doctor`, `smoke`)
+Tabrix does not spin up "yet another browser." It upgrades your current Chrome into an AI-executable runtime.
+
+- Real session, ready instantly: keep your existing logins, cookies, extensions, and tabs without rebuilding environments
+- More stable and safer runtime path: extension + Native Messaging, without keeping `--remote-debugging-port` exposed
+- Remote control by default: built-in Bearer auth, token management, and token TTL controls
+- Broad client compatibility: works with Claude Desktop, Cursor, Cline, Cherry Studio, Dify, and other MCP clients
+- Local-first architecture: browser state and data stay on your machine by default for stronger privacy and compliance control
+- Production operations built in: `tabrix status` / `doctor --fix` / `smoke` / `report`
+
+### Scenario Value
+
+- More reliable compliant collection: real-session reuse reduces failures from fresh environments and blank fingerprints
+- Higher back-office automation efficiency: automate logged-in CMS, ticketing, and operations workflows with fewer repetitive clicks
+- Better team collaboration: secure LAN remote access lets multiple MCP clients call the same browser capability
+- Faster regression troubleshooting: `doctor --fix` and `smoke` quickly pinpoint connection-path issues and shorten resolution time
 
 ## What You Can Build
 
@@ -57,16 +68,10 @@ Check runtime status:
 tabrix status
 ```
 
-Run diagnostics:
+Run automatic recovery:
 
 ```bash
-tabrix doctor
-```
-
-Run smoke test:
-
-```bash
-tabrix smoke
+tabrix doctor --fix
 ```
 
 ### 4) Connect from MCP Client (Streamable HTTP)

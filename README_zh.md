@@ -16,10 +16,21 @@ Tabrix 由 Chrome 扩展 + 本地原生服务组成，让任意 MCP 客户端都
 
 ## 为什么是 Tabrix
 
-- 使用真实浏览器会话，而不是“全新沙盒浏览器进程”
-- 模型和客户端无关，任何 MCP 客户端都可接入
-- 本地优先架构，适合隐私敏感场景
-- 面向生产可用的诊断链路（`tabrix status` / `doctor` / `smoke`）
+Tabrix 不是“再开一个新浏览器”，而是把你正在使用的 Chrome，直接升级为可被 AI 调用的执行层。
+
+- 真实会话，开箱即用：沿用现有登录态、Cookie、扩展与标签页，无需从零重建环境
+- 链路更稳更安全：基于扩展 + Native Messaging，无需长期暴露 `--remote-debugging-port`
+- 远程控制默认可用：内置 Bearer Token 鉴权、Token 管理与有效期机制（TTL）
+- 客户端广泛兼容：Claude Desktop、Cursor、Cline、Cherry Studio、Dify 等 MCP 客户端均可接入
+- 本地优先架构：浏览器状态与数据默认留在本机，隐私与合规更可控
+- 面向生产运维：提供 `tabrix status` / `doctor --fix` / `smoke` / `report` 闭环能力
+
+### 场景价值
+
+- 合规采集更稳定：复用真实会话，降低新环境与空白指纹带来的失败率
+- 后台自动化更高效：覆盖 CMS、工单、运营后台等已登录流程，减少重复点击与人工切换
+- 团队协作更灵活：支持局域网远程接入，同一浏览器能力可被多客户端安全调用
+- 回归排障更高效：通过 `doctor --fix` 与 `smoke` 快速定位连接链路问题，显著缩短处理时间
 
 ## 你可以用它做什么
 
@@ -47,7 +58,7 @@ tabrix register
 ### 2) 安装 Chrome 扩展
 
 从 [Releases](https://github.com/guodaxia103/tabrix/releases) 下载版本资产，优先使用 `tabrix-extension-vX.Y.Z.zip`，在 `chrome://extensions` 中以“加载已解压扩展程序”方式安装。
-安装后请打开扩展弹窗并点击一次 `Connect` 完成连接。
+安装后请打开扩展弹窗并点击一次 `连接` 完成连接。
 
 ### 3) 本地校验
 
@@ -57,16 +68,10 @@ tabrix register
 tabrix status
 ```
 
-执行诊断：
+异常自动修复：
 
 ```bash
-tabrix doctor
-```
-
-执行冒烟测试：
-
-```bash
-tabrix smoke
+tabrix doctor --fix
 ```
 
 ### 4) MCP 客户端连接（Streamable HTTP）

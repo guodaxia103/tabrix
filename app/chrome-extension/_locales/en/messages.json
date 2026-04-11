@@ -8,7 +8,7 @@
     "description": "Extension description"
   },
   "nativeServerConfigLabel": {
-    "message": "Native Server Configuration",
+    "message": "Server Config",
     "description": "Main section header for native server settings"
   },
   "semanticEngineLabel": {
@@ -102,7 +102,7 @@
     "description": "MCP configuration section label"
   },
   "connectionPortLabel": {
-    "message": "Connection Port",
+    "message": "Port",
     "description": "Connection port input label"
   },
   "refreshStatusButton": {
@@ -802,7 +802,7 @@
     "description": "Auto-synced key: popupNetworkLocalLabel"
   },
   "popupNoConnectedClients": {
-    "message": "No MCP client connected",
+    "message": "No client connected",
     "description": "Auto-synced key: popupNoConnectedClients"
   },
   "popupOpenDocs": {
@@ -836,6 +836,10 @@
   "popupRemoteConfigHint": {
     "message": "Enable Remote Access to view MCP configuration for remote clients.",
     "description": "Auto-synced key: popupRemoteConfigHint"
+  },
+  "popupConfigNeedsConnection": {
+    "message": "Connect first to view configuration",
+    "description": "Placeholder hint before connection is ready"
   },
   "popupRemoteEnabled": {
     "message": "Remote access enabled",
