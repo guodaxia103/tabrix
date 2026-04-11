@@ -3828,29 +3828,26 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: linear-gradient(
-    180deg,
-    var(--ac-accent, #d97757) 0%,
-    var(--ac-accent-hover, #c4664a) 100%
-  );
-  color: var(--ac-accent-contrast, white);
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+  color: #eff6ff;
   font-weight: 600;
   padding: 10px 14px;
   border-radius: 10px;
-  border: none;
+  border: 1px solid rgba(59, 130, 246, 0.44);
   cursor: pointer;
   transition: all var(--ac-motion-fast, 120ms) ease;
   box-shadow:
-    0 14px 24px -14px rgba(217, 119, 87, 0.72),
-    0 1px 0 rgba(255, 255, 255, 0.2) inset;
+    0 14px 24px -14px rgba(37, 99, 235, 0.66),
+    0 1px 0 rgba(255, 255, 255, 0.22) inset;
 }
 
 .connect-button:hover:not(:disabled) {
-  background: linear-gradient(180deg, var(--ac-accent-hover, #c4664a) 0%, #a94f34 100%);
+  background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+  border-color: rgba(59, 130, 246, 0.58);
   transform: translateY(-1px);
   box-shadow:
-    0 18px 26px -14px rgba(196, 102, 74, 0.76),
-    0 1px 0 rgba(255, 255, 255, 0.22) inset;
+    0 18px 26px -14px rgba(37, 99, 235, 0.72),
+    0 1px 0 rgba(255, 255, 255, 0.24) inset;
 }
 
 .connect-button:disabled {
@@ -3859,21 +3856,21 @@ onUnmounted(() => {
 }
 
 .connect-button.is-disconnect {
-  border: 1px solid rgba(244, 63, 94, 0.28);
-  background: linear-gradient(180deg, #fff3f6 0%, #ffe4ea 100%);
-  color: #be123c;
+  border: 1px solid rgba(244, 63, 94, 0.42);
+  background: linear-gradient(180deg, #fee2e2 0%, #fecdd3 100%);
+  color: #b91c1c;
   box-shadow:
-    0 14px 24px -14px rgba(225, 29, 72, 0.3),
-    0 1px 0 rgba(255, 255, 255, 0.68) inset;
+    0 14px 24px -14px rgba(225, 29, 72, 0.44),
+    0 1px 0 rgba(255, 255, 255, 0.72) inset;
 }
 
 .connect-button.is-disconnect:hover:not(:disabled) {
-  background: linear-gradient(180deg, #ffeaf0 0%, #ffd8e1 100%);
-  border-color: rgba(244, 63, 94, 0.42);
+  background: linear-gradient(180deg, #fecdd3 0%, #fda4af 100%);
+  border-color: rgba(244, 63, 94, 0.58);
   color: #9f1239;
   transform: translateY(-1px);
   box-shadow:
-    0 18px 26px -14px rgba(225, 29, 72, 0.38),
+    0 18px 26px -14px rgba(225, 29, 72, 0.5),
     0 1px 0 rgba(255, 255, 255, 0.72) inset;
 }
 .error-card {
