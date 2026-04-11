@@ -2356,7 +2356,8 @@
         // ignore
       }
 
-      if (reason) {
+      // Normal request/manual cleanup should not surface in chrome://extensions as warnings.
+      if (reason && reason !== 'request' && reason !== 'manual' && reason !== 'cleanup') {
         logWarn('Disposed:', reason);
       }
     },
