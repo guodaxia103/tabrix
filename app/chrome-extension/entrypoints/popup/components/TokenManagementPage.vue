@@ -120,20 +120,18 @@
       </section>
     </div>
 
-    <ConfirmDialog
-      :visible="showRefreshConfirm"
-      :title="getMessage('tokenPageRegenerateConfirmTitle')"
-      :message="refreshConfirmMessage"
-      :items="[getMessage('tokenPageRegenerateConfirmItem')]"
-      :warning="getMessage('tokenPageRegenerateConfirmWarning')"
-      icon="⚠️"
-      :confirm-text="getMessage('tokenPageRegenerateConfirmButton')"
-      :cancel-text="getMessage('cancelButton')"
-      :is-confirming="refreshing"
-      @confirm="onConfirmRefresh"
-      @cancel="showRefreshConfirm = false"
+    <div
+      v-if="showRefreshConfirm"
+      class="token-refresh-overlay"
+      @click.self="showRefreshConfirm = false"
     >
-      <template #extra>
+      <div class="token-refresh-modal">
+        <div class="token-refresh-header">
+          <span class="token-refresh-icon">⚠️</span>
+          <h3 class="token-refresh-title">{{ getMessage('tokenPageRegenerateConfirmTitle') }}</h3>
+        </div>
+        <p class="token-refresh-desc">{{ refreshConfirmMessage }}</p>
+
         <div class="refresh-ttl-in-dialog">
           <label class="refresh-ttl-label" for="dialog-token-ttl-days">{{
             getMessage('tokenPageNewTokenTtlLabel')
@@ -149,18 +147,50 @@
               class="refresh-ttl-input"
               @click.stop
             />
+            <span class="refresh-ttl-unit">{{ getMessage('tokenPageTtlDayUnit') }}</span>
           </div>
           <p class="refresh-ttl-hint">{{ getMessage('tokenPageTtlHint') }}</p>
         </div>
-      </template>
-    </ConfirmDialog>
+
+        <div class="token-refresh-checklist">
+          <span class="token-refresh-dot"></span>
+          <span>{{ getMessage('tokenPageRegenerateConfirmItem') }}</span>
+        </div>
+
+        <div class="token-refresh-warning">{{
+          getMessage('tokenPageRegenerateConfirmWarning')
+        }}</div>
+
+        <div class="token-refresh-actions">
+          <button
+            type="button"
+            class="token-refresh-primary"
+            :disabled="refreshing"
+            @click="onConfirmRefresh"
+          >
+            {{
+              refreshing
+                ? getMessage('processingStatus')
+                : getMessage('tokenPageRegenerateConfirmButton')
+            }}
+          </button>
+          <button
+            type="button"
+            class="token-refresh-secondary"
+            :disabled="refreshing"
+            @click="showRefreshConfirm = false"
+          >
+            {{ getMessage('cancelButton') }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { getMessage } from '@/utils/i18n';
-import ConfirmDialog from './ConfirmDialog.vue';
 
 export interface TokenInfo {
   token: string;
@@ -456,7 +486,7 @@ watch(
 }
 
 .refresh-ttl-in-dialog {
-  padding: 12px;
+  padding: 14px;
   background: var(--tm-surface-muted);
   border: 1px solid var(--tm-border);
   border-radius: 10px;
@@ -464,22 +494,22 @@ watch(
 
 .refresh-ttl-label {
   display: block;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--tm-text);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .refresh-ttl-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .refresh-ttl-input {
-  width: 90px;
-  padding: 8px 10px;
-  font-size: 18px;
+  width: 104px;
+  padding: 10px 12px;
+  font-size: 20px;
   font-weight: 700;
   border: 1px solid var(--tm-border);
   border-radius: 8px;
@@ -487,8 +517,14 @@ watch(
   color: var(--tm-text);
 }
 
+.refresh-ttl-unit {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tm-text-muted);
+}
+
 .refresh-ttl-hint {
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   font-size: 12px;
   color: var(--tm-text-muted);
 }
@@ -508,7 +544,7 @@ watch(
   border: 1px solid var(--tm-border);
   background: linear-gradient(180deg, var(--tm-surface) 0%, var(--tm-surface-muted) 100%);
   border-radius: 14px;
-  padding: 14px;
+  padding: 16px;
   box-shadow: var(--tm-shadow);
 }
 
@@ -593,7 +629,7 @@ watch(
 
 .meta-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -607,13 +643,10 @@ watch(
   gap: 3px;
 }
 
-.meta-item:first-child {
-  grid-column: 1 / -1;
-}
-
 .meta-label {
-  color: var(--tm-text-subtle);
-  font-size: 11px;
+  color: var(--tm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.01em;
 }
 
@@ -708,13 +741,160 @@ watch(
   border-color: rgba(251, 113, 133, 0.62);
 }
 
-@media (max-width: 360px) {
-  .meta-grid {
-    grid-template-columns: 1fr;
+.token-refresh-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(2, 6, 23, 0.54);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+
+.token-refresh-modal {
+  width: min(420px, calc(100vw - 20px));
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  border-radius: 16px;
+  border: 1px solid var(--tm-border);
+  background: linear-gradient(180deg, var(--tm-surface) 0%, var(--tm-surface-muted) 100%);
+  box-shadow: 0 28px 48px -30px rgba(2, 8, 23, 0.78);
+  padding: 18px;
+}
+
+.token-refresh-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--tm-border);
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+
+.token-refresh-icon {
+  line-height: 1;
+  font-size: 20px;
+}
+
+.token-refresh-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--tm-text);
+}
+
+.token-refresh-desc {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--tm-text-muted);
+}
+
+.token-refresh-checklist {
+  margin-top: 12px;
+  border: 1px solid var(--tm-border);
+  border-left: 3px solid #3b82f6;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--tm-text-muted);
+  background: rgba(59, 130, 246, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.token-refresh-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #3b82f6;
+  flex-shrink: 0;
+}
+
+.token-refresh-warning {
+  margin-top: 10px;
+  border: 1px solid var(--tm-danger-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--tm-danger);
+  background: var(--tm-danger-bg);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.token-refresh-actions {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.token-refresh-primary,
+.token-refresh-secondary {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.token-refresh-primary {
+  border: 1px solid #ef4444;
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+  color: #fff1f2;
+}
+
+.token-refresh-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.token-refresh-secondary {
+  border: 1px solid var(--tm-border);
+  background: var(--tm-surface);
+  color: var(--tm-text);
+}
+
+.popup-container[data-agent-theme='dark-console'] .token-refresh-overlay {
+  background: rgba(0, 5, 20, 0.72);
+}
+
+.popup-container[data-agent-theme='dark-console'] .token-refresh-modal {
+  background: linear-gradient(180deg, rgba(6, 20, 39, 0.96) 0%, rgba(10, 30, 55, 0.88) 100%);
+}
+
+.popup-container[data-agent-theme='dark-console'] .token-refresh-checklist {
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.popup-container[data-agent-theme='dark-console'] .token-refresh-secondary {
+  background: rgba(5, 17, 34, 0.9);
+}
+
+@media (max-width: 420px) {
+  .token-refresh-modal {
+    padding: 14px;
+    border-radius: 14px;
   }
 
-  .meta-item:first-child {
-    grid-column: auto;
+  .token-refresh-title {
+    font-size: 18px;
+  }
+
+  .token-refresh-desc {
+    font-size: 13px;
+  }
+
+  .token-refresh-primary,
+  .token-refresh-secondary {
+    min-height: 42px;
+    font-size: 15px;
   }
 }
 </style>

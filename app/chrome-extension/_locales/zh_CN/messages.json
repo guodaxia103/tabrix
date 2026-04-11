@@ -1245,6 +1245,10 @@
     "message": "0 为永不过期，最大 3650 天",
     "description": "自动同步键: tokenPageTtlHint"
   },
+  "tokenPageTtlDayUnit": {
+    "message": "天",
+    "description": "自动同步键: tokenPageTtlDayUnit"
+  },
   "sidepanelMarkerAddTitle": {
     "message": "新增标注",
     "description": "自动同步键: sidepanelMarkerAddTitle"

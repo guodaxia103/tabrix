@@ -1245,6 +1245,10 @@
     "message": "0 means never expire, max 3650 days",
     "description": "Auto-synced key: tokenPageTtlHint"
   },
+  "tokenPageTtlDayUnit": {
+    "message": "days",
+    "description": "Auto-synced key: tokenPageTtlDayUnit"
+  },
   "sidepanelMarkerAddTitle": {
     "message": "Add Marker",
     "description": "Auto-synced key: sidepanelMarkerAddTitle"
