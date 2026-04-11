@@ -858,19 +858,19 @@
     "description": "Auto-synced key: popupRemoteSecurityWarning"
   },
   "popupRemoteSummaryAutoCreating": {
-    "message": "Remote access is enabled. A default token is being created automatically.",
+    "message": "Remote enabled, creating default token.",
     "description": "Auto-synced key: popupRemoteSummaryAutoCreating"
   },
   "popupRemoteSummaryEnabledSecure": {
-    "message": "Remote access is enabled (0.0.0.0). LAN clients can connect securely with Token.",
+    "message": "Remote enabled (0.0.0.0), LAN clients connect with Token.",
     "description": "Auto-synced key: popupRemoteSummaryEnabledSecure"
   },
   "popupRemoteSummaryLocalOnly": {
-    "message": "Currently local-only (127.0.0.1). Enable Remote Access to allow LAN clients to connect.",
+    "message": "Local-only access (127.0.0.1).",
     "description": "Auto-synced key: popupRemoteSummaryLocalOnly"
   },
   "popupRemoteSummaryNeedRunning": {
-    "message": "Connect and start the local service before toggling Remote Access.",
+    "message": "Connect and start service first.",
     "description": "Auto-synced key: popupRemoteSummaryNeedRunning"
   },
   "popupRemoteTab": {

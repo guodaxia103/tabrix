@@ -858,19 +858,19 @@
     "description": "自动同步键: popupRemoteSecurityWarning"
   },
   "popupRemoteSummaryAutoCreating": {
-    "message": "远程访问已开启，正在自动创建默认 Token。",
+    "message": "远程已开启，正在生成默认 Token。",
     "description": "自动同步键: popupRemoteSummaryAutoCreating"
   },
   "popupRemoteSummaryEnabledSecure": {
-    "message": "远程访问已开启（0.0.0.0），局域网设备可通过 Token 安全接入。",
+    "message": "远程已开启（0.0.0.0），局域网通过 Token 接入。",
     "description": "自动同步键: popupRemoteSummaryEnabledSecure"
   },
   "popupRemoteSummaryLocalOnly": {
-    "message": "当前仅本机访问（127.0.0.1）。开启远程访问后，局域网设备即可接入 Tabrix。",
+    "message": "当前仅本机访问（127.0.0.1）。",
     "description": "自动同步键: popupRemoteSummaryLocalOnly"
   },
   "popupRemoteSummaryNeedRunning": {
-    "message": "需先连接并启动服务后才能切换远程访问。",
+    "message": "请先连接并启动服务。",
     "description": "自动同步键: popupRemoteSummaryNeedRunning"
   },
   "popupRemoteTab": {

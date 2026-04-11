@@ -3573,6 +3573,9 @@ onUnmounted(() => {
   font-size: 11px;
   color: #475569;
   line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .remote-switch {
@@ -4598,6 +4601,9 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 500;
   line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .popup-container[data-agent-theme='dark-console'] .remote-toggle-copied {
@@ -4643,6 +4649,7 @@ onUnmounted(() => {
   background: linear-gradient(180deg, rgba(5, 16, 33, 0.92) 0%, rgba(6, 20, 38, 0.95) 100%);
   border-color: rgba(56, 189, 248, 0.32);
   color: var(--popup-text-main);
+  box-shadow: inset 0 1px 0 rgba(34, 211, 238, 0.16);
 }
 
 .popup-container[data-agent-theme='dark-console'] .remote-switch-slider {
