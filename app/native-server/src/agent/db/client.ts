@@ -28,6 +28,34 @@ export type DrizzleDB = BetterSQLite3Database<typeof schema>;
 let dbInstance: DrizzleDB | null = null;
 let sqliteInstance: Database.Database | null = null;
 
+const SQLITE_BINDING_ERROR_PATTERNS = [
+  'Could not locate the bindings file',
+  'better_sqlite3.node',
+  'NODE_MODULE_VERSION',
+  'was compiled against a different Node.js version',
+];
+
+function isSqliteBindingError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return SQLITE_BINDING_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
+}
+
+function normalizeDbInitError(error: unknown): Error {
+  if (isSqliteBindingError(error)) {
+    const normalized = new Error(
+      [
+        'TABRIX_DB_BINDING_MISSING: better-sqlite3 native binding is unavailable.',
+        'Reinstall or rebuild native modules, then restart Chrome.',
+        'Recommended: npm i -g @tabrix/tabrix@latest --force',
+        'If you use pnpm: run pnpm approve-builds and reinstall.',
+      ].join(' '),
+    );
+    (normalized as Error & { code?: string }).code = 'TABRIX_DB_BINDING_MISSING';
+    return normalized;
+  }
+  return error instanceof Error ? error : new Error(String(error));
+}
+
 // ============================================================
 // Database Path Resolution
 // ============================================================
@@ -184,22 +212,26 @@ export function getDb(): DrizzleDB {
     return dbInstance;
   }
 
-  ensureDataDir();
-  const dbPath = getDatabasePath();
+  try {
+    ensureDataDir();
+    const dbPath = getDatabasePath();
 
-  // Create SQLite connection
-  sqliteInstance = new Database(dbPath);
+    // Create SQLite connection
+    sqliteInstance = new Database(dbPath);
 
-  // Enable WAL mode for better concurrent read performance
-  sqliteInstance.pragma('journal_mode = WAL');
+    // Enable WAL mode for better concurrent read performance
+    sqliteInstance.pragma('journal_mode = WAL');
 
-  // Initialize schema
-  initializeSchema(sqliteInstance);
+    // Initialize schema
+    initializeSchema(sqliteInstance);
 
-  // Create Drizzle instance
-  dbInstance = drizzle(sqliteInstance, { schema });
+    // Create Drizzle instance
+    dbInstance = drizzle(sqliteInstance, { schema });
 
-  return dbInstance;
+    return dbInstance;
+  } catch (error) {
+    throw normalizeDbInitError(error);
+  }
 }
 
 /**

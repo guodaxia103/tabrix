@@ -5,6 +5,7 @@
 import { ref, computed, watch } from 'vue';
 import type { AgentProject, AgentStoredMessage } from '@tabrix/shared';
 import { getMessage } from '@/utils/i18n';
+import { normalizeAgentServerError, parseAgentServerErrorText } from '../utils/server-error';
 
 const STORAGE_KEY_SELECTED_PROJECT = 'agent-selected-project-id';
 
@@ -164,7 +165,7 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(text || `Validation failed: HTTP ${response.status}`);
+        throw new Error(parseAgentServerErrorText(text, response.status));
       }
 
       return await response.json();
@@ -225,7 +226,7 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(text || `HTTP ${response.status}`);
+        throw new Error(parseAgentServerErrorText(text, response.status));
       }
 
       const payload = await response.json();
@@ -251,7 +252,9 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
       }
     } catch (error: unknown) {
       console.error('Failed to create project:', error);
-      projectError.value = error instanceof Error ? error.message : 'Failed to create project.';
+      projectError.value = normalizeAgentServerError(
+        error instanceof Error ? error.message : 'Failed to create project.',
+      );
       return null;
     } finally {
       isCreatingProject.value = false;
@@ -310,7 +313,8 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
           projectError.value =
             'Directory picker not available. Please rebuild and restart the native server.';
         } else {
-          projectError.value = `Server error: HTTP ${response.status}`;
+          const text = await response.text().catch(() => '');
+          projectError.value = parseAgentServerErrorText(text, response.status);
         }
         return null;
       }
@@ -376,7 +380,10 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
 
       if (!createResponse.ok) {
         const text = await createResponse.text().catch(() => '');
-        console.error('Failed to create default project:', text);
+        console.error(
+          'Failed to create default project:',
+          parseAgentServerErrorText(text, createResponse.status),
+        );
         return null;
       }
 
@@ -470,7 +477,7 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(text || `HTTP ${response.status}`);
+        throw new Error(parseAgentServerErrorText(text, response.status));
       }
 
       const payload = await response.json();
@@ -491,7 +498,9 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
       }
     } catch (error: unknown) {
       console.error('Failed to create project from path:', error);
-      projectError.value = error instanceof Error ? error.message : 'Failed to create project.';
+      projectError.value = normalizeAgentServerError(
+        error instanceof Error ? error.message : 'Failed to create project.',
+      );
       return null;
     }
   }

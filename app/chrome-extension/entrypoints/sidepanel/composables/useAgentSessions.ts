@@ -12,6 +12,7 @@ import type {
   AgentStoredMessage,
   AgentManagementInfo,
 } from '@tabrix/shared';
+import { normalizeAgentServerError, parseAgentServerErrorText } from '../utils/server-error';
 
 const STORAGE_KEY_SELECTED_SESSION = 'agent-selected-session-id';
 
@@ -110,11 +111,13 @@ export function useAgentSessions(options: UseAgentSessionsOptions) {
         }
       } else {
         const text = await response.text().catch(() => '');
-        sessionError.value = text || `HTTP ${response.status}`;
+        sessionError.value = parseAgentServerErrorText(text, response.status);
       }
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
-      sessionError.value = error instanceof Error ? error.message : 'Failed to fetch sessions';
+      sessionError.value = normalizeAgentServerError(
+        error instanceof Error ? error.message : 'Failed to fetch sessions',
+      );
     } finally {
       isLoadingSessions.value = false;
     }
@@ -154,11 +157,13 @@ export function useAgentSessions(options: UseAgentSessionsOptions) {
         allSessions.value = data.sessions || [];
       } else {
         const text = await response.text().catch(() => '');
-        sessionError.value = text || `HTTP ${response.status}`;
+        sessionError.value = parseAgentServerErrorText(text, response.status);
       }
     } catch (error) {
       console.error('Failed to fetch all sessions:', error);
-      sessionError.value = error instanceof Error ? error.message : 'Failed to fetch sessions';
+      sessionError.value = normalizeAgentServerError(
+        error instanceof Error ? error.message : 'Failed to fetch sessions',
+      );
     } finally {
       isLoadingAllSessions.value = false;
     }
@@ -205,7 +210,7 @@ export function useAgentSessions(options: UseAgentSessionsOptions) {
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(text || `HTTP ${response.status}`);
+        throw new Error(parseAgentServerErrorText(text, response.status));
       }
 
       const data = await response.json();
@@ -236,7 +241,9 @@ export function useAgentSessions(options: UseAgentSessionsOptions) {
         return null;
       }
       console.error('Failed to create session:', error);
-      sessionError.value = error instanceof Error ? error.message : 'Failed to create session';
+      sessionError.value = normalizeAgentServerError(
+        error instanceof Error ? error.message : 'Failed to create session',
+      );
       return null;
     } finally {
       isCreatingSession.value = false;
@@ -280,7 +287,7 @@ export function useAgentSessions(options: UseAgentSessionsOptions) {
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(text || `HTTP ${response.status}`);
+        throw new Error(parseAgentServerErrorText(text, response.status));
       }
 
       const data = await response.json();
@@ -303,7 +310,9 @@ export function useAgentSessions(options: UseAgentSessionsOptions) {
       return null;
     } catch (error) {
       console.error('Failed to update session:', error);
-      sessionError.value = error instanceof Error ? error.message : 'Failed to update session';
+      sessionError.value = normalizeAgentServerError(
+        error instanceof Error ? error.message : 'Failed to update session',
+      );
       return null;
     }
   }
@@ -402,7 +411,7 @@ export function useAgentSessions(options: UseAgentSessionsOptions) {
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(text || `HTTP ${response.status}`);
+        throw new Error(parseAgentServerErrorText(text, response.status));
       }
 
       const data = await response.json();
@@ -423,7 +432,9 @@ export function useAgentSessions(options: UseAgentSessionsOptions) {
       };
     } catch (error) {
       console.error('Failed to reset conversation:', error);
-      sessionError.value = error instanceof Error ? error.message : 'Failed to reset conversation';
+      sessionError.value = normalizeAgentServerError(
+        error instanceof Error ? error.message : 'Failed to reset conversation',
+      );
       return null;
     }
   }
@@ -443,7 +454,7 @@ export function useAgentSessions(options: UseAgentSessionsOptions) {
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new Error(text || `HTTP ${response.status}`);
+        throw new Error(parseAgentServerErrorText(text, response.status));
       }
 
       const data = await response.json();
