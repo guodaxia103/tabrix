@@ -1347,16 +1347,6 @@ const statusDetailText = computed(() => {
       getMessage('popupStatusDetailErrorDefault', [lastNativeError.value])
     );
   }
-  if (
-    state === ConnectionState.DISCONNECTED &&
-    daemonReachable.value &&
-    serverStatus.value.isRunning
-  ) {
-    return getMessage('popupStatusHintTapConnect');
-  }
-  if (state === ConnectionState.CONNECTED || state === ConnectionState.DISCONNECTED) {
-    return getMessage('popupStatusHintTapConnect');
-  }
   return '';
 });
 
@@ -3869,22 +3859,22 @@ onUnmounted(() => {
 }
 
 .connect-button.is-disconnect {
-  border: 1px solid rgba(244, 63, 94, 0.22);
-  background: linear-gradient(180deg, rgba(255, 247, 249, 0.98) 0%, rgba(255, 240, 244, 0.98) 100%);
+  border: 1px solid rgba(244, 63, 94, 0.28);
+  background: linear-gradient(180deg, #fff3f6 0%, #ffe4ea 100%);
   color: #be123c;
   box-shadow:
-    0 10px 20px -18px rgba(225, 29, 72, 0.35),
-    0 1px 0 rgba(255, 255, 255, 0.55) inset;
+    0 14px 24px -14px rgba(225, 29, 72, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.68) inset;
 }
 
 .connect-button.is-disconnect:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(255, 241, 244, 1) 0%, rgba(255, 232, 238, 1) 100%);
-  border-color: rgba(244, 63, 94, 0.32);
+  background: linear-gradient(180deg, #ffeaf0 0%, #ffd8e1 100%);
+  border-color: rgba(244, 63, 94, 0.42);
   color: #9f1239;
   transform: translateY(-1px);
   box-shadow:
-    0 14px 22px -18px rgba(225, 29, 72, 0.42),
-    0 1px 0 rgba(255, 255, 255, 0.58) inset;
+    0 18px 26px -14px rgba(225, 29, 72, 0.38),
+    0 1px 0 rgba(255, 255, 255, 0.72) inset;
 }
 .error-card {
   background: #fef2f2;
@@ -4762,23 +4752,23 @@ onUnmounted(() => {
 }
 
 .popup-container[data-agent-theme='dark-console'] .connect-button.is-disconnect {
-  background: linear-gradient(180deg, rgba(87, 24, 39, 0.88) 0%, rgba(66, 22, 36, 0.88) 100%);
-  border-color: rgba(251, 113, 133, 0.38);
+  background: linear-gradient(180deg, rgba(112, 28, 49, 0.92) 0%, rgba(85, 24, 42, 0.92) 100%);
+  border-color: rgba(251, 113, 133, 0.48);
   color: #ffe4e6;
   box-shadow:
-    0 14px 22px -18px rgba(244, 63, 94, 0.45),
-    0 0 0 1px rgba(251, 113, 133, 0.12) inset;
+    0 14px 22px -14px rgba(244, 63, 94, 0.4),
+    0 0 0 1px rgba(251, 113, 133, 0.16) inset;
 }
 
 .popup-container[data-agent-theme='dark-console']
   .connect-button.is-disconnect:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(108, 28, 47, 0.94) 0%, rgba(79, 24, 40, 0.94) 100%);
-  border-color: rgba(251, 113, 133, 0.56);
+  background: linear-gradient(180deg, rgba(136, 32, 58, 0.96) 0%, rgba(98, 26, 46, 0.96) 100%);
+  border-color: rgba(251, 113, 133, 0.68);
   color: #ffe4e6;
   transform: translateY(-1px);
   box-shadow:
-    0 16px 24px -18px rgba(244, 63, 94, 0.52),
-    0 0 0 1px rgba(251, 113, 133, 0.16) inset;
+    0 18px 26px -14px rgba(244, 63, 94, 0.48),
+    0 0 0 1px rgba(251, 113, 133, 0.22) inset;
 }
 
 .popup-container[data-agent-theme='dark-console'] .footer-link {
