@@ -3849,7 +3849,7 @@ onUnmounted(() => {
   .popup-container {
     width: 100%;
     height: auto;
-    max-height: 760px;
+    max-height: 1080px;
     border-radius: 0;
   }
 
