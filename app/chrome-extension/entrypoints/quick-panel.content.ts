@@ -20,6 +20,13 @@ export default defineContentScript({
   runAt: 'document_idle',
 
   main() {
+    // Some privileged documents (for example chrome://newtab) do not allow `unload`
+    // listeners and are not useful targets for Quick Panel anyway.
+    const blockedProtocols = new Set(['chrome:', 'chrome-extension:', 'devtools:', 'about:']);
+    if (blockedProtocols.has(window.location.protocol)) {
+      return;
+    }
+
     console.log('[QuickPanelContentScript] Content script loaded on:', window.location.href);
     let controller: QuickPanelController | null = null;
 
@@ -103,8 +110,8 @@ export default defineContentScript({
     // Register message listener
     chrome.runtime.onMessage.addListener(handleMessage);
 
-    // Cleanup on page unload
-    window.addEventListener('unload', () => {
+    // Cleanup on page teardown (`unload` can be blocked by page permission policies).
+    window.addEventListener('pagehide', () => {
       chrome.runtime.onMessage.removeListener(handleMessage);
       if (controller) {
         controller.dispose();
