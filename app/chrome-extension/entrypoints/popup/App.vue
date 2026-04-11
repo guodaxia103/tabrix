@@ -17,7 +17,8 @@
               @click="togglePopupTheme"
               :title="themeToggleTitle"
             >
-              <span class="header-theme-label">{{ themeToggleText }}</span>
+              <span :class="['header-theme-dot', isTechTheme ? 'tech' : 'light']"></span>
+              <span class="header-theme-label">{{ getMessage('themeLabel') }}</span>
             </button>
             <button
               class="header-refresh-button"
@@ -640,9 +641,6 @@ const { theme: agentTheme, initTheme, setTheme } = useAgentTheme();
 const QUICK_LIGHT_THEME: AgentThemeId = 'warm-editorial';
 const QUICK_TECH_THEME: AgentThemeId = 'dark-console';
 const isTechTheme = computed(() => agentTheme.value === QUICK_TECH_THEME);
-const themeToggleText = computed(() =>
-  isTechTheme.value ? getMessage('lightTheme') : getMessage('darkTheme'),
-);
 const themeToggleTitle = computed(() =>
   isTechTheme.value ? getMessage('lightTheme') : getMessage('darkTheme'),
 );
@@ -2626,9 +2624,9 @@ onUnmounted(() => {
 }
 
 .header-theme-button {
-  min-width: 52px;
+  min-width: 62px;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 9px;
   border-radius: 10px;
   border: 1px solid rgba(203, 213, 225, 0.92);
   background: rgba(255, 255, 255, 0.92);
@@ -2636,13 +2634,31 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   cursor: pointer;
   transition: all 0.18s ease;
 }
 
+.header-theme-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.header-theme-dot.light {
+  background: linear-gradient(180deg, #fb923c 0%, #f97316 100%);
+  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.18);
+}
+
+.header-theme-dot.tech {
+  background: linear-gradient(180deg, #22d3ee 0%, #0891b2 100%);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.32);
+}
+
 .header-theme-label {
-  font-size: 12px;
-  font-weight: 650;
+  font-size: 11px;
+  font-weight: 700;
   line-height: 1;
 }
 
@@ -4441,8 +4457,8 @@ onUnmounted(() => {
     radial-gradient(circle at 90% -20%, rgba(168, 85, 247, 0.2), transparent 44%),
     linear-gradient(160deg, var(--popup-bg-0) 0%, var(--popup-bg-1) 55%, #040b18 100%);
   box-shadow:
-    0 24px 52px -24px rgba(14, 165, 233, 0.5),
-    0 12px 26px -18px rgba(168, 85, 247, 0.45);
+    0 22px 48px -26px rgba(14, 165, 233, 0.34),
+    0 10px 22px -18px rgba(168, 85, 247, 0.26);
 }
 
 .popup-container[data-agent-theme='dark-console'] .header {
@@ -4453,9 +4469,9 @@ onUnmounted(() => {
 .popup-container[data-agent-theme='dark-console'] .header::after {
   background: linear-gradient(
     90deg,
-    rgba(34, 211, 238, 0.72),
-    rgba(56, 189, 248, 0.42) 42%,
-    rgba(168, 85, 247, 0.36) 75%,
+    rgba(34, 211, 238, 0.62),
+    rgba(56, 189, 248, 0.3) 42%,
+    rgba(168, 85, 247, 0.24) 75%,
     transparent 100%
   );
 }
@@ -4488,21 +4504,21 @@ onUnmounted(() => {
 .popup-container[data-agent-theme='dark-console'] .header-theme-button:hover {
   border-color: rgba(34, 211, 238, 0.62);
   color: #e0f2fe;
-  box-shadow: 0 12px 20px -14px rgba(34, 211, 238, 0.85);
+  box-shadow: 0 12px 20px -16px rgba(34, 211, 238, 0.62);
 }
 
 .popup-container[data-agent-theme='dark-console'] .header-theme-button.active {
   border-color: rgba(34, 211, 238, 0.72);
   color: #a5f3fc;
   box-shadow:
-    0 12px 20px -14px rgba(34, 211, 238, 0.9),
-    0 0 0 1px rgba(34, 211, 238, 0.35) inset;
+    0 10px 18px -16px rgba(34, 211, 238, 0.72),
+    0 0 0 1px rgba(34, 211, 238, 0.3) inset;
 }
 
 .popup-container[data-agent-theme='dark-console'] .header-refresh-button:hover {
   border-color: rgba(34, 211, 238, 0.62);
   color: #e0f2fe;
-  box-shadow: 0 12px 20px -14px rgba(34, 211, 238, 0.85);
+  box-shadow: 0 12px 20px -16px rgba(34, 211, 238, 0.62);
 }
 
 .popup-container[data-agent-theme='dark-console'] .config-card,
@@ -4511,8 +4527,8 @@ onUnmounted(() => {
   background: linear-gradient(180deg, rgba(5, 18, 36, 0.86) 0%, rgba(7, 20, 40, 0.92) 100%);
   border-color: var(--popup-border);
   box-shadow:
-    0 1px 0 rgba(56, 189, 248, 0.22) inset,
-    0 18px 32px -26px rgba(2, 132, 199, 0.85);
+    0 1px 0 rgba(56, 189, 248, 0.18) inset,
+    0 14px 26px -24px rgba(2, 132, 199, 0.56);
 }
 
 .popup-container[data-agent-theme='dark-console'] .section-title {
@@ -4527,7 +4543,7 @@ onUnmounted(() => {
 .popup-container[data-agent-theme='dark-console'] .status-inline--running {
   background: linear-gradient(180deg, rgba(5, 51, 58, 0.76) 0%, rgba(6, 38, 46, 0.78) 100%);
   border-color: rgba(45, 212, 191, 0.52);
-  box-shadow: 0 12px 20px -18px rgba(34, 211, 238, 0.85);
+  box-shadow: 0 10px 18px -18px rgba(34, 211, 238, 0.58);
 }
 
 .popup-container[data-agent-theme='dark-console'] .status-inline--warning {
@@ -4549,6 +4565,19 @@ onUnmounted(() => {
 .popup-container[data-agent-theme='dark-console'] .mcp-config-label,
 .popup-container[data-agent-theme='dark-console'] .port-label {
   color: var(--popup-text-muted);
+}
+
+.popup-container[data-agent-theme='dark-console'] .status-inline-meta {
+  color: #93c5fd;
+}
+
+.popup-container[data-agent-theme='dark-console'] .status-port-meta {
+  color: #bae6fd;
+}
+
+.popup-container[data-agent-theme='dark-console'] .connected-clients-section,
+.popup-container[data-agent-theme='dark-console'] .mcp-config-section {
+  border-top-color: rgba(56, 189, 248, 0.2);
 }
 
 .popup-container[data-agent-theme='dark-console'] .mcp-config-tabs {
@@ -4612,7 +4641,7 @@ onUnmounted(() => {
   background: linear-gradient(180deg, #0891b2 0%, #0e7490 100%);
   color: #ecfeff;
   box-shadow:
-    0 16px 26px -16px rgba(6, 182, 212, 0.85),
+    0 14px 22px -16px rgba(6, 182, 212, 0.62),
     0 0 0 1px rgba(34, 211, 238, 0.25) inset;
 }
 
