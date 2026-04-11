@@ -3848,7 +3848,8 @@ onUnmounted(() => {
 @media (max-width: 320px) {
   .popup-container {
     width: 100%;
-    height: 100vh;
+    height: auto;
+    max-height: min(92vh, 760px);
     border-radius: 0;
   }
 
@@ -4128,7 +4129,8 @@ onUnmounted(() => {
 .home-view {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: auto;
+  min-height: 0;
 }
 
 /* 管理入口卡片样式 */
