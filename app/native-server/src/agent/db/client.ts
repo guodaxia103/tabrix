@@ -8,7 +8,7 @@
  * - Configurable path via environment variable
  */
 import type Database from 'better-sqlite3';
-import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { sql } from 'drizzle-orm';
 import * as schema from './schema';
 import { getAgentDataDir } from '../storage';
@@ -28,6 +28,9 @@ export type DrizzleDB = BetterSQLite3Database<typeof schema>;
 let dbInstance: DrizzleDB | null = null;
 let sqliteInstance: Database.Database | null = null;
 let sqliteFactory: ((filename: string) => Database.Database) | null = null;
+let drizzleFactory:
+  | ((client: Database.Database, config: { schema: typeof schema }) => DrizzleDB)
+  | null = null;
 
 const SQLITE_BINDING_ERROR_PATTERNS = [
   'Could not locate the bindings file',
@@ -65,6 +68,25 @@ function getSqliteFactory(): (filename: string) => Database.Database {
   try {
     sqliteFactory = require('better-sqlite3') as (filename: string) => Database.Database;
     return sqliteFactory;
+  } catch (error) {
+    throw normalizeDbInitError(error);
+  }
+}
+
+function getDrizzleFactory(): (
+  client: Database.Database,
+  config: { schema: typeof schema },
+) => DrizzleDB {
+  if (drizzleFactory) {
+    return drizzleFactory;
+  }
+
+  try {
+    const loaded = require('drizzle-orm/better-sqlite3') as {
+      drizzle: (client: Database.Database, config: { schema: typeof schema }) => DrizzleDB;
+    };
+    drizzleFactory = loaded.drizzle;
+    return drizzleFactory;
   } catch (error) {
     throw normalizeDbInitError(error);
   }
@@ -230,6 +252,7 @@ export function getDb(): DrizzleDB {
     ensureDataDir();
     const dbPath = getDatabasePath();
     const openSqlite = getSqliteFactory();
+    const drizzle = getDrizzleFactory();
 
     // Create SQLite connection
     sqliteInstance = openSqlite(dbPath);
