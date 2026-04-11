@@ -103,19 +103,6 @@
         <h3 class="section-title">{{ getMessage('tokenPageNotesTitle') }}</h3>
         <p class="help-text">{{ getMessage('tokenPageNotesText') }}</p>
       </div>
-
-      <div class="section">
-        <h3 class="section-title">{{ getMessage('tokenPageRemoteConfigTitle') }}</h3>
-        <pre class="config-pre">{{ remoteConfigJson }}</pre>
-        <button
-          type="button"
-          class="secondary-button"
-          :disabled="!remoteConfigJson.trim()"
-          @click="copyText(remoteConfigJson)"
-        >
-          {{ getMessage('tokenPageCopyFullConfigButton') }}
-        </button>
-      </div>
     </div>
 
     <ConfirmDialog
@@ -171,7 +158,6 @@ export interface TokenInfo {
 const props = defineProps<{
   /** e.g. http://127.0.0.1:12306 */
   baseUrl: string;
-  serverPort: number;
   lanIp: string | null;
 }>();
 
@@ -240,25 +226,16 @@ const expiryStatusText = computed(() => {
   return getMessage('tokenPageRemainingMinutes', [String(mins)]);
 });
 
-const remoteConfigJson = computed(() => {
-  const port = props.serverPort;
-  const host = props.lanIp || getMessage('popupLanIpPlaceholder');
-  const tok = tokenInfo.value?.token;
-  const chromeMcp: Record<string, unknown> = {
-    url: `http://${host}:${port}/mcp`,
-  };
-  if (tok) {
-    chromeMcp.headers = { Authorization: `Bearer ${tok}` };
-  }
-  return JSON.stringify({ mcpServers: { tabrix: chromeMcp } }, null, 2);
-});
-
 async function copyText(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
     /* ignore */
   }
+}
+
+async function waitMs(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function requestNewToken(ttlDays?: number, silent = false): Promise<TokenInfo | null> {
@@ -289,30 +266,43 @@ async function requestNewToken(ttlDays?: number, silent = false): Promise<TokenI
 
 async function fetchToken(): Promise<void> {
   loadError.value = '';
-  try {
-    const res = await fetch(`${props.baseUrl}/auth/token`);
-    if (!res.ok) {
-      loadError.value = getMessage('tokenPageReadTokenFailedHttp', [String(res.status)]);
-      tokenInfo.value = null;
-      return;
-    }
-    const json = await res.json();
-    tokenInfo.value = json?.data ?? null;
-    if (tokenInfo.value) {
-      hasAttemptedAutoCreate.value = false;
-      return;
-    }
-    if (isRemoteEnabled.value && !hasAttemptedAutoCreate.value) {
-      hasAttemptedAutoCreate.value = true;
-      const created = await requestNewToken(undefined, true);
-      if (created) {
-        tokenInfo.value = created;
-        emit('token-changed');
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const res = await fetch(`${props.baseUrl}/auth/token`);
+      if (!res.ok) {
+        // 短暂服务波动时重试，避免出现“已连接但立即报错”的误判体验
+        if (res.status >= 500 && attempt < maxAttempts) {
+          await waitMs(attempt * 200);
+          continue;
+        }
+        loadError.value = getMessage('tokenPageReadTokenFailedHttp', [String(res.status)]);
+        tokenInfo.value = null;
+        return;
       }
+      const json = await res.json();
+      tokenInfo.value = json?.data ?? null;
+      if (tokenInfo.value) {
+        hasAttemptedAutoCreate.value = false;
+        return;
+      }
+      if (isRemoteEnabled.value && !hasAttemptedAutoCreate.value) {
+        hasAttemptedAutoCreate.value = true;
+        const created = await requestNewToken(undefined, true);
+        if (created) {
+          tokenInfo.value = created;
+          emit('token-changed');
+        }
+      }
+      return;
+    } catch {
+      if (attempt < maxAttempts) {
+        await waitMs(attempt * 200);
+        continue;
+      }
+      loadError.value = getMessage('tokenPageLocalServiceUnavailable');
+      tokenInfo.value = null;
     }
-  } catch {
-    loadError.value = getMessage('tokenPageLocalServiceUnavailable');
-    tokenInfo.value = null;
   }
 }
 

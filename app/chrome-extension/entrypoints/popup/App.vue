@@ -468,7 +468,6 @@
     <TokenManagementPage
       v-show="currentView === 'token-management'"
       :base-url="serverBaseUrl"
-      :server-port="serverPort"
       :lan-ip="lanIpAddress"
       @back="currentView = 'home'"
       @token-changed="fetchTokenInfo"

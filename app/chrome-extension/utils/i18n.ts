@@ -286,8 +286,7 @@ const fallbackMessages: Record<string, string> = {
   tokenPageRefreshFailed: 'Refresh failed: {0}',
   tokenPageRefreshRequestFailed: 'Refresh request failed',
   tokenPageReadTokenFailedHttp: 'Failed to read token (HTTP {0})',
-  tokenPageLocalServiceUnavailable:
-    'Cannot reach local service. Ensure Native is connected and service is running.',
+  tokenPageLocalServiceUnavailable: 'Token service is temporarily unavailable. Please retry.',
   webEditorNoAgentProjectSelected:
     'No Agent project selected. Open Side Panel -> AI Assistant and select/create a project first.',
   agentProjectConfirmCreateMissingDir: 'Directory "{0}" does not exist. Create it?',

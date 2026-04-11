@@ -1128,7 +1128,7 @@
     "description": "自动同步键: tokenPageGenerateDefaultTokenButton"
   },
   "tokenPageLocalServiceUnavailable": {
-    "message": "无法连接本地服务，请确认已连接 Native 且服务运行中。",
+    "message": "Token 服务暂不可用，请稍后重试。",
     "description": "自动同步键: tokenPageLocalServiceUnavailable"
   },
   "tokenPageNeverExpire": {

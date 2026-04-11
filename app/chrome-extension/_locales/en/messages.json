@@ -1128,7 +1128,7 @@
     "description": "Auto-synced key: tokenPageGenerateDefaultTokenButton"
   },
   "tokenPageLocalServiceUnavailable": {
-    "message": "Cannot reach local service. Ensure Native is connected and service is running.",
+    "message": "Token service is temporarily unavailable. Please retry.",
     "description": "Auto-synced key: tokenPageLocalServiceUnavailable"
   },
   "tokenPageNeverExpire": {
