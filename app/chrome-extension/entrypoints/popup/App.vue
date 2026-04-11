@@ -28,14 +28,16 @@
           <div class="config-card">
             <div class="status-section">
               <div class="status-inline">
-                <span :class="['status-dot', getStatusClass()]"></span>
-                <span class="status-text">{{ statusHeadlineText }}</span>
-                <span v-if="statusInlinePort" class="status-inline-meta"
-                  >· {{ getMessage('connectionPortLabel') }} {{ statusInlinePort }}</span
-                >
-                <span v-if="statusUpdatedTimeText" class="status-inline-meta">
-                  · {{ getMessage('lastUpdatedLabel') }} {{ statusUpdatedTimeText }}
-                </span>
+                <div class="status-mainline">
+                  <span :class="['status-dot', getStatusClass()]"></span>
+                  <span class="status-text">{{ statusHeadlineText }}</span>
+                  <span v-if="statusInlinePort" class="status-inline-meta status-port-meta">
+                    {{ getMessage('connectionPortLabel') }} {{ statusInlinePort }}
+                  </span>
+                </div>
+                <div v-if="statusUpdatedTimeText" class="status-subline">
+                  {{ getMessage('lastUpdatedLabel') }} {{ statusUpdatedTimeText }}
+                </div>
               </div>
               <div
                 v-if="statusDetailText"
@@ -122,6 +124,11 @@
                 <button
                   class="copy-config-button"
                   :disabled="!canCopyActiveConfig"
+                  :title="
+                    canCopyActiveConfig
+                      ? getMessage('copyConfigButton')
+                      : getMessage('popupConfigNeedsConnection')
+                  "
                   @click="copyMcpConfig"
                 >
                   {{ copyButtonText }}
@@ -194,7 +201,13 @@
             </div>
 
             <button
-              class="connect-button"
+              :class="[
+                'connect-button',
+                {
+                  'is-disconnect':
+                    !connectActionState.busy && connectActionState.action === 'disconnect',
+                },
+              ]"
               :disabled="connectActionState.busy"
               @click="testNativeConnection"
             >
@@ -2503,7 +2516,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .header-meta {
@@ -2513,17 +2526,18 @@ onUnmounted(() => {
 
 .header-mainline {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
   min-width: 0;
   flex-wrap: nowrap;
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .header-title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 760;
-  line-height: 1;
+  line-height: 1.02;
   letter-spacing: -0.03em;
   color: #1e293b;
   margin: 0;
@@ -2538,8 +2552,9 @@ onUnmounted(() => {
 
 .header-context {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
+  line-height: 1;
   color: #334155;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -2656,13 +2671,28 @@ onUnmounted(() => {
 
 .status-inline {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
   background: #f8fafc;
   border: 1px solid #dbe3ef;
   border-radius: 11px;
-  padding: 8px 10px;
+  padding: 8px 10px 7px;
+}
+
+.status-mainline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.status-subline {
+  font-size: 12px;
+  line-height: 1.25;
+  color: #64748b;
+  padding-left: 17px;
 }
 
 .status-dot {
@@ -2688,14 +2718,19 @@ onUnmounted(() => {
 }
 
 .status-text {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: #1e293b;
 }
 
 .status-inline-meta {
-  font-size: 13px;
+  font-size: 12px;
   color: #64748b;
+}
+
+.status-port-meta {
+  color: #475569;
+  font-weight: 600;
 }
 
 .model-label {
@@ -2768,7 +2803,7 @@ onUnmounted(() => {
 }
 
 .section {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .secondary-button {
@@ -2958,12 +2993,12 @@ onUnmounted(() => {
 .config-card {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, #ffffff 100%);
   border: 1px solid rgba(226, 232, 240, 0.95);
-  border-radius: 15px;
+  border-radius: 14px;
   box-shadow: 0 10px 22px -20px rgba(15, 23, 42, 0.65);
-  padding: 12px;
+  padding: 11px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 .semantic-engine-card {
   background: white;
@@ -3212,11 +3247,11 @@ onUnmounted(() => {
 /* Connected clients */
 .connected-clients-section {
   border-top: 1px solid #f1f5f9;
-  padding-top: 8px;
+  padding-top: 6px;
 }
 
 .connected-clients-section.connected-clients-empty {
-  padding-bottom: 4px;
+  padding-bottom: 2px;
 }
 
 .connected-clients-header {
@@ -3311,20 +3346,20 @@ onUnmounted(() => {
 
 .mcp-config-section {
   border-top: 1px solid #f1f5f9;
-  padding-top: 10px;
+  padding-top: 8px;
 }
 
 .mcp-config-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .mcp-config-tabs {
   display: flex;
   gap: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   background: #f1f5f9;
   border-radius: 8px;
   padding: 3px;
@@ -3332,7 +3367,7 @@ onUnmounted(() => {
 
 .mcp-tab {
   flex: 1;
-  padding: 6px 8px;
+  padding: 5px 8px;
   font-size: 13px;
   font-weight: 600;
   color: #64748b;
@@ -3364,8 +3399,8 @@ onUnmounted(() => {
 }
 
 .remote-toggle-card {
-  margin-bottom: 6px;
-  padding: 8px;
+  margin-bottom: 4px;
+  padding: 7px 8px;
   border-radius: 8px;
   border: 1px solid #dbeafe;
   background: #f8fbff;
@@ -3375,7 +3410,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .remote-toggle-title {
@@ -3455,7 +3490,7 @@ onUnmounted(() => {
   font-size: 11px;
   color: #64748b;
   text-align: center;
-  padding: 16px 8px;
+  padding: 12px 8px;
   background: #f8fafc;
   border-radius: 6px;
   border: 1px dashed #cbd5e1;
@@ -3464,9 +3499,9 @@ onUnmounted(() => {
 .mcp-network-info {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 6px;
-  font-size: 11px;
+  gap: 3px;
+  margin-top: 4px;
+  font-size: 10.5px;
   color: #94a3b8;
   flex-wrap: wrap;
 }
@@ -3506,7 +3541,7 @@ onUnmounted(() => {
   border: 1px solid rgba(245, 158, 11, 0.2);
   border-radius: 6px;
   padding: 6px 8px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .mcp-config-label {
@@ -3549,14 +3584,14 @@ onUnmounted(() => {
   background: #f8fbff;
   border: 1px solid #d7e2ef;
   border-radius: 11px;
-  padding: 12px;
+  padding: 10px;
   overflow-x: auto;
 }
 
 .mcp-config-json {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.45;
   color: #374151;
   margin: 0;
   white-space: pre;
@@ -3566,7 +3601,7 @@ onUnmounted(() => {
 .port-section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .port-label {
@@ -3578,10 +3613,10 @@ onUnmounted(() => {
 .port-input {
   display: block;
   width: 100%;
-  border-radius: 8px;
+  border-radius: 9px;
   border: 1px solid #d1d5db;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  padding: 10px 12px;
+  padding: 8px 10px;
   font-size: 14px;
   background: #f8fafc;
 }
@@ -3609,7 +3644,7 @@ onUnmounted(() => {
   background: var(--ac-accent, #d97757);
   color: var(--ac-accent-contrast, white);
   font-weight: 600;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-radius: 10px;
   border: none;
   cursor: pointer;
@@ -3626,6 +3661,21 @@ onUnmounted(() => {
 .connect-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.connect-button.is-disconnect {
+  background: #fff6f7;
+  color: #9f1239;
+  border: 1px solid #f5c5cf;
+  box-shadow: none;
+}
+
+.connect-button.is-disconnect:hover:not(:disabled) {
+  background: #ffeef1;
+  border-color: #ee9db0;
+  color: #881337;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px -16px rgba(190, 24, 93, 0.55);
 }
 .error-card {
   background: #fef2f2;
