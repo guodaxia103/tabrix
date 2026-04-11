@@ -494,22 +494,33 @@ watch(
 .refresh-ttl-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .refresh-ttl-input {
-  width: 104px;
-  padding: 10px 12px;
-  font-size: 20px;
+  width: 88px;
+  height: 42px;
+  padding: 0 10px;
+  font-size: 24px;
+  line-height: 1;
   font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
   border: 1px solid var(--tm-border);
   border-radius: 8px;
   background: var(--tm-surface);
   color: var(--tm-text);
+  appearance: textfield;
+}
+
+.refresh-ttl-input::-webkit-outer-spin-button,
+.refresh-ttl-input::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
 }
 
 .refresh-ttl-unit {
-  font-size: 13px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--tm-text-muted);
 }
