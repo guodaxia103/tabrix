@@ -4588,6 +4588,22 @@ onUnmounted(() => {
   color: #9ab8d8;
 }
 
+.popup-container[data-agent-theme='dark-console'] .remote-toggle-title {
+  color: #dbeafe;
+  font-weight: 700;
+}
+
+.popup-container[data-agent-theme='dark-console'] .remote-toggle-desc {
+  color: #c7e6ff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.popup-container[data-agent-theme='dark-console'] .remote-toggle-copied {
+  color: #67e8f9;
+}
+
 .popup-container[data-agent-theme='dark-console'] .connected-clients-section,
 .popup-container[data-agent-theme='dark-console'] .mcp-config-section {
   border-top-color: rgba(56, 189, 248, 0.2);
@@ -4627,6 +4643,36 @@ onUnmounted(() => {
   background: linear-gradient(180deg, rgba(5, 16, 33, 0.92) 0%, rgba(6, 20, 38, 0.95) 100%);
   border-color: rgba(56, 189, 248, 0.32);
   color: var(--popup-text-main);
+}
+
+.popup-container[data-agent-theme='dark-console'] .remote-switch-slider {
+  background: rgba(51, 65, 85, 0.9);
+  border: 1px solid rgba(125, 211, 252, 0.38);
+}
+
+.popup-container[data-agent-theme='dark-console'] .remote-switch-slider::before {
+  background: #f0f9ff;
+  box-shadow: 0 2px 6px rgba(8, 47, 73, 0.45);
+}
+
+.popup-container[data-agent-theme='dark-console']
+  .remote-switch
+  input:checked
+  + .remote-switch-slider {
+  background: linear-gradient(180deg, #06b6d4 0%, #0284c7 100%);
+  border-color: rgba(34, 211, 238, 0.72);
+}
+
+.popup-container[data-agent-theme='dark-console'] .remote-disabled-hint {
+  color: #9ec3e7;
+  background: rgba(10, 30, 55, 0.56);
+  border-color: rgba(56, 189, 248, 0.38);
+}
+
+.popup-container[data-agent-theme='dark-console'] .mcp-security-warning {
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.45);
+  border-color: rgba(251, 191, 36, 0.4);
 }
 
 .popup-container[data-agent-theme='dark-console'] .mcp-config-json {
