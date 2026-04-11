@@ -7,7 +7,7 @@
  * - Auto-create tables on first run (no migration tool needed)
  * - Configurable path via environment variable
  */
-import Database from 'better-sqlite3';
+import type Database from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { sql } from 'drizzle-orm';
 import * as schema from './schema';
@@ -27,6 +27,7 @@ export type DrizzleDB = BetterSQLite3Database<typeof schema>;
 
 let dbInstance: DrizzleDB | null = null;
 let sqliteInstance: Database.Database | null = null;
+let sqliteFactory: ((filename: string) => Database.Database) | null = null;
 
 const SQLITE_BINDING_ERROR_PATTERNS = [
   'Could not locate the bindings file',
@@ -54,6 +55,19 @@ function normalizeDbInitError(error: unknown): Error {
     return normalized;
   }
   return error instanceof Error ? error : new Error(String(error));
+}
+
+function getSqliteFactory(): (filename: string) => Database.Database {
+  if (sqliteFactory) {
+    return sqliteFactory;
+  }
+
+  try {
+    sqliteFactory = require('better-sqlite3') as (filename: string) => Database.Database;
+    return sqliteFactory;
+  } catch (error) {
+    throw normalizeDbInitError(error);
+  }
 }
 
 // ============================================================
@@ -215,9 +229,10 @@ export function getDb(): DrizzleDB {
   try {
     ensureDataDir();
     const dbPath = getDatabasePath();
+    const openSqlite = getSqliteFactory();
 
     // Create SQLite connection
-    sqliteInstance = new Database(dbPath);
+    sqliteInstance = openSqlite(dbPath);
 
     // Enable WAL mode for better concurrent read performance
     sqliteInstance.pragma('journal_mode = WAL');

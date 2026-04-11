@@ -380,10 +380,8 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
 
       if (!createResponse.ok) {
         const text = await createResponse.text().catch(() => '');
-        console.error(
-          'Failed to create default project:',
-          parseAgentServerErrorText(text, createResponse.status),
-        );
+        projectError.value = parseAgentServerErrorText(text, createResponse.status);
+        console.warn('Default project is not available yet:', projectError.value);
         return null;
       }
 
@@ -399,7 +397,12 @@ export function useAgentProjects(options: UseAgentProjectsOptions) {
 
       return null;
     } catch (error) {
-      console.error('Failed to ensure default project:', error);
+      const message =
+        error instanceof Error
+          ? normalizeAgentServerError(error.message)
+          : normalizeAgentServerError(String(error));
+      projectError.value = message;
+      console.warn('Failed to ensure default project:', message);
       return null;
     }
   }
