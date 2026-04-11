@@ -130,7 +130,6 @@
           <span class="token-refresh-icon">⚠️</span>
           <h3 class="token-refresh-title">{{ getMessage('tokenPageRegenerateConfirmTitle') }}</h3>
         </div>
-        <p class="token-refresh-desc">{{ refreshConfirmMessage }}</p>
 
         <div class="refresh-ttl-in-dialog">
           <label class="refresh-ttl-label" for="dialog-token-ttl-days">{{
@@ -150,11 +149,6 @@
             <span class="refresh-ttl-unit">{{ getMessage('tokenPageTtlDayUnit') }}</span>
           </div>
           <p class="refresh-ttl-hint">{{ getMessage('tokenPageTtlHint') }}</p>
-        </div>
-
-        <div class="token-refresh-checklist">
-          <span class="token-refresh-dot"></span>
-          <span>{{ getMessage('tokenPageRegenerateConfirmItem') }}</span>
         </div>
 
         <div class="token-refresh-warning">{{
@@ -250,9 +244,6 @@ function clampTtlDays(raw: number): number {
 }
 
 const refreshTtlDaysClamped = computed(() => clampTtlDays(refreshTtlDays.value));
-
-/** 弹框内说明不含天数（天数在下方输入框设置） */
-const refreshConfirmMessage = getMessage('tokenPageRefreshConfirmMessage');
 
 const expiryStatusText = computed(() => {
   void tick.value;
@@ -787,37 +778,8 @@ watch(
   color: var(--tm-text);
 }
 
-.token-refresh-desc {
-  margin: 0 0 12px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--tm-text-muted);
-}
-
-.token-refresh-checklist {
-  margin-top: 12px;
-  border: 1px solid var(--tm-border);
-  border-left: 3px solid #3b82f6;
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 13px;
-  color: var(--tm-text-muted);
-  background: rgba(59, 130, 246, 0.04);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.token-refresh-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #3b82f6;
-  flex-shrink: 0;
-}
-
 .token-refresh-warning {
-  margin-top: 10px;
+  margin-top: 12px;
   border: 1px solid var(--tm-danger-border);
   border-radius: 10px;
   padding: 10px 12px;
@@ -869,10 +831,6 @@ watch(
   background: linear-gradient(180deg, rgba(6, 20, 39, 0.96) 0%, rgba(10, 30, 55, 0.88) 100%);
 }
 
-.popup-container[data-agent-theme='dark-console'] .token-refresh-checklist {
-  background: rgba(34, 211, 238, 0.08);
-}
-
 .popup-container[data-agent-theme='dark-console'] .token-refresh-secondary {
   background: rgba(5, 17, 34, 0.9);
 }
@@ -885,10 +843,6 @@ watch(
 
   .token-refresh-title {
     font-size: 18px;
-  }
-
-  .token-refresh-desc {
-    font-size: 13px;
   }
 
   .token-refresh-primary,

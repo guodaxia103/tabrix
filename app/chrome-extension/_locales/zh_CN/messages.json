@@ -1158,7 +1158,7 @@
     "description": "自动同步键: tokenPageReadTokenFailedHttp"
   },
   "tokenPageRefreshConfirmMessage": {
-    "message": "执行后旧 Token 立即失效，请确认客户端可在短时间内完成更新。",
+    "message": "重新生成后，请尽快在客户端更新为新 Token。",
     "description": "自动同步键: tokenPageRefreshConfirmMessage"
   },
   "tokenPageRefreshFailed": {
@@ -1180,15 +1180,15 @@
     "description": "自动同步键: tokenPageRegenerateConfirmButton"
   },
   "tokenPageRegenerateConfirmItem": {
-    "message": "确保所有使用方可及时替换 Authorization",
+    "message": "客户端需更新为新 Token",
     "description": "自动同步键: tokenPageRegenerateConfirmItem"
   },
   "tokenPageRegenerateConfirmTitle": {
-    "message": "重新生成访问 Token？",
+    "message": "重新生成访问 Token",
     "description": "自动同步键: tokenPageRegenerateConfirmTitle"
   },
   "tokenPageRegenerateConfirmWarning": {
-    "message": "旧 Token 无法恢复。",
+    "message": "旧 Token 会立即失效且无法恢复。",
     "description": "自动同步键: tokenPageRegenerateConfirmWarning"
   },
   "tokenPageRegenerateTokenButton": {

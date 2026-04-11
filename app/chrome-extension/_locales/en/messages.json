@@ -1158,7 +1158,7 @@
     "description": "Auto-synced key: tokenPageReadTokenFailedHttp"
   },
   "tokenPageRefreshConfirmMessage": {
-    "message": "The old token expires immediately. Ensure clients can update quickly after regeneration.",
+    "message": "After regeneration, update clients to use the new token as soon as possible.",
     "description": "Auto-synced key: tokenPageRefreshConfirmMessage"
   },
   "tokenPageRefreshFailed": {
@@ -1180,15 +1180,15 @@
     "description": "Auto-synced key: tokenPageRegenerateConfirmButton"
   },
   "tokenPageRegenerateConfirmItem": {
-    "message": "Make sure all clients can replace Authorization promptly",
+    "message": "Clients need to switch to the new token",
     "description": "Auto-synced key: tokenPageRegenerateConfirmItem"
   },
   "tokenPageRegenerateConfirmTitle": {
-    "message": "Regenerate Access Token?",
+    "message": "Regenerate Access Token",
     "description": "Auto-synced key: tokenPageRegenerateConfirmTitle"
   },
   "tokenPageRegenerateConfirmWarning": {
-    "message": "The old token cannot be restored.",
+    "message": "The old token becomes invalid immediately and cannot be restored.",
     "description": "Auto-synced key: tokenPageRegenerateConfirmWarning"
   },
   "tokenPageRegenerateTokenButton": {
