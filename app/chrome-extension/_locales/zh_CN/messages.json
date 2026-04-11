@@ -110,7 +110,7 @@
     "description": "刷新状态按钮提示"
   },
   "copyConfigButton": {
-    "message": "复制配置",
+    "message": "复制",
     "description": "复制配置按钮文本"
   },
   "retryButton": {
@@ -424,7 +424,7 @@
     "description": "通用信息通知"
   },
   "configCopiedNotification": {
-    "message": "配置已复制到剪贴板",
+    "message": "已复制",
     "description": "配置复制成功消息"
   },
   "dataClearedNotification": {

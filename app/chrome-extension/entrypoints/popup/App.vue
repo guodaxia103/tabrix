@@ -35,7 +35,7 @@
               @click="refreshOverview"
               :title="getMessage('refreshStatusButton')"
             >
-              <RefreshIcon className="icon-small" />
+              <RefreshIcon className="header-action-icon" />
             </button>
           </div>
         </div>
@@ -1871,14 +1871,14 @@ const copyMcpConfig = async () => {
   }
   try {
     await navigator.clipboard.writeText(activeConfigJson.value);
-    copyButtonText.value = '✅' + getMessage('configCopiedNotification');
+    copyButtonText.value = getMessage('configCopiedNotification');
 
     setTimeout(() => {
       copyButtonText.value = getMessage('copyConfigButton');
     }, 2000);
   } catch (error) {
     console.error('Failed to copy config:', error);
-    copyButtonText.value = '❌' + getMessage('networkErrorMessage');
+    copyButtonText.value = getMessage('popupCopyFailed');
 
     setTimeout(() => {
       copyButtonText.value = getMessage('copyConfigButton');
@@ -2707,8 +2707,8 @@ onUnmounted(() => {
 }
 
 .header-refresh-button {
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   border-radius: 10px;
   border: 1px solid rgba(203, 213, 225, 0.9);
   background: rgba(255, 255, 255, 0.9);
@@ -2718,6 +2718,11 @@ onUnmounted(() => {
   justify-content: center;
   cursor: pointer;
   transition: all 0.18s ease;
+}
+
+.header-action-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .header-refresh-button:hover {
@@ -3738,14 +3743,17 @@ onUnmounted(() => {
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border: 1px solid #cbd5e1;
   cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 8px;
+  min-width: 74px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: #334155;
   transition: all 0.18s ease;
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
 }
 
@@ -3861,18 +3869,22 @@ onUnmounted(() => {
 }
 
 .connect-button.is-disconnect {
-  background: #fffafb;
+  border: 1px solid rgba(244, 63, 94, 0.22);
+  background: linear-gradient(180deg, rgba(255, 247, 249, 0.98) 0%, rgba(255, 240, 244, 0.98) 100%);
   color: #be123c;
-  border: 1px solid #f8d7df;
-  box-shadow: none;
+  box-shadow:
+    0 10px 20px -18px rgba(225, 29, 72, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.55) inset;
 }
 
 .connect-button.is-disconnect:hover:not(:disabled) {
-  background: #fff3f6;
-  border-color: #f3b6c5;
+  background: linear-gradient(180deg, rgba(255, 241, 244, 1) 0%, rgba(255, 232, 238, 1) 100%);
+  border-color: rgba(244, 63, 94, 0.32);
   color: #9f1239;
-  transform: none;
-  box-shadow: 0 8px 16px -18px rgba(190, 24, 93, 0.45);
+  transform: translateY(-1px);
+  box-shadow:
+    0 14px 22px -18px rgba(225, 29, 72, 0.42),
+    0 1px 0 rgba(255, 255, 255, 0.58) inset;
 }
 .error-card {
   background: #fef2f2;
@@ -4750,16 +4762,23 @@ onUnmounted(() => {
 }
 
 .popup-container[data-agent-theme='dark-console'] .connect-button.is-disconnect {
-  background: rgba(88, 28, 40, 0.7);
-  border-color: rgba(251, 113, 133, 0.45);
-  color: #fecdd3;
+  background: linear-gradient(180deg, rgba(87, 24, 39, 0.88) 0%, rgba(66, 22, 36, 0.88) 100%);
+  border-color: rgba(251, 113, 133, 0.38);
+  color: #ffe4e6;
+  box-shadow:
+    0 14px 22px -18px rgba(244, 63, 94, 0.45),
+    0 0 0 1px rgba(251, 113, 133, 0.12) inset;
 }
 
 .popup-container[data-agent-theme='dark-console']
   .connect-button.is-disconnect:hover:not(:disabled) {
-  background: rgba(112, 28, 49, 0.74);
-  border-color: rgba(251, 113, 133, 0.62);
+  background: linear-gradient(180deg, rgba(108, 28, 47, 0.94) 0%, rgba(79, 24, 40, 0.94) 100%);
+  border-color: rgba(251, 113, 133, 0.56);
   color: #ffe4e6;
+  transform: translateY(-1px);
+  box-shadow:
+    0 16px 24px -18px rgba(244, 63, 94, 0.52),
+    0 0 0 1px rgba(251, 113, 133, 0.16) inset;
 }
 
 .popup-container[data-agent-theme='dark-console'] .footer-link {

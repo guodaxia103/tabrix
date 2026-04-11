@@ -110,7 +110,7 @@
     "description": "Refresh status button tooltip"
   },
   "copyConfigButton": {
-    "message": "Copy Configuration",
+    "message": "Copy",
     "description": "Copy configuration button text"
   },
   "retryButton": {
@@ -424,7 +424,7 @@
     "description": "Generic info notification"
   },
   "configCopiedNotification": {
-    "message": "Configuration copied to clipboard",
+    "message": "Copied",
     "description": "Configuration copied success message"
   },
   "dataClearedNotification": {
