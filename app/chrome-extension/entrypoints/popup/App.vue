@@ -2544,17 +2544,20 @@ onUnmounted(() => {
 .header::after {
   content: '';
   position: absolute;
-  left: 16px;
-  right: 16px;
+  left: 12px;
+  right: 12px;
   bottom: -1px;
-  height: 2px;
+  height: 1px;
   border-radius: 999px;
   background: linear-gradient(
     90deg,
-    rgba(217, 119, 87, 0.42),
-    rgba(59, 130, 246, 0.18),
-    transparent 85%
+    transparent 0%,
+    rgba(217, 119, 87, 0.28) 12%,
+    rgba(59, 130, 246, 0.18) 46%,
+    rgba(99, 102, 241, 0.14) 68%,
+    transparent 100%
   );
+  opacity: 0.9;
   pointer-events: none;
 }
 
@@ -3497,21 +3500,23 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 5px;
+  margin-bottom: 8px;
 }
 
 .mcp-config-tabs {
   display: flex;
   gap: 4px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   background: #f1f5f9;
-  border-radius: 8px;
-  padding: 3px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 4px;
 }
 
 .mcp-tab {
   flex: 1;
-  padding: 5px 8px;
+  min-height: 30px;
+  padding: 6px 8px;
   font-size: 13px;
   font-weight: 600;
   color: #64748b;
@@ -3531,6 +3536,7 @@ onUnmounted(() => {
 .mcp-tab.active {
   color: #0f172a;
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #dbe4ef;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
   font-weight: 600;
 }
@@ -3543,10 +3549,10 @@ onUnmounted(() => {
 }
 
 .remote-toggle-card {
-  margin-bottom: 4px;
-  padding: 7px 8px;
+  margin-bottom: 6px;
+  padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid #dbeafe;
+  border: 1px solid #cfe0ff;
   background: #f8fbff;
 }
 
@@ -3690,7 +3696,7 @@ onUnmounted(() => {
 
 .mcp-config-label {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: #64748b;
   margin: 0;
 }
@@ -3699,7 +3705,7 @@ onUnmounted(() => {
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border: 1px solid #cbd5e1;
   cursor: pointer;
-  padding: 5px 10px;
+  padding: 6px 10px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
@@ -3730,19 +3736,22 @@ onUnmounted(() => {
   background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
   border: 1px solid #c6d3e5;
   border-radius: 11px;
-  padding: 10px;
-  overflow-x: auto;
+  padding: 12px;
+  overflow: auto;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .mcp-config-json {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: #374151;
   margin: 0;
-  white-space: pre;
-  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-height: 198px;
+  overflow: auto;
 }
 
 .port-section {
@@ -4465,11 +4474,13 @@ onUnmounted(() => {
 .popup-container[data-agent-theme='dark-console'] .header::after {
   background: linear-gradient(
     90deg,
-    rgba(34, 211, 238, 0.62),
-    rgba(56, 189, 248, 0.3) 42%,
-    rgba(168, 85, 247, 0.24) 75%,
+    transparent 0%,
+    rgba(34, 211, 238, 0.5) 12%,
+    rgba(56, 189, 248, 0.24) 42%,
+    rgba(168, 85, 247, 0.2) 72%,
     transparent 100%
   );
+  opacity: 0.9;
 }
 
 .popup-container[data-agent-theme='dark-console'] .header-title {
@@ -4584,6 +4595,7 @@ onUnmounted(() => {
 
 .popup-container[data-agent-theme='dark-console'] .mcp-config-tabs {
   background: rgba(8, 25, 46, 0.72);
+  border-color: rgba(56, 189, 248, 0.24);
 }
 
 .popup-container[data-agent-theme='dark-console'] .mcp-tab {
@@ -4593,7 +4605,8 @@ onUnmounted(() => {
 .popup-container[data-agent-theme='dark-console'] .mcp-tab.active {
   color: #e0f2fe;
   background: linear-gradient(180deg, rgba(8, 36, 66, 0.98) 0%, rgba(5, 24, 47, 0.98) 100%);
-  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.4) inset;
+  border-color: rgba(34, 211, 238, 0.45);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.34) inset;
 }
 
 .popup-container[data-agent-theme='dark-console'] .copy-config-button {
@@ -4617,7 +4630,7 @@ onUnmounted(() => {
 }
 
 .popup-container[data-agent-theme='dark-console'] .mcp-config-json {
-  color: var(--popup-text-muted);
+  color: #b9d9f8;
 }
 
 .popup-container[data-agent-theme='dark-console'] .entry-item {
