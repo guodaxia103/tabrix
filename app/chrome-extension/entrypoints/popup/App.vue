@@ -27,7 +27,7 @@
         <div class="section">
           <div class="config-card">
             <div class="status-section">
-              <div class="status-inline">
+              <div :class="['status-inline', statusToneClass]">
                 <div class="status-mainline">
                   <div class="status-left">
                     <span :class="['status-dot', getStatusClass()]"></span>
@@ -1160,6 +1160,21 @@ const availableModels = computed(() => {
 });
 
 const getStatusClass = () => stateToStatusClass(connectionState.value);
+const statusToneClass = computed(() => {
+  switch (connectionState.value) {
+    case ConnectionState.RUNNING:
+      return 'status-inline--running';
+    case ConnectionState.CONNECTED:
+      return 'status-inline--warning';
+    case ConnectionState.ERROR:
+    case ConnectionState.DISCONNECTED:
+      return 'status-inline--error';
+    case ConnectionState.CONNECTING:
+    case ConnectionState.UNKNOWN:
+    default:
+      return 'status-inline--neutral';
+  }
+});
 const statusInlinePort = computed(() => {
   if (connectionState.value !== ConnectionState.RUNNING) return '';
   return String(serverStatus.value.port || nativeServerPort.value || '');
@@ -2499,10 +2514,28 @@ onUnmounted(() => {
 
 .header {
   flex-shrink: 0;
-  padding: 12px 16px 9px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(248, 250, 252, 0.55) 100%);
+  position: relative;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.92);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(241, 245, 249, 0.76) 100%);
   backdrop-filter: blur(8px);
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(217, 119, 87, 0.42),
+    rgba(59, 130, 246, 0.18),
+    transparent 85%
+  );
+  pointer-events: none;
 }
 
 .header-content {
@@ -2510,7 +2543,7 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   gap: 10px;
-  min-height: 32px;
+  min-height: 34px;
   position: relative;
 }
 
@@ -2533,12 +2566,12 @@ onUnmounted(() => {
 
 .header-title {
   font-size: 22px;
-  font-weight: 760;
+  font-weight: 780;
   line-height: 1.02;
   letter-spacing: -0.03em;
-  color: #1e293b;
+  color: #0f172a;
   margin: 0;
-  text-shadow: 0 4px 10px rgba(30, 41, 59, 0.08);
+  text-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
 }
 
 .header-separator {
@@ -2552,7 +2585,7 @@ onUnmounted(() => {
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
-  color: #334155;
+  color: #1e3a8a;
   letter-spacing: 0.02em;
   white-space: nowrap;
   overflow: hidden;
@@ -2673,10 +2706,40 @@ onUnmounted(() => {
 .status-inline {
   display: flex;
   align-items: center;
-  background: #f8fafc;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.88) 0%, #f8fafc 100%);
   border: 1px solid #dbe3ef;
   border-radius: 11px;
   padding: 8px 10px;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.status-inline--running {
+  background: linear-gradient(180deg, #f3fbf7 0%, #ecfdf5 100%);
+  border-color: #86efac;
+  box-shadow: 0 10px 16px -16px rgba(22, 163, 74, 0.7);
+}
+
+.status-inline--warning {
+  background: linear-gradient(180deg, #fffbeb 0%, #fefce8 100%);
+  border-color: #fcd34d;
+  box-shadow: 0 10px 16px -16px rgba(202, 138, 4, 0.75);
+}
+
+.status-inline--error {
+  background: linear-gradient(180deg, #fef2f2 0%, #fff1f2 100%);
+  border-color: #fda4af;
+  box-shadow: 0 10px 16px -16px rgba(220, 38, 38, 0.72);
+}
+
+.status-inline--error .status-text {
+  color: #9f1239;
+}
+
+.status-inline--warning .status-text {
+  color: #92400e;
 }
 
 .status-mainline {
@@ -2728,7 +2791,7 @@ onUnmounted(() => {
 .status-text {
   font-size: 15px;
   font-weight: 700;
-  color: #1e293b;
+  color: #0f172a;
 }
 
 .status-inline-meta {
@@ -2857,11 +2920,10 @@ onUnmounted(() => {
 }
 
 .section-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #475569;
+  letter-spacing: 0.01em;
+  color: #334155;
   margin: 0 0 10px;
 }
 .current-model-card {
@@ -3000,14 +3062,16 @@ onUnmounted(() => {
 }
 
 .config-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, #ffffff 100%);
-  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, #ffffff 100%);
+  border: 1px solid rgba(203, 213, 225, 0.95);
   border-radius: 14px;
-  box-shadow: 0 10px 22px -20px rgba(15, 23, 42, 0.65);
-  padding: 11px;
+  box-shadow:
+    0 14px 28px -26px rgba(15, 23, 42, 0.78),
+    0 1px 0 rgba(255, 255, 255, 0.92) inset;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 .semantic-engine-card {
   background: white;
@@ -3561,14 +3625,14 @@ onUnmounted(() => {
 }
 
 .copy-config-button {
-  background: rgba(241, 245, 249, 0.92);
-  border: 1px solid #dbe4ef;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #cbd5e1;
   cursor: pointer;
   padding: 5px 10px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
+  color: #334155;
   transition: all 0.18s ease;
   display: flex;
   align-items: center;
@@ -3577,8 +3641,10 @@ onUnmounted(() => {
 
 .copy-config-button:hover {
   background: #ffffff;
-  border-color: #cbd5e1;
-  color: #334155;
+  border-color: #94a3b8;
+  color: #0f172a;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px -14px rgba(15, 23, 42, 0.62);
 }
 
 .copy-config-button:disabled {
@@ -3590,11 +3656,12 @@ onUnmounted(() => {
 }
 
 .mcp-config-content {
-  background: #f8fbff;
-  border: 1px solid #d7e2ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+  border: 1px solid #c6d3e5;
   border-radius: 11px;
   padding: 10px;
   overflow-x: auto;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .mcp-config-json {
@@ -3650,7 +3717,11 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: var(--ac-accent, #d97757);
+  background: linear-gradient(
+    180deg,
+    var(--ac-accent, #d97757) 0%,
+    var(--ac-accent-hover, #c4664a) 100%
+  );
   color: var(--ac-accent-contrast, white);
   font-weight: 600;
   padding: 10px 14px;
@@ -3658,13 +3729,17 @@ onUnmounted(() => {
   border: none;
   cursor: pointer;
   transition: all var(--ac-motion-fast, 120ms) ease;
-  box-shadow: 0 12px 18px -12px rgba(217, 119, 87, 0.7);
+  box-shadow:
+    0 14px 24px -14px rgba(217, 119, 87, 0.72),
+    0 1px 0 rgba(255, 255, 255, 0.2) inset;
 }
 
 .connect-button:hover:not(:disabled) {
-  background: var(--ac-accent-hover, #c4664a);
+  background: linear-gradient(180deg, var(--ac-accent-hover, #c4664a) 0%, #a94f34 100%);
   transform: translateY(-1px);
-  box-shadow: 0 16px 24px -14px rgba(196, 102, 74, 0.72);
+  box-shadow:
+    0 18px 26px -14px rgba(196, 102, 74, 0.76),
+    0 1px 0 rgba(255, 255, 255, 0.22) inset;
 }
 
 .connect-button:disabled {
