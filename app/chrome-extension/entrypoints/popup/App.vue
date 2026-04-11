@@ -2560,24 +2560,23 @@ onUnmounted(() => {
 
 .header-content {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: 34px;
-  position: relative;
 }
 
 .header-meta {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: calc(100% - 124px);
+  max-width: none;
 }
 
 .header-mainline {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
-  justify-content: center;
+  justify-content: flex-start;
   min-width: 0;
   flex-wrap: nowrap;
   white-space: nowrap;
@@ -2617,10 +2616,6 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
 }
 
 .header-theme-button {
@@ -4677,5 +4672,16 @@ onUnmounted(() => {
 
 .popup-container[data-agent-theme='dark-console'] .footer-text {
   color: var(--popup-text-subtle);
+}
+
+.popup-container[data-agent-theme='dark-console'] ::selection {
+  background: rgba(56, 189, 248, 0.42);
+  color: #f8fcff;
+  text-shadow: none;
+}
+
+.popup-container[data-agent-theme='dark-console'] .mcp-config-json::selection {
+  background: rgba(34, 211, 238, 0.5);
+  color: #ecfeff;
 }
 </style>
