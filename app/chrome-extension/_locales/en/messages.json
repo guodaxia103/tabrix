@@ -1144,7 +1144,7 @@
     "description": "Auto-synced key: tokenPageNotesText"
   },
   "tokenPageNotesTitle": {
-    "message": "Notes (Optional)",
+    "message": "Usage Notes",
     "description": "Auto-synced key: tokenPageNotesTitle"
   },
   "tokenPageReadTokenFailedHttp": {

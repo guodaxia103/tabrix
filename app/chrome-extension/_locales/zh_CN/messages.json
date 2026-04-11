@@ -1144,7 +1144,7 @@
     "description": "自动同步键: tokenPageNotesText"
   },
   "tokenPageNotesTitle": {
-    "message": "说明（可选）",
+    "message": "使用说明",
     "description": "自动同步键: tokenPageNotesTitle"
   },
   "tokenPageReadTokenFailedHttp": {

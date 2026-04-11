@@ -105,9 +105,9 @@ defineEmits<Emits>();
 }
 
 .dialog-content {
-  background: var(--cd-surface);
-  border-radius: 12px;
-  padding: 16px;
+  background: linear-gradient(180deg, var(--cd-surface) 0%, var(--cd-surface-muted) 100%);
+  border-radius: 14px;
+  padding: 16px 16px 14px;
   max-width: 380px;
   width: min(380px, calc(100vw - 20px));
   max-height: calc(100vh - 28px);
@@ -120,7 +120,9 @@ defineEmits<Emits>();
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--cd-border);
 }
 
 .dialog-icon {
@@ -141,9 +143,10 @@ defineEmits<Emits>();
 
 .dialog-message {
   font-size: 13px;
-  color: var(--cd-text-muted);
+  color: var(--cd-text);
   margin: 0 0 10px;
   line-height: 1.5;
+  opacity: 0.86;
 }
 
 .dialog-extra {
@@ -152,17 +155,31 @@ defineEmits<Emits>();
 
 .dialog-list {
   margin: 10px 0 0;
-  padding: 10px 12px 10px 28px;
+  padding: 10px 12px;
   background: var(--cd-surface-muted);
   border-radius: 6px;
   border-left: 3px solid #3b82f6;
+  list-style: none;
 }
 
 .dialog-list li {
+  position: relative;
   font-size: 12px;
   color: var(--cd-text-muted);
   margin-bottom: 4px;
   line-height: 1.4;
+  padding-left: 12px;
+}
+
+.dialog-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: #3b82f6;
 }
 
 .dialog-list li:last-child {
@@ -183,10 +200,11 @@ defineEmits<Emits>();
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  margin-top: 12px;
 }
 
 .dialog-button {
-  padding: 9px 14px;
+  padding: 10px 14px;
   border: 1px solid transparent;
   border-radius: 8px;
   font-size: 13px;
@@ -203,7 +221,7 @@ defineEmits<Emits>();
 }
 
 .cancel-button:hover {
-  filter: brightness(0.98);
+  background: var(--cd-surface-muted);
 }
 
 .confirm-button {
