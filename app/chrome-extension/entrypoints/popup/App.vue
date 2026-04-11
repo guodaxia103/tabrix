@@ -16,9 +16,19 @@
               :class="['header-theme-button', { active: isTechTheme }]"
               @click="togglePopupTheme"
               :title="themeToggleTitle"
+              :aria-label="themeToggleTitle"
             >
-              <span :class="['header-theme-dot', isTechTheme ? 'tech' : 'light']"></span>
-              <span class="header-theme-label">{{ getMessage('themeLabel') }}</span>
+              <svg class="header-theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <g class="header-theme-glyph header-theme-glyph-sun" fill="none">
+                  <circle cx="12" cy="12" r="5" />
+                  <path
+                    d="M12 1v2M12 21v2M4.93 4.93l1.41 1.41M17.65 17.65l1.41 1.41M1 12h2M21 12h2M4.93 19.07l1.41-1.41M17.65 6.35l1.41-1.41"
+                  />
+                </g>
+                <g class="header-theme-glyph header-theme-glyph-moon" fill="none">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </g>
+              </svg>
             </button>
             <button
               class="header-refresh-button"
@@ -2624,9 +2634,9 @@ onUnmounted(() => {
 }
 
 .header-theme-button {
-  min-width: 62px;
-  height: 32px;
-  padding: 0 11px;
+  width: 38px;
+  height: 38px;
+  padding: 0;
   border-radius: 10px;
   border: 1px solid rgba(203, 213, 225, 0.92);
   background: rgba(255, 255, 255, 0.92);
@@ -2634,33 +2644,41 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
 }
 
-.header-theme-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.header-theme-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  color: currentColor;
 }
 
-.header-theme-dot.light {
-  background: linear-gradient(180deg, #fb923c 0%, #f97316 100%);
-  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.18);
+.header-theme-glyph {
+  transform-origin: center;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition:
+    transform 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.35s ease;
 }
 
-.header-theme-dot.tech {
-  background: linear-gradient(180deg, #22d3ee 0%, #0891b2 100%);
-  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.32);
+.header-theme-glyph-sun {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
 }
 
-.header-theme-label {
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: 0.01em;
+.header-theme-glyph-moon {
+  opacity: 0;
+  transform: rotate(-30deg) scale(0.78);
 }
 
 .header-theme-button:hover {
@@ -2676,6 +2694,16 @@ onUnmounted(() => {
   box-shadow:
     0 10px 18px -16px rgba(6, 182, 212, 0.7),
     0 0 0 1px rgba(34, 211, 238, 0.18) inset;
+}
+
+.header-theme-button.active .header-theme-glyph-sun {
+  opacity: 0;
+  transform: rotate(30deg) scale(0.78);
+}
+
+.header-theme-button.active .header-theme-glyph-moon {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
 }
 
 .header-refresh-button {
