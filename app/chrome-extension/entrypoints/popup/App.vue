@@ -2566,9 +2566,9 @@ onUnmounted(() => {
 
 .header-title {
   font-size: 22px;
-  font-weight: 780;
+  font-weight: 800;
   line-height: 1.02;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   color: #0f172a;
   margin: 0;
   text-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
@@ -2582,11 +2582,11 @@ onUnmounted(() => {
 
 .header-context {
   margin: 0;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 620;
   line-height: 1;
-  color: #1e3a8a;
-  letter-spacing: 0.02em;
+  color: #64748b;
+  letter-spacing: 0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2761,9 +2761,10 @@ onUnmounted(() => {
 .status-updated {
   flex-shrink: 0;
   text-align: right;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 500;
   line-height: 1.3;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .status-dot {
@@ -2875,7 +2876,7 @@ onUnmounted(() => {
 }
 
 .section {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .secondary-button {
@@ -3748,18 +3749,18 @@ onUnmounted(() => {
 }
 
 .connect-button.is-disconnect {
-  background: #fff6f7;
-  color: #9f1239;
-  border: 1px solid #f5c5cf;
+  background: #fffafb;
+  color: #be123c;
+  border: 1px solid #f8d7df;
   box-shadow: none;
 }
 
 .connect-button.is-disconnect:hover:not(:disabled) {
-  background: #ffeef1;
-  border-color: #ee9db0;
-  color: #881337;
-  transform: translateY(-1px);
-  box-shadow: 0 10px 18px -16px rgba(190, 24, 93, 0.55);
+  background: #fff3f6;
+  border-color: #f3b6c5;
+  color: #9f1239;
+  transform: none;
+  box-shadow: 0 8px 16px -18px rgba(190, 24, 93, 0.45);
 }
 .error-card {
   background: #fef2f2;
