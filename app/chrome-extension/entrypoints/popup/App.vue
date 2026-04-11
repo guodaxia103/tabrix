@@ -13,6 +13,13 @@
           </div>
           <div class="header-actions">
             <button
+              :class="['header-theme-button', { active: isTechTheme }]"
+              @click="togglePopupTheme"
+              :title="themeToggleTitle"
+            >
+              <span class="header-theme-label">{{ themeToggleText }}</span>
+            </button>
+            <button
               class="header-refresh-button"
               @click="refreshOverview"
               :title="getMessage('refreshStatusButton')"
@@ -628,7 +635,22 @@ import {
 } from './components/icons';
 
 // AgentChat theme - 从preload中获取，保持与sidepanel一致
-const { theme: agentTheme, initTheme } = useAgentTheme();
+const { theme: agentTheme, initTheme, setTheme } = useAgentTheme();
+
+const QUICK_LIGHT_THEME: AgentThemeId = 'warm-editorial';
+const QUICK_TECH_THEME: AgentThemeId = 'dark-console';
+const isTechTheme = computed(() => agentTheme.value === QUICK_TECH_THEME);
+const themeToggleText = computed(() =>
+  isTechTheme.value ? getMessage('lightTheme') : getMessage('darkTheme'),
+);
+const themeToggleTitle = computed(() =>
+  isTechTheme.value ? getMessage('lightTheme') : getMessage('darkTheme'),
+);
+
+const togglePopupTheme = async () => {
+  const next = isTechTheme.value ? QUICK_LIGHT_THEME : QUICK_TECH_THEME;
+  await setTheme(next);
+};
 
 // 当前视图状态：首页 / 本地模型 / Token 管理
 const currentView = ref<'home' | 'local-model' | 'token-management'>('home');
@@ -2550,7 +2572,7 @@ onUnmounted(() => {
 .header-meta {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: calc(100% - 42px);
+  max-width: calc(100% - 124px);
 }
 
 .header-mainline {
@@ -2595,12 +2617,48 @@ onUnmounted(() => {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
   position: absolute;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
+}
+
+.header-theme-button {
+  min-width: 52px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(203, 213, 225, 0.92);
+  background: rgba(255, 255, 255, 0.92);
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.header-theme-label {
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.header-theme-button:hover {
+  color: #0f172a;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px -16px rgba(15, 23, 42, 0.75);
+}
+
+.header-theme-button.active {
+  border-color: rgba(34, 211, 238, 0.54);
+  color: #0e7490;
+  box-shadow:
+    0 10px 18px -16px rgba(6, 182, 212, 0.7),
+    0 0 0 1px rgba(34, 211, 238, 0.18) inset;
 }
 
 .header-refresh-button {
@@ -4419,6 +4477,26 @@ onUnmounted(() => {
   background: rgba(8, 22, 44, 0.82);
   border-color: rgba(56, 189, 248, 0.35);
   color: #7dd3fc;
+}
+
+.popup-container[data-agent-theme='dark-console'] .header-theme-button {
+  background: rgba(8, 22, 44, 0.82);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+}
+
+.popup-container[data-agent-theme='dark-console'] .header-theme-button:hover {
+  border-color: rgba(34, 211, 238, 0.62);
+  color: #e0f2fe;
+  box-shadow: 0 12px 20px -14px rgba(34, 211, 238, 0.85);
+}
+
+.popup-container[data-agent-theme='dark-console'] .header-theme-button.active {
+  border-color: rgba(34, 211, 238, 0.72);
+  color: #a5f3fc;
+  box-shadow:
+    0 12px 20px -14px rgba(34, 211, 238, 0.9),
+    0 0 0 1px rgba(34, 211, 238, 0.35) inset;
 }
 
 .popup-container[data-agent-theme='dark-console'] .header-refresh-button:hover {
