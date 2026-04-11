@@ -3960,16 +3960,16 @@ onUnmounted(() => {
   height: 24px;
 }
 .footer {
-  padding: 16px;
-  margin-top: auto;
+  padding: 10px 16px 14px;
+  margin-top: 2px;
 }
 
 .footer-links {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 16px;
-  margin-bottom: 8px;
+  gap: 14px;
+  margin-bottom: 6px;
 }
 
 .footer-link {
@@ -4001,6 +4001,10 @@ onUnmounted(() => {
   font-size: 12px;
   color: #94a3b8;
   margin: 0;
+}
+
+.home-view .content .section:last-child {
+  margin-bottom: 8px;
 }
 
 @media (max-width: 320px) {
