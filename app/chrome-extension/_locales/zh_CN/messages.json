@@ -1140,11 +1140,11 @@
     "description": "自动同步键: tokenPageNewTokenTtlLabel"
   },
   "tokenPageNotesText": {
-    "message": "在「重新生成 Token」弹框内可设置有效天数。服务端环境变量 MCP_AUTH_TOKEN_TTL 仍影响首次自动生成时的默认天数（默认 7；0 永不过期），修改后需重启生效。",
+    "message": "可在“重新生成 Token”弹窗设置有效天数（0=永不过期）。如修改 MCP_AUTH_TOKEN_TTL，重启服务后生效。",
     "description": "自动同步键: tokenPageNotesText"
   },
   "tokenPageNotesTitle": {
-    "message": "说明",
+    "message": "说明（可选）",
     "description": "自动同步键: tokenPageNotesTitle"
   },
   "tokenPageReadTokenFailedHttp": {
@@ -1158,7 +1158,7 @@
     "description": "自动同步键: tokenPageReadTokenFailedHttp"
   },
   "tokenPageRefreshConfirmMessage": {
-    "message": "旧 Token 将立即失效，其他设备上的 MCP 客户端需更新配置中的 Authorization。请在下方设置新 Token 的有效天数。",
+    "message": "旧 Token 会立即失效，请确认使用该 Token 的客户端可及时更新。",
     "description": "自动同步键: tokenPageRefreshConfirmMessage"
   },
   "tokenPageRefreshFailed": {
@@ -1180,7 +1180,7 @@
     "description": "自动同步键: tokenPageRegenerateConfirmButton"
   },
   "tokenPageRegenerateConfirmItem": {
-    "message": "已保存新 Token 或确认可立即更新各客户端",
+    "message": "已准备更新使用该 Token 的客户端",
     "description": "自动同步键: tokenPageRegenerateConfirmItem"
   },
   "tokenPageRegenerateConfirmTitle": {

@@ -390,7 +390,9 @@ watch(
   --tm-code-text: var(--ac-code-text, #e2e8f0);
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  flex: 1;
+  height: 100%;
+  min-height: 640px;
   background: var(--tm-page-bg);
   color: var(--tm-text);
 }
@@ -429,7 +431,7 @@ watch(
 }
 
 .page-content {
-  padding: 12px 16px 24px;
+  padding: 12px 16px 16px;
   flex: 1;
   overflow-y: auto;
 }
@@ -483,6 +485,10 @@ watch(
 
 .section {
   margin-bottom: 16px;
+}
+
+.section:last-child {
+  margin-bottom: 0;
 }
 
 .section.muted {
@@ -582,9 +588,9 @@ watch(
 
 .help-text {
   font-size: 11px;
-  line-height: 1.55;
+  line-height: 1.45;
   color: var(--tm-text-muted);
-  margin: 0 0 8px;
+  margin: 0;
 }
 
 .help-text.subtle {

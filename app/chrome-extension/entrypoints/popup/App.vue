@@ -2526,6 +2526,9 @@ onUnmounted(() => {
   box-shadow: 0 22px 50px -24px rgba(15, 23, 42, 0.5);
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-height: 640px;
+  height: 100%;
   overflow: hidden;
   font-family:
     'Segoe UI Variable', 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
@@ -4010,6 +4013,7 @@ onUnmounted(() => {
   .popup-container {
     width: 100%;
     height: auto;
+    min-height: 100%;
     max-height: 1080px;
     border-radius: 0;
   }
@@ -4290,7 +4294,7 @@ onUnmounted(() => {
 .home-view {
   display: flex;
   flex-direction: column;
-  height: auto;
+  flex: 1;
   min-height: 0;
 }
 

@@ -1140,11 +1140,11 @@
     "description": "Auto-synced key: tokenPageNewTokenTtlLabel"
   },
   "tokenPageNotesText": {
-    "message": "You can set token validity days in the regenerate dialog. MCP_AUTH_TOKEN_TTL still controls default days on first auto-generation (default 7; 0 means never expire). Restart service after changing env vars.",
+    "message": "Set token validity in the regenerate dialog (0 = never expire). If you change MCP_AUTH_TOKEN_TTL, restart the service to apply it.",
     "description": "Auto-synced key: tokenPageNotesText"
   },
   "tokenPageNotesTitle": {
-    "message": "Notes",
+    "message": "Notes (Optional)",
     "description": "Auto-synced key: tokenPageNotesTitle"
   },
   "tokenPageReadTokenFailedHttp": {
@@ -1158,7 +1158,7 @@
     "description": "Auto-synced key: tokenPageReadTokenFailedHttp"
   },
   "tokenPageRefreshConfirmMessage": {
-    "message": "The old token will expire immediately. MCP clients on other devices must update Authorization. Set validity days for the new token below.",
+    "message": "The old token expires immediately. Confirm clients using this token can be updated right away.",
     "description": "Auto-synced key: tokenPageRefreshConfirmMessage"
   },
   "tokenPageRefreshFailed": {
@@ -1180,7 +1180,7 @@
     "description": "Auto-synced key: tokenPageRegenerateConfirmButton"
   },
   "tokenPageRegenerateConfirmItem": {
-    "message": "Saved new token or confirmed all clients can be updated now",
+    "message": "Ready to update all clients using this token",
     "description": "Auto-synced key: tokenPageRegenerateConfirmItem"
   },
   "tokenPageRegenerateConfirmTitle": {
