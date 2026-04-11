@@ -76,7 +76,7 @@ body {
   width: 408px;
   height: auto;
   min-height: 0;
-  max-height: min(92vh, 760px);
+  max-height: 760px;
   overflow-y: auto;
   overflow-x: hidden;
   font-family: inherit;
