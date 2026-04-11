@@ -2626,7 +2626,7 @@ onUnmounted(() => {
 .header-theme-button {
   min-width: 62px;
   height: 32px;
-  padding: 0 9px;
+  padding: 0 11px;
   border-radius: 10px;
   border: 1px solid rgba(203, 213, 225, 0.92);
   background: rgba(255, 255, 255, 0.92);
@@ -2659,7 +2659,8 @@ onUnmounted(() => {
 .header-theme-label {
   font-size: 11px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
 }
 
 .header-theme-button:hover {
@@ -2999,7 +3000,7 @@ onUnmounted(() => {
   font-weight: 700;
   letter-spacing: 0.01em;
   color: #334155;
-  margin: 0 0 10px;
+  margin: 0 0 12px;
 }
 .current-model-card {
   background: linear-gradient(135deg, #faf5ff, #f3e8ff);
@@ -4457,8 +4458,8 @@ onUnmounted(() => {
     radial-gradient(circle at 90% -20%, rgba(168, 85, 247, 0.2), transparent 44%),
     linear-gradient(160deg, var(--popup-bg-0) 0%, var(--popup-bg-1) 55%, #040b18 100%);
   box-shadow:
-    0 22px 48px -26px rgba(14, 165, 233, 0.34),
-    0 10px 22px -18px rgba(168, 85, 247, 0.26);
+    0 20px 42px -26px rgba(14, 165, 233, 0.27),
+    0 8px 18px -18px rgba(168, 85, 247, 0.2);
 }
 
 .popup-container[data-agent-theme='dark-console'] .header {
@@ -4528,7 +4529,7 @@ onUnmounted(() => {
   border-color: var(--popup-border);
   box-shadow:
     0 1px 0 rgba(56, 189, 248, 0.18) inset,
-    0 14px 26px -24px rgba(2, 132, 199, 0.56);
+    0 12px 20px -24px rgba(2, 132, 199, 0.42);
 }
 
 .popup-container[data-agent-theme='dark-console'] .section-title {
@@ -4564,15 +4565,21 @@ onUnmounted(() => {
 .popup-container[data-agent-theme='dark-console'] .connected-clients-label,
 .popup-container[data-agent-theme='dark-console'] .mcp-config-label,
 .popup-container[data-agent-theme='dark-console'] .port-label {
-  color: var(--popup-text-muted);
+  color: #9ec3e7;
 }
 
 .popup-container[data-agent-theme='dark-console'] .status-inline-meta {
-  color: #93c5fd;
+  color: #a8d8ff;
 }
 
 .popup-container[data-agent-theme='dark-console'] .status-port-meta {
-  color: #bae6fd;
+  color: #c9e8ff;
+}
+
+.popup-container[data-agent-theme='dark-console'] .connected-clients-empty .connected-clients-label,
+.popup-container[data-agent-theme='dark-console'] .entry-desc,
+.popup-container[data-agent-theme='dark-console'] .remote-toggle-desc {
+  color: #9ab8d8;
 }
 
 .popup-container[data-agent-theme='dark-console'] .connected-clients-section,
@@ -4614,10 +4621,7 @@ onUnmounted(() => {
   color: var(--popup-text-main);
 }
 
-.popup-container[data-agent-theme='dark-console'] .mcp-config-json,
-.popup-container[data-agent-theme='dark-console'] .remote-toggle-desc,
-.popup-container[data-agent-theme='dark-console'] .connected-clients-label,
-.popup-container[data-agent-theme='dark-console'] .entry-desc {
+.popup-container[data-agent-theme='dark-console'] .mcp-config-json {
   color: var(--popup-text-muted);
 }
 
