@@ -702,7 +702,7 @@
     "description": "Auto-synced key: popupCopiedShort"
   },
   "popupCopyCommand": {
-    "message": "Copy command",
+    "message": "Copy",
     "description": "Auto-synced key: popupCopyCommand"
   },
   "popupCopyFailed": {
@@ -710,7 +710,7 @@
     "description": "Auto-synced key: popupCopyFailed"
   },
   "popupCopyFullTroubleshootScript": {
-    "message": "Copy full troubleshooting script",
+    "message": "Copy all",
     "description": "Auto-synced key: popupCopyFullTroubleshootScript"
   },
   "popupCopyRepairCommand": {
@@ -806,7 +806,7 @@
     "description": "Auto-synced key: popupNoConnectedClients"
   },
   "popupOpenDocs": {
-    "message": "Open docs",
+    "message": "Docs",
     "description": "Auto-synced key: popupOpenDocs"
   },
   "popupOpenTroubleshootingGuide": {
@@ -932,15 +932,15 @@
     "description": "Auto-synced key: popupTroubleshootDaemonAutostartTitle"
   },
   "popupTroubleshootDaemonStartTitle": {
-    "message": "Start daemon (keep service online without browser)",
+    "message": "Start daemon (optional)",
     "description": "Auto-synced key: popupTroubleshootDaemonStartTitle"
   },
   "popupTroubleshootDoctorFixTitle": {
-    "message": "Basic diagnostics and auto-fix",
+    "message": "Auto-fix common issues",
     "description": "Auto-synced key: popupTroubleshootDoctorFixTitle"
   },
   "popupTroubleshootingGuideDesc": {
-    "message": "Run these commands in order. Then fully restart Chrome and reload the extension in chrome://extensions/.",
+    "message": "Run commands in order. Then restart Chrome and reload the extension in chrome://extensions/.",
     "description": "Auto-synced key: popupTroubleshootingGuideDesc"
   },
   "popupTroubleshootingGuideTitle": {
@@ -948,11 +948,11 @@
     "description": "Auto-synced key: popupTroubleshootingGuideTitle"
   },
   "popupTroubleshootQuickFixTitle": {
-    "message": "Quick fix for current error",
+    "message": "Current error fix",
     "description": "Auto-synced key: popupTroubleshootQuickFixTitle"
   },
   "popupTroubleshootRegisterForceTitle": {
-    "message": "Force re-register Native host",
+    "message": "Re-register Native Host",
     "description": "Auto-synced key: popupTroubleshootRegisterForceTitle"
   },
   "popupTroubleshootRemotePersistNote": {

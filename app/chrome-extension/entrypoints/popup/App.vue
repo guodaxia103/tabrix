@@ -532,42 +532,61 @@
       class="troubleshooting-dialog"
       @click.self="showTroubleshootingDialog = false"
     >
-      <div class="troubleshooting-content">
+      <div class="troubleshooting-content" role="dialog" aria-modal="true">
         <div class="troubleshooting-header">
-          <h3>{{ getMessage('popupTroubleshootingGuideTitle') }}</h3>
-          <button class="troubleshooting-close" @click="showTroubleshootingDialog = false"
+          <div class="troubleshooting-title-wrap">
+            <h3>{{ getMessage('popupTroubleshootingGuideTitle') }}</h3>
+            <p class="troubleshooting-desc">{{ getMessage('popupTroubleshootingGuideDesc') }}</p>
+          </div>
+          <button
+            class="troubleshooting-close"
+            :title="getMessage('closeButton')"
+            @click="showTroubleshootingDialog = false"
             >✕</button
           >
         </div>
-        <p class="troubleshooting-desc">{{ getMessage('popupTroubleshootingGuideDesc') }}</p>
         <div class="troubleshooting-list">
-          <div v-for="item in troubleshootingCommands" :key="item.id" class="troubleshooting-item">
-            <div class="troubleshooting-item-title">{{ item.title }}</div>
+          <div
+            v-for="(item, index) in troubleshootingCommands"
+            :key="item.id"
+            class="troubleshooting-item"
+          >
+            <div class="troubleshooting-item-head">
+              <div class="troubleshooting-item-title">
+                <span class="troubleshooting-item-index">{{ index + 1 }}</span>
+                <span>{{ item.title }}</span>
+              </div>
+              <button
+                class="troubleshooting-copy"
+                @click="copyTroubleshootingCommand(item.command)"
+              >
+                {{
+                  copiedTroubleshootingCommand === item.command
+                    ? getMessage('popupCopiedShort')
+                    : getMessage('popupCopyCommand')
+                }}
+              </button>
+            </div>
             <pre class="troubleshooting-item-command">{{ item.command }}</pre>
             <div v-if="item.note" class="troubleshooting-item-note">{{ item.note }}</div>
-            <button class="troubleshooting-copy" @click="copyTroubleshootingCommand(item.command)">
-              {{
-                copiedTroubleshootingCommand === item.command
-                  ? getMessage('popupCopiedShort')
-                  : getMessage('popupCopyCommand')
-              }}
-            </button>
           </div>
         </div>
         <div class="troubleshooting-actions">
-          <button class="troubleshooting-action-btn docs" @click="copyTroubleshootingScript">
+          <button class="troubleshooting-action-btn secondary" @click="copyTroubleshootingScript">
             {{
               copiedTroubleshootingScript
                 ? getMessage('popupCopiedFullScript')
                 : getMessage('popupCopyFullTroubleshootScript')
             }}
           </button>
-          <button class="troubleshooting-action-btn docs" @click="openTroubleshooting">{{
+          <button class="troubleshooting-action-btn secondary" @click="openTroubleshooting">{{
             getMessage('popupOpenDocs')
           }}</button>
-          <button class="troubleshooting-action-btn" @click="showTroubleshootingDialog = false">{{
-            getMessage('closeButton')
-          }}</button>
+          <button
+            class="troubleshooting-action-btn primary"
+            @click="showTroubleshootingDialog = false"
+            >{{ getMessage('closeButton') }}</button
+          >
         </div>
       </div>
     </div>
@@ -1337,78 +1356,52 @@ const troubleshootingCommands = computed(() => {
     items.push({ id, title, command, note });
   };
 
-  if (repairCommandText.value) {
-    pushCommand('quick', getMessage('popupTroubleshootQuickFixTitle'), repairCommandText.value);
-  }
+  pushCommand('doctor-fix', getMessage('popupTroubleshootDoctorFixTitle'), 'tabrix doctor --fix');
 
   pushCommand(
-    'doctor-fix',
-    getMessage('popupTroubleshootDoctorFixTitle'),
-    'tabrix doctor && tabrix doctor --fix',
+    'register-force',
+    getMessage('popupTroubleshootRegisterForceTitle'),
+    'tabrix register --force',
   );
+
   if (!daemonReachable.value) {
     pushCommand(
       'daemon-start',
       getMessage('popupTroubleshootDaemonStartTitle'),
       'tabrix daemon start',
     );
-    pushCommand(
-      'daemon-autostart',
-      getMessage('popupTroubleshootDaemonAutostartTitle'),
-      'tabrix daemon install-autostart',
-    );
   }
-  pushCommand(
-    'register-force',
-    getMessage('popupTroubleshootRegisterForceTitle'),
-    'tabrix register --force',
-  );
-  pushCommand(
-    'remote-mode',
-    getMessage('popupTroubleshootRemotePersistTitle'),
-    navigator.platform?.startsWith('Win')
-      ? '[Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")'
-      : 'export MCP_HTTP_HOST=0.0.0.0',
-    getMessage('popupTroubleshootRemotePersistNote'),
-  );
+
+  if (repairCommandText.value) {
+    pushCommand('quick', getMessage('popupTroubleshootQuickFixTitle'), repairCommandText.value);
+  }
 
   return items;
 });
 
 const troubleshootingScript = computed(() => {
   const lines = [
-    '# Tabrix quick troubleshooting script (bash / zsh / PowerShell)',
+    '# Tabrix quick troubleshooting',
     '',
-    '# 1) Basic diagnostics',
-    'tabrix doctor',
-    '',
-    '# 2) Auto-fix common issues',
+    '# 1) Auto-fix common issues',
     'tabrix doctor --fix',
     '',
-    '# 3) Start daemon (optional, survives browser restarts better)',
-    'tabrix daemon start',
-    '',
-    '# 4) (Windows) Install daemon autostart (optional)',
-    'tabrix daemon install-autostart',
-    '',
-    '# 5) Force re-register Native host',
+    '# 2) Force re-register Native host',
     'tabrix register --force',
   ];
 
-  let step = 6;
+  let step = 3;
+  if (!daemonReachable.value) {
+    lines.push('', `# ${step}) Start daemon (optional)`, 'tabrix daemon start');
+    step++;
+  }
+
   if (repairCommandText.value) {
     lines.push('', `# ${step}) Current error targeted fix`, repairCommandText.value);
     step++;
   }
 
-  lines.push(
-    '',
-    `# ${step}) For LAN access:`,
-    '#   Windows PowerShell:  [Environment]::SetEnvironmentVariable("MCP_HTTP_HOST", "0.0.0.0", "User")',
-    '#   macOS / Linux:       export MCP_HTTP_HOST=0.0.0.0',
-    '',
-    `# ${step + 1}) Fully restart Chrome, then reload extension in chrome://extensions/`,
-  );
+  lines.push('', `# ${step}) Fully restart Chrome, then reload extension in chrome://extensions/`);
 
   return lines.join('\n');
 });
@@ -3224,155 +3217,241 @@ onUnmounted(() => {
 }
 
 .repair-command-button {
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(180, 83, 9, 0.25);
-  background: rgba(255, 255, 255, 0.75);
-  color: #9a3412;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(37, 99, 235, 0.26);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(241, 245, 249, 0.94) 100%);
+  color: #1d4ed8;
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
 }
 
 .repair-command-button:hover {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(180, 83, 9, 0.4);
+  border-color: rgba(37, 99, 235, 0.44);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(239, 246, 255, 0.98) 100%);
+  transform: translateY(-1px);
 }
 
 .repair-guide-button {
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(30, 64, 175, 0.25);
-  background: rgba(255, 255, 255, 0.75);
-  color: #1d4ed8;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(100, 116, 139, 0.28);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.94) 100%);
+  color: #334155;
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
 }
 
 .repair-guide-button:hover {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(30, 64, 175, 0.45);
+  border-color: rgba(100, 116, 139, 0.42);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 245, 249, 0.98) 100%);
+  transform: translateY(-1px);
 }
 
 .troubleshooting-dialog {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(2, 6, 23, 0.52);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1200;
+  padding: 14px;
 }
 
 .troubleshooting-content {
-  width: min(680px, 92vw);
+  width: min(620px, 100%);
   max-height: 86vh;
   overflow: auto;
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+  border: 1px solid rgba(203, 213, 225, 0.88);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow:
+    0 26px 48px -26px rgba(15, 23, 42, 0.5),
+    0 8px 22px -20px rgba(30, 64, 175, 0.22);
 }
 
 .troubleshooting-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.troubleshooting-title-wrap {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .troubleshooting-header h3 {
   margin: 0;
   font-size: 16px;
-  color: #1f2937;
+  line-height: 1.25;
+  font-weight: 760;
+  color: #0f172a;
 }
 
 .troubleshooting-close {
-  border: none;
-  background: transparent;
-  color: #6b7280;
-  font-size: 16px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(203, 213, 225, 0.85);
+  background: rgba(255, 255, 255, 0.88);
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 700;
   cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.troubleshooting-close:hover {
+  border-color: rgba(148, 163, 184, 0.9);
+  color: #334155;
+  transform: translateY(-1px);
 }
 
 .troubleshooting-desc {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 12px;
-  color: #6b7280;
-  line-height: 1.5;
+  color: #64748b;
+  line-height: 1.45;
 }
 
 .troubleshooting-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .troubleshooting-item {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.94) 0%, rgba(241, 245, 249, 0.86) 100%);
+  border: 1px solid rgba(203, 213, 225, 0.82);
   border-radius: 10px;
-  padding: 10px;
+  padding: 10px 10px 9px;
+}
+
+.troubleshooting-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
 }
 
 .troubleshooting-item-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: #374151;
-  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.troubleshooting-item-index {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: rgba(219, 234, 254, 0.95);
+  border: 1px solid rgba(147, 197, 253, 0.95);
 }
 
 .troubleshooting-item-command {
   margin: 0;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.4;
+  font-family:
+    'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Consolas', 'Liberation Mono', monospace;
   white-space: pre-wrap;
   word-break: break-all;
-  color: #1f2937;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(203, 213, 225, 0.88);
   border-radius: 8px;
-  padding: 8px;
+  padding: 7px 8px;
 }
 
 .troubleshooting-item-note {
-  margin-top: 6px;
+  margin-top: 5px;
   font-size: 11px;
-  color: #6b7280;
+  line-height: 1.4;
+  color: #64748b;
 }
 
 .troubleshooting-copy {
-  margin-top: 8px;
-  border: 1px solid #d1d5db;
-  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  background: rgba(255, 255, 255, 0.96);
   color: #374151;
   font-size: 12px;
-  border-radius: 6px;
-  padding: 4px 8px;
+  font-weight: 650;
+  border-radius: 7px;
+  min-height: 28px;
+  padding: 0 9px;
   cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.troubleshooting-copy:hover {
+  border-color: rgba(100, 116, 139, 0.52);
+  background: #ffffff;
 }
 
 .troubleshooting-actions {
-  margin-top: 14px;
+  margin-top: 12px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .troubleshooting-action-btn {
-  border: 1px solid #d1d5db;
-  background: #fff;
+  flex: 1 1 140px;
+  min-height: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  background: rgba(255, 255, 255, 0.98);
   color: #374151;
   border-radius: 8px;
   font-size: 12px;
-  padding: 6px 10px;
+  font-weight: 650;
+  padding: 0 10px;
   cursor: pointer;
+  transition: all 0.18s ease;
 }
 
-.troubleshooting-action-btn.docs {
-  border-color: #1d4ed8;
-  color: #1d4ed8;
+.troubleshooting-action-btn.secondary:hover {
+  border-color: rgba(30, 64, 175, 0.48);
+  color: #1e40af;
+}
+
+.troubleshooting-action-btn.primary {
+  border-color: rgba(37, 99, 235, 0.42);
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  color: #eff6ff;
+  box-shadow: 0 12px 18px -16px rgba(37, 99, 235, 0.66);
+}
+
+.troubleshooting-action-btn.primary:hover {
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  transform: translateY(-1px);
 }
 
 /* Connected clients */
@@ -4626,6 +4705,108 @@ onUnmounted(() => {
   background: rgba(9, 31, 56, 0.95);
   border-color: rgba(34, 211, 238, 0.6);
   color: #e0f2fe;
+}
+
+.popup-container[data-agent-theme='dark-console'] .repair-command-button {
+  border-color: rgba(34, 211, 238, 0.42);
+  background: linear-gradient(180deg, rgba(8, 37, 68, 0.9) 0%, rgba(7, 30, 56, 0.92) 100%);
+  color: #67e8f9;
+}
+
+.popup-container[data-agent-theme='dark-console'] .repair-command-button:hover {
+  border-color: rgba(34, 211, 238, 0.68);
+  color: #cffafe;
+}
+
+.popup-container[data-agent-theme='dark-console'] .repair-guide-button {
+  border-color: rgba(56, 189, 248, 0.34);
+  background: linear-gradient(180deg, rgba(8, 27, 49, 0.88) 0%, rgba(8, 24, 44, 0.9) 100%);
+  color: #9ec3e7;
+}
+
+.popup-container[data-agent-theme='dark-console'] .repair-guide-button:hover {
+  border-color: rgba(34, 211, 238, 0.5);
+  color: #dbeafe;
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-dialog {
+  background: rgba(2, 6, 23, 0.72);
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-content {
+  background: linear-gradient(180deg, rgba(4, 18, 35, 0.96) 0%, rgba(4, 14, 28, 0.98) 100%);
+  border-color: rgba(56, 189, 248, 0.38);
+  box-shadow:
+    0 28px 46px -26px rgba(2, 132, 199, 0.5),
+    0 8px 24px -20px rgba(168, 85, 247, 0.3);
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-header {
+  border-bottom-color: rgba(56, 189, 248, 0.2);
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-header h3 {
+  color: #e0f2fe;
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-desc,
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-item-note {
+  color: #a5c9eb;
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-close {
+  border-color: rgba(56, 189, 248, 0.3);
+  background: rgba(8, 24, 44, 0.82);
+  color: #7dd3fc;
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-close:hover {
+  border-color: rgba(34, 211, 238, 0.56);
+  color: #dbeafe;
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-item {
+  background: linear-gradient(180deg, rgba(5, 18, 36, 0.92) 0%, rgba(6, 20, 38, 0.96) 100%);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-item-title {
+  color: #dbeafe;
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-item-index {
+  color: #67e8f9;
+  background: rgba(7, 35, 61, 0.94);
+  border-color: rgba(34, 211, 238, 0.48);
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-item-command {
+  color: #cfe8ff;
+  background: rgba(3, 16, 33, 0.96);
+  border-color: rgba(56, 189, 248, 0.32);
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-copy,
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-action-btn.secondary {
+  border-color: rgba(56, 189, 248, 0.34);
+  background: rgba(7, 26, 47, 0.9);
+  color: #9ec3e7;
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-copy:hover,
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-action-btn.secondary:hover {
+  border-color: rgba(34, 211, 238, 0.56);
+  color: #e0f2fe;
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-action-btn.primary {
+  border-color: rgba(56, 189, 248, 0.48);
+  background: linear-gradient(180deg, #0891b2 0%, #0e7490 100%);
+  color: #ecfeff;
+}
+
+.popup-container[data-agent-theme='dark-console'] .troubleshooting-action-btn.primary:hover {
+  background: linear-gradient(180deg, #06b6d4 0%, #0e7490 100%);
 }
 
 .popup-container[data-agent-theme='dark-console'] .mcp-config-content,

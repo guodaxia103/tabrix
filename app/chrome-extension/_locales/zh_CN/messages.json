@@ -702,7 +702,7 @@
     "description": "自动同步键: popupCopiedShort"
   },
   "popupCopyCommand": {
-    "message": "复制命令",
+    "message": "复制",
     "description": "自动同步键: popupCopyCommand"
   },
   "popupCopyFailed": {
@@ -710,7 +710,7 @@
     "description": "自动同步键: popupCopyFailed"
   },
   "popupCopyFullTroubleshootScript": {
-    "message": "复制完整排障脚本",
+    "message": "复制全部",
     "description": "自动同步键: popupCopyFullTroubleshootScript"
   },
   "popupCopyRepairCommand": {
@@ -806,7 +806,7 @@
     "description": "自动同步键: popupNoConnectedClients"
   },
   "popupOpenDocs": {
-    "message": "打开文档",
+    "message": "文档",
     "description": "自动同步键: popupOpenDocs"
   },
   "popupOpenTroubleshootingGuide": {
@@ -932,15 +932,15 @@
     "description": "自动同步键: popupTroubleshootDaemonAutostartTitle"
   },
   "popupTroubleshootDaemonStartTitle": {
-    "message": "启动守护进程（无浏览器也可保持服务在线）",
+    "message": "启动守护进程（可选）",
     "description": "自动同步键: popupTroubleshootDaemonStartTitle"
   },
   "popupTroubleshootDoctorFixTitle": {
-    "message": "基础诊断与自动修复",
+    "message": "自动修复常见问题",
     "description": "自动同步键: popupTroubleshootDoctorFixTitle"
   },
   "popupTroubleshootingGuideDesc": {
-    "message": "推荐按顺序执行以下命令。执行后请完全重启 Chrome，并在 chrome://extensions/ 重新加载扩展。",
+    "message": "按顺序执行以下命令；完成后重启 Chrome 并在 chrome://extensions/ 重新加载扩展。",
     "description": "自动同步键: popupTroubleshootingGuideDesc"
   },
   "popupTroubleshootingGuideTitle": {
@@ -948,11 +948,11 @@
     "description": "自动同步键: popupTroubleshootingGuideTitle"
   },
   "popupTroubleshootQuickFixTitle": {
-    "message": "当前错误快速修复",
+    "message": "当前错误修复",
     "description": "自动同步键: popupTroubleshootQuickFixTitle"
   },
   "popupTroubleshootRegisterForceTitle": {
-    "message": "强制重注册 Native host",
+    "message": "重注册 Native Host",
     "description": "自动同步键: popupTroubleshootRegisterForceTitle"
   },
   "popupTroubleshootRemotePersistNote": {
