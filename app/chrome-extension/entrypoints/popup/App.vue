@@ -29,14 +29,16 @@
             <div class="status-section">
               <div class="status-inline">
                 <div class="status-mainline">
-                  <span :class="['status-dot', getStatusClass()]"></span>
-                  <span class="status-text">{{ statusHeadlineText }}</span>
-                  <span v-if="statusInlinePort" class="status-inline-meta status-port-meta">
-                    {{ getMessage('connectionPortLabel') }} {{ statusInlinePort }}
+                  <div class="status-left">
+                    <span :class="['status-dot', getStatusClass()]"></span>
+                    <span class="status-text">{{ statusHeadlineText }}</span>
+                    <span v-if="statusInlinePort" class="status-inline-meta status-port-meta">
+                      {{ getMessage('connectionPortLabel') }} {{ statusInlinePort }}
+                    </span>
+                  </div>
+                  <span v-if="statusUpdatedTimeText" class="status-updated">
+                    {{ getMessage('lastUpdatedLabel') }} {{ statusUpdatedTimeText }}
                   </span>
-                </div>
-                <div v-if="statusUpdatedTimeText" class="status-subline">
-                  {{ getMessage('lastUpdatedLabel') }} {{ statusUpdatedTimeText }}
                 </div>
               </div>
               <div
@@ -171,15 +173,6 @@
               <template v-if="canShowActiveConfig">
                 <div class="mcp-config-content">
                   <pre class="mcp-config-json">{{ activeConfigJson }}</pre>
-                </div>
-                <div class="mcp-network-info">
-                  <span class="network-label">{{ getMessage('popupNetworkLocalLabel') }}</span>
-                  <span class="network-ip">127.0.0.1:{{ serverPort }}</span>
-                  <template v-if="lanIpAddress">
-                    <span class="network-sep">|</span>
-                    <span class="network-label">{{ getMessage('popupNetworkLanLabel') }}</span>
-                    <span class="network-ip">{{ lanIpAddress }}:{{ serverPort }}</span>
-                  </template>
                 </div>
               </template>
               <div v-else class="remote-disabled-hint">
@@ -2514,20 +2507,24 @@ onUnmounted(() => {
 
 .header-content {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   gap: 10px;
+  min-height: 32px;
+  position: relative;
 }
 
 .header-meta {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: calc(100% - 42px);
 }
 
 .header-mainline {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  justify-content: center;
   min-width: 0;
   flex-wrap: nowrap;
   white-space: nowrap;
@@ -2567,6 +2564,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .header-refresh-button {
@@ -2671,28 +2672,35 @@ onUnmounted(() => {
 
 .status-inline {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
+  align-items: center;
   background: #f8fafc;
   border: 1px solid #dbe3ef;
   border-radius: 11px;
-  padding: 8px 10px 7px;
+  padding: 8px 10px;
 }
 
 .status-mainline {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  gap: 10px;
 }
 
-.status-subline {
+.status-left {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.status-updated {
+  flex-shrink: 0;
+  text-align: right;
   font-size: 12px;
-  line-height: 1.25;
+  line-height: 1.3;
   color: #64748b;
-  padding-left: 17px;
 }
 
 .status-dot {
@@ -2731,6 +2739,7 @@ onUnmounted(() => {
 .status-port-meta {
   color: #475569;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .model-label {
