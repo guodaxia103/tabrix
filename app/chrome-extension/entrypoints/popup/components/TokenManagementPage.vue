@@ -386,10 +386,23 @@ watch(
 
 <style scoped>
 .token-management-page {
+  --tm-page-bg: var(--ac-bg, #f8fafc);
+  --tm-surface: var(--ac-surface, #ffffff);
+  --tm-surface-muted: var(--ac-surface-muted, #f1f5f9);
+  --tm-text: var(--ac-text, #0f172a);
+  --tm-text-muted: var(--ac-text-muted, #64748b);
+  --tm-text-subtle: var(--ac-text-subtle, #94a3b8);
+  --tm-border: var(--ac-border, #e2e8f0);
+  --tm-danger: var(--ac-danger, #dc2626);
+  --tm-danger-bg: rgba(239, 68, 68, 0.08);
+  --tm-danger-border: rgba(248, 113, 113, 0.45);
+  --tm-code-bg: var(--ac-code-bg, #0f172a);
+  --tm-code-text: var(--ac-code-text, #e2e8f0);
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  background: var(--popup-bg, #f8fafc);
+  background: var(--tm-page-bg);
+  color: var(--tm-text);
 }
 
 .page-header {
@@ -397,8 +410,8 @@ watch(
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #fff;
+  border-bottom: 1px solid var(--tm-border);
+  background: var(--tm-surface);
 }
 
 .back-button {
@@ -408,21 +421,21 @@ watch(
   padding: 6px 8px;
   border: none;
   background: transparent;
-  color: #475569;
+  color: var(--tm-text-muted);
   cursor: pointer;
   border-radius: 6px;
   font-size: 13px;
 }
 
 .back-button:hover {
-  background: #f1f5f9;
+  background: var(--tm-surface-muted);
 }
 
 .page-title {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--tm-text);
 }
 
 .page-content {
@@ -433,8 +446,8 @@ watch(
 
 .refresh-ttl-in-dialog {
   padding: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--tm-surface-muted);
+  border: 1px solid var(--tm-border);
   border-radius: 8px;
 }
 
@@ -442,7 +455,7 @@ watch(
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #334155;
+  color: var(--tm-text);
   margin-bottom: 8px;
 }
 
@@ -457,21 +470,22 @@ watch(
   width: 96px;
   padding: 8px 10px;
   font-size: 15px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--tm-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--tm-surface);
+  color: var(--tm-text);
 }
 
 .refresh-ttl-hint {
   font-size: 12px;
-  color: #64748b;
+  color: var(--tm-text-muted);
 }
 
 .error-banner {
   font-size: 12px;
-  color: #b91c1c;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  color: var(--tm-danger);
+  background: var(--tm-danger-bg);
+  border: 1px solid var(--tm-danger-border);
   border-radius: 8px;
   padding: 8px 10px;
   margin-bottom: 12px;
@@ -482,7 +496,7 @@ watch(
 }
 
 .section.muted {
-  color: #64748b;
+  color: var(--tm-text-muted);
   font-size: 12px;
 }
 
@@ -490,7 +504,7 @@ watch(
   margin: 0 0 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #334155;
+  color: var(--tm-text);
 }
 
 .token-row {
@@ -507,7 +521,7 @@ watch(
   font-size: 11px;
   word-break: break-all;
   cursor: pointer;
-  color: #0f172a;
+  color: var(--tm-text);
 }
 
 .icon-btn {
@@ -521,7 +535,7 @@ watch(
 
 .env-badge {
   font-size: 11px;
-  color: #64748b;
+  color: var(--tm-text-muted);
   margin: 0 0 8px;
 }
 
@@ -533,27 +547,27 @@ watch(
 }
 
 .meta-label {
-  color: #94a3b8;
+  color: var(--tm-text-subtle);
   margin-right: 6px;
 }
 
 .meta-value {
-  color: #334155;
+  color: var(--tm-text);
 }
 
 .danger-button {
   width: 100%;
   padding: 8px 12px;
   font-size: 12px;
-  color: #b91c1c;
-  background: #fff;
-  border: 1px solid #fecaca;
+  color: var(--tm-danger);
+  background: var(--tm-surface);
+  border: 1px solid var(--tm-danger-border);
   border-radius: 8px;
   cursor: pointer;
 }
 
 .danger-button:hover:not(:disabled) {
-  background: #fef2f2;
+  background: var(--tm-danger-bg);
 }
 
 .danger-button:disabled {
@@ -565,21 +579,21 @@ watch(
   margin-top: 8px;
   padding: 6px 12px;
   font-size: 12px;
-  color: #334155;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  color: var(--tm-text);
+  background: var(--tm-surface);
+  border: 1px solid var(--tm-border);
   border-radius: 8px;
   cursor: pointer;
 }
 
 .secondary-button:hover:not(:disabled) {
-  background: #f8fafc;
+  background: var(--tm-surface-muted);
 }
 
 .help-text {
   font-size: 11px;
   line-height: 1.55;
-  color: #64748b;
+  color: var(--tm-text-muted);
   margin: 0 0 8px;
 }
 
@@ -589,21 +603,37 @@ watch(
 
 .help-text code {
   font-size: 10px;
-  background: #f1f5f9;
+  background: var(--tm-surface-muted);
   padding: 1px 4px;
   border-radius: 4px;
+  color: var(--tm-text);
 }
 
 .config-pre {
   font-size: 10px;
   line-height: 1.4;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--tm-code-bg);
+  color: var(--tm-code-text);
   padding: 10px;
   border-radius: 8px;
   overflow-x: auto;
   margin: 0 0 8px;
   max-height: 200px;
   overflow-y: auto;
+}
+
+.popup-container[data-agent-theme='dark-console'] .token-management-page {
+  --tm-page-bg: rgba(2, 8, 23, 0.95);
+  --tm-surface: rgba(6, 20, 39, 0.88);
+  --tm-surface-muted: rgba(10, 30, 55, 0.58);
+  --tm-text: #e0f2fe;
+  --tm-text-muted: #9ec3e7;
+  --tm-text-subtle: #7aa2c7;
+  --tm-border: rgba(56, 189, 248, 0.3);
+  --tm-danger: #fb7185;
+  --tm-danger-bg: rgba(120, 20, 45, 0.32);
+  --tm-danger-border: rgba(251, 113, 133, 0.45);
+  --tm-code-bg: #05172e;
+  --tm-code-text: #c7e6ff;
 }
 </style>

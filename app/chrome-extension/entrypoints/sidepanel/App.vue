@@ -1,5 +1,5 @@
 <template>
-  <div class="h-full w-full bg-slate-50 relative agent-theme" :data-agent-theme="currentTheme">
+  <div class="sidepanel-root h-full w-full relative agent-theme" :data-agent-theme="currentTheme">
     <!-- Sidepanel Navigator - only show on workflows/element-markers pages -->
     <SidepanelNavigator
       v-if="activeTab !== 'agent-chat'"
@@ -793,6 +793,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.sidepanel-root {
+  background: var(--ac-bg, #f8fafc);
+  color: var(--ac-text, #1f2937);
+}
+
 /* reuse popup styles; only tune list item spacing for sidepanel width */
 .rr-item {
   margin-bottom: 8px;
@@ -803,6 +808,8 @@ onUnmounted(() => {
 
 /* Element Markers Styles - Using agent-theme tokens */
 .element-markers-content {
+  min-height: 100%;
+  background: var(--ac-bg, transparent);
   padding-bottom: 24px;
   color: var(--ac-text, #262626);
 }
@@ -926,7 +933,7 @@ onUnmounted(() => {
 
 .em-btn-primary {
   background: var(--ac-accent, #d97757);
-  color: var(--ac-accent-contrast, #ffffff);
+  color: var(--ac-text-inverse, #ffffff);
 }
 
 .em-btn-primary:hover {
@@ -1030,7 +1037,7 @@ onUnmounted(() => {
   background: var(--ac-accent, #d97757);
   border: none;
   border-radius: var(--ac-radius-button, 10px);
-  color: var(--ac-accent-contrast, #ffffff);
+  color: var(--ac-text-inverse, #ffffff);
   cursor: pointer;
   transition: all var(--ac-motion-fast, 150ms) ease;
   flex-shrink: 0;

@@ -227,7 +227,7 @@ const inputStyle = computed(() => ({
 
 const newButtonStyle = computed(() => ({
   backgroundColor: 'var(--ac-accent)',
-  color: 'var(--ac-accent-contrast)',
+  color: 'var(--ac-text-inverse)',
   borderRadius: 'var(--ac-radius-button)',
 }));
 

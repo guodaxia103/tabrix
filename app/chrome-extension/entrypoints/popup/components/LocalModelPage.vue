@@ -359,6 +359,8 @@ const formatIndexSize = () => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--ac-bg, #f8fafc);
+  color: var(--ac-text, #1a1a1a);
 }
 
 .page-header {
@@ -473,7 +475,7 @@ const formatIndexSize = () => {
   justify-content: center;
   gap: 8px;
   background: var(--ac-accent, #d97757);
-  color: var(--ac-accent-contrast, white);
+  color: var(--ac-text-inverse, white);
   font-weight: 600;
   padding: 12px 16px;
   border-radius: var(--ac-radius-button, 8px);
