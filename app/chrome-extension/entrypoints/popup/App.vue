@@ -50,9 +50,6 @@
                   <div class="status-left">
                     <span :class="['status-dot', getStatusClass()]"></span>
                     <span class="status-text">{{ statusHeadlineText }}</span>
-                    <span v-if="statusInlinePort" class="status-inline-meta status-port-meta">
-                      {{ getMessage('connectionPortLabel') }} {{ statusInlinePort }}
-                    </span>
                   </div>
                   <span v-if="statusUpdatedTimeText" class="status-updated">
                     {{ getMessage('lastUpdatedLabel') }} {{ statusUpdatedTimeText }}
@@ -1203,10 +1200,6 @@ const statusToneClass = computed(() => {
     default:
       return 'status-inline--neutral';
   }
-});
-const statusInlinePort = computed(() => {
-  if (connectionState.value !== ConnectionState.RUNNING) return '';
-  return String(serverStatus.value.port || nativeServerPort.value || '');
 });
 const statusUpdatedTimeText = computed(() => {
   if (!serverStatus.value.lastUpdated) return '';
@@ -2891,17 +2884,6 @@ onUnmounted(() => {
   font-size: 15px;
   font-weight: 700;
   color: #0f172a;
-}
-
-.status-inline-meta {
-  font-size: 12px;
-  color: #64748b;
-}
-
-.status-port-meta {
-  color: #475569;
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 .model-label {
@@ -4609,14 +4591,6 @@ onUnmounted(() => {
 .popup-container[data-agent-theme='dark-console'] .mcp-config-label,
 .popup-container[data-agent-theme='dark-console'] .port-label {
   color: #9ec3e7;
-}
-
-.popup-container[data-agent-theme='dark-console'] .status-inline-meta {
-  color: #a8d8ff;
-}
-
-.popup-container[data-agent-theme='dark-console'] .status-port-meta {
-  color: #c9e8ff;
 }
 
 .popup-container[data-agent-theme='dark-console'] .connected-clients-empty .connected-clients-label,
