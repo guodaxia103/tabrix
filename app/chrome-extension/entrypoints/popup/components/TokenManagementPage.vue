@@ -430,6 +430,8 @@ watch(
   flex: 1;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
   background: var(--tm-page-bg);
   color: var(--tm-text);
 }
@@ -468,10 +470,11 @@ watch(
 }
 
 .page-content {
-  padding: 14px 16px 16px;
+  padding: 12px 16px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -499,10 +502,10 @@ watch(
 }
 
 .refresh-ttl-input {
-  width: 88px;
-  height: 42px;
+  width: 84px;
+  height: 40px;
   padding: 0 10px;
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1;
   font-weight: 700;
   text-align: center;
@@ -511,11 +514,13 @@ watch(
   border-radius: 8px;
   background: var(--tm-surface);
   color: var(--tm-text);
-  appearance: textfield;
+  appearance: none;
+  -moz-appearance: textfield;
 }
 
 .refresh-ttl-input::-webkit-outer-spin-button,
 .refresh-ttl-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
   appearance: none;
   margin: 0;
 }

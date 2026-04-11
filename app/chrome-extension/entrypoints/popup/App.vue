@@ -719,7 +719,6 @@ function isFlowBoundToCurrent(flow: any) {
 
 // 运行记录与覆盖项在侧边栏页面查看
 const startRecording = async () => {
-  // TODO: 录制回放功能开发中，暂时拦截
   showComingSoonToast(getMessage('popupRecordReplayFeature'));
   return;
   // if (rrRecording.value) return;
@@ -736,7 +735,6 @@ const startRecording = async () => {
 };
 
 const stopRecording = async () => {
-  // TODO: 录制回放功能开发中，暂时拦截
   showComingSoonToast(getMessage('popupRecordReplayFeature'));
   return;
   // if (!rrRecording.value) return;
@@ -1248,9 +1246,7 @@ async function openSidepanelAndClose(tab: string) {
 
 // Open sidepanel from popup for workflow management
 function openWorkflowSidepanel() {
-  // TODO: 工作流功能开发中，暂时拦截
   showComingSoonToast(getMessage('popupWorkflowManagementTitle'));
-  // openSidepanelAndClose('workflows');
 }
 
 // Open sidepanel for element marker management
@@ -1312,25 +1308,6 @@ function openBuilderWindow(flowId?: string, focusNodeId?: string) {
   if (focusNodeId) url.searchParams.set('focus', focusNodeId);
   chrome.windows.create({ url: url.toString(), type: 'popup', width: 1280, height: 800 });
 }
-
-const getStatusText = () => {
-  switch (connectionState.value) {
-    case ConnectionState.RUNNING:
-      return getMessage('serviceRunningStatus', [
-        (serverStatus.value.port || 'Unknown').toString(),
-      ]);
-    case ConnectionState.CONNECTED:
-      return getMessage('connectedServiceNotStartedStatus');
-    case ConnectionState.CONNECTING:
-      return getMessage('detectingStatus');
-    case ConnectionState.ERROR:
-    case ConnectionState.DISCONNECTED:
-      return getMessage('serviceNotConnectedStatus');
-    case ConnectionState.UNKNOWN:
-    default:
-      return getMessage('detectingStatus');
-  }
-};
 
 const statusDetailText = computed(() => {
   const state = connectionState.value;
@@ -2520,7 +2497,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: 640px;
+  min-height: 100%;
   height: 100%;
   overflow: hidden;
   font-family:
@@ -2637,8 +2614,8 @@ onUnmounted(() => {
 }
 
 .header-theme-icon {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: block;
   color: currentColor;
 }
@@ -2704,8 +2681,8 @@ onUnmounted(() => {
 }
 
 .header-action-icon {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 
 .header-refresh-button:hover {
@@ -3838,22 +3815,22 @@ onUnmounted(() => {
 }
 
 .connect-button.is-disconnect {
-  border: 1px solid rgba(244, 63, 94, 0.42);
-  background: linear-gradient(180deg, #fee2e2 0%, #fecdd3 100%);
-  color: #b91c1c;
+  border: 1px solid rgba(225, 29, 72, 0.52);
+  background: linear-gradient(180deg, #fb7185 0%, #e11d48 100%);
+  color: #fff1f2;
   box-shadow:
-    0 14px 24px -14px rgba(225, 29, 72, 0.44),
-    0 1px 0 rgba(255, 255, 255, 0.72) inset;
+    0 14px 24px -14px rgba(225, 29, 72, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.16) inset;
 }
 
 .connect-button.is-disconnect:hover:not(:disabled) {
-  background: linear-gradient(180deg, #fecdd3 0%, #fda4af 100%);
-  border-color: rgba(244, 63, 94, 0.58);
-  color: #9f1239;
+  background: linear-gradient(180deg, #f43f5e 0%, #be123c 100%);
+  border-color: rgba(225, 29, 72, 0.66);
+  color: #fff1f2;
   transform: translateY(-1px);
   box-shadow:
-    0 18px 26px -14px rgba(225, 29, 72, 0.5),
-    0 1px 0 rgba(255, 255, 255, 0.72) inset;
+    0 18px 26px -14px rgba(225, 29, 72, 0.64),
+    0 1px 0 rgba(255, 255, 255, 0.18) inset;
 }
 .error-card {
   background: #fef2f2;

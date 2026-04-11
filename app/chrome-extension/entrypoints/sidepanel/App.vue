@@ -5,6 +5,7 @@
       v-if="activeTab !== 'agent-chat'"
       :activeTab="activeTab"
       @change="handleTabChange"
+      @workflow-locked="handleWorkflowLocked"
     />
 
     <!-- Workflows Tab -->
@@ -336,12 +337,20 @@ const activeTab = ref<'workflows' | 'element-markers' | 'agent-chat'>('agent-cha
 
 // Handle tab change and update URL for deep linking
 function handleTabChange(tab: 'workflows' | 'element-markers' | 'agent-chat') {
+  if (tab === 'workflows') {
+    handleWorkflowLocked();
+    return;
+  }
   activeTab.value = tab;
   // Update URL params for deep link
   const url = new URL(window.location.href);
   url.searchParams.set('tab', tab);
   history.replaceState(null, '', url.toString());
   // Note: loadMarkers is already called by the watch on activeTab, no need to call here
+}
+
+function handleWorkflowLocked() {
+  alert(getMessage('sidepanelWorkflowComingSoon'));
 }
 
 // Workflows state - using V3 data layer
@@ -493,15 +502,13 @@ async function run(id: string) {
 }
 
 function edit(id: string) {
-  // V3 Builder not yet implemented - show message
+  // Workflow builder stays gated in this release.
+  void id;
   alert(getMessage('sidepanelWorkflowEditNotImplemented'));
-  // TODO: openBuilder({ flowId: id });
 }
 
 function createFlow() {
-  // V3 Builder not yet implemented - show message
   alert(getMessage('sidepanelWorkflowCreateNotImplemented'));
-  // TODO: openBuilder({ newFlow: true });
 }
 
 async function remove(id: string) {
@@ -772,7 +779,7 @@ onMounted(async () => {
   } else if (tabParam === 'agent-chat') {
     activeTab.value = 'agent-chat';
   } else if (tabParam === 'workflows') {
-    activeTab.value = 'workflows';
+    activeTab.value = 'agent-chat';
   }
 
   // V3 workflows data is auto-refreshed by useWorkflowsV3 composable

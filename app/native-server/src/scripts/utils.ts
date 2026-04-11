@@ -577,7 +577,9 @@ async function checkWindowsAdminRights(): Promise<boolean> {
 /**
  * 使用提升权限注册系统级清单
  */
-export async function registerWithElevatedPermissions(): Promise<void> {
+export async function registerWithElevatedPermissions(
+  targetBrowsers?: BrowserType[],
+): Promise<void> {
   try {
     console.log(colorText('Attempting to register system-level manifest...', 'blue'));
 
@@ -587,8 +589,16 @@ export async function registerWithElevatedPermissions(): Promise<void> {
     // 2. 准备清单内容
     const manifest = await createManifestContent();
 
-    // 3. 获取系统级清单路径
-    const manifestPath = getSystemManifestPath();
+    // 3. 确定要注册的浏览器
+    const browsersToRegister = [...(targetBrowsers || detectInstalledBrowsers())];
+    if (browsersToRegister.length === 0) {
+      browsersToRegister.push(BrowserType.CHROME, BrowserType.CHROMIUM);
+      console.log(
+        colorText('No browsers detected, registering for Chrome and Chromium by default', 'yellow'),
+      );
+    } else {
+      console.log(colorText(`Target browsers: ${browsersToRegister.join(', ')}`, 'blue'));
+    }
 
     // 4. 创建临时清单文件
     const tempManifestPath = path.join(os.tmpdir(), `${HOST_NAME}.json`);
@@ -599,34 +609,57 @@ export async function registerWithElevatedPermissions(): Promise<void> {
     const hasAdminRights = await checkWindowsAdminRights(); // Windows平台检测管理员权限
     const hasElevatedPermissions = isRoot || hasAdminRights;
 
-    // 准备命令
-    const command =
-      os.platform() === 'win32'
-        ? `if not exist "${path.dirname(manifestPath)}" mkdir "${path.dirname(manifestPath)}" && copy "${tempManifestPath}" "${manifestPath}"`
-        : `mkdir -p "${path.dirname(manifestPath)}" && cp "${tempManifestPath}" "${manifestPath}" && chmod 644 "${manifestPath}"`;
-
     if (hasElevatedPermissions) {
-      // 已经有管理员权限，直接执行命令
-      try {
-        // 创建目录
-        if (!fs.existsSync(path.dirname(manifestPath))) {
-          fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+      const results: { browser: string; success: boolean; error?: string }[] = [];
+
+      for (const browserType of browsersToRegister) {
+        const config = getBrowserConfig(browserType);
+        const manifestPath = config.systemManifestPath;
+        try {
+          // 创建目录
+          if (!fs.existsSync(path.dirname(manifestPath))) {
+            fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+          }
+
+          // 复制文件
+          fs.copyFileSync(tempManifestPath, manifestPath);
+
+          // 设置权限（非Windows平台）
+          if (os.platform() !== 'win32') {
+            fs.chmodSync(manifestPath, '644');
+          }
+
+          if (os.platform() === 'win32' && config.systemRegistryKey) {
+            const regCommand = `reg add "${config.systemRegistryKey}" /ve /t REG_SZ /d "${manifestPath}" /f`;
+            execSync(regCommand, { stdio: 'pipe' });
+            if (!verifyWindowsRegistryEntry(config.systemRegistryKey, manifestPath)) {
+              throw new Error('Registry verification failed');
+            }
+            console.log(colorText(`✓ Registry entry created for ${config.displayName}`, 'green'));
+          }
+
+          results.push({ browser: config.displayName, success: true });
+          console.log(colorText(`✓ Registered ${config.displayName} (system level)`, 'green'));
+        } catch (error: any) {
+          results.push({ browser: config.displayName, success: false, error: error.message });
+          console.error(
+            colorText(`✗ Failed to register ${config.displayName}: ${error.message}`, 'red'),
+          );
         }
+      }
 
-        // 复制文件
-        fs.copyFileSync(tempManifestPath, manifestPath);
+      const successCount = results.filter((item) => item.success).length;
+      if (successCount === 0) {
+        throw new Error('System-level registration failed for all target browsers');
+      }
 
-        // 设置权限（非Windows平台）
-        if (os.platform() !== 'win32') {
-          fs.chmodSync(manifestPath, '644');
+      console.log(colorText('\n===== System Registration Summary =====', 'blue'));
+      for (const result of results) {
+        if (result.success) {
+          console.log(colorText(`✓ ${result.browser}: Success`, 'green'));
+        } else {
+          console.log(colorText(`✗ ${result.browser}: Failed - ${result.error}`, 'red'));
         }
-
-        console.log(colorText('System-level manifest registration successful!', 'green'));
-      } catch (error: any) {
-        console.error(
-          colorText(`System-level manifest installation failed: ${error.message}`, 'red'),
-        );
-        throw error;
       }
     } else {
       // 没有管理员权限，打印手动操作提示
@@ -640,69 +673,34 @@ export async function registerWithElevatedPermissions(): Promise<void> {
         ),
       );
 
-      if (os.platform() === 'win32') {
-        console.log(colorText('  1. Open Command Prompt as Administrator and run:', 'blue'));
-        console.log(colorText(`     ${command}`, 'cyan'));
-      } else {
-        console.log(colorText('  1. Run with sudo:', 'blue'));
-        console.log(colorText(`     sudo ${command}`, 'cyan'));
+      for (const browserType of browsersToRegister) {
+        const config = getBrowserConfig(browserType);
+        const manifestPath = config.systemManifestPath;
+        const command =
+          os.platform() === 'win32'
+            ? `if not exist "${path.dirname(manifestPath)}" mkdir "${path.dirname(manifestPath)}" && copy "${tempManifestPath}" "${manifestPath}"`
+            : `mkdir -p "${path.dirname(manifestPath)}" && cp "${tempManifestPath}" "${manifestPath}" && chmod 644 "${manifestPath}"`;
+
+        console.log(colorText(`  - ${config.displayName}:`, 'blue'));
+        if (os.platform() === 'win32') {
+          console.log(colorText(`    ${command}`, 'cyan'));
+          if (config.systemRegistryKey) {
+            console.log(
+              colorText(
+                `    reg add "${config.systemRegistryKey}" /ve /t REG_SZ /d "${manifestPath}" /f`,
+                'cyan',
+              ),
+            );
+          }
+        } else {
+          console.log(colorText(`    sudo ${command}`, 'cyan'));
+        }
       }
 
-      console.log(
-        colorText('  2. Or run the registration command with elevated privileges:', 'blue'),
-      );
-      console.log(colorText(`     sudo ${COMMAND_NAME} register --system`, 'cyan'));
+      console.log(colorText('\nOr rerun with elevated privileges:', 'blue'));
+      console.log(colorText(`  sudo ${COMMAND_NAME} register --system`, 'cyan'));
 
       throw new Error('Administrator privileges required for system-level installation');
-    }
-
-    // 6. Windows特殊处理 - 设置系统级注册表
-    if (os.platform() === 'win32') {
-      const registryKey = `HKLM\\Software\\Google\\Chrome\\NativeMessagingHosts\\${HOST_NAME}`;
-      // 注意：不需要手动双写反斜杠，reg 命令会正确处理 Windows 路径
-      const regCommand = `reg add "${registryKey}" /ve /t REG_SZ /d "${manifestPath}" /f`;
-
-      console.log(colorText(`Creating system registry entry: ${registryKey}`, 'blue'));
-      console.log(colorText(`Manifest path: ${manifestPath}`, 'blue'));
-
-      if (hasElevatedPermissions) {
-        // 已经有管理员权限，直接执行注册表命令
-        try {
-          execSync(regCommand, { stdio: 'pipe' });
-
-          // 验证注册表项是否创建成功
-          if (verifyWindowsRegistryEntry(registryKey, manifestPath)) {
-            console.log(colorText('Windows registry entry created successfully!', 'green'));
-          } else {
-            console.log(colorText('⚠️ Registry entry created but verification failed', 'yellow'));
-          }
-        } catch (error: any) {
-          console.error(
-            colorText(`Windows registry entry creation failed: ${error.message}`, 'red'),
-          );
-          console.error(colorText(`Command: ${regCommand}`, 'red'));
-          throw error;
-        }
-      } else {
-        // 没有管理员权限，打印手动操作提示
-        console.log(
-          colorText(
-            '⚠️ Administrator privileges required for Windows registry modification',
-            'yellow',
-          ),
-        );
-        console.log(colorText('Please run the following command as Administrator:', 'blue'));
-        console.log(colorText(`  ${regCommand}`, 'cyan'));
-        console.log(colorText('Or run the registration command with elevated privileges:', 'blue'));
-        console.log(
-          colorText(
-            `  Run Command Prompt as Administrator and execute: ${COMMAND_NAME} register --system`,
-            'cyan',
-          ),
-        );
-
-        throw new Error('Administrator privileges required for Windows registry modification');
-      }
     }
   } catch (error: any) {
     console.error(colorText(`注册失败: ${error.message}`, 'red'));

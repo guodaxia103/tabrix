@@ -34,5 +34,19 @@ export default defineConfig({
     typecheck: {
       enabled: false, // Run separately with vue-tsc
     },
+    onConsoleLog(log) {
+      const expectedNoiseMarkers = [
+        '[AgentServer] SSE error:',
+        '[AgentServer] Reconnecting in',
+        'Failed to connect to native host',
+        'Native connection disconnected',
+        '[RecordingSession] Unknown step type',
+        '[NativeHost]',
+        '[Recovery]',
+      ];
+      if (expectedNoiseMarkers.some((marker) => log.includes(marker))) {
+        return false;
+      }
+    },
   },
 });

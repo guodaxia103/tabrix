@@ -28,6 +28,7 @@
 
   const PROTOCOL_VERSION = 1;
   const LOG_PREFIX = '[PropsAgent]';
+  const DEBUG_FLAG_KEY = '__TABRIX_DEBUG__';
 
   const EVENT_NAME = Object.freeze({
     REQUEST: 'web-editor-props:request',
@@ -70,7 +71,16 @@
     }
   }
 
+  function isDebugLoggingEnabled() {
+    try {
+      return window[DEBUG_FLAG_KEY] === true;
+    } catch {
+      return false;
+    }
+  }
+
   function logWarn(...args) {
+    if (!isDebugLoggingEnabled()) return;
     try {
       console.warn(LOG_PREFIX, ...args);
     } catch {

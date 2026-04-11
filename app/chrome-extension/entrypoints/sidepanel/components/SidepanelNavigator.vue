@@ -89,8 +89,8 @@
             </button>
             <button
               class="navigator-item"
-              :class="{ 'navigator-item-active': activeTab === 'workflows' }"
-              @click="selectTab('workflows')"
+              :class="{ 'navigator-item-disabled': true }"
+              @click="selectWorkflowTab"
             >
               <div class="navigator-item-icon">
                 <svg
@@ -109,24 +109,15 @@
                 </svg>
               </div>
               <div class="navigator-item-content">
-                <span class="navigator-item-title">{{
-                  getMessage('popupWorkflowManagementTitle')
-                }}</span>
+                <span class="navigator-item-title-row">
+                  <span class="navigator-item-title">{{
+                    getMessage('popupWorkflowManagementTitle')
+                  }}</span>
+                  <span class="navigator-item-badge">COMING SOON</span>
+                </span>
                 <span class="navigator-item-desc">{{
                   getMessage('popupWorkflowManagementDesc')
                 }}</span>
-              </div>
-              <div v-if="activeTab === 'workflows'" class="navigator-item-check">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="16"
-                  height="16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
               </div>
             </button>
             <button
@@ -194,6 +185,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'change', tab: TabType): void;
+  (e: 'workflow-locked'): void;
 }>();
 
 const isOpen = ref(false);
@@ -236,6 +228,11 @@ function closeMenu() {
 
 function selectTab(tab: TabType) {
   emit('change', tab);
+  closeMenu();
+}
+
+function selectWorkflowTab() {
+  emit('workflow-locked');
   closeMenu();
 }
 </script>
@@ -400,6 +397,12 @@ function selectTab(tab: TabType) {
   min-width: 0;
 }
 
+.navigator-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .navigator-item-title {
   display: block;
   font-size: 14px;
@@ -424,6 +427,28 @@ function selectTab(tab: TabType) {
   justify-content: center;
   color: var(--ac-accent, #d97757);
   flex-shrink: 0;
+}
+
+.navigator-item-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ac-accent, #d97757);
+  background: color-mix(in srgb, var(--ac-accent, #d97757) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ac-accent, #d97757) 35%, transparent);
+}
+
+.navigator-item-disabled {
+  opacity: 0.88;
+}
+
+.navigator-item-disabled .navigator-item-icon {
+  color: var(--ac-text-subtle, #a8a29e);
 }
 
 /* Transition animations */

@@ -1365,6 +1365,10 @@
     "message": "V3 Trigger management is not implemented yet, cannot edit trigger for now.",
     "description": "Auto-synced key: sidepanelTriggerEditNotImplemented"
   },
+  "sidepanelWorkflowComingSoon": {
+    "message": "Workflow management is under development. Coming soon.",
+    "description": "Auto-synced key: sidepanelWorkflowComingSoon"
+  },
   "sidepanelWorkflowCreateNotImplemented": {
     "message": "V3 Builder is not implemented yet, cannot create workflow for now.",
     "description": "Auto-synced key: sidepanelWorkflowCreateNotImplemented"

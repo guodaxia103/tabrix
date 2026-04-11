@@ -1365,6 +1365,10 @@
     "message": "V3 Trigger 管理尚未实现，暂时无法编辑触发器",
     "description": "自动同步键: sidepanelTriggerEditNotImplemented"
   },
+  "sidepanelWorkflowComingSoon": {
+    "message": "工作流管理功能开发中，敬请期待",
+    "description": "自动同步键: sidepanelWorkflowComingSoon"
+  },
   "sidepanelWorkflowCreateNotImplemented": {
     "message": "V3 Builder 尚未实现，暂时无法创建工作流",
     "description": "自动同步键: sidepanelWorkflowCreateNotImplemented"
