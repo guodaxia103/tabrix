@@ -115,6 +115,13 @@ interface NodeResolutionResult {
   };
 }
 
+interface SqliteBindingProbeResult {
+  ok: boolean;
+  packageDir?: string;
+  version?: string;
+  error?: string;
+}
+
 // ============================================================================
 // Utility Functions
 // ============================================================================
@@ -164,6 +171,46 @@ function resolveDistDir(): string {
 function stringifyError(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+function detectSqliteBindingIssue(message: string): boolean {
+  const patterns = [
+    'Could not locate the bindings file',
+    'better_sqlite3.node',
+    'NODE_MODULE_VERSION',
+    'was compiled against a different Node.js version',
+  ];
+  return patterns.some((pattern) => message.includes(pattern));
+}
+
+function probeBetterSqliteBinding(distDir: string): SqliteBindingProbeResult {
+  let packageDir: string | undefined;
+  try {
+    const packageJsonPath = require.resolve('better-sqlite3/package.json', {
+      paths: [distDir, process.cwd()],
+    });
+    packageDir = path.dirname(packageJsonPath);
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
+      version?: string;
+    };
+    const BetterSqlite3 = require('better-sqlite3') as new (filename: string) => {
+      prepare: (sqlText: string) => { get: () => unknown };
+      close: () => void;
+    };
+    const db = new BetterSqlite3(':memory:');
+    try {
+      db.prepare('SELECT 1').get();
+    } finally {
+      db.close();
+    }
+    return { ok: true, packageDir, version: packageJson.version };
+  } catch (error) {
+    return {
+      ok: false,
+      packageDir,
+      error: stringifyError(error),
+    };
+  }
 }
 
 function canExecute(filePath: string): boolean {
@@ -648,6 +695,29 @@ async function attemptFixes(
     await ensureExecutionPermissions();
   });
 
+  const sqliteProbe = probeBetterSqliteBinding(distDir);
+  if (!sqliteProbe.ok) {
+    await attempt('native.sqlite', 'Rebuild better-sqlite3 native binding', async () => {
+      if (!sqliteProbe.packageDir) {
+        throw new Error(
+          `Cannot locate better-sqlite3 package directory. Original error: ${sqliteProbe.error ?? 'unknown'}`,
+        );
+      }
+      const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+      execFileSync(npmCmd, ['run', 'install'], {
+        cwd: sqliteProbe.packageDir,
+        stdio: silent ? ['ignore', 'pipe', 'pipe'] : 'inherit',
+        timeout: 120_000,
+        windowsHide: true,
+      });
+
+      const afterProbe = probeBetterSqliteBinding(distDir);
+      if (!afterProbe.ok) {
+        throw new Error(afterProbe.error ?? 'better-sqlite3 binding check still failed');
+      }
+    });
+  }
+
   await attempt('register', 'Re-register Native Messaging host (user-level)', async () => {
     const ok = await tryRegisterUserLevelHost(targetBrowsers);
     if (!ok) {
@@ -902,6 +972,7 @@ function getCheckPriority(id: string): number {
   if (id === 'installation') return 10;
   if (id === 'host.files') return 20;
   if (id === 'node') return 30;
+  if (id === 'native.sqlite') return 35;
   if (id.startsWith('manifest.')) return 40;
   if (id.startsWith('active-origin.')) return 45;
   if (id.startsWith('registry.')) return 50;
@@ -1121,6 +1192,36 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
       fix: nodeFix,
     },
   });
+
+  // Check 4.1: Native sqlite binding for agent database
+  const sqliteProbe = probeBetterSqliteBinding(distDir);
+  const sqliteIssue =
+    !sqliteProbe.ok && typeof sqliteProbe.error === 'string'
+      ? detectSqliteBindingIssue(sqliteProbe.error)
+      : false;
+  const sqliteFix = sqliteProbe.packageDir
+    ? [`${COMMAND_NAME} doctor --fix`, `npm --prefix "${sqliteProbe.packageDir}" run install`]
+    : [`${COMMAND_NAME} doctor --fix`, `npm i -g @tabrix/tabrix@latest --force`];
+
+  checks.push({
+    id: 'native.sqlite',
+    title: 'Native sqlite binding',
+    status: sqliteProbe.ok ? 'ok' : 'error',
+    message: sqliteProbe.ok
+      ? `better-sqlite3 is ready${sqliteProbe.version ? ` (v${sqliteProbe.version})` : ''}`
+      : sqliteIssue
+        ? 'better-sqlite3 binding is missing or incompatible'
+        : `better-sqlite3 check failed: ${sqliteProbe.error ?? 'unknown error'}`,
+    details: {
+      packageDir: sqliteProbe.packageDir,
+      version: sqliteProbe.version,
+      error: sqliteProbe.error,
+      fix: sqliteProbe.ok ? undefined : sqliteFix,
+    },
+  });
+  if (!sqliteProbe.ok) {
+    nextSteps.push(`${COMMAND_NAME} doctor --fix`);
+  }
 
   // Check 5: Manifest checks per browser
   const discoveredOrigins = discoverLoadedExtensionOrigins(browsersToCheck);

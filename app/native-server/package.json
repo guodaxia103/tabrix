@@ -30,11 +30,6 @@
     "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3"
-    ]
-  },
   "engines": {
     "node": ">=20.0.0"
   },
