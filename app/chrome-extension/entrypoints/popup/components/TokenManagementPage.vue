@@ -429,7 +429,7 @@ watch(
   flex-direction: column;
   flex: 1;
   height: 100%;
-  min-height: 640px;
+  min-height: 0;
   background: var(--tm-page-bg);
   color: var(--tm-text);
 }
@@ -470,6 +470,7 @@ watch(
 .page-content {
   padding: 14px 16px 16px;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
