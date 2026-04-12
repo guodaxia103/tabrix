@@ -161,7 +161,7 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@3.25.76)
       '@tabrix/shared':
-        specifier: ^2.0.6
+        specifier: ^2.0.7
         version: link:../../packages/shared
       '@types/node-fetch':
         specifier: '2'
