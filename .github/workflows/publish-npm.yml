@@ -132,6 +132,8 @@ jobs:
         id: shared_status
         if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true')
         shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           SHARED_NAME="${{ steps.meta.outputs.shared_package_name }}"
           SHARED_VERSION="${{ steps.meta.outputs.shared_version }}"
@@ -176,23 +178,29 @@ jobs:
           fi
 
       - name: Verify shared package availability
+        id: shared_visibility
         if: steps.npm_status.outputs.already_published == 'false' && (github.event_name == 'push' || github.event.inputs.publish_npm == 'true') && steps.shared_status.outputs.already_published == 'false' && steps.shared_publish.outputs.publish_code == '0'
         shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           SHARED_NAME="${{ steps.meta.outputs.shared_package_name }}"
           SHARED_VERSION="${{ steps.meta.outputs.shared_version }}"
+          MAX_ATTEMPTS=30
+          SLEEP_SECONDS=10
 
-          for i in {1..12}; do
+          for i in $(seq 1 "${MAX_ATTEMPTS}"); do
             if npm view "${SHARED_NAME}@${SHARED_VERSION}" version >/dev/null 2>&1; then
               echo "Shared package is visible."
+              echo "shared_visible=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            echo "Attempt ${i}/12: shared package not visible yet, waiting 10s..."
-            sleep 10
+            echo "Attempt ${i}/${MAX_ATTEMPTS}: shared package not visible yet, waiting ${SLEEP_SECONDS}s..."
+            sleep "${SLEEP_SECONDS}"
           done
 
-          echo "::error::Shared package ${SHARED_NAME}@${SHARED_VERSION} is not visible after publish."
-          exit 1
+          echo "::warning::Shared package ${SHARED_NAME}@${SHARED_VERSION} is still not visible after publish checks. Continuing so GitHub Release assets can still be generated."
+          echo "shared_visible=false" >> "$GITHUB_OUTPUT"
 
       - name: Publish to npm
         id: npm_publish
