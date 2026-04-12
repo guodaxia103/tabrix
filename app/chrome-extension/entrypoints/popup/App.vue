@@ -3894,22 +3894,24 @@ onUnmounted(() => {
 }
 
 .connect-button.is-disconnect {
-  border: 1px solid rgba(225, 29, 72, 0.52);
-  background: linear-gradient(180deg, #fb7185 0%, #e11d48 100%);
+  border: 1px solid rgba(244, 63, 94, 0.42);
+  background: linear-gradient(180deg, #fb7185 0%, #e11d48 58%, #be123c 100%);
   color: #fff1f2;
   box-shadow:
-    0 14px 24px -14px rgba(225, 29, 72, 0.6),
-    0 1px 0 rgba(255, 255, 255, 0.16) inset;
+    0 14px 24px -14px rgba(225, 29, 72, 0.56),
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 -1px 0 rgba(136, 19, 55, 0.38) inset;
 }
 
 .connect-button.is-disconnect:hover:not(:disabled) {
-  background: linear-gradient(180deg, #f43f5e 0%, #be123c 100%);
-  border-color: rgba(225, 29, 72, 0.66);
+  background: linear-gradient(180deg, #fb4d6f 0%, #e11d48 54%, #9f1239 100%);
+  border-color: rgba(244, 63, 94, 0.54);
   color: #fff1f2;
   transform: translateY(-1px);
   box-shadow:
-    0 18px 26px -14px rgba(225, 29, 72, 0.64),
-    0 1px 0 rgba(255, 255, 255, 0.18) inset;
+    0 18px 26px -14px rgba(225, 29, 72, 0.62),
+    0 1px 0 rgba(255, 255, 255, 0.24) inset,
+    0 -1px 0 rgba(122, 16, 47, 0.48) inset;
 }
 .error-card {
   background: #fef2f2;
@@ -4881,23 +4883,35 @@ onUnmounted(() => {
 }
 
 .popup-container[data-agent-theme='dark-console'] .connect-button.is-disconnect {
-  background: linear-gradient(180deg, rgba(112, 28, 49, 0.92) 0%, rgba(85, 24, 42, 0.92) 100%);
-  border-color: rgba(251, 113, 133, 0.48);
+  background: linear-gradient(
+    180deg,
+    rgba(138, 34, 61, 0.94) 0%,
+    rgba(112, 27, 50, 0.94) 56%,
+    rgba(88, 21, 40, 0.95) 100%
+  );
+  border-color: rgba(251, 113, 133, 0.36);
   color: #ffe4e6;
   box-shadow:
-    0 14px 22px -14px rgba(244, 63, 94, 0.4),
-    0 0 0 1px rgba(251, 113, 133, 0.16) inset;
+    0 14px 22px -14px rgba(244, 63, 94, 0.44),
+    0 1px 0 rgba(255, 228, 230, 0.2) inset,
+    0 -1px 0 rgba(78, 17, 35, 0.62) inset;
 }
 
 .popup-container[data-agent-theme='dark-console']
   .connect-button.is-disconnect:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(136, 32, 58, 0.96) 0%, rgba(98, 26, 46, 0.96) 100%);
-  border-color: rgba(251, 113, 133, 0.68);
+  background: linear-gradient(
+    180deg,
+    rgba(164, 36, 70, 0.98) 0%,
+    rgba(130, 28, 56, 0.98) 58%,
+    rgba(99, 22, 44, 0.98) 100%
+  );
+  border-color: rgba(251, 113, 133, 0.5);
   color: #ffe4e6;
   transform: translateY(-1px);
   box-shadow:
-    0 18px 26px -14px rgba(244, 63, 94, 0.48),
-    0 0 0 1px rgba(251, 113, 133, 0.22) inset;
+    0 18px 26px -14px rgba(244, 63, 94, 0.5),
+    0 1px 0 rgba(255, 228, 230, 0.24) inset,
+    0 -1px 0 rgba(88, 18, 38, 0.68) inset;
 }
 
 .popup-container[data-agent-theme='dark-console'] .footer-link {
