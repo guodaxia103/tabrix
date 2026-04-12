@@ -884,6 +884,50 @@ async function fetchJson(
   }
 }
 
+function parseMcpJsonPayload(body: unknown): { payload?: any; error?: string } {
+  if (body && typeof body === 'object') {
+    return { payload: body };
+  }
+
+  if (typeof body !== 'string') {
+    return { error: 'MCP response body is empty' };
+  }
+
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return { error: 'MCP response body is empty' };
+  }
+
+  if (trimmed.startsWith('{')) {
+    try {
+      return { payload: JSON.parse(trimmed) };
+    } catch (error) {
+      return {
+        error: `Failed to parse MCP JSON body: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  const dataLines = trimmed
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trim())
+    .filter(Boolean);
+
+  const latest = dataLines[dataLines.length - 1];
+  if (!latest) {
+    return { error: 'MCP response did not contain a data payload' };
+  }
+
+  try {
+    return { payload: JSON.parse(latest) };
+  } catch (error) {
+    return {
+      error: `Failed to parse MCP stream payload: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
 async function checkRuntimeStatus(baseUrl: URL): Promise<{
   ok: boolean;
   status?: number;
@@ -969,6 +1013,141 @@ async function checkMcpInitialize(baseUrl: URL): Promise<{
   };
 }
 
+async function checkMcpToolCall(baseUrl: URL): Promise<{
+  ok: boolean;
+  status?: number;
+  sessionId?: string;
+  error?: string;
+}> {
+  const mcpUrl = new URL('/mcp', baseUrl);
+
+  const initResponse = await fetchJson(
+    mcpUrl.toString(),
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: {
+            name: 'doctor',
+            version: '1.0.0',
+          },
+        },
+      }),
+    },
+    2500,
+  );
+
+  const sessionId = initResponse.headers?.['mcp-session-id'];
+  if (!initResponse.ok || !sessionId) {
+    return {
+      ok: false,
+      status: initResponse.status,
+      error:
+        initResponse.error ||
+        (initResponse.ok ? 'Initialize succeeded but no mcp-session-id was returned' : undefined),
+    };
+  }
+
+  const callResponse = await fetchJson(
+    mcpUrl.toString(),
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+        'mcp-session-id': sessionId,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: {
+          name: 'get_windows_and_tabs',
+          arguments: {},
+        },
+      }),
+    },
+    3500,
+  );
+
+  const deleteResponse = await fetchJson(
+    mcpUrl.toString(),
+    {
+      method: 'DELETE',
+      headers: {
+        'mcp-session-id': sessionId,
+      },
+    },
+    1500,
+  );
+
+  const deleteOk = deleteResponse.ok || deleteResponse.status === HTTP_STATUS.NO_CONTENT;
+  if (!deleteOk) {
+    return {
+      ok: false,
+      status: callResponse.status,
+      sessionId,
+      error: deleteResponse.error || `DELETE /mcp returned ${deleteResponse.status}`,
+    };
+  }
+
+  if (!callResponse.ok) {
+    return {
+      ok: false,
+      status: callResponse.status,
+      sessionId,
+      error: callResponse.error || `POST /mcp tools/call returned ${callResponse.status}`,
+    };
+  }
+
+  const parsed = parseMcpJsonPayload(callResponse.body);
+  if (!parsed.payload) {
+    return {
+      ok: false,
+      status: callResponse.status,
+      sessionId,
+      error: parsed.error || 'Unable to parse tools/call payload',
+    };
+  }
+
+  if (parsed.payload.error) {
+    return {
+      ok: false,
+      status: callResponse.status,
+      sessionId,
+      error: String(parsed.payload.error.message || parsed.payload.error),
+    };
+  }
+
+  const result = parsed.payload.result;
+  if (result?.isError) {
+    const toolText = Array.isArray(result.content)
+      ? result.content.find((item: any) => item?.type === 'text')?.text
+      : undefined;
+    return {
+      ok: false,
+      status: callResponse.status,
+      sessionId,
+      error: toolText ? String(toolText) : 'tools/call returned isError=true',
+    };
+  }
+
+  return {
+    ok: true,
+    status: callResponse.status,
+    sessionId,
+  };
+}
+
 // ============================================================================
 // Summary Computation
 // ============================================================================
@@ -1000,6 +1179,7 @@ function getCheckPriority(id: string): number {
   if (id === 'daemon.status') return 93;
   if (id === 'remote.lan') return 95;
   if (id === 'mcp.initialize') return 100;
+  if (id === 'mcp.toolcall') return 101;
   if (id === 'security.auth') return 110;
   if (id === 'logs') return 120;
   return 1000;
@@ -1604,6 +1784,34 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
 
           if (!initialize.ok) {
             nextSteps.push('Check transport/session logs or run tabrix report --include-logs tail');
+          } else {
+            const toolCall = await checkMcpToolCall(url);
+            checks.push({
+              id: 'mcp.toolcall',
+              title: 'MCP tool call (browser control readiness)',
+              status: toolCall.ok ? 'ok' : 'warn',
+              message: toolCall.ok
+                ? `POST /mcp tools/call get_windows_and_tabs -> ${toolCall.status}`
+                : `POST /mcp tools/call failed (${toolCall.error || toolCall.status || 'unknown error'})`,
+              details: {
+                sessionId: toolCall.sessionId,
+                hint: toolCall.ok
+                  ? 'Browser control bridge is ready.'
+                  : 'MCP transport is reachable, but browser control bridge is not ready yet.',
+                fix: toolCall.ok
+                  ? undefined
+                  : [
+                      'Open the extension popup and click Connect',
+                      `${COMMAND_NAME} doctor --fix`,
+                      `${COMMAND_NAME} smoke`,
+                    ],
+              },
+            });
+
+            if (!toolCall.ok) {
+              nextSteps.push('Open the extension popup and click Connect');
+              nextSteps.push(`${COMMAND_NAME} smoke`);
+            }
           }
         }
       } catch (e) {
