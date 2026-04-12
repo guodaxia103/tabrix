@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { COMMAND_NAME } from './constant';
-import { NATIVE_SERVER_PORT, SERVER_CONFIG } from '../constant';
+import { SERVER_CONFIG, getChromeMcpPort } from '../constant';
 
 export interface StatusOptions {
   json?: boolean;
@@ -102,13 +102,14 @@ export async function runStatus(options: StatusOptions = {}): Promise<number> {
   }
 
   try {
-    const response = await fetchFn(
-      `http://${SERVER_CONFIG.HOST}:${process.env.CHROME_MCP_PORT || NATIVE_SERVER_PORT}/status`,
-      {
-        method: 'GET',
-        signal: controller.signal,
-      },
-    );
+    const listenHost = SERVER_CONFIG.HOST;
+    const requestHost = listenHost === '0.0.0.0' || listenHost === '::' ? '127.0.0.1' : listenHost;
+    const requestPort = getChromeMcpPort();
+
+    const response = await fetchFn(`http://${requestHost}:${requestPort}/status`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
 
     if (!response.ok) {
       process.stderr.write(`Status failed: HTTP ${response.status}\n`);
@@ -120,7 +121,15 @@ export async function runStatus(options: StatusOptions = {}): Promise<number> {
     process.stdout.write(output + '\n');
     return 0;
   } catch (error) {
-    process.stderr.write(`Status failed: ${stringifyError(error)}\n`);
+    const message = stringifyError(error);
+    process.stderr.write(`Status failed: ${message}\n`);
+
+    if (/fetch failed|ECONNREFUSED|EHOSTUNREACH|ENOTFOUND|network|abort/i.test(message)) {
+      process.stderr.write(
+        `Hint: run "${COMMAND_NAME} daemon start" or "${COMMAND_NAME} doctor --fix"\n`,
+      );
+    }
+
     return 1;
   } finally {
     clearTimeout(timeout);

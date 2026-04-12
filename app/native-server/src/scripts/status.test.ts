@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { runStatus } from './status';
-import { NATIVE_SERVER_PORT, SERVER_CONFIG } from '../constant';
+import { MCP_HTTP_HOST_ENV, NATIVE_SERVER_PORT, SERVER_CONFIG } from '../constant';
 
 type FetchMock = typeof globalThis.fetch;
 
 describe('status script', () => {
   const originalFetch = globalThis.fetch;
   const originalPort = process.env.CHROME_MCP_PORT;
+  const originalHost = process.env[MCP_HTTP_HOST_ENV];
   let stdoutSpy: jest.SpiedFunction<typeof process.stdout.write>;
   let stderrSpy: jest.SpiedFunction<typeof process.stderr.write>;
 
@@ -28,6 +29,11 @@ describe('status script', () => {
       delete process.env.CHROME_MCP_PORT;
     } else {
       process.env.CHROME_MCP_PORT = originalPort;
+    }
+    if (originalHost === undefined) {
+      delete process.env[MCP_HTTP_HOST_ENV];
+    } else {
+      process.env[MCP_HTTP_HOST_ENV] = originalHost;
     }
   });
 
@@ -88,5 +94,50 @@ describe('status script', () => {
     expect(code).toBe(0);
     const output = stdoutSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
     expect(output).toContain('Session IDs: session-1, session-2');
+  });
+
+  test('uses localhost when server listens on wildcard host', async () => {
+    process.env[MCP_HTTP_HOST_ENV] = '0.0.0.0';
+
+    const json = {
+      status: 'ok',
+      data: {
+        isRunning: true,
+        host: '0.0.0.0',
+        port: NATIVE_SERVER_PORT,
+        nativeHostAttached: true,
+        transports: {
+          total: 1,
+          sse: 0,
+          streamableHttp: 1,
+        },
+      },
+    };
+
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => json,
+    })) as unknown as FetchMock;
+    globalThis.fetch = fetchMock;
+
+    const code = await runStatus();
+
+    expect(code).toBe(0);
+    expect(fetchMock).toHaveBeenCalled();
+    const [url] = (fetchMock as unknown as jest.Mock).mock.calls[0] as [string, unknown];
+    expect(url).toBe(`http://127.0.0.1:${process.env.CHROME_MCP_PORT}/status`);
+  });
+
+  test('prints actionable hint when fetch fails', async () => {
+    globalThis.fetch = jest.fn(async () => {
+      throw new Error('fetch failed');
+    }) as unknown as FetchMock;
+
+    const code = await runStatus();
+
+    expect(code).toBe(1);
+    const errorOutput = stderrSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
+    expect(errorOutput).toContain('Status failed: fetch failed');
+    expect(errorOutput).toContain('doctor --fix');
   });
 });

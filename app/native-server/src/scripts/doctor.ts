@@ -25,7 +25,7 @@ import {
   getLogDir,
   discoverLoadedExtensionOrigins,
 } from './utils';
-import { daemonStatus } from './daemon';
+import { daemonStart, daemonStatus, daemonStop } from './daemon';
 import {
   HTTP_STATUS,
   NATIVE_SERVER_PORT,
@@ -741,7 +741,24 @@ async function attemptFixes(
       }
     });
   }
+  await attempt('daemon', 'Ensure standalone daemon is running', async () => {
+    const before = await daemonStatus();
 
+    if (before.running && before.healthy) {
+      return;
+    }
+
+    if (before.running && !before.healthy) {
+      await daemonStop();
+    }
+
+    await daemonStart();
+
+    const after = await daemonStatus();
+    if (!after.running || !after.healthy) {
+      throw new Error('Daemon is still unavailable after start attempt');
+    }
+  });
   return fixes;
 }
 

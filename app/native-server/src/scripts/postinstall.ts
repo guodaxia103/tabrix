@@ -7,6 +7,7 @@ import { execSync } from 'child_process';
 import { COMMAND_NAME } from './constant';
 import { colorText, tryRegisterUserLevelHost, writeNodePathFile } from './utils';
 import { tokenManager } from '../server/auth';
+import { daemonStart, daemonStatus } from './daemon';
 
 // Check if this script is run directly
 const isDirectRun = require.main === module;
@@ -274,6 +275,62 @@ function ensureDefaultAuthToken(): void {
 }
 
 /**
+ * Best-effort daemon startup after successful global install.
+ * This makes `tabrix status` and local MCP endpoint available immediately.
+ */
+async function ensureDaemonRunningAfterInstall(): Promise<void> {
+  if (!isGlobalInstall) {
+    return;
+  }
+
+  if (isRunningElevated()) {
+    if (verboseInstallDebug) {
+      console.log(
+        colorText(
+          'Skip daemon autostart under elevated context (to avoid user context mismatch)',
+          'yellow',
+        ),
+      );
+    }
+    return;
+  }
+
+  try {
+    const before = await daemonStatus();
+    if (before.running && before.healthy) {
+      console.log(colorText('✓ Local daemon already running', 'green'));
+      return;
+    }
+
+    const result = await daemonStart();
+    const after = await daemonStatus();
+
+    if (after.running && after.healthy) {
+      const pidText = after.pid ? `pid=${after.pid}` : 'pid=unknown';
+      if (result.started) {
+        console.log(colorText(`✓ Local daemon started (${pidText})`, 'green'));
+      } else {
+        console.log(colorText(`✓ Local daemon running (${pidText})`, 'green'));
+      }
+      return;
+    }
+
+    console.warn(
+      colorText(
+        '⚠️ Daemon start attempted but health check is not ready yet. You can run: tabrix daemon start',
+        'yellow',
+      ),
+    );
+  } catch (error) {
+    console.warn(
+      colorText(
+        `⚠️ Failed to auto-start daemon: ${error instanceof Error ? error.message : String(error)}`,
+        'yellow',
+      ),
+    );
+  }
+}
+/**
  * 打印手动安装指南
  */
 function printManualInstructions(): void {
@@ -356,6 +413,7 @@ async function main(): Promise<void> {
   // If global installation, try automatic registration
   if (isGlobalInstall) {
     await tryRegisterNativeHost();
+    await ensureDaemonRunningAfterInstall();
   } else {
     console.log(colorText('Local installation detected', 'yellow'));
     printManualInstructions();
