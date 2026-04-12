@@ -35,7 +35,7 @@
     "clean:modules": "node ./scripts/clean-workspace.mjs modules",
     "clean": "pnpm run clean:dist && pnpm run clean:modules",
     "typecheck": "pnpm -r --if-present typecheck",
-    "test:core": "pnpm -C app/native-server test && pnpm -C app/chrome-extension test",
+    "test:core": "pnpm -C app/native-server test:ci && pnpm -C app/chrome-extension test",
     "test:wasm": "pnpm -C packages/wasm-simd test",
     "deps:outdated": "pnpm -r outdated",
     "audit": "pnpm audit --prod --audit-level high",
