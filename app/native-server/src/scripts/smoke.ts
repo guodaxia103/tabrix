@@ -1067,6 +1067,23 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       'Uploaded local temp file',
     );
 
+    const clickDownload = parseToolText(
+      await mcp.callTool('chrome_click_element', {
+        tabId: tempTabId,
+        selector: '#downloadLink',
+      }),
+    );
+    const clickDownloadOk =
+      clickDownload?.clickMethod === 'intercepted-download' &&
+      Boolean(clickDownload?.download?.savedPath);
+    record(
+      'chrome_click_element(download-intercept)',
+      clickDownloadOk,
+      clickDownloadOk
+        ? `Intercepted page download into ${clickDownload.download.savedPath}`
+        : `Download intercept failed (${JSON.stringify(clickDownload).slice(0, 120)})`,
+    );
+
     record('chrome_handle_dialog', true, 'Skipped in default smoke run');
 
     await mcp.callTool('chrome_bookmark_add', {
