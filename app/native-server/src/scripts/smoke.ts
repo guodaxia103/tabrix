@@ -5,11 +5,17 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { SERVER_CONFIG, NATIVE_SERVER_PORT } from '../constant';
+import { getChromeMcpUrl } from '../constant';
 
 export interface SmokeOptions {
   json?: boolean;
   keepTab?: boolean;
+  url?: string;
+  authToken?: string;
+  protocolOnly?: boolean;
+  allTools?: boolean;
+  repeat?: number;
+  concurrency?: number;
 }
 
 interface SmokeStep {
@@ -21,6 +27,8 @@ interface SmokeStep {
 interface SmokeResult {
   ok: boolean;
   baseUrl: string;
+  mcpUrl: string;
+  mode: 'protocol' | 'local-browser' | 'all-tools';
   steps: SmokeStep[];
 }
 
@@ -32,8 +40,55 @@ interface HttpProbeResult {
 
 interface MpcCallResult {
   raw: any;
-  parsed: any;
+  parsed: any | null;
+  sessionId?: string | null;
+  durationMs?: number;
 }
+
+interface ProtocolSmokeSummary {
+  ok: boolean;
+  steps: SmokeStep[];
+  sessionId: string | null;
+  toolCount: number;
+  latencyMs: number;
+}
+
+interface StabilityAttempt {
+  ok: boolean;
+  latencyMs: number;
+  error?: string;
+}
+
+const ALL_TOOL_NAMES = [
+  'get_windows_and_tabs',
+  'performance_start_trace',
+  'performance_stop_trace',
+  'performance_analyze_insight',
+  'chrome_read_page',
+  'chrome_computer',
+  'chrome_navigate',
+  'chrome_screenshot',
+  'chrome_close_tabs',
+  'chrome_switch_tab',
+  'chrome_get_web_content',
+  'chrome_network_request',
+  'chrome_network_capture',
+  'chrome_handle_download',
+  'chrome_history',
+  'chrome_bookmark_search',
+  'chrome_bookmark_add',
+  'chrome_bookmark_delete',
+  'chrome_get_interactive_elements',
+  'chrome_javascript',
+  'chrome_click_element',
+  'chrome_fill_or_select',
+  'chrome_request_element_selection',
+  'chrome_keyboard',
+  'chrome_console',
+  'chrome_upload_file',
+  'chrome_handle_dialog',
+  'chrome_gif_recorder',
+] as const;
 
 function stringifyError(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -184,13 +239,15 @@ function createSmokeServer(): Promise<{
   });
 }
 
-class LocalMcpClient {
+class StreamableHttpMcpClient {
   private sessionId: string | null = null;
   private requestId = 1;
   private readonly baseUrl: string;
+  private readonly defaultHeaders: Record<string, string>;
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, defaultHeaders: Record<string, string> = {}) {
     this.baseUrl = baseUrl;
+    this.defaultHeaders = defaultHeaders;
   }
 
   public async initialize(): Promise<void> {
@@ -207,12 +264,21 @@ class LocalMcpClient {
     this.sessionId = sessionId;
   }
 
+  public async notifyInitialized(): Promise<void> {
+    await this.rpc('notifications/initialized', {}, { notification: true, allowEmpty: true });
+  }
+
+  public getSessionId(): string | null {
+    return this.sessionId;
+  }
+
   public async close(): Promise<void> {
     if (!this.sessionId) return;
     try {
       await fetch(this.baseUrl, {
         method: 'DELETE',
         headers: {
+          ...this.defaultHeaders,
           'mcp-session-id': this.sessionId,
         },
       });
@@ -234,22 +300,28 @@ class LocalMcpClient {
     return response.parsed?.result;
   }
 
-  private async rpc(method: string, params: Record<string, unknown>): Promise<MpcCallResult> {
+  private async rpc(
+    method: string,
+    params: Record<string, unknown>,
+    options: { notification?: boolean; allowEmpty?: boolean } = {},
+  ): Promise<MpcCallResult> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30_000);
     let res: Response;
+    const startedAt = Date.now();
     try {
       res = await fetch(this.baseUrl, {
         method: 'POST',
         signal: controller.signal,
         headers: {
+          ...this.defaultHeaders,
           'content-type': 'application/json',
           accept: 'application/json, text/event-stream',
           ...(this.sessionId ? { 'mcp-session-id': this.sessionId } : {}),
         },
         body: JSON.stringify({
           jsonrpc: '2.0',
-          id: this.requestId++,
+          ...(options.notification ? {} : { id: this.requestId++ }),
           method,
           params,
         }),
@@ -259,7 +331,7 @@ class LocalMcpClient {
     }
 
     const text = await res.text();
-    const parsed = parseStreamableJson(text);
+    const parsed = text.trim() ? parseStreamableJson(text) : null;
 
     if (!res.ok || parsed?.error) {
       throw new Error(
@@ -267,7 +339,16 @@ class LocalMcpClient {
       );
     }
 
-    return { raw: res, parsed };
+    if (!parsed && !options.allowEmpty) {
+      throw new Error(`MCP ${method} returned no payload`);
+    }
+
+    return {
+      raw: res,
+      parsed,
+      sessionId: res.headers.get('mcp-session-id'),
+      durationMs: Date.now() - startedAt,
+    };
   }
 }
 
@@ -295,9 +376,30 @@ async function poll<T>(
   return last;
 }
 
-async function probe(url: string): Promise<HttpProbeResult> {
+function buildCompanionUrl(mcpUrl: string, endpoint: 'ping' | 'status'): string {
+  const url = new URL(mcpUrl);
+  if (url.pathname.endsWith('/mcp')) {
+    url.pathname = `${url.pathname.slice(0, -4)}/${endpoint}`.replace(/\/{2,}/g, '/');
+  } else {
+    url.pathname = `/${endpoint}`;
+  }
+  return url.toString();
+}
+
+function buildDefaultMcpUrl(): string {
+  return getChromeMcpUrl();
+}
+
+function buildAuthHeaders(token?: string): Record<string, string> {
+  if (!token) {
+    return {};
+  }
+  return { Authorization: `Bearer ${token}` };
+}
+
+async function probe(url: string, headers: Record<string, string> = {}): Promise<HttpProbeResult> {
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { headers });
     return {
       ok: response.ok,
       status: response.status,
@@ -311,45 +413,413 @@ async function probe(url: string): Promise<HttpProbeResult> {
   }
 }
 
-export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
+async function runProtocolSequence(
+  mcpUrl: string,
+  authToken?: string,
+): Promise<ProtocolSmokeSummary> {
   const steps: SmokeStep[] = [];
-  const smokeServer = await createSmokeServer();
-  const mcp = new LocalMcpClient(`http://${SERVER_CONFIG.HOST}:${NATIVE_SERVER_PORT}/mcp`);
-  let tempTabId: number | null = null;
-  let originalTabId: number | null = null;
+  const defaultHeaders = buildAuthHeaders(authToken);
+  const pingUrl = buildCompanionUrl(mcpUrl, 'ping');
+  const statusUrl = buildCompanionUrl(mcpUrl, 'status');
+  const mcp = new StreamableHttpMcpClient(mcpUrl, defaultHeaders);
+  const startedAt = Date.now();
+  let sessionId: string | null = null;
+  let toolCount = 0;
 
   const record = (name: string, ok: boolean, detail: string): void => {
     steps.push({ name, ok, detail });
   };
 
   try {
-    const ping = await probe(`http://${SERVER_CONFIG.HOST}:${NATIVE_SERVER_PORT}/ping`);
-    record(
-      'runtime.ping',
-      ping.ok,
-      ping.ok
-        ? `Bridge reachable (${ping.detail})`
-        : `Bridge not reachable (${ping.detail}). Click Connect in the extension, then retry.`,
-    );
+    const ping = await probe(pingUrl);
+    record('runtime.ping', ping.ok, ping.ok ? `Bridge reachable (${ping.detail})` : ping.detail);
+    if (!ping.ok) throw new Error(`Ping failed: ${ping.detail}`);
 
-    if (!ping.ok) {
-      throw new Error('Bridge runtime is not reachable');
-    }
-
-    const status = await probe(`http://${SERVER_CONFIG.HOST}:${NATIVE_SERVER_PORT}/status`);
+    const status = await probe(statusUrl);
     record(
       'runtime.status',
       status.ok,
-      status.ok
-        ? `Status endpoint reachable (${status.detail})`
-        : `Status endpoint failed (${status.detail})`,
+      status.ok ? `Status endpoint reachable (${status.detail})` : status.detail,
     );
+    if (!status.ok) throw new Error(`Status failed: ${status.detail}`);
 
     await mcp.initialize();
-    record('initialize', true, 'Created MCP session successfully');
+    sessionId = mcp.getSessionId();
+    record('initialize', true, `Created MCP session ${sessionId}`);
+
+    await mcp.notifyInitialized();
+    record('notifications/initialized', true, 'Initialization notification accepted');
 
     const tools = await mcp.listTools();
-    record('tools/list', true, `${tools.length} tools available`);
+    toolCount = tools.length;
+    record(
+      'tools/list',
+      toolCount > 0 && tools.includes('get_windows_and_tabs'),
+      `${toolCount} tools available`,
+    );
+    if (!tools.includes('get_windows_and_tabs')) {
+      throw new Error('get_windows_and_tabs not found in tools/list');
+    }
+
+    const windows = parseToolText(await mcp.callTool('get_windows_and_tabs'));
+    const summary =
+      typeof windows === 'string'
+        ? windows
+        : JSON.stringify({
+            windowCount: windows?.windowCount,
+            tabCount: windows?.tabCount,
+            activeTabTitle: windows?.activeTabTitle,
+          });
+    record(
+      'tools/call:get_windows_and_tabs',
+      String(summary).includes('windowCount') || Boolean(windows?.windowCount),
+      `Browser control ready (${summary.slice(0, 160)})`,
+    );
+
+    return {
+      ok: steps.every((step) => step.ok),
+      steps,
+      sessionId,
+      toolCount,
+      latencyMs: Date.now() - startedAt,
+    };
+  } finally {
+    await mcp.close().catch(() => {
+      // Ignore cleanup failures in smoke runs.
+    });
+  }
+}
+
+async function runProtocolStability(
+  mcpUrl: string,
+  authToken: string | undefined,
+  repeat: number,
+  concurrency: number,
+): Promise<{ steps: SmokeStep[]; ok: boolean }> {
+  const attempts: StabilityAttempt[] = [];
+  const steps: SmokeStep[] = [];
+
+  for (let offset = 0; offset < repeat; offset += concurrency) {
+    const size = Math.min(concurrency, repeat - offset);
+    const batch = await Promise.all(
+      Array.from({ length: size }, async () => {
+        try {
+          const result = await runProtocolSequence(mcpUrl, authToken);
+          return { ok: result.ok, latencyMs: result.latencyMs } satisfies StabilityAttempt;
+        } catch (error) {
+          return {
+            ok: false,
+            latencyMs: 0,
+            error: stringifyError(error),
+          } satisfies StabilityAttempt;
+        }
+      }),
+    );
+    attempts.push(...batch);
+  }
+
+  const successes = attempts.filter((attempt) => attempt.ok);
+  const failures = attempts.filter((attempt) => !attempt.ok);
+  const latencies = successes.map((attempt) => attempt.latencyMs).sort((a, b) => a - b);
+  const percentile = (p: number): number | null =>
+    latencies.length
+      ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * p))]
+      : null;
+  const avgLatency = latencies.length
+    ? Math.round(latencies.reduce((sum, value) => sum + value, 0) / latencies.length)
+    : null;
+
+  steps.push({
+    name: 'stability.summary',
+    ok: failures.length === 0,
+    detail: `${successes.length}/${attempts.length} attempts passed; concurrency ${concurrency}; avg ${avgLatency ?? 'n/a'}ms; p90 ${percentile(0.9) ?? 'n/a'}ms`,
+  });
+
+  failures.slice(0, 5).forEach((failure, index) => {
+    steps.push({
+      name: `stability.failure.${index + 1}`,
+      ok: false,
+      detail: failure.error || 'Unknown failure',
+    });
+  });
+
+  return {
+    steps,
+    ok: failures.length === 0,
+  };
+}
+
+async function locateTabIdByUrl(
+  mcp: StreamableHttpMcpClient,
+  prefixUrl: string,
+): Promise<number | null> {
+  const snap = parseToolText(await mcp.callTool('get_windows_and_tabs'));
+  return (
+    snap?.windows
+      ?.flatMap((window: any) => window.tabs || [])
+      .find((tab: any) => String(tab?.url || '').startsWith(prefixUrl))?.tabId || null
+  );
+}
+
+async function runAllToolsValidation(
+  mcp: StreamableHttpMcpClient,
+  smokeServer: { baseUrl: string; tempFilePath: string },
+  record: (name: string, ok: boolean, detail: string) => void,
+  currentTabId: number | null,
+): Promise<number | null> {
+  const tools = await mcp.listTools();
+  const toolNames = new Set(tools);
+  const missing = ALL_TOOL_NAMES.filter((name) => !toolNames.has(name));
+  record(
+    'tools.coverage',
+    missing.length === 0,
+    missing.length === 0
+      ? `All ${ALL_TOOL_NAMES.length} expected tools are registered`
+      : `Missing tools: ${missing.join(', ')}`,
+  );
+
+  if (currentTabId == null) {
+    throw new Error('Cannot run --all-tools validation without a resolved smoke tab');
+  }
+
+  const tabId = currentTabId;
+  await mcp.callTool('chrome_switch_tab', { tabId });
+
+  const interactive = parseToolText(
+    await mcp.callTool('chrome_get_interactive_elements', {
+      tabId,
+      includeCoordinates: true,
+    }),
+  );
+  record(
+    'chrome_get_interactive_elements',
+    JSON.stringify(interactive).length > 20,
+    'Interactive element tree fetched',
+  );
+
+  await mcp.callTool('chrome_network_capture', {
+    action: 'start',
+    tabId,
+    includeStatic: false,
+    maxCaptureTime: 15000,
+    inactivityTimeout: 3000,
+  });
+  await mcp.callTool('chrome_click_element', {
+    tabId,
+    selector: '#fetchBtn',
+  });
+  await sleep(1000);
+  const captured = parseToolText(
+    await mcp.callTool('chrome_network_capture', {
+      action: 'stop',
+      tabId,
+    }),
+  );
+  record(
+    'chrome_network_capture',
+    JSON.stringify(captured).includes('/api/data'),
+    'Network capture observed smoke fetch request',
+  );
+
+  const directRequest = parseToolText(
+    await mcp.callTool('chrome_network_request', {
+      tabId,
+      url: `${smokeServer.baseUrl}/api/data`,
+      method: 'GET',
+    }),
+  );
+  record(
+    'chrome_network_request',
+    JSON.stringify(directRequest).includes('network-ok'),
+    'Direct network request returned expected payload',
+  );
+
+  await mcp.callTool('chrome_upload_file', {
+    tabId,
+    selector: '#fileInput',
+    filePath: smokeServer.tempFilePath,
+  });
+  const uploaded = await poll(
+    async () =>
+      parseToolText(
+        await mcp.callTool('chrome_javascript', {
+          tabId,
+          code: "return document.querySelector('#fileName').textContent;",
+        }),
+      ),
+    (value) => String(value?.result ?? value).includes(path.basename(smokeServer.tempFilePath)),
+    { timeout: 4000 },
+  );
+  record(
+    'chrome_upload_file',
+    String(uploaded?.result ?? uploaded).includes(path.basename(smokeServer.tempFilePath)),
+    'Local file upload succeeded',
+  );
+
+  await mcp.callTool('chrome_click_element', {
+    tabId,
+    selector: '#promptBtn',
+  });
+  await sleep(200);
+  const dialogHandled = parseToolText(
+    await mcp.callTool('chrome_handle_dialog', {
+      action: 'accept',
+      promptText: 'smoke-dialog-ok',
+      tabId,
+    }),
+  );
+  record(
+    'chrome_handle_dialog',
+    true,
+    `Dialog accept command executed (${JSON.stringify(dialogHandled).slice(0, 48)})`,
+  );
+  await sleep(120);
+  // Best-effort cleanup: dismiss if the browser still reports an open dialog.
+  await mcp
+    .callTool('chrome_handle_dialog', {
+      action: 'dismiss',
+      tabId,
+    })
+    .catch(() => {
+      // No dialog open is expected in most runs.
+    });
+
+  await mcp.callTool('chrome_click_element', {
+    tabId,
+    selector: '#downloadLink',
+  });
+  const downloadResult = parseToolText(
+    await mcp.callTool('chrome_handle_download', {
+      filenameContains: 'smoke-download',
+      timeoutMs: 20000,
+      waitForComplete: true,
+    }),
+  );
+  record(
+    'chrome_handle_download',
+    JSON.stringify(downloadResult).toLowerCase().includes('download'),
+    'Download capture confirmed',
+  );
+
+  record('chrome_request_element_selection', true, 'Skipped (manual user interaction required)');
+
+  const perfInsight = parseToolText(
+    await mcp.callTool('performance_analyze_insight', {
+      tabId,
+      timeoutMs: 20000,
+    }),
+  );
+  record(
+    'performance_analyze_insight',
+    JSON.stringify(perfInsight).length > 2,
+    'Performance insight analyzed',
+  );
+
+  return tabId;
+}
+
+export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
+  const steps: SmokeStep[] = [];
+  const mcpUrl = options.url || buildDefaultMcpUrl();
+  const protocolOnly =
+    Boolean(options.protocolOnly) || Boolean(options.url) || Boolean(options.authToken);
+  const repeat = Math.max(1, options.repeat || 1);
+  const concurrency = Math.max(1, options.concurrency || 1);
+  const smokeServer = protocolOnly ? null : await createSmokeServer();
+  const mcp = new StreamableHttpMcpClient(mcpUrl, buildAuthHeaders(options.authToken));
+  let tempTabId: number | null = null;
+  let originalTabId: number | null = null;
+  const mode: SmokeResult['mode'] = options.allTools
+    ? 'all-tools'
+    : protocolOnly
+      ? 'protocol'
+      : 'local-browser';
+
+  const record = (name: string, ok: boolean, detail: string): void => {
+    steps.push({ name, ok, detail });
+  };
+
+  try {
+    if (options.allTools && protocolOnly) {
+      throw new Error(
+        '--all-tools requires local smoke mode. Remove --url/--auth-token/--protocol-only and retry.',
+      );
+    }
+
+    if (repeat > 1 || concurrency > 1) {
+      const stability = await runProtocolStability(mcpUrl, options.authToken, repeat, concurrency);
+      steps.push(...stability.steps);
+      const result: SmokeResult = {
+        ok: stability.ok,
+        baseUrl: mcpUrl,
+        mcpUrl,
+        mode: 'protocol',
+        steps,
+      };
+
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        process.stdout.write(`tabrix smoke\n\n`);
+        process.stdout.write(`MCP endpoint: ${mcpUrl}\n`);
+        for (const step of steps) {
+          process.stdout.write(`${step.ok ? '[OK]' : '[FAIL]'} ${step.name}: ${step.detail}\n`);
+        }
+      }
+
+      return result.ok ? 0 : 1;
+    }
+
+    if (protocolOnly) {
+      const protocol = await runProtocolSequence(mcpUrl, options.authToken);
+      steps.push(...protocol.steps);
+
+      const result: SmokeResult = {
+        ok: protocol.ok,
+        baseUrl: mcpUrl,
+        mcpUrl,
+        mode: 'protocol',
+        steps,
+      };
+
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        process.stdout.write(`tabrix smoke\n\n`);
+        process.stdout.write(`MCP endpoint: ${mcpUrl}\n`);
+        for (const step of steps) {
+          process.stdout.write(`${step.ok ? '[OK]' : '[FAIL]'} ${step.name}: ${step.detail}\n`);
+        }
+      }
+
+      return result.ok ? 0 : 1;
+    }
+
+    const defaultHeaders = buildAuthHeaders(options.authToken);
+    const pingUrl = buildCompanionUrl(mcpUrl, 'ping');
+    const statusUrl = buildCompanionUrl(mcpUrl, 'status');
+    const ping = await probe(pingUrl, defaultHeaders);
+    record('runtime.ping', ping.ok, ping.ok ? `Bridge reachable (${ping.detail})` : ping.detail);
+    if (!ping.ok) throw new Error(`Ping failed: ${ping.detail}`);
+
+    const status = await probe(statusUrl, defaultHeaders);
+    record(
+      'runtime.status',
+      status.ok,
+      status.ok ? `Status endpoint reachable (${status.detail})` : status.detail,
+    );
+    if (!status.ok) throw new Error(`Status failed: ${status.detail}`);
+
+    await mcp.initialize();
+    record('initialize', true, `Created MCP session ${mcp.getSessionId()}`);
+    await mcp.notifyInitialized();
+    record('notifications/initialized', true, 'Initialization notification accepted');
+    const listedTools = await mcp.listTools();
+    record(
+      'tools/list',
+      listedTools.length > 0 && listedTools.includes('get_windows_and_tabs'),
+      `${listedTools.length} tools available`,
+    );
 
     const windows = parseToolText(await mcp.callTool('get_windows_and_tabs'));
     originalTabId =
@@ -359,7 +829,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
 
     const navigateResult = parseToolText(
       await mcp.callTool('chrome_navigate', {
-        url: smokeServer.baseUrl,
+        url: smokeServer!.baseUrl,
         newWindow: true,
         width: 1280,
         height: 900,
@@ -369,19 +839,12 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       navigateResult?.tabId ||
       navigateResult?.tabs?.[0]?.tabId ||
       navigateResult?.tabs?.find((tab: any) =>
-        String(tab?.url || '').startsWith(smokeServer.baseUrl),
+        String(tab?.url || '').startsWith(smokeServer!.baseUrl),
       )?.tabId ||
       null;
 
     if (!tempTabId) {
-      const findTab = async () => {
-        const snap = parseToolText(await mcp.callTool('get_windows_and_tabs'));
-        return (
-          snap?.windows
-            ?.flatMap((w: any) => w.tabs || [])
-            .find((t: any) => String(t.url || '').startsWith(smokeServer.baseUrl))?.tabId || null
-        );
-      };
+      const findTab = async () => locateTabIdByUrl(mcp, smokeServer!.baseUrl);
       tempTabId = await poll(findTab, (id) => id != null, { timeout: 8000 });
     }
     record(
@@ -501,7 +964,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
 
     const directRequest = parseToolText(
       await mcp.callTool('chrome_network_request', {
-        url: `${smokeServer.baseUrl}/api/data`,
+        url: `${smokeServer!.baseUrl}/api/data`,
         method: 'GET',
       }),
     );
@@ -555,7 +1018,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     await mcp.callTool('chrome_upload_file', {
       tabId: tempTabId,
       selector: '#fileInput',
-      filePath: smokeServer.tempFilePath,
+      filePath: smokeServer!.tempFilePath,
     });
     const uploaded = await poll(
       async () =>
@@ -565,23 +1028,19 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
             code: "return document.querySelector('#fileName').textContent;",
           }),
         ),
-      (v) => String(v?.result ?? v).includes(path.basename(smokeServer.tempFilePath)),
+      (v) => String(v?.result ?? v).includes(path.basename(smokeServer!.tempFilePath)),
       { timeout: 4000 },
     );
     record(
       'chrome_upload_file',
-      String(uploaded?.result ?? uploaded).includes(path.basename(smokeServer.tempFilePath)),
+      String(uploaded?.result ?? uploaded).includes(path.basename(smokeServer!.tempFilePath)),
       'Uploaded local temp file',
     );
 
-    record(
-      'chrome_handle_dialog',
-      true,
-      'Skipped in default smoke run to avoid leaving a browser-modal prompt open on the desktop',
-    );
+    record('chrome_handle_dialog', true, 'Skipped in default smoke run');
 
     await mcp.callTool('chrome_bookmark_add', {
-      url: smokeServer.baseUrl,
+      url: smokeServer!.baseUrl,
       title: 'Phase0 Smoke Bookmark',
       parentId: 'Bookmarks Bar',
       createFolder: false,
@@ -599,7 +1058,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     );
 
     await mcp.callTool('chrome_bookmark_delete', {
-      url: smokeServer.baseUrl,
+      url: smokeServer!.baseUrl,
       title: 'Phase0 Smoke Bookmark',
     });
     record('chrome_bookmark_delete', true, 'Deleted temporary bookmark');
@@ -641,6 +1100,10 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       'Started and stopped performance trace',
     );
 
+    if (options.allTools) {
+      tempTabId = await runAllToolsValidation(mcp, smokeServer!, record, tempTabId);
+    }
+
     if (!options.keepTab) {
       await mcp.callTool('chrome_close_tabs', {
         tabIds: [tempTabId],
@@ -674,15 +1137,19 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     } catch {
       // Ignore cleanup failures.
     }
-    smokeServer.server.close();
-    if (fs.existsSync(smokeServer.tempFilePath)) {
-      fs.rmSync(smokeServer.tempFilePath, { force: true });
+    if (smokeServer) {
+      smokeServer.server.close();
+      if (fs.existsSync(smokeServer.tempFilePath)) {
+        fs.rmSync(smokeServer.tempFilePath, { force: true });
+      }
     }
   }
 
   const result: SmokeResult = {
     ok: steps.every((step) => step.ok),
-    baseUrl: smokeServer.baseUrl,
+    baseUrl: smokeServer?.baseUrl || mcpUrl,
+    mcpUrl,
+    mode,
     steps,
   };
 
@@ -690,7 +1157,9 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
   } else {
     process.stdout.write(`tabrix smoke\n\n`);
-    process.stdout.write(`Local test page: ${result.baseUrl}\n`);
+    process.stdout.write(
+      `${result.mode === 'protocol' ? 'MCP endpoint' : 'Local test page'}: ${result.baseUrl}\n`,
+    );
     for (const step of steps) {
       process.stdout.write(`${step.ok ? '[OK]' : '[FAIL]'} ${step.name}: ${step.detail}\n`);
     }

@@ -299,14 +299,35 @@ program
 
 program
   .command('smoke')
-  .description('Run a live browser smoke test against the local MCP server')
+  .description(
+    'Run smoke tests against local browser control or a remote Streamable HTTP MCP endpoint',
+  )
   .option('--json', 'Output smoke test results as JSON')
   .option('--keep-tab', 'Keep the temporary smoke-test tab open for inspection')
+  .option('--all-tools', 'Run extended full-tool validation (local mode only)')
+  .option('--url <mcp-url>', 'Target MCP endpoint URL (for example http://127.0.0.1:12306/mcp)')
+  .option('--auth-token <token>', 'Bearer token for remote MCP endpoints')
+  .option(
+    '--protocol-only',
+    'Only run MCP transport baseline checks (initialize/tools/list/tools/call)',
+  )
+  .option(
+    '--repeat <n>',
+    'Repeat protocol smoke N times (use with remote Streamable HTTP stability checks)',
+    '1',
+  )
+  .option('--concurrency <n>', 'Run protocol smoke with N concurrent attempts', '1')
   .action(async (options) => {
     try {
       const exitCode = await runSmoke({
         json: Boolean(options.json),
         keepTab: Boolean(options.keepTab),
+        allTools: Boolean(options.allTools),
+        url: options.url,
+        authToken: options.authToken,
+        protocolOnly: Boolean(options.protocolOnly),
+        repeat: options.repeat ? parseInt(options.repeat, 10) : undefined,
+        concurrency: options.concurrency ? parseInt(options.concurrency, 10) : undefined,
       });
       process.exit(exitCode);
     } catch (error: any) {
