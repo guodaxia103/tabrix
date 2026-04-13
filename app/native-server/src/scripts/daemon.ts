@@ -8,6 +8,14 @@ interface DaemonStatus {
   running: boolean;
   pid: number | null;
   healthy: boolean;
+  startedAt: number | null;
+  entryPath: string | null;
+}
+
+interface DaemonRecord {
+  pid: number;
+  startedAt?: number;
+  entryPath?: string;
 }
 
 const PID_DIR = path.join(os.homedir(), '.tabrix');
@@ -22,20 +30,39 @@ function resolveDaemonEntryPath(): string {
   return path.resolve(resolveDistDir(), 'daemon-entry.js');
 }
 
-function readPid(): number | null {
+function readDaemonRecord(): DaemonRecord | null {
   try {
     if (!fs.existsSync(PID_FILE)) return null;
     const raw = fs.readFileSync(PID_FILE, 'utf8').trim();
-    const pid = Number(raw);
-    return Number.isFinite(pid) && pid > 0 ? pid : null;
+    // Backward compatibility: old versions wrote plain numeric PID.
+    const legacyPid = Number(raw);
+    if (Number.isFinite(legacyPid) && legacyPid > 0) {
+      const stat = fs.statSync(PID_FILE);
+      return {
+        pid: legacyPid,
+        startedAt: Number.isFinite(stat.mtimeMs) ? Math.floor(stat.mtimeMs) : undefined,
+        entryPath: resolveDaemonEntryPath(),
+      };
+    }
+
+    const parsed = JSON.parse(raw) as Partial<DaemonRecord>;
+    if (!Number.isFinite(parsed.pid) || Number(parsed.pid) <= 0) {
+      return null;
+    }
+
+    return {
+      pid: Number(parsed.pid),
+      startedAt: Number.isFinite(parsed.startedAt) ? Number(parsed.startedAt) : undefined,
+      entryPath: typeof parsed.entryPath === 'string' ? parsed.entryPath : undefined,
+    };
   } catch {
     return null;
   }
 }
 
-function writePid(pid: number): void {
+function writeDaemonRecord(record: DaemonRecord): void {
   fs.mkdirSync(PID_DIR, { recursive: true });
-  fs.writeFileSync(PID_FILE, String(pid), 'utf8');
+  fs.writeFileSync(PID_FILE, JSON.stringify(record, null, 2), 'utf8');
 }
 
 function clearPid(): void {
@@ -73,12 +100,25 @@ async function checkHealth(): Promise<boolean> {
 }
 
 export async function daemonStatus(): Promise<DaemonStatus> {
-  const pid = readPid();
+  const record = readDaemonRecord();
+  const pid = record?.pid ?? null;
   if (!pid || !isProcessAlive(pid)) {
     if (pid) clearPid();
-    return { running: false, pid: null, healthy: await checkHealth() };
+    return {
+      running: false,
+      pid: null,
+      healthy: await checkHealth(),
+      startedAt: null,
+      entryPath: record?.entryPath ?? null,
+    };
   }
-  return { running: true, pid, healthy: await checkHealth() };
+  return {
+    running: true,
+    pid,
+    healthy: await checkHealth(),
+    startedAt: record?.startedAt ?? null,
+    entryPath: record?.entryPath ?? resolveDaemonEntryPath(),
+  };
 }
 
 export async function daemonStart(): Promise<{ started: boolean; pid: number }> {
@@ -109,7 +149,11 @@ export async function daemonStart(): Promise<{ started: boolean; pid: number }> 
     throw new Error('Failed to start daemon process.');
   }
 
-  writePid(child.pid);
+  writeDaemonRecord({
+    pid: child.pid,
+    startedAt: Date.now(),
+    entryPath: daemonEntry,
+  });
   return { started: true, pid: child.pid };
 }
 
@@ -118,7 +162,7 @@ export async function daemonStop(): Promise<{
   pid: number | null;
   graceful: boolean;
 }> {
-  const pid = readPid();
+  const pid = readDaemonRecord()?.pid ?? null;
   if (!pid) {
     return { stopped: false, pid: null, graceful: false };
   }
@@ -153,6 +197,14 @@ export async function daemonStop(): Promise<{
   const stillAlive = isProcessAlive(pid);
   clearPid();
   return { stopped: !stillAlive, pid, graceful: false };
+}
+
+export function getDaemonRuntimePaths(): { pidFile: string; pidDir: string; entryPath: string } {
+  return {
+    pidFile: PID_FILE,
+    pidDir: PID_DIR,
+    entryPath: resolveDaemonEntryPath(),
+  };
 }
 
 const LAUNCHD_LABEL = 'com.tabrix.daemon';

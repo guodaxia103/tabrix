@@ -161,6 +161,35 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         clickY = updatedRect.top + updatedRect.height / 2;
       }
 
+      const allowDownloadClick = options.allowDownloadClick === true;
+      const resolvedAnchor =
+        element && typeof element.closest === 'function' ? element.closest('a[href]') : null;
+      if (resolvedAnchor && !allowDownloadClick) {
+        const href = resolvedAnchor.href || '';
+        const downloadAttr = resolvedAnchor.getAttribute('download');
+        const path = (() => {
+          try {
+            return new URL(href, window.location.href).pathname || '';
+          } catch {
+            return '';
+          }
+        })();
+        const looksLikeFile = /\.(zip|rar|7z|pdf|csv|xlsx?|docx?|pptx?|txt|json|xml|html?|md|png|jpe?g|gif|webp|mp4|mp3|wav)$/i.test(
+          path,
+        );
+        if (downloadAttr !== null || looksLikeFile) {
+          return {
+            success: true,
+            interceptedDownload: true,
+            message:
+              'Download link intercepted to avoid browser Save As dialog. Use extension-side download path.',
+            downloadUrl: href,
+            downloadFilename: (downloadAttr || '').trim() || null,
+            elementInfo,
+          };
+        }
+      }
+
       let navigationPromise;
       if (waitForNavigation) {
         navigationPromise = new Promise((resolve) => {
@@ -353,6 +382,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
           bubbles: request.bubbles,
           cancelable: request.cancelable,
           modifiers: request.modifiers,
+          allowDownloadClick: request.allowDownloadClick === true,
         },
       )
         .then(sendResponse)

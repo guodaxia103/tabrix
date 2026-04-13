@@ -3,6 +3,7 @@ import { BaseBrowserToolExecutor } from '../base-browser';
 import { TOOL_NAMES } from '@tabrix/shared';
 import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import { TIMEOUTS, ERROR_MESSAGES } from '@/common/constants';
+import { handleDownloadTool, markNextDownloadAsInteractive } from './download';
 
 interface Coordinates {
   x: number;
@@ -22,6 +23,7 @@ interface ClickToolParams {
   bubbles?: boolean;
   cancelable?: boolean;
   modifiers?: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean };
+  allowDownloadClick?: boolean;
   tabId?: number; // target existing tab id
   windowId?: number; // when no tabId, pick active tab from this window
 }
@@ -97,6 +99,9 @@ class ClickTool extends BaseBrowserToolExecutor {
       }
 
       await this.injectContentScript(tab.id, ['inject-scripts/click-helper.js']);
+      if (args.allowDownloadClick === true) {
+        markNextDownloadAsInteractive(tab.id);
+      }
 
       // Send click message to content script
       const result = await this.sendMessageToTab(
@@ -113,9 +118,52 @@ class ClickTool extends BaseBrowserToolExecutor {
           bubbles,
           cancelable,
           modifiers,
+          allowDownloadClick: args.allowDownloadClick === true,
         },
         frameId,
       );
+
+      if (result?.interceptedDownload && result?.downloadUrl) {
+        const downloadResult = await handleDownloadTool.execute({
+          url: String(result.downloadUrl),
+          filename: result.downloadFilename ? String(result.downloadFilename) : undefined,
+          saveAs: false,
+          waitForComplete: true,
+          timeoutMs: 60000,
+        });
+
+        if (downloadResult.isError) {
+          return createErrorResponse(
+            `Download link click was blocked and auto-download failed: ${
+              (downloadResult.content?.[0] as any)?.text || 'unknown error'
+            }`,
+          );
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                message:
+                  'Download link was intercepted and handled via chrome_handle_download (silent mode).',
+                clickMethod: 'intercepted-download',
+                downloadUrl: result.downloadUrl,
+                downloadFilename: result.downloadFilename || null,
+                download: (() => {
+                  try {
+                    return JSON.parse((downloadResult.content?.[0] as any)?.text || '{}')?.download;
+                  } catch {
+                    return null;
+                  }
+                })(),
+              }),
+            },
+          ],
+          isError: false,
+        };
+      }
 
       // Determine actual click method used
       let clickMethod: string;

@@ -26,6 +26,7 @@ import {
   discoverLoadedExtensionOrigins,
 } from './utils';
 import { daemonStart, daemonStatus, daemonStop } from './daemon';
+import { collectRuntimeConsistencySnapshot } from './runtime-consistency';
 import {
   HTTP_STATUS,
   NATIVE_SERVER_PORT,
@@ -97,6 +98,7 @@ export interface DoctorReport {
     };
   };
   fixes: DoctorFixAttempt[];
+  runtimeConsistency?: Awaited<ReturnType<typeof collectRuntimeConsistencySnapshot>>;
   checks: DoctorCheckResult[];
   nextSteps: string[];
 }
@@ -1176,6 +1178,7 @@ function getCheckPriority(id: string): number {
   if (id === 'port.config' || id === 'port.constant') return 70;
   if (id === 'connectivity') return 80;
   if (id === 'runtime.status') return 90;
+  if (id === 'runtime.consistency') return 92;
   if (id === 'daemon.status') return 93;
   if (id === 'remote.lan') return 95;
   if (id === 'mcp.initialize') return 100;
@@ -1242,6 +1245,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     { path: string; origins: string[]; issues: string[] }
   >();
   let runtimeSnapshot: Record<string, unknown> | undefined;
+  let runtimeConsistency: Awaited<ReturnType<typeof collectRuntimeConsistencySnapshot>> | undefined;
 
   // Check 1: Installation info
   checks.push({
@@ -1857,7 +1861,57 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     });
   }
 
-  // Check 10: Logs directory
+  // Check 10: Runtime instance consistency (防止“改了代码但没跑到”)
+  try {
+    runtimeConsistency = await collectRuntimeConsistencySnapshot();
+    const consistencyStatus: DoctorStatus =
+      runtimeConsistency.verdict === 'consistent'
+        ? 'ok'
+        : runtimeConsistency.verdict === 'inconsistent'
+          ? 'warn'
+          : 'warn';
+    const consistencyFix =
+      runtimeConsistency.verdict === 'consistent'
+        ? undefined
+        : [
+            `${COMMAND_NAME} daemon restart`,
+            `${COMMAND_NAME} status`,
+            'Reload unpacked extension in chrome://extensions/ if extension build is stale',
+          ];
+    checks.push({
+      id: 'runtime.consistency',
+      title: 'Runtime consistency',
+      status: consistencyStatus,
+      message: runtimeConsistency.summary,
+      details: {
+        verdict: runtimeConsistency.verdict,
+        reasons: runtimeConsistency.reasons,
+        cliSourcePath: runtimeConsistency.cli.sourcePath,
+        workspaceCliPath: runtimeConsistency.cli.workspaceCliPath,
+        daemon: runtimeConsistency.daemon,
+        nativeDist: runtimeConsistency.nativeDist,
+        extensionBuild: runtimeConsistency.extensionBuild,
+        fix: consistencyFix,
+      },
+    });
+    if (runtimeConsistency.verdict !== 'consistent') {
+      nextSteps.push(`${COMMAND_NAME} daemon restart`);
+      nextSteps.push(`${COMMAND_NAME} status`);
+    }
+  } catch (error) {
+    checks.push({
+      id: 'runtime.consistency',
+      title: 'Runtime consistency',
+      status: 'warn',
+      message: `Runtime consistency check failed (${stringifyError(error)})`,
+      details: {
+        fix: [`${COMMAND_NAME} status`],
+      },
+    });
+    nextSteps.push(`${COMMAND_NAME} status`);
+  }
+
+  // Check 11: Logs directory
   checks.push({
     id: 'logs',
     title: 'Logs',
@@ -1868,7 +1922,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     },
   });
 
-  // Check 11: Remote access security
+  // Check 12: Remote access security
   const isRemoteListening = SERVER_CONFIG.HOST === '0.0.0.0' || SERVER_CONFIG.HOST === '::';
   const hasAuthToken = !!process.env[MCP_AUTH_TOKEN_ENV];
   if (isRemoteListening && !hasAuthToken) {
@@ -1904,7 +1958,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
     });
   }
 
-  // Check 11: Remote LAN readiness (host/networkAddresses)
+  // Check 13: Remote LAN readiness (host/networkAddresses)
   const runtimeHost = getSnapshotHost(runtimeSnapshot);
   const runtimeNetworkAddresses = getSnapshotNetworkAddresses(runtimeSnapshot);
   const envHost = process.env[MCP_HTTP_HOST_ENV];
@@ -1981,6 +2035,7 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
       nativeHost: { hostName: HOST_NAME, expectedPort: EXPECTED_PORT },
     },
     fixes,
+    ...(runtimeConsistency ? { runtimeConsistency } : {}),
     checks: orderedChecks,
     nextSteps: Array.from(new Set(nextSteps)).slice(0, 10),
   };
@@ -2014,6 +2069,23 @@ export async function runDoctor(options: DoctorOptions): Promise<number> {
       for (const f of report.fixes) {
         const badge = f.success ? colorText('[OK]', 'green') : colorText('[ERROR]', 'red');
         console.log(`${badge} ${f.description}${f.success ? '' : ` (${f.error})`}`);
+      }
+    }
+    if (options.fix) {
+      const verdict = report.runtimeConsistency?.verdict ?? 'unknown';
+      const summary = report.runtimeConsistency?.summary ?? 'Runtime consistency unavailable';
+      const badge =
+        verdict === 'consistent'
+          ? colorText('[OK]', 'green')
+          : verdict === 'inconsistent'
+            ? colorText('[WARN]', 'yellow')
+            : colorText('[WARN]', 'yellow');
+      console.log(`\n${badge} Runtime consistency after --fix: ${verdict}`);
+      console.log(`        ${summary}`);
+      if (report.runtimeConsistency?.reasons?.length) {
+        for (const reason of report.runtimeConsistency.reasons) {
+          console.log(`        Reason: ${reason}`);
+        }
       }
     }
     if (report.nextSteps.length > 0) {

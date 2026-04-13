@@ -2,6 +2,7 @@
 
 import { COMMAND_NAME } from './constant';
 import { SERVER_CONFIG, getChromeMcpPort } from '../constant';
+import { collectRuntimeConsistencySnapshot } from './runtime-consistency';
 
 export interface StatusOptions {
   json?: boolean;
@@ -22,6 +23,10 @@ interface StatusPayload {
       sessionIds?: string[];
     };
   };
+}
+
+interface EnrichedStatusPayload extends StatusPayload {
+  runtimeConsistency?: Awaited<ReturnType<typeof collectRuntimeConsistencySnapshot>>;
 }
 
 type FetchFn = typeof globalThis.fetch;
@@ -65,7 +70,7 @@ function normalizeTransports(payload: StatusPayload['data']['transports']): {
   };
 }
 
-function renderPretty(payload: StatusPayload): string {
+function renderPretty(payload: EnrichedStatusPayload): string {
   const { data } = payload;
   const transports = normalizeTransports(data.transports);
   const lines = [
@@ -80,6 +85,33 @@ function renderPretty(payload: StatusPayload): string {
 
   if (transports.sessionIds.length > 0) {
     lines.push(`Session IDs: ${transports.sessionIds.join(', ')}`);
+  }
+
+  if (payload.runtimeConsistency) {
+    const consistency = payload.runtimeConsistency;
+    lines.push('');
+    lines.push('Runtime Consistency');
+    lines.push(`  Verdict: ${consistency.verdict}`);
+    lines.push(`  Summary: ${consistency.summary}`);
+    lines.push(`  CLI source: ${consistency.cli.sourcePath || 'unknown'}`);
+    lines.push(
+      `  Daemon: ${
+        consistency.daemon.running
+          ? `running (pid=${consistency.daemon.pid ?? 'unknown'}, started=${consistency.daemon.startedAt || 'unknown'})`
+          : 'stopped'
+      }`,
+    );
+    lines.push(
+      `  Native dist: ${consistency.nativeDist.cliPath} (${consistency.nativeDist.modifiedAt || 'missing'})`,
+    );
+    lines.push(
+      `  Extension build: ${consistency.extensionBuild.buildId || 'unknown'} (loaded=${consistency.extensionBuild.loadedPath || 'unknown'})`,
+    );
+    if (consistency.reasons.length > 0) {
+      for (const reason of consistency.reasons) {
+        lines.push(`  Reason: ${reason}`);
+      }
+    }
   }
 
   return lines.join('\n');
@@ -117,7 +149,17 @@ export async function runStatus(options: StatusOptions = {}): Promise<number> {
     }
 
     const payload = (await response.json()) as StatusPayload;
-    const output = options.json ? JSON.stringify(payload, null, 2) : renderPretty(payload);
+    let runtimeConsistency: Awaited<ReturnType<typeof collectRuntimeConsistencySnapshot>> | undefined;
+    try {
+      runtimeConsistency = await collectRuntimeConsistencySnapshot();
+    } catch {
+      runtimeConsistency = undefined;
+    }
+    const enrichedPayload: EnrichedStatusPayload = {
+      ...payload,
+      ...(runtimeConsistency ? { runtimeConsistency } : {}),
+    };
+    const output = options.json ? JSON.stringify(enrichedPayload, null, 2) : renderPretty(enrichedPayload);
     process.stdout.write(output + '\n');
     return 0;
   } catch (error) {

@@ -1110,6 +1110,11 @@ export const TOOL_SCHEMAS: Tool[] = [
             shiftKey: { type: 'boolean' },
           },
         },
+        allowDownloadClick: {
+          type: 'boolean',
+          description:
+            'When false (default), clicks on likely download links are intercepted and routed through extension-side download flow to avoid Save As dialogs.',
+        },
         waitForNavigation: {
           type: 'boolean',
           description: 'Wait for navigation to complete after click (default: false).',
