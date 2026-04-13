@@ -351,6 +351,16 @@ export class Server {
       const managedEntry = sessionId ? this.sessions.get(sessionId) : undefined;
       let transport: StreamableHTTPServerTransport | undefined =
         managedEntry?.kind === 'streamable-http' ? managedEntry.transport : undefined;
+      let newSessionServer: ReturnType<typeof createMcpServer> | undefined;
+      let newSessionMeta:
+        | {
+            sessionId: string;
+            clientIp: string;
+            clientName: string;
+            clientVersion: string;
+            connectedAt: number;
+          }
+        | undefined;
 
       if (transport) {
         // Existing session found, proceed.
@@ -366,18 +376,26 @@ export class Server {
         };
         const clientName = initBody?.params?.clientInfo?.name ?? '';
         const clientVersion = initBody?.params?.clientInfo?.version ?? '';
+        newSessionServer = server;
+        newSessionMeta = {
+          sessionId: newSessionId,
+          clientIp,
+          clientName,
+          clientVersion,
+          connectedAt: Date.now(),
+        };
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => newSessionId,
           onsessioninitialized: (initializedSessionId) => {
-            if (transport && initializedSessionId === newSessionId) {
+            if (transport) {
               this.sessions.register(initializedSessionId, {
                 kind: 'streamable-http',
                 transport,
                 server,
-                clientIp,
-                clientName,
-                clientVersion,
-                connectedAt: Date.now(),
+                clientIp: newSessionMeta?.clientIp ?? clientIp,
+                clientName: newSessionMeta?.clientName ?? clientName,
+                clientVersion: newSessionMeta?.clientVersion ?? clientVersion,
+                connectedAt: newSessionMeta?.connectedAt ?? Date.now(),
               });
             }
           },
@@ -386,6 +404,8 @@ export class Server {
         transport.onclose = () => {
           if (transport?.sessionId) {
             this.sessions.remove(transport.sessionId);
+          } else if (newSessionMeta?.sessionId) {
+            this.sessions.remove(newSessionMeta.sessionId);
           }
         };
         await server.connect(transport);
@@ -396,6 +416,29 @@ export class Server {
 
       try {
         await transport.handleRequest(request.raw, reply.raw, request.body);
+
+        // Some runtimes/proxies may complete initialize without invoking onsessioninitialized
+        // in time; ensure the new session is present for immediate follow-up requests.
+        if (newSessionServer && newSessionMeta) {
+          const headerSessionId = reply.raw.getHeader('mcp-session-id');
+          const effectiveSessionId =
+            (typeof headerSessionId === 'string' && headerSessionId) ||
+            (Array.isArray(headerSessionId) && headerSessionId[0]) ||
+            transport.sessionId ||
+            newSessionMeta.sessionId;
+
+          if (effectiveSessionId && !this.sessions.has(effectiveSessionId)) {
+            this.sessions.register(effectiveSessionId, {
+              kind: 'streamable-http',
+              transport,
+              server: newSessionServer,
+              clientIp: newSessionMeta.clientIp,
+              clientName: newSessionMeta.clientName,
+              clientVersion: newSessionMeta.clientVersion,
+              connectedAt: newSessionMeta.connectedAt,
+            });
+          }
+        }
       } catch (error) {
         if (canWriteReply(reply)) {
           reply
@@ -416,26 +459,13 @@ export class Server {
         return;
       }
 
-      reply.hijack();
-      reply.raw.setHeader('Content-Type', 'text/event-stream');
-      reply.raw.setHeader('Cache-Control', 'no-cache');
-      reply.raw.setHeader('Connection', 'keep-alive');
-      reply.raw.flushHeaders();
-
       try {
         await transport.handleRequest(request.raw, reply.raw);
-        if (!reply.sent) {
-          reply.hijack();
-        }
       } catch (error) {
         if (!reply.raw.writableEnded && !reply.raw.destroyed) {
           reply.raw.end();
         }
       }
-
-      request.socket.on('close', () => {
-        request.log.info(`SSE client disconnected for session: ${sessionId}`);
-      });
     });
 
     // MCP DELETE endpoint

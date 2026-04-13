@@ -14,6 +14,20 @@ function setTokenData(data: TokenData | null): void {
   (tokenManager as unknown as { data: TokenData | null }).data = data;
 }
 
+function parseStreamableJson(text: string): any {
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{')) return JSON.parse(trimmed);
+
+  const dataLines = trimmed
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trim())
+    .filter(Boolean);
+
+  const payload = dataLines[dataLines.length - 1];
+  return payload ? JSON.parse(payload) : {};
+}
+
 describe('服务器测试', () => {
   // 启动服务器测试实例
   beforeAll(async () => {
@@ -271,6 +285,51 @@ describe('服务器测试', () => {
       .set('mcp-session-id', id2);
     expect([200, 204]).toContain(del1.status);
     expect([200, 204]).toContain(del2.status);
+  });
+
+  test('POST /mcp initialize 后可立即调用 tools/list', async () => {
+    const initializeRequest = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'followup-tools-list-test', version: '1.0.0' },
+      },
+    };
+
+    const init = await supertest(Server.getInstance().server)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Content-Type', 'application/json')
+      .send(initializeRequest)
+      .expect(200);
+
+    const sid = String(init.headers['mcp-session-id'] || '');
+    expect(sid.length).toBeGreaterThan(0);
+
+    const list = await supertest(Server.getInstance().server)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Content-Type', 'application/json')
+      .set('mcp-session-id', sid)
+      .send({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/list',
+        params: {},
+      })
+      .expect(200);
+
+    const payload = parseStreamableJson(list.text || '');
+    expect(payload?.result?.tools).toBeDefined();
+    expect(Array.isArray(payload?.result?.tools)).toBe(true);
+
+    const del = await supertest(Server.getInstance().server)
+      .delete('/mcp')
+      .set('mcp-session-id', sid);
+    expect([200, 204]).toContain(del.status);
   });
 
   /**
