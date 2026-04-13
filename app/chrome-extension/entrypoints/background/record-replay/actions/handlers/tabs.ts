@@ -16,6 +16,32 @@ const DEFAULT_TAB_TIMEOUT_MS = 10000;
 
 /** Default timeout for download operations */
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 60000;
+const AUTO_DOWNLOAD_SUBDIR = 'tabrix';
+
+function sanitizeDownloadFilename(name: string): string {
+  const trimmed = (name || '').trim();
+  const normalized = Array.from(trimmed, (ch) => {
+    const code = ch.charCodeAt(0);
+    return code >= 0 && code < 32 ? '_' : ch;
+  }).join('');
+  const replaced = normalized
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!replaced) return `download-${Date.now()}`;
+  return replaced.replace(/[. ]+$/g, '') || `download-${Date.now()}`;
+}
+
+function getDownloadLeafName(item: chrome.downloads.DownloadItem): string {
+  const filename = (item.filename || '').split(/[/\\]/).pop() || '';
+  if (filename) return filename;
+  try {
+    const url = new URL(item.url || '');
+    const leaf = decodeURIComponent((url.pathname || '').split('/').pop() || '');
+    if (leaf) return leaf;
+  } catch {}
+  return `download-${item.id ?? Date.now()}`;
+}
 
 // ================================
 // openTab Handler
@@ -296,10 +322,19 @@ export const handleDownloadHandler: ActionHandler<'handleDownload'> = {
       let downloadId: number | undefined;
       let downloadInfo: DownloadInfo | undefined;
       let resolved = false;
+      let determineListener:
+        | ((
+            item: chrome.downloads.DownloadItem,
+            suggest: (suggestion?: chrome.downloads.DownloadFilenameSuggestion) => void,
+          ) => void)
+        | null = null;
 
       const cleanup = () => {
         chrome.downloads.onCreated.removeListener(onCreated);
         chrome.downloads.onChanged.removeListener(onChanged);
+        if (determineListener) {
+          chrome.downloads.onDeterminingFilename.removeListener(determineListener);
+        }
       };
 
       const finish = (result: Awaited<ReturnType<ActionHandler<'handleDownload'>['run']>>) => {
@@ -355,6 +390,19 @@ export const handleDownloadHandler: ActionHandler<'handleDownload'> = {
         }
       };
 
+      determineListener = (item, suggest) => {
+        const filename = item.filename.toLowerCase();
+        if (filenamePattern && !filename.includes(filenamePattern)) {
+          suggest();
+          return;
+        }
+        const leaf = sanitizeDownloadFilename(getDownloadLeafName(item));
+        suggest({
+          filename: `${AUTO_DOWNLOAD_SUBDIR}/${leaf}`,
+          conflictAction: 'uniquify',
+        });
+      };
+
       const storeAndFinish = () => {
         if (params.saveAs && downloadInfo) {
           ctx.vars[params.saveAs] = downloadInfo as unknown as VariableStore[string];
@@ -366,6 +414,7 @@ export const handleDownloadHandler: ActionHandler<'handleDownload'> = {
       };
 
       // Set up listeners
+      chrome.downloads.onDeterminingFilename.addListener(determineListener);
       chrome.downloads.onCreated.addListener(onCreated);
       chrome.downloads.onChanged.addListener(onChanged);
 

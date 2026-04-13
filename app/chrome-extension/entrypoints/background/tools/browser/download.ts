@@ -8,6 +8,34 @@ interface HandleDownloadParams {
   waitForComplete?: boolean; // default true
 }
 
+const AUTO_DOWNLOAD_SUBDIR = 'tabrix';
+
+function sanitizeDownloadFilename(name: string): string {
+  const trimmed = (name || '').trim();
+  const normalized = Array.from(trimmed, (ch) => {
+    const code = ch.charCodeAt(0);
+    return code >= 0 && code < 32 ? '_' : ch;
+  }).join('');
+  const replaced = normalized
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!replaced) return `download-${Date.now()}`;
+  // Avoid hidden/invalid trailing dots on Windows
+  return replaced.replace(/[. ]+$/g, '') || `download-${Date.now()}`;
+}
+
+function getDownloadLeafName(item: chrome.downloads.DownloadItem): string {
+  const filename = (item.filename || '').split(/[/\\]/).pop() || '';
+  if (filename) return filename;
+  try {
+    const url = new URL(item.url || '');
+    const leaf = decodeURIComponent((url.pathname || '').split('/').pop() || '');
+    if (leaf) return leaf;
+  } catch {}
+  return `download-${item.id ?? Date.now()}`;
+}
+
 /**
  * Tool: wait for a download and return info
  */
@@ -39,6 +67,12 @@ async function waitForDownload(opts: {
   const { filenameContains, waitForComplete, timeoutMs } = opts;
   return new Promise<any>((resolve, reject) => {
     let timer: any = null;
+    let determineListener:
+      | ((
+          item: chrome.downloads.DownloadItem,
+          suggest: (suggestion?: chrome.downloads.DownloadFilenameSuggestion) => void,
+        ) => void)
+      | null = null;
     const onError = (err: any) => {
       cleanup();
       reject(err instanceof Error ? err : new Error(String(err)));
@@ -52,6 +86,11 @@ async function waitForDownload(opts: {
       } catch {}
       try {
         chrome.downloads.onChanged.removeListener(onChanged);
+      } catch {}
+      try {
+        if (determineListener) {
+          chrome.downloads.onDeterminingFilename.removeListener(determineListener);
+        }
       } catch {}
     };
     const matches = (item: chrome.downloads.DownloadItem) => {
@@ -106,6 +145,23 @@ async function waitForDownload(opts: {
           .catch(() => {});
       } catch {}
     };
+    determineListener = (item, suggest) => {
+      try {
+        if (!matches(item)) {
+          suggest();
+          return;
+        }
+        // Auto-route matching downloads into Downloads/tabrix to avoid save dialog prompts.
+        const leaf = sanitizeDownloadFilename(getDownloadLeafName(item));
+        suggest({
+          filename: `${AUTO_DOWNLOAD_SUBDIR}/${leaf}`,
+          conflictAction: 'uniquify',
+        });
+      } catch {
+        suggest();
+      }
+    };
+    chrome.downloads.onDeterminingFilename.addListener(determineListener);
     chrome.downloads.onCreated.addListener(onCreated);
     chrome.downloads.onChanged.addListener(onChanged);
     timer = setTimeout(() => onError(new Error('Download wait timed out')), timeoutMs);
