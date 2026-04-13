@@ -324,16 +324,18 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
 
   private shouldFilterByMimeType(mimeType: string, includeStatic: boolean): boolean {
     if (!mimeType) return false;
+    const normalizedMime = mimeType.toLowerCase().split(';')[0]?.trim() || '';
+    if (!normalizedMime) return false;
 
     // Never filter API MIME types
-    if (NETWORK_FILTERS.API_MIME_TYPES.some((apiMime) => mimeType.startsWith(apiMime))) {
+    if (NETWORK_FILTERS.API_MIME_TYPES.some((apiMime) => normalizedMime.startsWith(apiMime))) {
       return false;
     }
 
     // Filter static MIME types when not including static resources
     if (!includeStatic) {
       return NETWORK_FILTERS.STATIC_MIME_TYPES_TO_FILTER.some((staticMime) =>
-        mimeType.startsWith(staticMime),
+        normalizedMime.startsWith(staticMime),
       );
     }
 

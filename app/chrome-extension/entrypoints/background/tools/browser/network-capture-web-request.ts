@@ -242,9 +242,11 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
    */
   private shouldFilterByMimeType(mimeType: string, includeStatic: boolean): boolean {
     if (!mimeType) return false;
+    const normalizedMime = mimeType.toLowerCase().split(';')[0]?.trim() || '';
+    if (!normalizedMime) return false;
 
     // Always keep API response types
-    if (NetworkCaptureStartTool.API_MIME_TYPES.some((type) => mimeType.startsWith(type))) {
+    if (NetworkCaptureStartTool.API_MIME_TYPES.some((type) => normalizedMime.startsWith(type))) {
       return false;
     }
 
@@ -253,16 +255,10 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
       // Filter static resource MIME types
       if (
         NetworkCaptureStartTool.STATIC_MIME_TYPES_TO_FILTER.some((type) =>
-          mimeType.startsWith(type),
+          normalizedMime.startsWith(type),
         )
       ) {
-        console.log(`NetworkCaptureV2: Filtering static resource by MIME type: ${mimeType}`);
-        return true;
-      }
-
-      // Filter all MIME types starting with text/ (except those already in API_MIME_TYPES)
-      if (mimeType.startsWith('text/')) {
-        console.log(`NetworkCaptureV2: Filtering text response: ${mimeType}`);
+        console.log(`NetworkCaptureV2: Filtering static resource by MIME type: ${normalizedMime}`);
         return true;
       }
     }

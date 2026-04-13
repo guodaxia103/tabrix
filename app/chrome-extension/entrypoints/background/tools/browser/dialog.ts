@@ -11,8 +11,10 @@ interface HandleDialogParams {
 }
 
 const DIALOG_NOT_SHOWING_MESSAGE = 'No dialog is showing';
-const DIALOG_HANDLE_MAX_ATTEMPTS = 10;
+const DIALOG_HANDLE_MAX_ATTEMPTS = 12;
 const DIALOG_HANDLE_RETRY_DELAY_MS = 100;
+const DIALOG_COMMAND_TIMEOUT_MS = 1200;
+const DIALOG_TOTAL_TIMEOUT_MS = 6000;
 
 function isDialogNotReadyError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -21,6 +23,21 @@ function isDialogNotReadyError(error: unknown): boolean {
 
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
 }
 
 /**
@@ -48,15 +65,30 @@ class HandleDialogTool extends BaseBrowserToolExecutor {
 
       // Use shared CDP session manager for safe attach/detach with refcount
       await cdpSessionManager.withSession(tabId, 'dialog', async () => {
-        await cdpSessionManager.sendCommand(tabId, 'Page.enable');
+        await withTimeout(
+          cdpSessionManager.sendCommand(tabId, 'Page.enable'),
+          DIALOG_COMMAND_TIMEOUT_MS,
+          'Enable dialog domain timed out',
+        );
         let lastError: unknown;
+        const startedAt = Date.now();
 
         for (let attempt = 0; attempt < DIALOG_HANDLE_MAX_ATTEMPTS; attempt += 1) {
+          if (Date.now() - startedAt > DIALOG_TOTAL_TIMEOUT_MS) {
+            throw (
+              lastError ||
+              new Error('Dialog handling timed out while waiting for a visible JavaScript dialog')
+            );
+          }
           try {
-            await cdpSessionManager.sendCommand(tabId, 'Page.handleJavaScriptDialog', {
-              accept: action === 'accept',
-              promptText: action === 'accept' ? promptText : undefined,
-            });
+            await withTimeout(
+              cdpSessionManager.sendCommand(tabId, 'Page.handleJavaScriptDialog', {
+                accept: action === 'accept',
+                promptText: action === 'accept' ? promptText : undefined,
+              }),
+              DIALOG_COMMAND_TIMEOUT_MS,
+              'Handling JavaScript dialog timed out',
+            );
             return;
           } catch (error) {
             lastError = error;
