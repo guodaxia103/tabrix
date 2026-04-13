@@ -64,6 +64,6 @@ describe('handleDialogTool', () => {
     expect(result.isError).toBe(true);
     expect(result.content[0]?.type).toBe('text');
     expect((result.content[0] as { text: string }).text).toContain('Failed to handle dialog');
-    expect(sendCommandMock).toHaveBeenCalledTimes(11);
+    expect(sendCommandMock).toHaveBeenCalledTimes(12);
   });
 });

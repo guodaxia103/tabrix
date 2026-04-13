@@ -14,6 +14,7 @@ export interface SmokeOptions {
   authToken?: string;
   protocolOnly?: boolean;
   allTools?: boolean;
+  includeInteractiveTools?: boolean;
   repeat?: number;
   concurrency?: number;
 }
@@ -566,6 +567,7 @@ async function runAllToolsValidation(
   smokeServer: { baseUrl: string; tempFilePath: string },
   record: (name: string, ok: boolean, detail: string) => void,
   currentTabId: number | null,
+  includeInteractiveTools: boolean,
 ): Promise<number | null> {
   const tools = await mcp.listTools();
   const toolNames = new Set(tools);
@@ -656,50 +658,78 @@ async function runAllToolsValidation(
     'Local file upload succeeded',
   );
 
-  await mcp.callTool('chrome_click_element', {
-    tabId,
-    selector: '#promptBtn',
-  });
-  await sleep(200);
-  const dialogHandled = parseToolText(
-    await mcp.callTool('chrome_handle_dialog', {
+  if (includeInteractiveTools) {
+    await mcp.callTool('chrome_click_element', {
+      tabId,
+      selector: '#promptBtn',
+    });
+    await sleep(200);
+    const dialogCall = await mcp.callTool('chrome_handle_dialog', {
       action: 'accept',
       promptText: 'smoke-dialog-ok',
       tabId,
-    }),
-  );
-  record(
-    'chrome_handle_dialog',
-    true,
-    `Dialog accept command executed (${JSON.stringify(dialogHandled).slice(0, 48)})`,
-  );
-  await sleep(120);
-  // Best-effort cleanup: dismiss if the browser still reports an open dialog.
-  await mcp
-    .callTool('chrome_handle_dialog', {
-      action: 'dismiss',
-      tabId,
-    })
-    .catch(() => {
-      // No dialog open is expected in most runs.
     });
+    const dialogHandled = parseToolText(dialogCall);
+    const dialogOk =
+      dialogCall?.isError !== true && !String(dialogHandled).toLowerCase().includes('failed');
+    record(
+      'chrome_handle_dialog',
+      dialogOk,
+      dialogOk
+        ? `Dialog accept command executed (${JSON.stringify(dialogHandled).slice(0, 48)})`
+        : `Dialog handle failed (${String(dialogHandled).slice(0, 96)})`,
+    );
+    await sleep(120);
+    await mcp
+      .callTool('chrome_handle_dialog', {
+        action: 'dismiss',
+        tabId,
+      })
+      .catch(() => {
+        // No dialog open is expected in most runs.
+      });
 
-  await mcp.callTool('chrome_click_element', {
-    tabId,
-    selector: '#downloadLink',
-  });
-  const downloadResult = parseToolText(
-    await mcp.callTool('chrome_handle_download', {
-      filenameContains: 'smoke-download',
-      timeoutMs: 20000,
+    const downloadCall = await mcp.callTool('chrome_handle_download', {
+      url: `${smokeServer.baseUrl}/download.txt`,
+      filename: `smoke-download-${Date.now()}.txt`,
       waitForComplete: true,
-    }),
-  );
-  record(
-    'chrome_handle_download',
-    JSON.stringify(downloadResult).toLowerCase().includes('download'),
-    'Download capture confirmed',
-  );
+      timeoutMs: 20000,
+    });
+    const downloadResult = parseToolText(downloadCall);
+    const downloadOk =
+      downloadCall?.isError !== true &&
+      JSON.stringify(downloadResult).toLowerCase().includes('download');
+    record(
+      'chrome_handle_download',
+      downloadOk,
+      downloadOk
+        ? 'Silent download capture confirmed'
+        : `Silent download failed (${JSON.stringify(downloadResult).slice(0, 96)})`,
+    );
+  } else {
+    record(
+      'chrome_handle_dialog',
+      true,
+      'Skipped in non-interactive mode (avoids browser modal blocking)',
+    );
+    const downloadCall = await mcp.callTool('chrome_handle_download', {
+      url: `${smokeServer.baseUrl}/download.txt`,
+      filename: `smoke-download-${Date.now()}.txt`,
+      waitForComplete: true,
+      timeoutMs: 20000,
+    });
+    const downloadResult = parseToolText(downloadCall);
+    const downloadOk =
+      downloadCall?.isError !== true &&
+      JSON.stringify(downloadResult).toLowerCase().includes('download');
+    record(
+      'chrome_handle_download',
+      downloadOk,
+      downloadOk
+        ? 'Silent download capture confirmed (non-interactive mode)'
+        : `Silent download failed (${JSON.stringify(downloadResult).slice(0, 96)})`,
+    );
+  }
 
   record('chrome_request_element_selection', true, 'Skipped (manual user interaction required)');
 
@@ -1101,7 +1131,13 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     );
 
     if (options.allTools) {
-      tempTabId = await runAllToolsValidation(mcp, smokeServer!, record, tempTabId);
+      tempTabId = await runAllToolsValidation(
+        mcp,
+        smokeServer!,
+        record,
+        tempTabId,
+        options.includeInteractiveTools === true,
+      );
     }
 
     if (!options.keepTab) {

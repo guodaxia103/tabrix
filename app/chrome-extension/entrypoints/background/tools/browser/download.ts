@@ -4,6 +4,9 @@ import { TOOL_NAMES } from '@tabrix/shared';
 
 interface HandleDownloadParams {
   filenameContains?: string;
+  url?: string;
+  filename?: string;
+  saveAs?: boolean;
   timeoutMs?: number; // default 60000
   waitForComplete?: boolean; // default true
 }
@@ -44,11 +47,66 @@ class HandleDownloadTool extends BaseBrowserToolExecutor {
 
   async execute(args: HandleDownloadParams): Promise<ToolResult> {
     const filenameContains = String(args?.filenameContains || '').trim();
+    const downloadUrl = String(args?.url || '').trim();
+    const requestedFilename = String(args?.filename || '').trim();
+    const saveAs = args?.saveAs === true;
     const waitForComplete = args?.waitForComplete !== false;
     const timeoutMs = Math.max(1000, Math.min(Number(args?.timeoutMs ?? 60000), 300000));
+    let triggerDownload: (() => Promise<void>) | undefined;
+    let effectiveFilter = filenameContains;
+    let autoRouteFilename = true;
+
+    if (downloadUrl) {
+      autoRouteFilename = false;
+      const safeLeaf = requestedFilename
+        ? sanitizeDownloadFilename(requestedFilename)
+        : sanitizeDownloadFilename(
+            (() => {
+              try {
+                const parsed = new URL(downloadUrl);
+                return decodeURIComponent(parsed.pathname.split('/').pop() || '');
+              } catch {
+                return '';
+              }
+            })(),
+          );
+      const targetFilename = `${AUTO_DOWNLOAD_SUBDIR}/${safeLeaf}`;
+      if (!effectiveFilter && !requestedFilename) {
+        effectiveFilter = safeLeaf;
+      }
+      triggerDownload = async () =>
+        await new Promise<void>((resolve, reject) => {
+          chrome.downloads.download(
+            {
+              url: downloadUrl,
+              filename: targetFilename,
+              conflictAction: 'uniquify',
+              saveAs,
+            },
+            (downloadId) => {
+              const lastError = chrome.runtime.lastError;
+              if (lastError) {
+                reject(new Error(lastError.message));
+                return;
+              }
+              if (typeof downloadId !== 'number') {
+                reject(new Error('Download did not return a valid downloadId'));
+                return;
+              }
+              resolve();
+            },
+          );
+        });
+    }
 
     try {
-      const result = await waitForDownload({ filenameContains, waitForComplete, timeoutMs });
+      const result = await waitForDownload({
+        filenameContains: effectiveFilter,
+        waitForComplete,
+        timeoutMs,
+        triggerDownload,
+        autoRouteFilename,
+      });
       return {
         content: [{ type: 'text', text: JSON.stringify({ success: true, download: result }) }],
         isError: false,
@@ -63,8 +121,16 @@ async function waitForDownload(opts: {
   filenameContains?: string;
   waitForComplete: boolean;
   timeoutMs: number;
+  triggerDownload?: () => Promise<void>;
+  autoRouteFilename?: boolean;
 }) {
-  const { filenameContains, waitForComplete, timeoutMs } = opts;
+  const {
+    filenameContains,
+    waitForComplete,
+    timeoutMs,
+    triggerDownload,
+    autoRouteFilename = true,
+  } = opts;
   return new Promise<any>((resolve, reject) => {
     let timer: any = null;
     let determineListener:
@@ -147,6 +213,10 @@ async function waitForDownload(opts: {
     };
     determineListener = (item, suggest) => {
       try {
+        if (!autoRouteFilename) {
+          suggest();
+          return;
+        }
         if (!matches(item)) {
           suggest();
           return;
@@ -165,6 +235,9 @@ async function waitForDownload(opts: {
     chrome.downloads.onCreated.addListener(onCreated);
     chrome.downloads.onChanged.addListener(onChanged);
     timer = setTimeout(() => onError(new Error('Download wait timed out')), timeoutMs);
+    if (triggerDownload) {
+      triggerDownload().catch((error) => onError(error));
+    }
     // Try to find an already-running matching download
     chrome.downloads
       .search({ state: waitForComplete ? 'in_progress' : undefined })

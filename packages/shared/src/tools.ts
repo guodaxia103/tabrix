@@ -749,6 +749,21 @@ export const TOOL_SCHEMAS: Tool[] = [
       type: 'object',
       properties: {
         filenameContains: { type: 'string', description: 'Filter by substring in filename or URL' },
+        url: {
+          type: 'string',
+          description:
+            'Optional URL to trigger a download first, then wait for its completion in the browser.',
+        },
+        filename: {
+          type: 'string',
+          description:
+            'Optional target filename when url is provided. Saved under Downloads/tabrix by default.',
+        },
+        saveAs: {
+          type: 'boolean',
+          description:
+            'When url is provided, whether to force Save As dialog (default: false for silent save).',
+        },
         timeoutMs: { type: 'number', description: 'Timeout in ms (default 60000, max 300000)' },
         waitForComplete: { type: 'boolean', description: 'Wait until completed (default true)' },
       },

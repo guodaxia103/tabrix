@@ -305,6 +305,10 @@ program
   .option('--json', 'Output smoke test results as JSON')
   .option('--keep-tab', 'Keep the temporary smoke-test tab open for inspection')
   .option('--all-tools', 'Run extended full-tool validation (local mode only)')
+  .option(
+    '--include-interactive-tools',
+    'Include modal/download checks that may require browser-level auto-save settings',
+  )
   .option('--url <mcp-url>', 'Target MCP endpoint URL (for example http://127.0.0.1:12306/mcp)')
   .option('--auth-token <token>', 'Bearer token for remote MCP endpoints')
   .option(
@@ -323,6 +327,7 @@ program
         json: Boolean(options.json),
         keepTab: Boolean(options.keepTab),
         allTools: Boolean(options.allTools),
+        includeInteractiveTools: options.includeInteractiveTools === true,
         url: options.url,
         authToken: options.authToken,
         protocolOnly: Boolean(options.protocolOnly),
