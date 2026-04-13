@@ -436,11 +436,18 @@ export class Server {
     // MCP DELETE endpoint
     this.fastify.delete('/mcp', async (request, reply) => {
       const sessionId = request.headers['mcp-session-id'] as string | undefined;
+      if (!sessionId) {
+        reply.code(HTTP_STATUS.BAD_REQUEST).send({ error: ERROR_MESSAGES.INVALID_SESSION_ID });
+        return;
+      }
+
       const delEntry = sessionId ? this.sessions.get(sessionId) : undefined;
       const transport = delEntry?.kind === 'streamable-http' ? delEntry.transport : undefined;
 
       if (!transport) {
-        reply.code(HTTP_STATUS.BAD_REQUEST).send({ error: ERROR_MESSAGES.INVALID_SESSION_ID });
+        // Treat repeated or late session termination as a no-op so MCP clients can
+        // shut down cleanly even if the server has already dropped the session.
+        reply.code(HTTP_STATUS.NO_CONTENT).send();
         return;
       }
 

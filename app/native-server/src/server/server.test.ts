@@ -332,6 +332,13 @@ describe('服务器测试', () => {
     expect([200, 204]).toContain(del.status);
   });
 
+  test('DELETE /mcp 对已不存在的 session 应返回 204', async () => {
+    await supertest(Server.getInstance().server)
+      .delete('/mcp')
+      .set('mcp-session-id', 'already-gone-session')
+      .expect(204);
+  });
+
   /**
    * 放在其它用例之后：先启用 MCP_AUTH_TOKEN + resolve()，再对 inject 设置 remoteAddress，
    * 覆盖「远程访问必须带有效 Bearer」的 HTTP 层行为（本机 IP 仍豁免）。
@@ -452,6 +459,89 @@ describe('服务器测试', () => {
         remoteAddress: REMOTE_CLIENT_IP,
         headers: {
           ...authHeaders,
+          'mcp-session-id': sid,
+        },
+      });
+      expect([200, 204]).toContain(del.statusCode);
+    });
+
+    test('远程 IP 携带正确 Bearer 时可完成 initialize -> initialized -> tools/list', async () => {
+      const app = Server.getInstance();
+      const authHeaders = {
+        authorization: `Bearer ${REMOTE_BEARER_TOKEN}`,
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+      };
+
+      const initializeRequest = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'remote-bearer-sequence', version: '1.0.0' },
+        },
+      };
+
+      const init = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: authHeaders,
+        payload: initializeRequest,
+      });
+      expect(init.statusCode).toBe(200);
+
+      const sid = String(init.headers['mcp-session-id'] || '');
+      expect(sid.length).toBeGreaterThan(0);
+
+      const initialized = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: {
+          ...authHeaders,
+          'mcp-session-id': sid,
+        },
+        payload: {
+          jsonrpc: '2.0',
+          method: 'notifications/initialized',
+          params: {},
+        },
+      });
+      expect([200, 202, 204]).toContain(initialized.statusCode);
+
+      const list = await app.inject({
+        method: 'POST',
+        url: '/mcp',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: {
+          ...authHeaders,
+          'mcp-session-id': sid,
+        },
+        payload: {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/list',
+          params: {},
+        },
+      });
+      expect(list.statusCode).toBe(200);
+      const payload = parseStreamableJson(list.body as string);
+      expect(Array.isArray(payload?.result?.tools)).toBe(true);
+      expect(
+        payload?.result?.tools?.some(
+          (tool: { name?: string }) => tool?.name === 'get_windows_and_tabs',
+        ),
+      ).toBe(true);
+
+      const del = await app.inject({
+        method: 'DELETE',
+        url: '/mcp',
+        remoteAddress: REMOTE_CLIENT_IP,
+        headers: {
+          authorization: `Bearer ${REMOTE_BEARER_TOKEN}`,
           'mcp-session-id': sid,
         },
       });
