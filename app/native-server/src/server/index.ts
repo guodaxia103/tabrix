@@ -351,16 +351,7 @@ export class Server {
       const managedEntry = sessionId ? this.sessions.get(sessionId) : undefined;
       let transport: StreamableHTTPServerTransport | undefined =
         managedEntry?.kind === 'streamable-http' ? managedEntry.transport : undefined;
-      let newSessionServer: ReturnType<typeof createMcpServer> | undefined;
-      let newSessionMeta:
-        | {
-            sessionId: string;
-            clientIp: string;
-            clientName: string;
-            clientVersion: string;
-            connectedAt: number;
-          }
-        | undefined;
+      let newSessionId: string | undefined;
 
       if (transport) {
         // Existing session found, proceed.
@@ -368,7 +359,8 @@ export class Server {
         reply.code(HTTP_STATUS.BAD_REQUEST).send({ error: ERROR_MESSAGES.STALE_MCP_SESSION });
         return;
       } else if (!sessionId && isInitializeRequest(request.body)) {
-        const newSessionId = randomUUID();
+        const createdSessionId = randomUUID();
+        newSessionId = createdSessionId;
         const server = createMcpServer();
         const clientIp = request.ip;
         const initBody = request.body as {
@@ -376,37 +368,25 @@ export class Server {
         };
         const clientName = initBody?.params?.clientInfo?.name ?? '';
         const clientVersion = initBody?.params?.clientInfo?.version ?? '';
-        newSessionServer = server;
-        newSessionMeta = {
-          sessionId: newSessionId,
+        const connectedAt = Date.now();
+
+        transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => createdSessionId,
+          onsessioninitialized: () => undefined,
+        });
+
+        this.sessions.register(createdSessionId, {
+          kind: 'streamable-http',
+          transport,
+          server,
           clientIp,
           clientName,
           clientVersion,
-          connectedAt: Date.now(),
-        };
-        transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: () => newSessionId,
-          onsessioninitialized: (initializedSessionId) => {
-            if (transport) {
-              this.sessions.register(initializedSessionId, {
-                kind: 'streamable-http',
-                transport,
-                server,
-                clientIp: newSessionMeta?.clientIp ?? clientIp,
-                clientName: newSessionMeta?.clientName ?? clientName,
-                clientVersion: newSessionMeta?.clientVersion ?? clientVersion,
-                connectedAt: newSessionMeta?.connectedAt ?? Date.now(),
-              });
-            }
-          },
+          connectedAt,
         });
 
         transport.onclose = () => {
-          if (transport?.sessionId) {
-            this.sessions.remove(transport.sessionId);
-          } else if (newSessionMeta?.sessionId) {
-            this.sessions.remove(newSessionMeta.sessionId);
-          }
+          this.sessions.remove(createdSessionId);
         };
         await server.connect(transport);
       } else {
@@ -417,29 +397,14 @@ export class Server {
       try {
         await transport.handleRequest(request.raw, reply.raw, request.body);
 
-        // Some runtimes/proxies may complete initialize without invoking onsessioninitialized
-        // in time; ensure the new session is present for immediate follow-up requests.
-        if (newSessionServer && newSessionMeta) {
-          const headerSessionId = reply.raw.getHeader('mcp-session-id');
-          const effectiveSessionId =
-            (typeof headerSessionId === 'string' && headerSessionId) ||
-            (Array.isArray(headerSessionId) && headerSessionId[0]) ||
-            transport.sessionId ||
-            newSessionMeta.sessionId;
-
-          if (effectiveSessionId && !this.sessions.has(effectiveSessionId)) {
-            this.sessions.register(effectiveSessionId, {
-              kind: 'streamable-http',
-              transport,
-              server: newSessionServer,
-              clientIp: newSessionMeta.clientIp,
-              clientName: newSessionMeta.clientName,
-              clientVersion: newSessionMeta.clientVersion,
-              connectedAt: newSessionMeta.connectedAt,
-            });
-          }
+        // If initialize failed, remove the pre-registered session to avoid leaks.
+        if (newSessionId && reply.raw.statusCode >= HTTP_STATUS.BAD_REQUEST) {
+          this.sessions.remove(newSessionId);
         }
       } catch (error) {
+        if (newSessionId) {
+          this.sessions.remove(newSessionId);
+        }
         if (canWriteReply(reply)) {
           reply
             .code(HTTP_STATUS.INTERNAL_SERVER_ERROR)
