@@ -247,7 +247,7 @@ export class BridgeStateManager {
     const heartbeatFresh =
       this.snapshot.extensionHeartbeatAt !== null &&
       now - this.snapshot.extensionHeartbeatAt <= HEARTBEAT_TIMEOUT_MS;
-    const bridgeReady = this.snapshot.nativeHostAttached || heartbeatFresh;
+    const bridgeReady = this.snapshot.nativeHostAttached && heartbeatFresh;
 
     if (this.snapshot.recoveryInFlight) {
       this.snapshot.bridgeState = 'BRIDGE_CONNECTING';
@@ -261,6 +261,11 @@ export class BridgeStateManager {
 
     if (bridgeReady) {
       this.snapshot.bridgeState = 'READY';
+      return;
+    }
+
+    if (heartbeatFresh && !this.snapshot.nativeHostAttached) {
+      this.snapshot.bridgeState = 'BRIDGE_DEGRADED';
       return;
     }
 

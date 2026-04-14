@@ -30,6 +30,7 @@ describe('BridgeStateManager', () => {
     const manager = new BridgeStateManager(() => true);
 
     manager.syncBrowserProcessNow();
+    manager.recordHeartbeat({ sentAt: Date.now(), nativeConnected: true });
     manager.setNativeHostAttached(true);
 
     expect(manager.getSnapshot()).toMatchObject({
@@ -39,16 +40,17 @@ describe('BridgeStateManager', () => {
     });
   });
 
-  test('reports ready when a fresh heartbeat says native is connected', () => {
+  test('reports degraded when heartbeat is fresh but native host is not attached yet', () => {
     const manager = new BridgeStateManager(() => true);
 
     manager.syncBrowserProcessNow();
     manager.recordHeartbeat({ sentAt: Date.now(), nativeConnected: true });
 
     expect(manager.getSnapshot()).toMatchObject({
-      bridgeState: 'READY',
+      bridgeState: 'BRIDGE_DEGRADED',
       browserProcessRunning: true,
       extensionHeartbeatAt: expect.any(Number),
+      nativeHostAttached: false,
     });
   });
 

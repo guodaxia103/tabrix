@@ -39,6 +39,10 @@ interface HttpProbeResult {
   detail: string;
 }
 
+interface StatusProbeResult extends HttpProbeResult {
+  snapshot?: Record<string, unknown>;
+}
+
 interface MpcCallResult {
   raw: any;
   parsed: any | null;
@@ -414,6 +418,42 @@ async function probe(url: string, headers: Record<string, string> = {}): Promise
   }
 }
 
+function describeBridgeFromStatus(snapshot?: Record<string, unknown>): string {
+  const bridge =
+    snapshot && typeof snapshot.bridge === 'object' && snapshot.bridge !== null
+      ? (snapshot.bridge as Record<string, unknown>)
+      : undefined;
+  const bridgeState = typeof bridge?.bridgeState === 'string' ? bridge.bridgeState : 'unknown';
+  const nativeAttached =
+    typeof bridge?.nativeHostAttached === 'boolean' ? bridge.nativeHostAttached : undefined;
+  return `bridge=${bridgeState}${typeof nativeAttached === 'boolean' ? `; nativeHostAttached=${nativeAttached}` : ''}`;
+}
+
+async function probeStatus(
+  url: string,
+  headers: Record<string, string> = {},
+): Promise<StatusProbeResult> {
+  try {
+    const response = await fetch(url, { headers });
+    const json = response.ok ? await response.json() : null;
+    const snapshot =
+      json && typeof json === 'object' && json.data && typeof json.data === 'object'
+        ? (json.data as Record<string, unknown>)
+        : undefined;
+    return {
+      ok: response.ok,
+      status: response.status,
+      detail: `${response.status} ${response.statusText}`.trim(),
+      snapshot,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: stringifyError(error),
+    };
+  }
+}
+
 async function runProtocolSequence(
   mcpUrl: string,
   authToken?: string,
@@ -436,11 +476,13 @@ async function runProtocolSequence(
     record('runtime.ping', ping.ok, ping.ok ? `Bridge reachable (${ping.detail})` : ping.detail);
     if (!ping.ok) throw new Error(`Ping failed: ${ping.detail}`);
 
-    const status = await probe(statusUrl);
+    const status = await probeStatus(statusUrl);
     record(
       'runtime.status',
       status.ok,
-      status.ok ? `Status endpoint reachable (${status.detail})` : status.detail,
+      status.ok
+        ? `Status endpoint reachable (${status.detail}); ${describeBridgeFromStatus(status.snapshot)}`
+        : status.detail,
     );
     if (!status.ok) throw new Error(`Status failed: ${status.detail}`);
 
@@ -837,11 +879,13 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     record('runtime.ping', ping.ok, ping.ok ? `Bridge reachable (${ping.detail})` : ping.detail);
     if (!ping.ok) throw new Error(`Ping failed: ${ping.detail}`);
 
-    const status = await probe(statusUrl, defaultHeaders);
+    const status = await probeStatus(statusUrl, defaultHeaders);
     record(
       'runtime.status',
       status.ok,
-      status.ok ? `Status endpoint reachable (${status.detail})` : status.detail,
+      status.ok
+        ? `Status endpoint reachable (${status.detail}); ${describeBridgeFromStatus(status.snapshot)}`
+        : status.detail,
     );
     if (!status.ok) throw new Error(`Status failed: ${status.detail}`);
 

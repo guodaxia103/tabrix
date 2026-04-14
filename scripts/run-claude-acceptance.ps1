@@ -167,7 +167,11 @@ function Wait-TabrixBridgeReady {
   while ((Get-Date) -lt $deadline) {
     try {
       $status = tabrix status --json | ConvertFrom-Json
-      if ($status.data.nativeHostAttached) {
+      if (
+        $status.data.nativeHostAttached -and
+        $status.data.bridge -and
+        $status.data.bridge.bridgeState -eq 'READY'
+      ) {
         return $true
       }
     } catch {
@@ -342,6 +346,7 @@ try {
   $cases = @(
     @{
       name = 'group-core-1'
+      kind = 'unattended'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
 1) get_windows_and_tabs
@@ -354,6 +359,7 @@ try {
     },
     @{
       name = 'group-core-2'
+      kind = 'unattended'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
 1) chrome_navigate 打开 $BaseUrl
@@ -369,6 +375,7 @@ try {
     },
     @{
       name = 'group-core-3'
+      kind = 'unattended'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
 1) chrome_navigate 打开 $BaseUrl
@@ -381,6 +388,7 @@ try {
     },
     @{
       name = 'group-core-4'
+      kind = 'unattended'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
 1) chrome_bookmark_add(url=$BaseUrl,title=TabrixSmokeBookmarkFast)
@@ -392,6 +400,7 @@ try {
     },
     @{
       name = 'group-core-5'
+      kind = 'unattended'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
 1) chrome_switch_tab 切换到 URL 包含 127.0.0.1:62100 的标签
@@ -408,6 +417,7 @@ try {
     $cases += @(
     @{
       name = 'group-full-1-dialog'
+      kind = 'unattended'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
 1) chrome_navigate 打开 $BaseUrl
@@ -420,16 +430,18 @@ try {
     },
     @{
       name = 'group-full-2-gif'
+      kind = 'unattended'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
 1) chrome_gif_recorder(action=clear)
-2) chrome_gif_recorder(action=start,durationMs=1200,fps=4,filename=claude-full-gif)
+2) chrome_gif_recorder(action=start,durationMs=4000,fps=4,filename=claude-full-gif)
 3) chrome_gif_recorder(action=stop)
 最后给每一步返回 success/failed 摘要。
 "@
     },
     @{
       name = 'group-full-3-upload-select'
+      kind = 'collaborative'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
 1) chrome_navigate 打开 $BaseUrl
@@ -440,6 +452,7 @@ try {
       },
       @{
         name = 'group-full-4-close-tabs'
+        kind = 'unattended'
         prompt = @"
 请使用 tabrix 工具一次会话连续完成：
 1) chrome_navigate 打开 ${BaseUrl}page2.html 并使用 newWindow=true
@@ -465,6 +478,7 @@ try {
     endedAt = $endedAt.ToString('s')
     elapsedSec = [math]::Round(($endedAt - $startedAt).TotalSeconds, 1)
     caseCount = $cases.Count
+    cases = @($cases | ForEach-Object { [PSCustomObject]@{ name = $_.name; kind = $_.kind } })
   }
   $summary | ConvertTo-Json | Out-File -FilePath (Join-Path $OutDir '_summary.json') -Encoding utf8
   Write-Host "Done. Summary written to $(Join-Path $OutDir '_summary.json')"
