@@ -12,27 +12,60 @@ describe('handleDownloadTool', () => {
       suggest: (suggestion?: chrome.downloads.DownloadFilenameSuggestion) => void,
     ) => void
   > = [];
+  let runtimeMessageListeners: Array<(message: any) => void> = [];
 
   beforeEach(() => {
     vi.restoreAllMocks();
     changedListeners = [];
     createdListeners = [];
     determiningListeners = [];
+    runtimeMessageListeners = [];
 
     const downloadsStore = new Map<number, Partial<chrome.downloads.DownloadItem>>();
+    let nextId = 100;
 
     chrome.runtime.lastError = undefined;
+    chrome.runtime.onMessage = {
+      addListener: vi.fn((listener: (message: any) => void) => {
+        runtimeMessageListeners.push(listener);
+      }),
+      removeListener: vi.fn((listener: (message: any) => void) => {
+        runtimeMessageListeners = runtimeMessageListeners.filter((l) => l !== listener);
+      }),
+    } as any;
+    chrome.runtime.sendMessage = vi.fn(async (message: any) => {
+      if (message?.type === 'forward_to_native') {
+        const requestId = message?.message?.requestId;
+        setTimeout(() => {
+          runtimeMessageListeners.forEach((listener) =>
+            listener({
+              type: 'file_operation_response',
+              responseToRequestId: requestId,
+              payload: {
+                success: true,
+                filePath: `C:\\Temp\\chrome-mcp-uploads\\${message?.message?.payload?.fileName || 'download.bin'}`,
+                fileName: message?.message?.payload?.fileName || 'download.bin',
+                size: 123,
+              },
+            }),
+          );
+        }, 0);
+      }
+      return { success: true };
+    }) as any;
     chrome.downloads = {
-      download: vi.fn((options: chrome.downloads.DownloadOptions, callback?: (id?: number) => void) => {
-        const id = 101;
-        downloadsStore.set(id, {
-          id,
-          filename: `C:\\Users\\test\\Downloads\\${options.filename || 'unknown'}`,
-          url: options.url || '',
-          state: 'in_progress',
-        });
-        callback?.(id);
-      }) as any,
+      download: vi.fn(
+        (options: chrome.downloads.DownloadOptions, callback?: (id?: number) => void) => {
+          const id = ++nextId;
+          downloadsStore.set(id, {
+            id,
+            filename: `C:\\Users\\test\\Downloads\\${options.filename || 'unknown'}`,
+            url: options.url || '',
+            state: 'in_progress',
+          });
+          callback?.(id);
+        },
+      ) as any,
       search: vi.fn(async (query: chrome.downloads.DownloadQuery) => {
         if (typeof query.id === 'number') {
           const hit = downloadsStore.get(query.id);
@@ -81,42 +114,30 @@ describe('handleDownloadTool', () => {
     } as any;
   });
 
-  it('actively downloads via extension and returns savedPath', async () => {
-    const run = handleDownloadTool.execute({
+  it('downloads via native host by default and returns savedPath', async () => {
+    const result = await handleDownloadTool.execute({
       url: 'https://example.com/file.txt',
       filename: 'report.txt',
       waitForComplete: true,
       timeoutMs: 3000,
     });
-
-    setTimeout(() => {
-      changedListeners.forEach((listener) => {
-        listener({
-          id: 101,
-          state: { current: 'complete' },
-        } as chrome.downloads.DownloadDelta);
-      });
-    }, 0);
-
-    const result = await run;
     expect(result.isError).toBe(false);
     const text = (result.content[0] as { text: string }).text;
     const payload = JSON.parse(text);
     expect(payload.success).toBe(true);
-    expect(payload.download.savedPath).toContain('Downloads');
-    expect(payload.download.savedPath).toContain('tabrix/report.txt');
-    expect(chrome.downloads.download).toHaveBeenCalledWith(
+    expect(payload.download.savedPath).toContain('chrome-mcp-uploads');
+    expect(payload.download.filename).toBe('report.txt');
+    expect(payload.download.source).toBe('native');
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: 'https://example.com/file.txt',
-        filename: 'tabrix/report.txt',
-        saveAs: false,
-        conflictAction: 'uniquify',
+        type: 'forward_to_native',
       }),
-      expect.any(Function),
     );
+    expect(chrome.downloads.download).not.toHaveBeenCalled();
   });
 
-  it('returns diagnostic message when timeout occurs', async () => {
+  it('returns diagnostic message when native download timeout occurs', async () => {
+    chrome.runtime.sendMessage = vi.fn(async (_message: any) => ({ success: true })) as any;
     const result = await handleDownloadTool.execute({
       url: 'https://example.com/file.txt',
       filename: 'stuck.txt',
@@ -126,8 +147,80 @@ describe('handleDownloadTool', () => {
 
     expect(result.isError).toBe(true);
     const text = (result.content[0] as { text: string }).text;
-    expect(text).toContain('Download wait timed out');
-    expect(text).toContain('ask save location each time');
+    expect(text).toContain('Native download timed out');
+  });
+
+  it('does not fallback to browser download when native bridge is unavailable by default', async () => {
+    chrome.runtime.sendMessage = vi.fn(async (_message: any) => ({
+      success: false,
+      error: 'Native host not connected',
+    })) as any;
+    const result = await handleDownloadTool.execute({
+      url: 'https://example.com/file.txt',
+      filename: 'no-fallback.txt',
+      waitForComplete: true,
+      timeoutMs: 3000,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(chrome.downloads.download).not.toHaveBeenCalled();
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain('Native host is not connected');
+  });
+
+  it('dedupes duplicate requests within task scope by default (join policy)', async () => {
+    const firstRun = handleDownloadTool.execute({
+      url: 'https://example.com/file.txt',
+      filename: 'dup.txt',
+      waitForComplete: true,
+      timeoutMs: 3000,
+      taskId: 'task-join-1',
+    });
+    const secondRun = handleDownloadTool.execute({
+      url: 'https://example.com/file.txt',
+      filename: 'dup.txt',
+      waitForComplete: true,
+      timeoutMs: 3000,
+      taskId: 'task-join-1',
+    });
+
+    const [first, second] = await Promise.all([firstRun, secondRun]);
+    expect(first.isError).toBe(false);
+    expect(second.isError).toBe(false);
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
+    const payload1 = JSON.parse((first.content[0] as { text: string }).text);
+    const payload2 = JSON.parse((second.content[0] as { text: string }).text);
+    expect(payload1.dedupe.reused).toBe(false);
+    expect(payload2.dedupe.reused).toBe(true);
+  });
+
+  it('can bypass dedupe with force policy in same task scope', async () => {
+    const firstRun = handleDownloadTool.execute({
+      url: 'https://example.com/file.txt',
+      filename: 'force.txt',
+      waitForComplete: true,
+      timeoutMs: 3000,
+      taskId: 'task-force-1',
+      dedupePolicy: 'force',
+    });
+    const secondRun = handleDownloadTool.execute({
+      url: 'https://example.com/file.txt',
+      filename: 'force.txt',
+      waitForComplete: true,
+      timeoutMs: 3000,
+      taskId: 'task-force-1',
+      dedupePolicy: 'force',
+    });
+
+    const [first, second] = await Promise.all([firstRun, secondRun]);
+    expect(first.isError).toBe(false);
+    expect(second.isError).toBe(false);
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(2);
+    const payload1 = JSON.parse((first.content[0] as { text: string }).text);
+    const payload2 = JSON.parse((second.content[0] as { text: string }).text);
+    expect(payload1.dedupe.policy).toBe('force');
+    expect(payload2.dedupe.policy).toBe('force');
+    expect(payload1.dedupe.reused).toBe(false);
+    expect(payload2.dedupe.reused).toBe(false);
   });
 });
-

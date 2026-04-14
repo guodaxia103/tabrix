@@ -764,8 +764,34 @@ export const TOOL_SCHEMAS: Tool[] = [
           description:
             'When url is provided, whether to force Save As dialog (default: false for silent save).',
         },
+        allowBrowserFallback: {
+          type: 'boolean',
+          description:
+            'Debug-only escape hatch. When true and native bridge is unavailable, allow fallback to browser download path (may trigger Save As depending on browser settings). Default: false.',
+        },
         timeoutMs: { type: 'number', description: 'Timeout in ms (default 60000, max 300000)' },
         waitForComplete: { type: 'boolean', description: 'Wait until completed (default true)' },
+        sessionId: {
+          type: 'string',
+          description:
+            'Optional session scope id for download dedupe. When provided, duplicate downloads are deduped inside this session.',
+        },
+        taskId: {
+          type: 'string',
+          description:
+            'Optional task scope id for download dedupe (higher priority than sessionId). Duplicate downloads are deduped inside this task.',
+        },
+        dedupeWindowSec: {
+          type: 'number',
+          description:
+            'Duplicate-join window in seconds (default 60, range 1-300). Within this window, same scoped request can reuse an existing job.',
+        },
+        dedupePolicy: {
+          type: 'string',
+          enum: ['join', 'force'],
+          description:
+            'Duplicate handling policy (default join). join: reuse existing in-window job; force: always create a new download job.',
+        },
       },
       required: [],
     },

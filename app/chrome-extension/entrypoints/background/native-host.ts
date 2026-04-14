@@ -714,8 +714,20 @@ export const initNativeHostListener = () => {
       console.error(`${LOG_PREFIX} Failed to initialize last native error`, error);
     });
 
-  // Auto-connect on SW activation (covers SW restart after idle termination)
-  void ensureNativeConnected('sw_startup').catch(() => {});
+  // Auto-connect on SW activation (covers SW restart after idle termination).
+  // Self-heal persisted "auto connect disabled" state so unattended flows can recover after restarts.
+  void (async () => {
+    if (!autoConnectLoaded) {
+      autoConnectEnabled = await loadNativeAutoConnectEnabled();
+      autoConnectLoaded = true;
+      syncKeepaliveHold();
+    }
+    if (!autoConnectEnabled) {
+      console.info(`${LOG_PREFIX} Auto-connect was disabled; re-enabling on startup for recovery.`);
+      await setNativeAutoConnectEnabled(true);
+    }
+    await ensureNativeConnected('sw_startup');
+  })().catch(() => {});
 
   // Auto-connect on Chrome browser startup
   chrome.runtime.onStartup.addListener(() => {

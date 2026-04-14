@@ -1,18 +1,26 @@
 import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
 import { TOOL_NAMES } from '@tabrix/shared';
+import { prepareFileViaNative } from './native-file';
 
 interface HandleDownloadParams {
   filenameContains?: string;
   url?: string;
   filename?: string;
   saveAs?: boolean;
+  allowBrowserFallback?: boolean; // debug-only: allow fallback to chrome.downloads when native is unavailable
   timeoutMs?: number; // default 60000
   waitForComplete?: boolean; // default true
+  sessionId?: string;
+  taskId?: string;
+  dedupeWindowSec?: number; // default 60
+  dedupePolicy?: 'join' | 'force';
 }
 
 const AUTO_DOWNLOAD_SUBDIR = 'tabrix';
 const INTERACTIVE_BYPASS_WINDOW_MS = 15000;
+const DOWNLOAD_MAX_CONCURRENCY = 5;
+const DOWNLOAD_DEFAULT_DEDUPE_WINDOW_SEC = 60;
 
 type DownloadFailureCode =
   | 'permission'
@@ -36,6 +44,15 @@ class DownloadToolError extends Error {
 
 const interactiveBypassTabs = new Map<number, number>();
 let globalDownloadRoutingInstalled = false;
+let downloadActiveCount = 0;
+const downloadWaiters: Array<() => void> = [];
+const downloadDedupeCache = new Map<
+  string,
+  {
+    promise: Promise<any>;
+    expiresAt: number;
+  }
+>();
 
 export function markNextDownloadAsInteractive(tabId?: number): void {
   if (!Number.isFinite(tabId)) return;
@@ -55,6 +72,96 @@ function sanitizeDownloadFilename(name: string): string {
   if (!replaced) return `download-${Date.now()}`;
   // Avoid hidden/invalid trailing dots on Windows
   return replaced.replace(/[. ]+$/g, '') || `download-${Date.now()}`;
+}
+
+function normalizeUrlForDedupe(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return url.trim();
+  }
+}
+
+function normalizeScopeId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function resolveDownloadScope(args: HandleDownloadParams): string {
+  const taskId = normalizeScopeId(args?.taskId);
+  if (taskId) return `task:${taskId}`;
+  const sessionId = normalizeScopeId(args?.sessionId);
+  if (sessionId) return `session:${sessionId}`;
+  return 'global';
+}
+
+function getDedupeWindowMs(args: HandleDownloadParams): number {
+  const raw = Number(args?.dedupeWindowSec);
+  if (!Number.isFinite(raw)) return DOWNLOAD_DEFAULT_DEDUPE_WINDOW_SEC * 1000;
+  const sec = Math.min(300, Math.max(1, Math.floor(raw)));
+  return sec * 1000;
+}
+
+function getDedupePolicy(args: HandleDownloadParams): 'join' | 'force' {
+  return args?.dedupePolicy === 'force' ? 'force' : 'join';
+}
+
+function cleanupExpiredDedupeEntries(now = Date.now()): void {
+  for (const [key, entry] of downloadDedupeCache.entries()) {
+    if (entry.expiresAt <= now) {
+      downloadDedupeCache.delete(key);
+    }
+  }
+}
+
+function buildDedupeKey(params: {
+  scope: string;
+  url: string;
+  filename: string;
+  saveAs: boolean;
+  waitForComplete: boolean;
+}): string {
+  const { scope, url, filename, saveAs, waitForComplete } = params;
+  return JSON.stringify({
+    scope,
+    url: normalizeUrlForDedupe(url),
+    filename,
+    saveAs,
+    waitForComplete,
+  });
+}
+
+async function acquireDownloadSlot(): Promise<void> {
+  if (downloadActiveCount < DOWNLOAD_MAX_CONCURRENCY) {
+    downloadActiveCount += 1;
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    downloadWaiters.push(() => {
+      downloadActiveCount += 1;
+      resolve();
+    });
+  });
+}
+
+function releaseDownloadSlot(): void {
+  downloadActiveCount = Math.max(0, downloadActiveCount - 1);
+  const next = downloadWaiters.shift();
+  if (next) {
+    next();
+  }
+}
+
+async function runWithDownloadQueue<T>(fn: () => Promise<T>): Promise<T> {
+  await acquireDownloadSlot();
+  try {
+    return await fn();
+  } finally {
+    releaseDownloadSlot();
+  }
 }
 
 function getDownloadLeafName(item: chrome.downloads.DownloadItem): string {
@@ -151,6 +258,129 @@ function createDownloadErrorResponse(error: unknown): ToolResult {
   );
 }
 
+interface NativeFileResponsePayload {
+  success?: boolean;
+  filePath?: string;
+  fileName?: string;
+  size?: number;
+  error?: string;
+}
+
+function hasNativeFileBridge(): boolean {
+  const runtime = chrome?.runtime as any;
+  return Boolean(
+    runtime &&
+    typeof runtime.sendMessage === 'function' &&
+    runtime.onMessage &&
+    typeof runtime.onMessage.addListener === 'function' &&
+    typeof runtime.onMessage.removeListener === 'function',
+  );
+}
+
+async function downloadViaNativeHost(opts: {
+  url: string;
+  fileName: string;
+  timeoutMs: number;
+}): Promise<{
+  id: null;
+  filename: string;
+  savedPath?: string;
+  url: string;
+  fileSize?: number;
+  state: 'complete';
+  source: 'native';
+}> {
+  const { url, fileName, timeoutMs } = opts;
+  if (!hasNativeFileBridge()) {
+    throw new DownloadToolError(
+      'session',
+      'Native file bridge is unavailable in current runtime context',
+    );
+  }
+  const requestId = `download-native-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  const payload = await new Promise<NativeFileResponsePayload>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      chrome.runtime.onMessage.removeListener(listener);
+      reject(new DownloadToolError('timeout', `Native download timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    const listener = (message: any) => {
+      if (
+        message &&
+        message.type === 'file_operation_response' &&
+        message.responseToRequestId === requestId
+      ) {
+        clearTimeout(timer);
+        chrome.runtime.onMessage.removeListener(listener);
+        if (message.error) {
+          reject(
+            new DownloadToolError('session', `Native download failed: ${String(message.error)}`),
+          );
+          return;
+        }
+        resolve((message.payload || {}) as NativeFileResponsePayload);
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(listener);
+    chrome.runtime
+      .sendMessage({
+        type: 'forward_to_native',
+        message: {
+          type: 'file_operation',
+          requestId,
+          payload: {
+            action: 'prepareFile',
+            fileUrl: url,
+            fileName,
+          },
+        },
+      })
+      .then((response: any) => {
+        if (response?.success !== true) {
+          clearTimeout(timer);
+          chrome.runtime.onMessage.removeListener(listener);
+          reject(
+            new DownloadToolError(
+              'session',
+              `Native host is not connected: ${response?.error || 'forward_to_native rejected'}`,
+            ),
+          );
+        }
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        chrome.runtime.onMessage.removeListener(listener);
+        reject(
+          new DownloadToolError(
+            'session',
+            `Failed to contact native host for download: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          ),
+        );
+      });
+  });
+
+  if (!payload?.success || !payload.filePath) {
+    throw new DownloadToolError(
+      'session',
+      `Native download did not produce a file path: ${payload?.error || 'unknown reason'}`,
+    );
+  }
+
+  return {
+    id: null,
+    filename: payload.fileName || fileName,
+    savedPath: payload.filePath,
+    url,
+    fileSize: payload.size,
+    state: 'complete',
+    source: 'native',
+  };
+}
+
 /**
  * Tool: wait for a download and return info
  */
@@ -163,9 +393,10 @@ class HandleDownloadTool extends BaseBrowserToolExecutor {
     const downloadUrl = String(args?.url || '').trim();
     const requestedFilename = String(args?.filename || '').trim();
     const saveAs = args?.saveAs === true;
+    const allowBrowserFallback = args?.allowBrowserFallback === true;
     const waitForComplete = args?.waitForComplete !== false;
     const timeoutMs = Math.max(1000, Math.min(Number(args?.timeoutMs ?? 60000), 300000));
-    let effectiveFilter = filenameContains;
+    const effectiveFilter = filenameContains;
 
     if (downloadUrl) {
       const safeLeaf = requestedFilename
@@ -181,16 +412,88 @@ class HandleDownloadTool extends BaseBrowserToolExecutor {
             })(),
           );
       const targetFilename = `${AUTO_DOWNLOAD_SUBDIR}/${safeLeaf}`;
+      const scope = resolveDownloadScope(args);
+      const dedupeWindowMs = getDedupeWindowMs(args);
+      const dedupePolicy = getDedupePolicy(args);
+      const dedupeKey = buildDedupeKey({
+        scope,
+        url: downloadUrl,
+        filename: targetFilename,
+        saveAs,
+        waitForComplete,
+      });
+
       try {
-        const triggered = await triggerDownloadAndWait({
-          url: downloadUrl,
-          filename: targetFilename,
-          saveAs,
-          waitForComplete,
-          timeoutMs,
-        });
+        const now = Date.now();
+        cleanupExpiredDedupeEntries(now);
+        let reused = false;
+        let dedupeEntry = downloadDedupeCache.get(dedupeKey);
+        if (dedupePolicy === 'join' && dedupeEntry && dedupeEntry.expiresAt > now) {
+          reused = true;
+        } else {
+          const promise = runWithDownloadQueue(async () => {
+            if (!saveAs) {
+              try {
+                return await downloadViaNativeHost({
+                  url: downloadUrl,
+                  fileName: safeLeaf,
+                  timeoutMs,
+                });
+              } catch (error) {
+                const parsed = classifyDownloadFailure(error);
+                // Hard default: no browser fallback in silent mode to prevent Save As popups.
+                if (parsed.code !== 'session' || !allowBrowserFallback) {
+                  throw parsed;
+                }
+                return await triggerDownloadAndWait({
+                  url: downloadUrl,
+                  filename: targetFilename,
+                  saveAs: false,
+                  waitForComplete,
+                  timeoutMs,
+                });
+              }
+            }
+            return await triggerDownloadAndWait({
+              url: downloadUrl,
+              filename: targetFilename,
+              saveAs,
+              waitForComplete,
+              timeoutMs,
+            });
+          }).catch((error) => {
+            // Failed entries should not stay cached; allow immediate retry.
+            downloadDedupeCache.delete(dedupeKey);
+            throw error;
+          });
+          dedupeEntry = {
+            promise,
+            expiresAt: now + dedupeWindowMs,
+          };
+          downloadDedupeCache.set(dedupeKey, dedupeEntry);
+        }
+        const triggered = await dedupeEntry.promise;
         return {
-          content: [{ type: 'text', text: JSON.stringify({ success: true, download: triggered }) }],
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                download: triggered,
+                dedupe: {
+                  policy: dedupePolicy,
+                  windowSec: Math.floor(dedupeWindowMs / 1000),
+                  scope,
+                  reused,
+                },
+                queue: {
+                  maxConcurrency: DOWNLOAD_MAX_CONCURRENCY,
+                  active: downloadActiveCount,
+                  pending: downloadWaiters.length,
+                },
+              }),
+            },
+          ],
           isError: false,
         };
       } catch (e: any) {
@@ -381,11 +684,130 @@ async function triggerDownloadAndWait(opts: {
     );
   });
 
+  const waitForDownloadId = async (id: number, maxWaitMs: number) => {
+    return await new Promise<any>((resolveById, rejectById) => {
+      let waitTimer: any = null;
+      const cleanupById = () => {
+        try {
+          if (waitTimer) clearTimeout(waitTimer);
+        } catch {}
+        try {
+          chrome.downloads.onChanged.removeListener(onChangedById);
+        } catch {}
+      };
+      const finishById = async () => {
+        try {
+          const [found] = await chrome.downloads.search({ id });
+          if (!found) {
+            cleanupById();
+            rejectById(new DownloadToolError('not_found', `Download ${id} not found`));
+            return;
+          }
+          cleanupById();
+          resolveById({
+            id: found.id,
+            filename: found.filename,
+            savedPath: found.filename || undefined,
+            url: found.url,
+            mime: (found as any).mime || undefined,
+            fileSize: found.fileSize ?? found.totalBytes ?? undefined,
+            state: found.state,
+            danger: found.danger,
+            startTime: found.startTime,
+            endTime: (found as any).endTime || undefined,
+            exists: (found as any).exists,
+          });
+        } catch (error) {
+          cleanupById();
+          rejectById(classifyDownloadFailure(error));
+        }
+      };
+      const onChangedById = (delta: chrome.downloads.DownloadDelta) => {
+        if (!delta || delta.id !== id) return;
+        const state = delta.state?.current;
+        if (!state) return;
+        if (!waitForComplete) {
+          void finishById();
+          return;
+        }
+        if (state === 'complete') {
+          void finishById();
+          return;
+        }
+        if (state === 'interrupted') {
+          cleanupById();
+          rejectById(new DownloadToolError('interrupted', `Download ${id} interrupted`));
+        }
+      };
+      chrome.downloads.onChanged.addListener(onChangedById);
+      waitTimer = setTimeout(
+        () => rejectById(new DownloadToolError('timeout', `Download ${id} timed out`)),
+        maxWaitMs,
+      );
+      void chrome.downloads
+        .search({ id })
+        .then((rows) => {
+          const row = rows?.[0];
+          if (!row) return;
+          if (!waitForComplete || row.state === 'complete') {
+            void finishById();
+          }
+        })
+        .catch(() => {});
+    });
+  };
+
+  const fallbackSilentDownload = async () => {
+    try {
+      try {
+        await chrome.downloads.cancel(downloadId);
+      } catch {}
+      try {
+        await chrome.downloads.erase({ id: downloadId });
+      } catch {}
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) {
+        throw new DownloadToolError('session', `Fallback fetch failed: HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      const dataUrl = await new Promise<string>((resolveDataUrl, rejectDataUrl) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') resolveDataUrl(reader.result);
+          else rejectDataUrl(new Error('Fallback produced non-string data URL'));
+        };
+        reader.onerror = () =>
+          rejectDataUrl(reader.error || new Error('Fallback FileReader failed'));
+        reader.readAsDataURL(blob);
+      });
+      const nativeSaved = await prepareFileViaNative({
+        base64Data: dataUrl,
+        fileName: filename.split('/').pop() || filename,
+        requestPrefix: 'download-fallback',
+      });
+      return {
+        id: null,
+        filename,
+        savedPath: nativeSaved.fullPath,
+        url,
+        fileSize: nativeSaved.size,
+        state: 'complete',
+        source: 'native-fallback',
+      };
+    } catch (error) {
+      throw classifyDownloadFailure(error);
+    }
+  };
+
   return await new Promise<any>((resolve, reject) => {
     let timer: any = null;
+    let blockedProbeTimer: any = null;
     const cleanup = () => {
       try {
         if (timer) clearTimeout(timer);
+      } catch {}
+      try {
+        if (blockedProbeTimer) clearTimeout(blockedProbeTimer);
       } catch {}
       try {
         chrome.downloads.onChanged.removeListener(onChanged);
@@ -404,6 +826,17 @@ async function triggerDownloadAndWait(opts: {
         }
         const state = item.state || 'unknown';
         const filename = item.filename || '';
+        if (state === 'in_progress' && !filename) {
+          try {
+            const fallback = await fallbackSilentDownload();
+            cleanup();
+            resolve(fallback);
+            return;
+          } catch (error) {
+            fail(classifyDownloadFailure(error));
+            return;
+          }
+        }
         // In practice, when "Ask where to save each file" is enabled, download may wait
         // indefinitely for user confirmation and appear as a timeout from the extension side.
         fail(
@@ -461,6 +894,33 @@ async function triggerDownloadAndWait(opts: {
       }
     };
     chrome.downloads.onChanged.addListener(onChanged);
+
+    // Fast-fail probe: detect likely Save-As blocking early instead of waiting full timeout.
+    // If a download stays "in_progress" without a resolved filename for several seconds,
+    // it is typically waiting on a native save dialog.
+    const blockedProbeStartedAt = Date.now();
+    const blockedProbe = async () => {
+      try {
+        const [row] = await chrome.downloads.search({ id: downloadId });
+        if (!row) return;
+        if (row.state === 'complete' || row.state === 'interrupted') return;
+        const hasFilename = typeof row.filename === 'string' && row.filename.trim().length > 0;
+        const elapsed = Date.now() - blockedProbeStartedAt;
+        if (!hasFilename && elapsed >= Math.min(8000, timeoutMs)) {
+          await failWithDownloadState('Download appears blocked (likely waiting for Save As)');
+          return;
+        }
+      } catch {
+        // ignore probe failures
+      }
+      blockedProbeTimer = setTimeout(() => {
+        void blockedProbe();
+      }, 1000);
+    };
+    blockedProbeTimer = setTimeout(() => {
+      void blockedProbe();
+    }, 1500);
+
     timer = setTimeout(() => {
       void failWithDownloadState('Download wait timed out');
     }, timeoutMs);

@@ -1,4 +1,5 @@
- 
+/* global window, document, Element, MouseEvent, chrome */
+
 // click-helper.js
 // This script is injected into the page to handle click operations
 
@@ -167,22 +168,44 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
       if (resolvedAnchor && !allowDownloadClick) {
         const href = resolvedAnchor.href || '';
         const downloadAttr = resolvedAnchor.getAttribute('download');
-        const path = (() => {
+        const anchorText = (resolvedAnchor.textContent || '').trim();
+        const parsed = (() => {
           try {
-            return new URL(href, window.location.href).pathname || '';
+            return new URL(href, window.location.href);
           } catch {
-            return '';
+            return null;
           }
         })();
-        const looksLikeFile = /\.(zip|rar|7z|pdf|csv|xlsx?|docx?|pptx?|txt|json|xml|html?|md|png|jpe?g|gif|webp|mp4|mp3|wav)$/i.test(
-          path,
-        );
-        if (downloadAttr !== null || looksLikeFile) {
+        const path = parsed?.pathname || '';
+        const lowerPath = path.toLowerCase();
+        const lowerHref = href.toLowerCase();
+        const lowerText = anchorText.toLowerCase();
+        const isHashOrJs =
+          href.startsWith('#') || lowerHref.startsWith('javascript:') || lowerHref.length === 0;
+        const hasFileExt =
+          /\.(zip|rar|7z|pdf|csv|xlsx?|docx?|pptx?|txt|json|xml|html?|md|png|jpe?g|gif|webp|mp4|mp3|wav|apk|dmg|exe)$/i.test(
+            path,
+          );
+        const queryLooksDownload =
+          /(?:[?&](download|dl|export|attachment|response-content-disposition)=)/i.test(href);
+        const hrefKeyword = /\b(download|export|attachment|file)\b/i.test(href);
+        const textKeyword = /\b(download|export|下载|导出)\b/i.test(anchorText);
+        const likelyApiCall = /\/api(\/|$)/i.test(lowerPath) && !hasFileExt;
+        // Score-based interception: only intercept high-confidence download intent.
+        // This avoids one-size-fits-all behavior for normal clicks or API-triggered actions.
+        let score = 0;
+        if (downloadAttr !== null) score += 3;
+        if (hasFileExt) score += 2;
+        if (queryLooksDownload) score += 2;
+        if (hrefKeyword) score += 1;
+        if (textKeyword) score += 1;
+        if (likelyApiCall) score -= 2;
+        if (!isHashOrJs && score >= 2) {
           return {
             success: true,
             interceptedDownload: true,
             message:
-              'Download link intercepted to avoid browser Save As dialog. Use extension-side download path.',
+              'High-confidence download click intercepted to avoid browser Save As dialog. Use extension-side download path.',
             downloadUrl: href,
             downloadFilename: (downloadAttr || '').trim() || null,
             elementInfo,

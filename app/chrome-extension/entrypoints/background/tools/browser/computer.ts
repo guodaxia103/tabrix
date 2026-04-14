@@ -557,59 +557,13 @@ class ComputerTool extends BaseBrowserToolExecutor {
         if (!domResult.isError) {
           return domResult; // Standardized response from click tool
         }
-        // Fallback to CDP if DOM failed
-        try {
-          await CDPHelper.attach(tab.id);
-          const button: MouseButton = params.action === 'right_click' ? 'right' : 'left';
-          const clickCount = 1;
-          await CDPHelper.dispatchMouseEvent(tab.id, {
-            type: 'mouseMoved',
-            x: coord.x,
-            y: coord.y,
-            button: 'none',
-            buttons: 0,
-            modifiers: modifiersMask,
-          });
-          for (let i = 1; i <= clickCount; i++) {
-            await CDPHelper.dispatchMouseEvent(tab.id, {
-              type: 'mousePressed',
-              x: coord.x,
-              y: coord.y,
-              button,
-              buttons: button === 'left' ? 1 : 2,
-              clickCount: i,
-              modifiers: modifiersMask,
-            });
-            await CDPHelper.dispatchMouseEvent(tab.id, {
-              type: 'mouseReleased',
-              x: coord.x,
-              y: coord.y,
-              button,
-              buttons: 0,
-              clickCount: i,
-              modifiers: modifiersMask,
-            });
-          }
-          await CDPHelper.detach(tab.id);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  success: true,
-                  action: params.action,
-                  coordinates: coord,
-                }),
-              },
-            ],
-            isError: false,
-          };
-        } catch (e) {
-          await CDPHelper.detach(tab.id);
-          return createErrorResponse(
-            `CDP click failed: ${e instanceof Error ? e.message : String(e)}`,
-          );
-        }
+        // Safety-first: do not fallback to raw CDP click when DOM click fails.
+        // Raw CDP path may bypass download interception and trigger native Save As dialogs.
+        return createErrorResponse(
+          `Click blocked to avoid unsafe fallback (DOM click failed). ` +
+            `Please use ref/selector via chrome_read_page + click, or retry with a precise target. ` +
+            `Original error: ${((domResult.content?.[0] as any)?.text as string) || 'unknown'}`,
+        );
       }
       case 'double_click':
       case 'triple_click': {

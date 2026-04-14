@@ -2443,6 +2443,17 @@ onMounted(async () => {
 
     await checkSemanticEngineStatus();
     setupServerStatusListener();
+
+    // Unattended recovery: when popup opens and native is disconnected,
+    // proactively trigger the same connect flow as the "Connect" button.
+    // `?autoconnect=0` can be used to disable this behavior for debugging.
+    const search = new URLSearchParams(window.location.search);
+    const allowAutoConnect = search.get('autoconnect') !== '0';
+    if (allowAutoConnect && nativeConnectionStatus.value !== 'connected') {
+      await testNativeConnection();
+      await refreshServerStatus();
+    }
+
     // Auto-refresh workflows list when storage rr_flows changes
     try {
       const onChanged = (changes: any, area: string) => {

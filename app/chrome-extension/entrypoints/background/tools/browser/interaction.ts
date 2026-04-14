@@ -34,6 +34,105 @@ interface ClickToolParams {
 class ClickTool extends BaseBrowserToolExecutor {
   name = TOOL_NAMES.BROWSER.CLICK;
 
+  private async preflightDownloadIntercept(
+    tabId: number,
+    args: { selector?: string; ref?: string; frameId?: number },
+  ): Promise<{
+    interceptedDownload: boolean;
+    downloadUrl?: string;
+    downloadFilename?: string | null;
+  }> {
+    if (!args.selector && !args.ref) {
+      return { interceptedDownload: false };
+    }
+    try {
+      const target: chrome.scripting.InjectionTarget = {
+        tabId,
+        ...(typeof args.frameId === 'number' ? { frameIds: [args.frameId] } : {}),
+      };
+      const [injection] = await chrome.scripting.executeScript({
+        target,
+        func: (params: { selector?: string; ref?: string }) => {
+          let element: Element | null = null;
+          if (params.ref && typeof params.ref === 'string') {
+            try {
+              const map = (window as any).__claudeElementMap;
+              const weak = map && map[params.ref];
+              const deref = weak && typeof weak.deref === 'function' ? weak.deref() : null;
+              if (deref instanceof Element) {
+                element = deref;
+              }
+            } catch {
+              // ignore
+            }
+          } else if (params.selector && typeof params.selector === 'string') {
+            element = document.querySelector(params.selector);
+          }
+          if (!element) return { interceptedDownload: false };
+
+          const anchor =
+            element instanceof HTMLAnchorElement ? element : element.closest?.('a[href]') || null;
+          if (!anchor || !(anchor instanceof HTMLAnchorElement)) {
+            return { interceptedDownload: false };
+          }
+
+          const href = anchor.href || '';
+          const downloadAttr = anchor.getAttribute('download');
+          const anchorText = (anchor.textContent || '').trim();
+          const parsed = (() => {
+            try {
+              return new URL(href, window.location.href);
+            } catch {
+              return null;
+            }
+          })();
+          const path = parsed?.pathname || '';
+          const lowerPath = path.toLowerCase();
+          const lowerHref = href.toLowerCase();
+          const isHashOrJs =
+            href.startsWith('#') || lowerHref.startsWith('javascript:') || lowerHref.length === 0;
+          const hasFileExt =
+            /\.(zip|rar|7z|pdf|csv|xlsx?|docx?|pptx?|txt|json|xml|html?|md|png|jpe?g|gif|webp|mp4|mp3|wav|apk|dmg|exe)$/i.test(
+              path,
+            );
+          const queryLooksDownload =
+            /(?:[?&](download|dl|export|attachment|response-content-disposition)=)/i.test(href);
+          const hrefKeyword = /\b(download|export|attachment|file)\b/i.test(href);
+          const textKeyword = /\b(download|export|下载|导出)\b/i.test(anchorText);
+          const likelyApiCall = /\/api(\/|$)/i.test(lowerPath) && !hasFileExt;
+
+          let score = 0;
+          if (downloadAttr !== null) score += 3;
+          if (hasFileExt) score += 2;
+          if (queryLooksDownload) score += 2;
+          if (hrefKeyword) score += 1;
+          if (textKeyword) score += 1;
+          if (likelyApiCall) score -= 2;
+
+          if (!isHashOrJs && score >= 2) {
+            return {
+              interceptedDownload: true,
+              downloadUrl: href,
+              downloadFilename: (downloadAttr || '').trim() || null,
+            };
+          }
+          return { interceptedDownload: false };
+        },
+        args: [{ selector: args.selector, ref: args.ref }],
+      });
+      const result = injection?.result as
+        | { interceptedDownload?: boolean; downloadUrl?: string; downloadFilename?: string | null }
+        | undefined;
+      return {
+        interceptedDownload: result?.interceptedDownload === true,
+        downloadUrl: result?.downloadUrl,
+        downloadFilename: result?.downloadFilename ?? null,
+      };
+    } catch {
+      return { interceptedDownload: false };
+    }
+  }
+
   /**
    * Execute click operation
    */
@@ -95,6 +194,56 @@ class ClickTool extends BaseBrowserToolExecutor {
           return createErrorResponse(
             `Error resolving XPath: ${error instanceof Error ? error.message : String(error)}`,
           );
+        }
+      }
+
+      if (args.allowDownloadClick !== true) {
+        const preflight = await this.preflightDownloadIntercept(tab.id, {
+          selector: finalSelector,
+          ref: finalRef,
+          frameId,
+        });
+        if (preflight.interceptedDownload && preflight.downloadUrl) {
+          const downloadResult = await handleDownloadTool.execute({
+            url: String(preflight.downloadUrl),
+            filename: preflight.downloadFilename ? String(preflight.downloadFilename) : undefined,
+            saveAs: false,
+            waitForComplete: true,
+            timeoutMs: 60000,
+          });
+
+          if (downloadResult.isError) {
+            return createErrorResponse(
+              `Download link preflight intercept failed: ${
+                (downloadResult.content?.[0] as any)?.text || 'unknown error'
+              }`,
+            );
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  message:
+                    'Download link was preflight-intercepted and handled via chrome_handle_download (silent mode).',
+                  clickMethod: 'intercepted-download',
+                  downloadUrl: preflight.downloadUrl,
+                  downloadFilename: preflight.downloadFilename || null,
+                  download: (() => {
+                    try {
+                      return JSON.parse((downloadResult.content?.[0] as any)?.text || '{}')
+                        ?.download;
+                    } catch {
+                      return null;
+                    }
+                  })(),
+                }),
+              },
+            ],
+            isError: false,
+          };
         }
       }
 

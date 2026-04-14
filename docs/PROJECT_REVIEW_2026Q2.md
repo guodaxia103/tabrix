@@ -4,6 +4,8 @@
 
 Tabrix has evolved from a browser bridge into a product-shaped MCP execution platform with clear strengths in local-first browser automation and remote control. The current phase should focus on stability and contributor trust: tighten quality gates, complete user-facing i18n, and reduce release risk before accelerating feature expansion.
 
+At this stage, Tabrix should explicitly optimize for AI assistant products first. The two tier-1 connection modes are `stdio` and remote `Streamable HTTP`; everything else should be treated as secondary until remote browser control is consistently reliable.
+
 ## 1) Product Manager View
 
 ### Positioning
@@ -11,6 +13,7 @@ Tabrix has evolved from a browser bridge into a product-shaped MCP execution pla
 - Core value: turn a real daily browser session into an MCP execution layer.
 - Strong differentiator: remote control with token auth and LAN workflow support.
 - Ecosystem fit: compatible with multiple MCP clients and assistant products.
+- Priority audience: Copaw, OpenClaw, Codex, Claude Desktop, Cursor, Cline, and similar AI assistant products.
 
 ### Growth Drivers
 
@@ -43,6 +46,8 @@ Tabrix has evolved from a browser bridge into a product-shaped MCP execution pla
 - Keep CLI contract stable; optimize internal modules behind unchanged commands.
 - Use CI gates as architecture guardrails (i18n, typecheck, tests, audit).
 - Treat remote-control path as tier-1 path with dedicated regression checks.
+- Treat `stdio` and remote `Streamable HTTP` as the only tier-1 transports in the current phase.
+- Design recovery around the assistant command path: if the browser is not running, the system should be able to launch Chrome, reattach the extension bridge, and continue the requested tool call.
 
 ## 3) Test & Release Management View
 
@@ -70,6 +75,7 @@ Tabrix has evolved from a browser bridge into a product-shaped MCP execution pla
 
 - Positive: command surface is simpler and troubleshooting is actionable.
 - Required improvements: fully localized, concise, and non-technical user messages across popup + sidepanel + builder validation.
+- Required improvements: remote browser control should feel automatic for assistant users, not like a manual multi-step setup ritual.
 
 ### UX Principles for Next Iteration
 
@@ -99,15 +105,19 @@ Current recommended strategy is **reputation-first open source growth**:
 - Complete user-facing i18n coverage.
 - Enforce CI/release quality gates.
 - Close high-severity dependency risks.
+- Fully stabilize remote `Streamable HTTP` for real assistant clients before expanding other surfaces.
+- Define release gating around real MCP flows: `initialize -> tools/list -> tools/call`.
 
 ### M1 - Growth
 
 - Improve onboarding docs and demos for top MCP clients.
 - Add contributor starter tasks and dev environment quick checks.
 - Publish reliability and adoption metrics in release notes.
+- Publish an assistant-first compatibility matrix for Copaw, OpenClaw, Codex, Claude Desktop, Cursor, and Cline.
 
 ### M2 - Differentiation
 
 - Smart DOM understanding and dehydration pipeline.
 - Remote collaboration and multi-operator workflow controls.
 - Higher-level automation abstractions for repeatable business workflows.
+- Automatic end-to-end browser recovery for assistant commands: daemon auto-start, Chrome auto-launch, bridge reattach, and tool-call retry when the browser is not yet running.

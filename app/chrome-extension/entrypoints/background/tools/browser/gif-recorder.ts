@@ -47,6 +47,7 @@ const DEFAULT_WIDTH = 800;
 const DEFAULT_HEIGHT = 600;
 const DEFAULT_MAX_COLORS = 256;
 const CDP_SESSION_KEY = 'gif-recorder';
+const AUTO_DOWNLOAD_SUBDIR = 'tabrix';
 
 // ============================================================================
 // Types
@@ -516,27 +517,15 @@ async function stopRecording(): Promise<GifResult> {
 
       // Save GIF file
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const outputFilename = filename?.replace(/[^a-z0-9_-]/gi, '_') || `recording_${timestamp}`;
-      const fullFilename = outputFilename.endsWith('.gif')
-        ? outputFilename
-        : `${outputFilename}.gif`;
+      const outputFilename = filename || `recording_${timestamp}`;
+      const fullFilename = toSilentGifFilename(outputFilename);
 
-      const downloadId = await chrome.downloads.download({
-        url: dataUrl,
-        filename: fullFilename,
-        saveAs: false,
+      const saved = await saveGifViaNativeHost({
+        dataUrl,
+        fileName: fullFilename.split('/').pop() || fullFilename,
       });
-
-      // Wait briefly to get download info
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      let fullPath: string | undefined;
-      try {
-        const [downloadItem] = await chrome.downloads.search({ id: downloadId });
-        fullPath = downloadItem?.filename;
-      } catch {
-        // Ignore path lookup errors
-      }
+      const downloadId: number | undefined = undefined;
+      const fullPath: string | undefined = saved.fullPath;
 
       return {
         success: true,
@@ -600,6 +589,113 @@ function blobToDataUrl(blob: Blob): Promise<string> {
     reader.onerror = () => reject(new Error('Failed to read blob'));
     reader.readAsDataURL(blob);
   });
+}
+
+function sanitizeGifFilename(name: string): string {
+  const trimmed = (name || '').trim();
+  const normalized = Array.from(trimmed, (ch) => {
+    const code = ch.charCodeAt(0);
+    return code >= 0 && code < 32 ? '_' : ch;
+  }).join('');
+  const replaced = normalized
+    .replace(/[<>:"/\\|?*]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[. ]+$/g, '');
+  return replaced || `recording_${Date.now()}`;
+}
+
+function toSilentGifFilename(rawName?: string): string {
+  const base = sanitizeGifFilename(rawName || '');
+  const full = base.toLowerCase().endsWith('.gif') ? base : `${base}.gif`;
+  return `${AUTO_DOWNLOAD_SUBDIR}/${full}`;
+}
+
+function hasNativeFileBridge(): boolean {
+  const runtime = chrome?.runtime as any;
+  return Boolean(
+    runtime &&
+    typeof runtime.sendMessage === 'function' &&
+    runtime.onMessage &&
+    typeof runtime.onMessage.addListener === 'function' &&
+    typeof runtime.onMessage.removeListener === 'function',
+  );
+}
+
+async function saveGifViaNativeHost(opts: {
+  dataUrl: string;
+  fileName: string;
+  timeoutMs?: number;
+}): Promise<{ filename: string; fullPath?: string; source: 'native' }> {
+  const { dataUrl, fileName, timeoutMs = 15000 } = opts;
+  if (!hasNativeFileBridge()) {
+    throw new Error('Native file bridge is unavailable');
+  }
+  const requestId = `gif-native-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  const payload = await new Promise<any>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      chrome.runtime.onMessage.removeListener(listener);
+      reject(new Error(`Native GIF save timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    const listener = (message: any) => {
+      if (
+        message &&
+        message.type === 'file_operation_response' &&
+        message.responseToRequestId === requestId
+      ) {
+        clearTimeout(timer);
+        chrome.runtime.onMessage.removeListener(listener);
+        if (message.error) {
+          reject(new Error(String(message.error)));
+          return;
+        }
+        resolve(message.payload || {});
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(listener);
+    chrome.runtime
+      .sendMessage({
+        type: 'forward_to_native',
+        message: {
+          type: 'file_operation',
+          requestId,
+          payload: {
+            action: 'prepareFile',
+            base64Data: dataUrl,
+            fileName,
+          },
+        },
+      })
+      .then((response: any) => {
+        if (response?.success !== true) {
+          clearTimeout(timer);
+          chrome.runtime.onMessage.removeListener(listener);
+          reject(
+            new Error(
+              `Native host unavailable: ${response?.error || 'forward_to_native rejected'}`,
+            ),
+          );
+        }
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        chrome.runtime.onMessage.removeListener(listener);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      });
+  });
+
+  if (!payload?.success || !payload.filePath) {
+    throw new Error(`Native GIF save failed: ${payload?.error || 'missing filePath'}`);
+  }
+
+  return {
+    filename: payload.fileName || fileName,
+    fullPath: payload.filePath,
+    source: 'native',
+  };
 }
 
 function normalizePositiveInt(value: unknown, fallback: number, max?: number): number {
@@ -830,27 +926,15 @@ class GifRecorderTool extends BaseBrowserToolExecutor {
             const dataUrl = await blobToDataUrl(blob);
 
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const outputFilename =
-              filename?.replace(/[^a-z0-9_-]/gi, '_') || `recording_${timestamp}`;
-            const fullFilename = outputFilename.endsWith('.gif')
-              ? outputFilename
-              : `${outputFilename}.gif`;
+            const outputFilename = filename || `recording_${timestamp}`;
+            const fullFilename = toSilentGifFilename(outputFilename);
 
-            const downloadId = await chrome.downloads.download({
-              url: dataUrl,
-              filename: fullFilename,
-              saveAs: false,
+            const saved = await saveGifViaNativeHost({
+              dataUrl,
+              fileName: fullFilename.split('/').pop() || fullFilename,
             });
-
-            await new Promise((resolve) => setTimeout(resolve, 100));
-
-            let fullPath: string | undefined;
-            try {
-              const [downloadItem] = await chrome.downloads.search({ id: downloadId });
-              fullPath = downloadItem?.filename;
-            } catch {
-              // Ignore
-            }
+            const downloadId: number | undefined = undefined;
+            const fullPath: string | undefined = saved.fullPath;
 
             return this.buildResponse({
               success: true,
@@ -986,26 +1070,15 @@ class GifRecorderTool extends BaseBrowserToolExecutor {
 
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
             const filename = args.filename ?? lastRecordedGif.filename;
-            const outputFilename = filename?.replace(/[^a-z0-9_-]/gi, '_') || `export_${timestamp}`;
-            const fullFilename = outputFilename.endsWith('.gif')
-              ? outputFilename
-              : `${outputFilename}.gif`;
+            const outputFilename = filename ?? `export_${timestamp}`;
+            const fullFilename = toSilentGifFilename(outputFilename);
 
-            const downloadId = await chrome.downloads.download({
-              url: dataUrl,
-              filename: fullFilename,
-              saveAs: false,
+            const saved = await saveGifViaNativeHost({
+              dataUrl,
+              fileName: fullFilename.split('/').pop() || fullFilename,
             });
-
-            await new Promise((resolve) => setTimeout(resolve, 100));
-
-            let fullPath: string | undefined;
-            try {
-              const [downloadItem] = await chrome.downloads.search({ id: downloadId });
-              fullPath = downloadItem?.filename;
-            } catch {
-              // Ignore
-            }
+            const downloadId: number | undefined = undefined;
+            const fullPath: string | undefined = saved.fullPath;
 
             return this.buildResponse({
               success: true,

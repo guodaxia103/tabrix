@@ -11,6 +11,7 @@
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import os from 'os';
+import { Duplex } from 'node:stream';
 import {
   NATIVE_SERVER_PORT,
   TIMEOUTS,
@@ -32,6 +33,30 @@ import { closeDb } from '../agent/db';
 import { registerAgentRoutes } from './routes';
 import { sessionManager } from '../execution/session-manager';
 import { SessionRegistry, type ConnectedClient, type TransportsSnapshot } from './session-registry';
+
+// Compatibility guard:
+// @hono/node-server may call socket.destroySoon() while draining incoming requests.
+// Some socket-like streams in Node 22 environments don't implement destroySoon().
+// Provide a conservative fallback to avoid uncaught TypeError during shutdown.
+const duplexPrototype = Duplex.prototype as Duplex & {
+  destroySoon?: () => void;
+  end?: () => void;
+  destroy?: () => void;
+};
+if (typeof duplexPrototype.destroySoon !== 'function') {
+  duplexPrototype.destroySoon = function destroySoonFallback() {
+    try {
+      this.end?.();
+    } catch {
+      // ignore
+    }
+    try {
+      this.destroy?.();
+    } catch {
+      // ignore
+    }
+  };
+}
 
 // ============================================================
 // Types

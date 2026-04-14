@@ -11,9 +11,9 @@ interface HandleDialogParams {
 }
 
 const DIALOG_NOT_SHOWING_MESSAGE = 'No dialog is showing';
-const DIALOG_HANDLE_MAX_ATTEMPTS = 12;
-const DIALOG_HANDLE_RETRY_DELAY_MS = 100;
-const DIALOG_COMMAND_TIMEOUT_MS = 1200;
+const DIALOG_HANDLE_MAX_ATTEMPTS = 16;
+const DIALOG_HANDLE_RETRY_DELAY_MS = 80;
+const DIALOG_COMMAND_TIMEOUT_MS = 3000;
 const DIALOG_TOTAL_TIMEOUT_MS = 6000;
 
 function isDialogNotReadyError(error: unknown): boolean {

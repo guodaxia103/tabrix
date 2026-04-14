@@ -1,15 +1,15 @@
-# MCP 传输模式说明（HTTP / stdio）
+# MCP 传输模式说明（Streamable HTTP / stdio）
 
 > 对应任务 A7：客户端与部署方式不同时，请选对传输层。
 > SSE 经典模式（`GET /sse` + `POST /messages`）已在 v2.12 移除。
+> 当前阶段只将 `Streamable HTTP` 与 `stdio` 视为正式主线连接方式。
 
 ## 概览
 
-| 模式                 | 端点                       | 典型场景                                           | 备注                                                |
-| -------------------- | -------------------------- | -------------------------------------------------- | --------------------------------------------------- |
-| **Streamable HTTP**  | `POST /mcp`                | Cursor、Claude Desktop、CoPaw 等远程/本地 HTTP MCP | 默认推荐；`http://127.0.0.1:<port>/mcp`             |
-| **SSE（HTTP 升级）** | `GET /mcp`（已有 session） | Streamable HTTP 客户端的服务端推送通道             | 客户端先 POST initialize，然后 GET 同一端点接收事件 |
-| **stdio**（备用）    | stdin/stdout JSON-RPC      | Claude Code CLI 等不经网络的本地客户端             | 备用方案；子进程代理到本机 HTTP                     |
+| 模式                | 端点                  | 典型场景                                           | 备注                                                                  |
+| ------------------- | --------------------- | -------------------------------------------------- | --------------------------------------------------------------------- |
+| **Streamable HTTP** | `POST /mcp`           | Cursor、Claude Desktop、CoPaw 等远程/本地 HTTP MCP | 当前主线；`http://127.0.0.1:<port>/mcp` 或 `http://LAN_IP:<port>/mcp` |
+| **stdio**           | stdin/stdout JSON-RPC | Claude Code CLI 等不经网络的本地客户端             | 当前主线；子进程代理到本机 HTTP                                       |
 
 ## 当前支持的连接方式详解
 
@@ -26,11 +26,16 @@
 
 **适用客户端**：Cursor、Claude Desktop、CoPaw、CherryStudio、Windsurf、Dify、MCP Inspector
 
-### 2. Streamable HTTP + SSE 升级
+### 2. Streamable HTTP 的事件流能力
 
 Streamable HTTP 客户端在完成 `POST /mcp` initialize 后，可以用 `GET /mcp`（携带 `mcp-session-id` header）订阅服务端推送事件（如工具执行进度）。
 
-### 3. stdio（标准输入/输出，备用）
+说明：
+
+- 这是 `Streamable HTTP` 的组成能力，不是单独对外宣传的第三种连接模式
+- 当前产品文档、UI 和排障路径，均应围绕 `Streamable HTTP` 与 `stdio` 两种主线模式展开
+
+### 3. stdio（标准输入/输出，备用但正式支持）
 
 通过子进程 `tabrix-stdio` 桥接，AI 客户端直接通过 stdin/stdout 传输 JSON-RPC，子进程内部代理到本机 HTTP 服务。
 
@@ -126,3 +131,12 @@ Token 管理端点（仅本机可用）：
 - 一般桌面 AI 客户端：优先 **Streamable HTTP** 指向本机 bridge。
 - 远程 / Docker 场景：用扩展开关或设 `MCP_HTTP_HOST=0.0.0.0`，用宿主机 IP 连接。
 - 仅当客户端只支持 stdio 时使用 **`tabrix-stdio`**，并确保 MCP 宿主进程正确管理子进程生命周期。
+
+## 当前阶段优先级
+
+对于 Tabrix 当前阶段，连接方式优先级明确如下：
+
+1. `远程 Streamable HTTP`
+2. `本机 stdio`
+
+在远程 `Streamable HTTP` 尚未完全稳定前，不继续扩展更多连接模式，也不让其它模式分散排障与测试精力。

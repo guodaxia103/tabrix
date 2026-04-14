@@ -9,7 +9,7 @@ import { NativeMessageType, TOOL_SCHEMAS } from '@tabrix/shared';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 /**
  * Tools with elevated risk: arbitrary JS execution, data deletion, file system
@@ -162,6 +162,46 @@ async function launchBrowserBestEffort(): Promise<{ launched: boolean; command?:
   return { launched: false };
 }
 
+function hasBrowserProcessRunning(): boolean {
+  try {
+    if (process.platform === 'win32') {
+      const chrome = spawnSync('tasklist', ['/FI', 'IMAGENAME eq chrome.exe'], {
+        encoding: 'utf8',
+        windowsHide: true,
+      });
+      const chromium = spawnSync('tasklist', ['/FI', 'IMAGENAME eq chromium.exe'], {
+        encoding: 'utf8',
+        windowsHide: true,
+      });
+      const output = `${chrome.stdout || ''}\n${chromium.stdout || ''}`.toLowerCase();
+      return output.includes('chrome.exe') || output.includes('chromium.exe');
+    }
+    if (process.platform === 'darwin') {
+      const chrome = spawnSync('pgrep', ['-x', 'Google Chrome'], { encoding: 'utf8' });
+      const chromium = spawnSync('pgrep', ['-x', 'Chromium'], { encoding: 'utf8' });
+      return Boolean((chrome.stdout || '').trim() || (chromium.stdout || '').trim());
+    }
+    const chrome = spawnSync('pgrep', ['-x', 'google-chrome'], { encoding: 'utf8' });
+    const chromeStable = spawnSync('pgrep', ['-x', 'google-chrome-stable'], { encoding: 'utf8' });
+    const chromium = spawnSync('pgrep', ['-x', 'chromium'], { encoding: 'utf8' });
+    const chromiumBrowser = spawnSync('pgrep', ['-x', 'chromium-browser'], { encoding: 'utf8' });
+    return Boolean(
+      (chrome.stdout || '').trim() ||
+      (chromeStable.stdout || '').trim() ||
+      (chromium.stdout || '').trim() ||
+      (chromiumBrowser.stdout || '').trim(),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function shouldSkipBrowserLaunchForError(error: unknown): boolean {
+  const message = stringifyUnknownError(error).toLowerCase();
+  // Native bridge / extension detach usually cannot be fixed by launching a new browser window.
+  return message.includes('forward_to_native rejected');
+}
+
 async function attemptBridgeRecovery(
   _context: string,
   firstError: unknown,
@@ -169,7 +209,16 @@ async function attemptBridgeRecovery(
   if (!isRecoverableBridgeIssue(firstError)) {
     return { attempted: false, launched: false, waitMs: 0 };
   }
-  const launch = await launchBrowserBestEffort();
+  const browserAlreadyRunning = hasBrowserProcessRunning();
+  const skipLaunch = browserAlreadyRunning || shouldSkipBrowserLaunchForError(firstError);
+  const launch = skipLaunch
+    ? {
+        launched: false,
+        command: browserAlreadyRunning
+          ? 'skip:browser-already-running'
+          : 'skip:forward_to_native_rejected',
+      }
+    : await launchBrowserBestEffort();
   await wait(BRIDGE_RECOVERY_WAIT_MS);
   return {
     attempted: true,

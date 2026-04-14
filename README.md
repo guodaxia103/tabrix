@@ -285,6 +285,8 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Project Structure Guide](docs/PROJECT_STRUCTURE.md)
+- [Product Positioning and Technical Principles (ZH)](docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md)
+- [Tool Layering and Risk Classification (ZH)](docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md)
 - [Contributing](docs/CONTRIBUTING.md)
 - [Visual Editor](docs/VisualEditor.md)
 - [Release Process](docs/RELEASE_PROCESS.md)

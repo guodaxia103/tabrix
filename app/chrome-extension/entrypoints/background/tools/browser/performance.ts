@@ -2,6 +2,7 @@ import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
 import { TOOL_NAMES } from '@tabrix/shared';
 import { cdpSessionManager } from '@/utils/cdp-session-manager';
+import { prepareFileViaNative } from './native-file';
 
 type OwnerTag = 'performance';
 
@@ -114,17 +115,14 @@ async function saveTraceToDownloads(
 ): Promise<{ downloadId?: number; filename?: string; fullPath?: string }> {
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `${filenamePrefix}_${timestamp}.json`;
+    const filename = `tabrix/${filenamePrefix}_${timestamp}.json`;
     const dataUrl = `data:application/json;base64,${btoa(unescape(encodeURIComponent(json)))}`;
-    const downloadId = await chrome.downloads.download({ url: dataUrl, filename, saveAs: false });
-    // Attempt to resolve full path
-    try {
-      await new Promise((r) => setTimeout(r, 120));
-      const [item] = await chrome.downloads.search({ id: downloadId });
-      return { downloadId, filename, fullPath: item?.filename };
-    } catch {
-      return { downloadId, filename };
-    }
+    const saved = await prepareFileViaNative({
+      base64Data: dataUrl,
+      fileName: filename.split('/').pop() || filename,
+      requestPrefix: 'trace-save',
+    });
+    return { downloadId: undefined, filename, fullPath: saved.fullPath };
   } catch {
     return {};
   }

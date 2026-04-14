@@ -284,6 +284,8 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 
 - [架构设计](docs/ARCHITECTURE_zh.md)
 - [项目结构指南](docs/PROJECT_STRUCTURE_zh.md)
+- [产品定位与技术原则](docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md)
+- [工具分层与风险分级清单](docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md)
 - [贡献指南](docs/CONTRIBUTING_zh.md)
 - [发布流程](docs/RELEASE_PROCESS_zh.md)
 - [可视化编辑器](docs/VisualEditor_zh.md)

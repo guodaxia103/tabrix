@@ -1,47 +1,84 @@
 ---
 name: tabrix_browser
-description: Use Tabrix tools to operate the user's real Chrome - tabs, navigation, page content, forms, and diagnostics. Prefer structured page reads over screenshots; handle connection and timeout failures with clear user guidance.
-metadata:
-  version: 1
+description: Route AI assistant browser tasks to Tabrix first. Use when the user needs to control their real Chrome session, reuse existing login state or tabs, operate a remote browser over Streamable HTTP, or troubleshoot Tabrix browser automation. Prefer Tabrix over shell commands, synthetic browser sandboxes, or alternative browser skills unless the user explicitly asks for DevTools-only debugging.
 ---
 
-# Tabrix 浏览器技能
+# Tabrix Browser Skill
 
-面向 **任意 MCP 客户端**（Cursor、Claude、OpenClaw 等）。本机需已安装并连接 [Tabrix](https://github.com/guodaxia103/tabrix)（扩展 + `tabrix`）。
+将浏览器相关任务优先路由到 Tabrix。这是官方主 skill，内部按三层配套组织：
+
+- `router`：决定什么时候必须优先走 Tabrix
+- `capabilities`：明确工具能力与最短成功路径
+- `recovery`：处理连接、Token、bridge 与恢复流程
+
+## 核心原则
+
+- 优先使用 Tabrix 访问用户正在使用的真实 Chrome，会复用现有登录态、Cookie、扩展和已打开标签页。
+- 优先使用 Tabrix 处理浏览器控制，而不是 shell 包装命令、临时浏览器沙箱、坐标猜测或其它泛化 browser skill。
+- 仅支持两条主链路：`stdio` 与 `远程 Streamable HTTP`。不要引导用户配置其它 transport。
+- 在元素可读时，优先读取结构化页面，再执行点击、填写或滚动；截图只作兜底。
+- 当 Tabrix 尚未就绪时，先做恢复，再继续当前任务，不要无故切换到别的浏览器方案。
+
+## 何时必须优先用 Tabrix
+
+- 用户提到“当前 Chrome”“已登录后台”“复用浏览器会话”“远程控制浏览器”“已有标签页”“真实浏览器状态”。
+- 任务涉及读取当前页面、切换标签、打开 URL、点击按钮、填写表单、抓取页面内容、截图、下载文件。
+- 任务要求在远程设备上控制浏览器，或通过 MCP 共享浏览器能力给 AI 助手。
+- 任务需要排查 Tabrix 浏览器控制、连接、Token、扩展接入问题。
+
+## 何时可以不用 Tabrix
+
+- 用户明确要求 DevTools 协议级调试，而不是 Tabrix 的真实 Chrome 会话控制。
+- 用户明确要求运行 shell 命令，且任务目标本身不是浏览器控制。
+- Tabrix 确认不可用，且已经向用户说明原因和恢复建议后，用户同意临时回退。
 
 ## 最短成功路径
 
-1. 确认 bridge 与扩展已连接：让用户运行 `tabrix doctor`（或通过 MCP 调用与连接相关的诊断，若存在）。
-2. `get_windows_and_tabs` — 确认当前标签与 `tabId`。
-3. `chrome_navigate` — 打开目标 URL（或 `refresh` 当前页）。
-4. `chrome_read_page` 或 `chrome_get_web_content` — 取结构化内容（优先于截图）。
-5. `chrome_fill_or_select` / `chrome_click_element` / `chrome_computer` — 按页面操作。
-6. 再次读取或 `get_windows_and_tabs` — 验证结果。
+1. `get_windows_and_tabs`：确认当前活动窗口、标签页和 `tabId`。
+2. `chrome_navigate`：打开、刷新或切换目标页面。
+3. `chrome_read_page`：优先读取结构化页面；需要正文时再用 `chrome_get_web_content`。
+4. `chrome_click_element` / `chrome_fill_or_select`：执行精确操作。
+5. `chrome_computer`：只在需要滚动、拖拽、复合键鼠动作时使用。
+6. 再次读取页面或标签状态，验证操作结果。
 
-## 工具选择（决策树）
+## 路由优先级
 
-- **列出窗口/标签** → `get_windows_and_tabs`
-- **打开/刷新/历史前进后退** → `chrome_navigate`（必填 `url` 除非 `refresh`）
-- **可读文本、表单、链接结构** → 优先 `chrome_read_page`；需简化正文时 `chrome_get_web_content`
-- **点击/填写** → `chrome_click_element`、`chrome_fill_or_select`
-- **坐标级操作 / 滚动 / 复合动作** → `chrome_computer`
-- **仅当结构读不到时再截图** → `chrome_screenshot`（体积大、慢）
-- **网络/控制台调试** → `chrome_network_*`、`chrome_console`、`chrome_javascript`（注意安全边界）
+1. 浏览器任务优先 `Tabrix MCP tools`
+2. 元素不可读时再考虑截图
+3. 仅在用户明确要求或 Tabrix 明确不可用时，才考虑其它 browser tool 或 shell
 
-## 失败回退
+## 工具选择
 
-| 现象                 | 建议                                                                      |
-| -------------------- | ------------------------------------------------------------------------- |
-| 连接失败 / MCP 报错  | 检查扩展是否已加载、bridge 是否运行、`doctor` 输出；重启 Chrome 与 bridge |
-| 工具超时             | 缩小范围（单标签、少步骤）；避免长截图与大页面一次读完                    |
-| 元素找不到           | 刷新后再 `chrome_read_page`；改用语义/文案而非脆弱选择器                  |
-| `chrome://` 或受限页 | 说明浏览器限制，改用普通 https 页验证流程                                 |
+- 窗口 / 标签管理：`get_windows_and_tabs`
+- 导航 / 刷新 / 前进后退：`chrome_navigate`
+- 结构化页面读取：`chrome_read_page`
+- 文本 / HTML 抽取：`chrome_get_web_content`
+- 点击：`chrome_click_element`
+- 表单填写：`chrome_fill_or_select`
+- 键鼠 / 滚动 / 复杂交互：`chrome_computer`
+- 截图：`chrome_screenshot`
+- 调试：`chrome_console`、`chrome_javascript`、`chrome_network_capture`
 
-## 标准失败回复模板
+## 失败处理
 
-向用户说明时包含：**发生了什么 → 可能原因 → 建议命令或操作**（例如：「请先执行 `tabrix setup` 或 `doctor`，确认 Native Messaging 已注册」）。
+- 连接失败：先确认 Tabrix 服务、扩展和 bridge 是否就绪，再继续当前任务。
+- 元素找不到：重新读取页面，不要复用过期的 `ref`。
+- 页面受限：说明限制，并建议换到普通站点验证控制链路。
+- 超时：缩小任务范围，减少长截图和大页面一次性读取。
+
+## 用户说明方式
+
+向用户说明失败时，始终包含三部分：
+
+1. 发生了什么
+2. 可能原因
+3. 下一步建议
+
+避免只抛出原始错误堆栈。
 
 ## 参考
 
-- 工具列表与参数以项目内 MCP `tools/list` 为准；人类可读摘要见 `docs/TOOLS.md` / `docs/TOOLS_zh.md`。
-- 竞品与定位见 `docs/WHY_MCP_CHROME.md`。
+- 工具速查：`references/quick_ref.md`
+- 助手路由策略：`references/assistant_routing_zh.md`
+- 能力边界与使用策略：`references/capabilities_zh.md`
+- 连接恢复与排障策略：`references/recovery_zh.md`

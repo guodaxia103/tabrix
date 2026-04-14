@@ -10,6 +10,7 @@ import {
   compressImage,
 } from '../../../../utils/image-utils';
 import { screenshotContextManager } from '@/utils/screenshot-context';
+import { prepareFileViaNative } from './native-file';
 
 // Screenshot-specific constants
 const SCREENSHOT_CONSTANTS = {
@@ -304,38 +305,21 @@ class ScreenshotTool extends BaseBrowserToolExecutor {
       }
 
       if (savePng === true) {
-        // Save PNG file to downloads
+        // Save PNG file through native host to avoid browser Save As dialogs.
         this.logInfo('Saving PNG...');
         try {
           // Generate filename
           const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-          const filename = `${name.replace(/[^a-z0-9_-]/gi, '_') || 'screenshot'}_${timestamp}.png`;
-
-          // Use Chrome's download API to save the file
-          const downloadId = await chrome.downloads.download({
-            url: finalImageDataUrl,
-            filename: filename,
-            saveAs: false,
+          const filename = `tabrix/${name.replace(/[^a-z0-9_-]/gi, '_') || 'screenshot'}_${timestamp}.png`;
+          const saved = await prepareFileViaNative({
+            base64Data: finalImageDataUrl,
+            fileName: filename.split('/').pop() || filename,
+            requestPrefix: 'screenshot-save',
           });
-
-          results.downloadId = downloadId;
+          results.downloadId = undefined;
           results.filename = filename;
           results.fileSaved = true;
-
-          // Try to get the full file path
-          try {
-            // Wait a moment to ensure download info is updated
-            await new Promise((resolve) => setTimeout(resolve, 100));
-
-            // Search for download item to get full path
-            const [downloadItem] = await chrome.downloads.search({ id: downloadId });
-            if (downloadItem && downloadItem.filename) {
-              // Add full path to response
-              results.fullPath = downloadItem.filename;
-            }
-          } catch (pathError) {
-            console.warn('Could not get full file path:', pathError);
-          }
+          results.fullPath = saved.fullPath;
         } catch (error) {
           console.error('Error saving PNG file:', error);
           results.saveError = String(error instanceof Error ? error.message : error);
