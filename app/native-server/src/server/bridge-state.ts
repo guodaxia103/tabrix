@@ -13,6 +13,14 @@ export interface BridgeRuntimeSnapshot {
   browserProcessRunning: boolean;
   browserProcessDetectedAt: number | null;
   extensionHeartbeatAt: number | null;
+  heartbeat: {
+    extensionId: string | null;
+    connectionId: string | null;
+    browserVersion: string | null;
+    tabCount: number | null;
+    windowCount: number | null;
+    autoConnectEnabled: boolean | null;
+  };
   nativeHostAttached: boolean;
   lastBridgeReadyAt: number | null;
   lastBridgeErrorCode: string | null;
@@ -26,6 +34,12 @@ export interface BridgeRuntimeSnapshot {
 interface RecordHeartbeatOptions {
   sentAt?: number | null;
   nativeConnected?: boolean;
+  extensionId?: string | null;
+  connectionId?: string | null;
+  browserVersion?: string | null;
+  tabCount?: number | null;
+  windowCount?: number | null;
+  autoConnectEnabled?: boolean | null;
 }
 
 const BROWSER_WATCH_INTERVAL_MS = 10_000;
@@ -76,6 +90,14 @@ export class BridgeStateManager {
     browserProcessRunning: false,
     browserProcessDetectedAt: null,
     extensionHeartbeatAt: null,
+    heartbeat: {
+      extensionId: null,
+      connectionId: null,
+      browserVersion: null,
+      tabCount: null,
+      windowCount: null,
+      autoConnectEnabled: null,
+    },
     nativeHostAttached: false,
     lastBridgeReadyAt: null,
     lastBridgeErrorCode: null,
@@ -126,6 +148,15 @@ export class BridgeStateManager {
   recordHeartbeat(options: RecordHeartbeatOptions = {}): void {
     const sentAt = Number.isFinite(options.sentAt) ? Number(options.sentAt) : Date.now();
     this.snapshot.extensionHeartbeatAt = sentAt;
+    this.snapshot.heartbeat = {
+      extensionId: this.normalizeNullableString(options.extensionId),
+      connectionId: this.normalizeNullableString(options.connectionId),
+      browserVersion: this.normalizeNullableString(options.browserVersion),
+      tabCount: this.normalizeNullableNumber(options.tabCount),
+      windowCount: this.normalizeNullableNumber(options.windowCount),
+      autoConnectEnabled:
+        typeof options.autoConnectEnabled === 'boolean' ? options.autoConnectEnabled : null,
+    };
     if (options.nativeConnected === true) {
       this.snapshot.lastBridgeReadyAt = Date.now();
       this.snapshot.lastBridgeErrorCode = null;
@@ -168,7 +199,18 @@ export class BridgeStateManager {
 
   getSnapshot(): BridgeRuntimeSnapshot {
     this.refreshDerivedState();
-    return { ...this.snapshot };
+    return {
+      ...this.snapshot,
+      heartbeat: { ...this.snapshot.heartbeat },
+    };
+  }
+
+  private normalizeNullableString(value: unknown): string | null {
+    return typeof value === 'string' && value.trim() ? value : null;
+  }
+
+  private normalizeNullableNumber(value: unknown): number | null {
+    return Number.isFinite(value) ? Number(value) : null;
   }
 
   private refreshDerivedState(now: number = Date.now()): void {

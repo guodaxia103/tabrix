@@ -67,6 +67,17 @@ interface ExtensionRequestPayload {
   data?: unknown;
 }
 
+interface BridgeHeartbeatPayload {
+  extensionId?: unknown;
+  connectionId?: unknown;
+  sentAt?: unknown;
+  nativeConnected?: unknown;
+  browserVersion?: unknown;
+  tabCount?: unknown;
+  windowCount?: unknown;
+  autoConnectEnabled?: unknown;
+}
+
 interface ServerStatusSnapshot {
   isRunning: boolean;
   host: string;
@@ -168,10 +179,18 @@ export class Server {
   }
 
   public recordBridgeHeartbeat(
-    sentAt?: number | null,
-    nativeConnected?: boolean,
+    heartbeat: {
+      sentAt?: number | null;
+      nativeConnected?: boolean;
+      extensionId?: string | null;
+      connectionId?: string | null;
+      browserVersion?: string | null;
+      tabCount?: number | null;
+      windowCount?: number | null;
+      autoConnectEnabled?: boolean | null;
+    } = {},
   ): BridgeRuntimeSnapshot {
-    this.bridgeState.recordHeartbeat({ sentAt, nativeConnected });
+    this.bridgeState.recordHeartbeat(heartbeat);
     return this.bridgeState.getSnapshot();
   }
 
@@ -361,6 +380,8 @@ export class Server {
   // ============================================================
 
   private setupExtensionRoutes(): void {
+    const LOCALHOST_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
     this.fastify.get(
       '/ask-extension',
       async (request: FastifyRequest<{ Body: ExtensionRequestPayload }>, reply: FastifyReply) => {
@@ -395,6 +416,40 @@ export class Server {
             });
           }
         }
+      },
+    );
+
+    this.fastify.post(
+      '/bridge/heartbeat',
+      async (request: FastifyRequest<{ Body: BridgeHeartbeatPayload }>, reply: FastifyReply) => {
+        if (!LOCALHOST_IPS.has(request.ip)) {
+          return reply.status(403).send({
+            status: 'error',
+            message: 'Forbidden – bridge heartbeat is only available from localhost.',
+          });
+        }
+
+        const body = (request.body || {}) as BridgeHeartbeatPayload;
+        const snapshot = this.recordBridgeHeartbeat({
+          sentAt: Number.isFinite(body.sentAt) ? Number(body.sentAt) : Date.now(),
+          nativeConnected: body.nativeConnected === true,
+          extensionId: typeof body.extensionId === 'string' ? body.extensionId : null,
+          connectionId: typeof body.connectionId === 'string' ? body.connectionId : null,
+          browserVersion: typeof body.browserVersion === 'string' ? body.browserVersion : null,
+          tabCount: Number.isFinite(body.tabCount) ? Number(body.tabCount) : null,
+          windowCount: Number.isFinite(body.windowCount) ? Number(body.windowCount) : null,
+          autoConnectEnabled:
+            typeof body.autoConnectEnabled === 'boolean' ? body.autoConnectEnabled : null,
+        });
+
+        return reply.status(HTTP_STATUS.OK).send({
+          status: 'ok',
+          data: {
+            bridgeState: snapshot.bridgeState,
+            recordedAt: Date.now(),
+            nextHeartbeatInMs: 5000,
+          },
+        });
       },
     );
   }

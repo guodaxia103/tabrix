@@ -27,6 +27,28 @@ export interface ServerStatus {
   host?: string;
   networkAddresses?: string[];
   authEnabled?: boolean;
+  bridge?: {
+    bridgeState?: string;
+    browserProcessRunning?: boolean;
+    browserProcessDetectedAt?: number | null;
+    extensionHeartbeatAt?: number | null;
+    heartbeat?: {
+      extensionId?: string | null;
+      connectionId?: string | null;
+      browserVersion?: string | null;
+      tabCount?: number | null;
+      windowCount?: number | null;
+      autoConnectEnabled?: boolean | null;
+    };
+    nativeHostAttached?: boolean;
+    lastBridgeReadyAt?: number | null;
+    lastBridgeErrorCode?: string | null;
+    lastBridgeErrorMessage?: string | null;
+    lastRecoveryAction?: string | null;
+    lastRecoveryAt?: number | null;
+    recoveryAttempts?: number;
+    recoveryInFlight?: boolean;
+  };
   lastUpdated: number;
 }
 

@@ -160,12 +160,26 @@ describe('native host reconnect behavior', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
+    (globalThis as any).fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        status: 'ok',
+        data: {
+          isRunning: true,
+          port: 12306,
+          bridge: {
+            bridgeState: 'READY',
+          },
+        },
+      }),
+    });
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.resetModules();
+    delete (globalThis as any).fetch;
   });
 
   it('reconnects after unexpected native disconnect and preserves last error', async () => {
@@ -453,5 +467,36 @@ describe('native host reconnect behavior', () => {
       type: NativeMessageType.START,
       payload: { port: 12306 },
     });
+  });
+
+  it('posts bridge heartbeat after server start', async () => {
+    const firstPort = createMockPort();
+    const harness = createChromeHarness([firstPort]);
+    (globalThis as any).chrome = harness.chromeMock;
+
+    const nativeHostModule = await import('@/entrypoints/background/native-host');
+    nativeHostModule.initNativeHostListener();
+    await flushMicrotasks();
+
+    const connectPromise = harness.sendRuntimeMessage({
+      type: NativeMessageType.CONNECT_NATIVE,
+      port: 12306,
+    });
+    await flushMicrotasks();
+    await firstPort.emitMessage({
+      type: NativeMessageType.SERVER_STARTED,
+      payload: { port: 12306, host: '127.0.0.1' },
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    await connectPromise;
+    await flushMicrotasks();
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:12306/bridge/heartbeat',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
   });
 });

@@ -19,6 +19,7 @@ const RECONNECT_BASE_DELAY_MS = 500;
 const RECONNECT_MAX_DELAY_MS = 60_000;
 const RECONNECT_MAX_FAST_ATTEMPTS = 8;
 const RECONNECT_COOLDOWN_DELAY_MS = 5 * 60_000;
+const HEARTBEAT_INTERVAL_MS = 5_000;
 
 // ==================== Auto-connect State ====================
 
@@ -49,6 +50,7 @@ let currentServerStatus: ServerStatus = {
   isRunning: false,
   lastUpdated: Date.now(),
 };
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Save server status to chrome.storage
@@ -365,6 +367,7 @@ async function markServerStopped(reason: string, connectionId?: number): Promise
   }
 
   broadcastServerStatusChange(nextStatus);
+  pulseBridgeHeartbeat(`server_stopped:${reason}`);
   console.debug(`${LOG_PREFIX} Server marked stopped (${reason})`);
 }
 
@@ -385,6 +388,7 @@ async function probeRunningServerStatus(port: number): Promise<ServerStatus | nu
             host?: string;
             networkAddresses?: string[];
             authEnabled?: boolean;
+            bridge?: ServerStatus['bridge'];
           };
         }
       | undefined;
@@ -397,11 +401,80 @@ async function probeRunningServerStatus(port: number): Promise<ServerStatus | nu
       host: payload.data.host,
       networkAddresses: payload.data.networkAddresses,
       authEnabled: payload.data.authEnabled,
+      bridge: payload.data.bridge,
       lastUpdated: Date.now(),
     };
   } catch {
     return null;
   }
+}
+
+async function collectHeartbeatSnapshot() {
+  let tabCount: number | null = null;
+  let windowCount: number | null = null;
+
+  try {
+    const tabs = await chrome.tabs.query({});
+    tabCount = tabs.length;
+  } catch {
+    tabCount = null;
+  }
+
+  try {
+    const windows = await chrome.windows.getAll();
+    windowCount = windows.length;
+  } catch {
+    windowCount = null;
+  }
+
+  return {
+    extensionId: chrome.runtime.id,
+    connectionId: activeNativeConnectionId ? String(activeNativeConnectionId) : null,
+    sentAt: Date.now(),
+    nativeConnected: nativePort !== null,
+    browserVersion: navigator.userAgent,
+    tabCount,
+    windowCount,
+    autoConnectEnabled,
+  };
+}
+
+async function postBridgeHeartbeat(reason: string): Promise<void> {
+  const port = await getPreferredPort();
+  if (!port) return;
+
+  const payload = await collectHeartbeatSnapshot();
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/bridge/heartbeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      console.debug(`${LOG_PREFIX} Heartbeat not accepted (${reason}): HTTP ${response.status}`);
+    }
+  } catch {
+    // Best-effort only: the daemon or local HTTP server may not be ready yet.
+  }
+}
+
+function ensureHeartbeatLoop(): void {
+  if (heartbeatTimer) return;
+  heartbeatTimer = setInterval(() => {
+    void postBridgeHeartbeat('interval');
+  }, HEARTBEAT_INTERVAL_MS);
+}
+
+function stopHeartbeatLoop(): void {
+  if (!heartbeatTimer) return;
+  clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+}
+
+function pulseBridgeHeartbeat(reason: string): void {
+  void postBridgeHeartbeat(reason);
 }
 
 async function tryRecoverAddressInUseStatus(nativeError: string): Promise<boolean> {
@@ -622,6 +695,7 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         await clearLastNativeError();
         await saveServerStatus(currentServerStatus);
         broadcastServerStatusChange(currentServerStatus);
+        pulseBridgeHeartbeat('server_started');
         // Server is confirmed running - now we can reset reconnect state
         resetReconnectState();
         console.log(`${SUCCESS_MESSAGES.SERVER_STARTED} on port ${port}`);
@@ -633,6 +707,7 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         };
         await saveServerStatus(currentServerStatus);
         broadcastServerStatusChange(currentServerStatus);
+        pulseBridgeHeartbeat('server_stopped_message');
         console.log(SUCCESS_MESSAGES.SERVER_STOPPED);
       } else if (message.type === 'remote_access_changed') {
         currentServerStatus = {
@@ -645,6 +720,7 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         };
         await saveServerStatus(currentServerStatus);
         broadcastServerStatusChange(currentServerStatus);
+        pulseBridgeHeartbeat('remote_access_changed');
         console.log(
           `[NativeHost] Remote access ${message.payload?.enabled ? 'enabled' : 'disabled'}, host=${message.payload?.host}`,
         );
@@ -825,6 +901,9 @@ async function requestMessageViaNativeHost(request: {
 export const initNativeHostListener = () => {
   registerNativeBridgeForwarder((message) => forwardMessageToNativeHost(message));
   registerNativeBridgeRequester((request) => requestMessageViaNativeHost(request));
+  stopHeartbeatLoop();
+  ensureHeartbeatLoop();
+  pulseBridgeHeartbeat('sw_init');
   // Initialize server status from storage
   loadServerStatus()
     .then((status) => {

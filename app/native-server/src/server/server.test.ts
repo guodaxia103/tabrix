@@ -70,6 +70,14 @@ describe('服务器测试', () => {
       bridgeState: expect.any(String),
       browserProcessRunning: expect.any(Boolean),
       extensionHeartbeatAt: null,
+      heartbeat: {
+        extensionId: null,
+        connectionId: null,
+        browserVersion: null,
+        tabCount: null,
+        windowCount: null,
+        autoConnectEnabled: null,
+      },
       nativeHostAttached: false,
       lastBridgeReadyAt: null,
       lastBridgeErrorCode: null,
@@ -103,6 +111,46 @@ describe('服务器测试', () => {
       lastSessionId: null,
     });
     expect(Array.isArray(response.body.data.transports.sessionIds)).toBe(true);
+  });
+
+  test('POST /bridge/heartbeat 应记录扩展心跳并更新 bridge 快照', async () => {
+    const sentAt = Date.now();
+    const heartbeat = await supertest(Server.getInstance().server)
+      .post('/bridge/heartbeat')
+      .send({
+        extensionId: 'tabrix-extension',
+        connectionId: 'conn-1',
+        sentAt,
+        nativeConnected: true,
+        browserVersion: '135.0.0.0',
+        tabCount: 3,
+        windowCount: 1,
+        autoConnectEnabled: true,
+      })
+      .expect(200)
+      .expect('Content-Type', /json/);
+
+    expect(heartbeat.body).toMatchObject({
+      status: 'ok',
+      data: {
+        bridgeState: 'READY',
+        nextHeartbeatInMs: 5000,
+      },
+    });
+
+    const status = await supertest(Server.getInstance().server).get('/status').expect(200);
+    expect(status.body.data.bridge).toMatchObject({
+      bridgeState: 'READY',
+      extensionHeartbeatAt: sentAt,
+      heartbeat: {
+        extensionId: 'tabrix-extension',
+        connectionId: 'conn-1',
+        browserVersion: '135.0.0.0',
+        tabCount: 3,
+        windowCount: 1,
+        autoConnectEnabled: true,
+      },
+    });
   });
 
   test('GET /status 应暴露 execution 快照', async () => {
