@@ -3,6 +3,40 @@ import { NativeMessageType } from '@tabrix/shared';
 const root = document.querySelector<HTMLDivElement>('#app');
 const callbackUrl = new URLSearchParams(window.location.search).get('callback');
 
+function buildCallbackNavigationUrl(payload: Record<string, unknown>): string | null {
+  if (!callbackUrl) return null;
+  try {
+    const url = new URL(callbackUrl);
+    url.searchParams.set('payload', JSON.stringify(payload));
+    url.searchParams.set('ts', String(Date.now()));
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function reportResultViaImage(payload: Record<string, unknown>): Promise<void> {
+  return new Promise((resolve) => {
+    const navigationUrl = buildCallbackNavigationUrl(payload);
+    if (!navigationUrl) {
+      resolve();
+      return;
+    }
+
+    const image = new Image();
+    const finish = () => {
+      image.onload = null;
+      image.onerror = null;
+      resolve();
+    };
+
+    image.onload = finish;
+    image.onerror = finish;
+    image.src = navigationUrl;
+    window.setTimeout(finish, 500);
+  });
+}
+
 async function reportResult(payload: Record<string, unknown>) {
   if (!callbackUrl) return;
   try {
@@ -12,8 +46,9 @@ async function reportResult(payload: Record<string, unknown>) {
       body: JSON.stringify(payload),
       keepalive: true,
     });
+    return;
   } catch {
-    // Best-effort only.
+    await reportResultViaImage(payload);
   }
 }
 

@@ -164,30 +164,63 @@ function Ensure-TabrixBridge {
   $listener.Start()
   $script:BridgeProbeListener = $listener
 
-  $connectUrl = "$script:ExtensionConnectUrl?callback=http://127.0.0.1:$probePort/"
+  $callbackUrl = "http://127.0.0.1:$probePort/"
+  $encodedCallbackUrl = [System.Uri]::EscapeDataString($callbackUrl)
+  $connectUrl = "$script:ExtensionConnectUrl?callback=$encodedCallbackUrl"
   Start-Process -FilePath $chromePath -ArgumentList $connectUrl | Out-Null
 
-  $asyncContext = $listener.BeginGetContext($null, $null)
-  if ($asyncContext.AsyncWaitHandle.WaitOne([TimeSpan]::FromSeconds(15))) {
+  $deadline = (Get-Date).AddSeconds(20)
+  while ((Get-Date) -lt $deadline) {
+    $asyncContext = $listener.BeginGetContext($null, $null)
+    if (-not $asyncContext.AsyncWaitHandle.WaitOne([TimeSpan]::FromSeconds(3))) {
+      continue
+    }
+
     try {
       $context = $listener.EndGetContext($asyncContext)
-      $reader = [System.IO.StreamReader]::new($context.Request.InputStream, $context.Request.ContentEncoding)
-      $body = $reader.ReadToEnd()
-      $reader.Dispose()
-      $script:BridgeProbeResult = if ($body) { $body | ConvertFrom-Json } else { $null }
+      $body = ''
+      $queryPayload = $context.Request.QueryString['payload']
+      if ($queryPayload) {
+        $payload = $queryPayload | ConvertFrom-Json
+      } else {
+        $reader = [System.IO.StreamReader]::new($context.Request.InputStream, $context.Request.ContentEncoding)
+        $body = $reader.ReadToEnd()
+        $reader.Dispose()
+        $payload = if ($body) { $body | ConvertFrom-Json } else { $null }
+      }
+
       $buffer = [System.Text.Encoding]::UTF8.GetBytes('ok')
       $context.Response.StatusCode = 200
       $context.Response.OutputStream.Write($buffer, 0, $buffer.Length)
       $context.Response.OutputStream.Close()
+
+      if ($payload) {
+        $script:BridgeProbeResult = $payload
+        if ($payload.status -and $payload.status -ne 'pending') {
+          break
+        }
+      }
     } catch {
       $script:BridgeProbeResult = @{
         status = 'error'
         reason = "probe callback failed: $($_.Exception.Message)"
       }
+      break
     }
   }
 
   Stop-BridgeProbeListener
+
+  $callbackSucceeded =
+    $script:BridgeProbeResult `
+    -and $script:BridgeProbeResult.status -eq 'success' `
+    -and $script:BridgeProbeResult.response `
+    -and $script:BridgeProbeResult.response.success -eq $true `
+    -and $script:BridgeProbeResult.response.connected -eq $true
+
+  if ($callbackSucceeded) {
+    return
+  }
 
   if (-not (Wait-TabrixBridgeReady -TimeoutSec 20)) {
     $probeDetail = if ($script:BridgeProbeResult) {
