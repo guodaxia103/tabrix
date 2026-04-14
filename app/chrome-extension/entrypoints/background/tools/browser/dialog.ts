@@ -11,7 +11,6 @@ interface HandleDialogParams {
 }
 
 const DIALOG_NOT_SHOWING_MESSAGE = 'No dialog is showing';
-const DIALOG_HANDLE_MAX_ATTEMPTS = 16;
 const DIALOG_HANDLE_RETRY_DELAY_MS = 80;
 const DIALOG_COMMAND_TIMEOUT_MS = 3000;
 const DIALOG_TOTAL_TIMEOUT_MS = 6000;
@@ -90,8 +89,12 @@ class HandleDialogTool extends BaseBrowserToolExecutor {
 
         let lastError: unknown;
         const startedAt = Date.now();
+        const maxAttempts = Math.max(
+          1,
+          Math.ceil(DIALOG_TOTAL_TIMEOUT_MS / DIALOG_HANDLE_RETRY_DELAY_MS),
+        );
 
-        for (let attempt = 0; attempt < DIALOG_HANDLE_MAX_ATTEMPTS; attempt += 1) {
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
           if (Date.now() - startedAt > DIALOG_TOTAL_TIMEOUT_MS) {
             throw (
               lastError ||
@@ -114,12 +117,12 @@ class HandleDialogTool extends BaseBrowserToolExecutor {
             if (
               !isDialogNotReadyError(error) &&
               !(isEnableTimeoutError(error) && !pageDomainEnabled) &&
-              attempt !== DIALOG_HANDLE_MAX_ATTEMPTS - 1
+              attempt !== maxAttempts - 1
             ) {
               throw error;
             }
 
-            if (attempt === DIALOG_HANDLE_MAX_ATTEMPTS - 1) {
+            if (attempt === maxAttempts - 1) {
               throw error;
             }
 

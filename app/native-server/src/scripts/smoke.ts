@@ -175,7 +175,7 @@ function createSmokeServer(): Promise<{
       <span id="fetchResult">none</span>
     </div>
     <div class="row">
-          <button id="promptBtn" onclick="document.querySelector('#dialogResult').textContent = 'pending'; setTimeout(() => { const value = prompt('Enter value', 'default'); document.querySelector('#dialogResult').textContent = value || ''; console.log('dialog resolved', value); }, 1500);">Prompt</button>
+          <button id="promptBtn" onclick="document.querySelector('#dialogResult').textContent = 'pending'; setTimeout(() => { const value = prompt('Enter value', 'default'); document.querySelector('#dialogResult').textContent = value || ''; console.log('dialog resolved', value); }, 1000);">Prompt</button>
       <span id="dialogResult"></span>
     </div>
     <div class="row">

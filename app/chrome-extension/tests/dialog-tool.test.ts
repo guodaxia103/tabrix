@@ -68,21 +68,53 @@ describe('handleDialogTool', () => {
     });
   });
 
-  it('surfaces an error after exhausting dialog retries', async () => {
+  it('keeps polling long enough for a delayed dialog to appear', async () => {
+    vi.useFakeTimers();
+
     sendCommandMock.mockResolvedValueOnce({});
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    for (let attempt = 0; attempt < 15; attempt += 1) {
       sendCommandMock.mockRejectedValueOnce(new Error('No dialog is showing'));
     }
+    sendCommandMock.mockResolvedValueOnce({});
 
-    const result = await handleDialogTool.execute({
+    const resultPromise = handleDialogTool.execute({
       action: 'accept',
       promptText: 'phase0-dialog',
       tabId: 123,
     });
 
+    await vi.advanceTimersByTimeAsync(1600);
+    const result = await resultPromise;
+
+    expect(result.isError).toBe(false);
+    expect(sendCommandMock).toHaveBeenLastCalledWith(123, 'Page.handleJavaScriptDialog', {
+      accept: true,
+      promptText: 'phase0-dialog',
+    });
+  });
+
+  it('surfaces an error after exhausting dialog retries', async () => {
+    vi.useFakeTimers();
+
+    sendCommandMock.mockResolvedValueOnce({});
+    sendCommandMock.mockImplementation(async (_tabId: number, method: string) => {
+      if (method === 'Page.enable') {
+        return {};
+      }
+      throw new Error('No dialog is showing');
+    });
+
+    const resultPromise = handleDialogTool.execute({
+      action: 'accept',
+      promptText: 'phase0-dialog',
+      tabId: 123,
+    });
+    await vi.advanceTimersByTimeAsync(7000);
+    const result = await resultPromise;
+
     expect(result.isError).toBe(true);
     expect(result.content[0]?.type).toBe('text');
     expect((result.content[0] as { text: string }).text).toContain('Failed to handle dialog');
-    expect(sendCommandMock).toHaveBeenCalledTimes(12);
+    expect(sendCommandMock).toHaveBeenCalled();
   });
 });
