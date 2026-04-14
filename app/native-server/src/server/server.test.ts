@@ -66,6 +66,19 @@ describe('服务器测试', () => {
       authEnabled: false,
       nativeHostAttached: false,
     });
+    expect(response.body.data.bridge).toMatchObject({
+      bridgeState: expect.any(String),
+      browserProcessRunning: expect.any(Boolean),
+      extensionHeartbeatAt: null,
+      nativeHostAttached: false,
+      lastBridgeReadyAt: null,
+      lastBridgeErrorCode: null,
+      lastBridgeErrorMessage: null,
+      lastRecoveryAction: null,
+      lastRecoveryAt: null,
+      recoveryAttempts: 0,
+      recoveryInFlight: false,
+    });
     expect(response.body.data.transports).toMatchObject({
       total: 0,
       streamableHttp: 0,

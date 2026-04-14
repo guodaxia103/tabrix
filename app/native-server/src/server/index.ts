@@ -33,6 +33,7 @@ import { closeDb } from '../agent/db';
 import { registerAgentRoutes } from './routes';
 import { sessionManager } from '../execution/session-manager';
 import { SessionRegistry, type ConnectedClient, type TransportsSnapshot } from './session-registry';
+import { BridgeStateManager, type BridgeRuntimeSnapshot } from './bridge-state';
 
 // Compatibility guard:
 // @hono/node-server may call socket.destroySoon() while draining incoming requests.
@@ -74,6 +75,7 @@ interface ServerStatusSnapshot {
   authEnabled: boolean;
   securityWarning?: string;
   nativeHostAttached: boolean;
+  bridge: BridgeRuntimeSnapshot;
   transports: TransportsSnapshot;
   execution: {
     tasks: {
@@ -136,6 +138,7 @@ export class Server {
   private nativeHost: NativeMessagingHost | null = null;
   private sessions = new SessionRegistry();
   private listeningPort: number | null = null;
+  private bridgeState = new BridgeStateManager();
   private agentStreamManager: AgentStreamManager;
   private agentChatService: AgentChatService;
 
@@ -155,6 +158,37 @@ export class Server {
    */
   public setNativeHost(nativeHost: NativeMessagingHost): void {
     this.nativeHost = nativeHost;
+    this.bridgeState.setNativeHostAttached(true);
+  }
+
+  public clearNativeHost(nativeHost?: NativeMessagingHost): void {
+    if (nativeHost && this.nativeHost !== nativeHost) return;
+    this.nativeHost = null;
+    this.bridgeState.setNativeHostAttached(false);
+  }
+
+  public recordBridgeHeartbeat(
+    sentAt?: number | null,
+    nativeConnected?: boolean,
+  ): BridgeRuntimeSnapshot {
+    this.bridgeState.recordHeartbeat({ sentAt, nativeConnected });
+    return this.bridgeState.getSnapshot();
+  }
+
+  public markBridgeRecoveryStarted(action: string): void {
+    this.bridgeState.markRecoveryStarted(action);
+  }
+
+  public markBridgeRecoveryFinished(
+    success: boolean,
+    errorCode?: string | null,
+    errorMessage?: string | null,
+  ): void {
+    this.bridgeState.markRecoveryFinished(success, errorCode, errorMessage);
+  }
+
+  public setBridgeError(code: string, message: string): void {
+    this.bridgeState.setBridgeError(code, message);
   }
 
   private async setupPlugins(): Promise<void> {
@@ -524,9 +558,11 @@ export class Server {
 
       this.listeningPort = port;
       this.isRunning = true;
+      this.bridgeState.startWatching();
     } catch (err) {
       this.listeningPort = null;
       this.isRunning = false;
+      this.bridgeState.stopWatching();
       throw err;
     }
   }
@@ -542,10 +578,14 @@ export class Server {
       closeDb();
       this.listeningPort = null;
       this.isRunning = false;
+      this.bridgeState.stopWatching();
+      this.clearNativeHost();
     } catch (err) {
       this.listeningPort = null;
       this.isRunning = false;
       closeDb();
+      this.bridgeState.stopWatching();
+      this.clearNativeHost();
       throw err;
     }
   }
@@ -583,6 +623,9 @@ export class Server {
     const authEnabled = tokenManager.enabled;
     const securityWarning =
       isWildcard && !authEnabled ? 'Remote access enabled without authentication' : undefined;
+    this.bridgeState.syncBrowserProcessNow();
+    this.bridgeState.setNativeHostAttached(this.nativeHost !== null);
+    const bridge = this.bridgeState.getSnapshot();
 
     return {
       isRunning: this.isRunning,
@@ -592,6 +635,7 @@ export class Server {
       authEnabled,
       ...(securityWarning && { securityWarning }),
       nativeHostAttached: this.nativeHost !== null,
+      bridge,
       transports: this.sessions.snapshot(),
       execution: {
         tasks: {
