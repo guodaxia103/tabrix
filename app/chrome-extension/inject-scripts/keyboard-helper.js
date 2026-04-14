@@ -1,4 +1,4 @@
- 
+/* global chrome, window, document, KeyboardEvent */
 // keyboard-helper.js
 // This script is injected into the page to handle keyboard event simulation
 
@@ -74,7 +74,7 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
         mainKeyPart = part;
       } else {
         // Invalid format: multiple main keys in a single combination (e.g., "Ctrl+A+B")
-        console.error(`Invalid key combination string: ${keyString}. Multiple main keys found.`);
+        console.warn(`Invalid key combination string: ${keyString}. Multiple main keys found.`);
         return null;
       }
     }
@@ -94,7 +94,7 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
         if (mainKeyPart === 'meta' || mainKeyPart === 'command' || mainKeyPart === 'cmd')
           return { key: 'Meta', code: 'MetaLeft', keyCode: 91, modifiers };
       } else {
-        console.error(`Invalid key combination string: ${keyString}. No main key specified.`);
+        console.warn(`Invalid key combination string: ${keyString}. No main key specified.`);
         return null;
       }
     }
@@ -123,7 +123,7 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
       };
     }
 
-    console.error(`Unknown key: ${mainKeyPart} in string "${keyString}"`);
+    console.warn(`Unknown key: ${mainKeyPart} in string "${keyString}"`);
     return null; // Or handle as an error
   }
 

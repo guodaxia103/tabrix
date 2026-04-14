@@ -243,9 +243,11 @@ try {
 请使用 tabrix 工具一次会话连续完成：
 1) chrome_click_element 点击 #clickBtn
 2) chrome_fill_or_select 填 #textInput=hello-tabrix
-3) chrome_keyboard 对 #textInput 执行 Ctrl+A Backspace 并输入 world
-4) chrome_javascript 读取 #textInput 当前值
-5) chrome_console(snapshot)
+3) chrome_keyboard 对 #textInput 执行 Ctrl+A, Backspace
+4) chrome_fill_or_select 再填 #textInput=world
+5) chrome_javascript 读取 #textInput 当前值
+6) chrome_console(snapshot)
+注意：chrome_keyboard 只用于快捷键或特殊按键，不要把纯文本 world 作为 keys 传入。
 最后给每一步返回 success/failed 摘要。
 "@
     },
@@ -253,11 +255,12 @@ try {
       name = 'group-core-3'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
-1) chrome_network_request 请求 ${BaseUrl}json
-2) chrome_network_capture start(includeStatic=false) -> 再请求 ${BaseUrl}json -> stop
-3) chrome_screenshot(savePng=true,name=claude-fast-shot)
-4) chrome_history 查询最近1小时 127.0.0.1:62100
-最后给每一步返回 success/failed 摘要。
+1) chrome_navigate 打开 $BaseUrl
+2) chrome_network_request 请求 ${BaseUrl}json
+3) chrome_network_capture start(includeStatic=false) -> 再请求 ${BaseUrl}json -> stop
+4) chrome_screenshot(savePng=true,name=claude-fast-shot)
+5) chrome_history 查询最近1小时 127.0.0.1:62100
+最后给每一步返回 success/failed 摘要；如果当前活动标签页不是普通网页，先切回 $BaseUrl 再继续。
 "@
     },
     @{

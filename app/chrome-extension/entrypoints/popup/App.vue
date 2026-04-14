@@ -632,6 +632,7 @@ import { resolvePopupPortUpdate } from '@/common/popup-port-input';
 import { shouldApplyPopupServerStatusMessage } from '@/common/popup-server-status-message';
 import { resolvePopupConnectionState } from '@/common/popup-status-phase';
 import { normalizeNativeLastError } from '@/common/normalize-native-last-error';
+import { isNoServiceWorkerError } from '@/common/is-no-service-worker-error';
 import {
   getPopupNativeErrorGuidance,
   getPopupRepairCommand,
@@ -1011,11 +1012,6 @@ const tokenInfo = ref<TokenInfo | null>(null);
 
 function waitMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isNoServiceWorkerError(error: unknown): boolean {
-  const message = normalizeNativeLastError(error) ?? String(error ?? '');
-  return /\bno sw\b/i.test(message) || /service worker/i.test(message);
 }
 
 async function sendRuntimeMessageWithNoSwRetry<T = any>(

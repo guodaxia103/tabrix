@@ -48,6 +48,11 @@ class NetworkRequestTool extends BaseBrowserToolExecutor {
           'No target tab found for network request (check tabId/windowId).',
         );
       }
+      if (this.isRestrictedUrl(tab.url)) {
+        return createErrorResponse(
+          `Cannot run chrome_network_request on browser-internal pages (${tab.url || 'unknown URL'}). Switch to a normal web page or pass a specific tabId.`,
+        );
+      }
       const activeTabId = tab.id;
 
       // Ensure content script is available in the target tab
@@ -79,10 +84,18 @@ class NetworkRequestTool extends BaseBrowserToolExecutor {
         isError: !resultFromContentScript?.success,
       };
     } catch (error: any) {
-      console.error('NetworkRequestTool: Error sending network request:', error);
-      return createErrorResponse(
-        `Error sending network request: ${error.message || String(error)}`,
-      );
+      const message = error?.message || String(error);
+      if (
+        typeof message === 'string' &&
+        (message.includes('Cannot access a chrome:// URL') ||
+          message.includes('Cannot access contents of the page') ||
+          message.includes('chrome-extension://'))
+      ) {
+        console.warn('NetworkRequestTool: Restricted target tab for network request:', message);
+      } else {
+        console.error('NetworkRequestTool: Error sending network request:', error);
+      }
+      return createErrorResponse(`Error sending network request: ${message}`);
     }
   }
 }

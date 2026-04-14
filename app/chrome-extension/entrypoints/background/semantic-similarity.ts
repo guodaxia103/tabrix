@@ -3,6 +3,7 @@ import { OffscreenManager } from '@/utils/offscreen-manager';
 import { BACKGROUND_MESSAGE_TYPES, OFFSCREEN_MESSAGE_TYPES } from '@/common/message-types';
 import { STORAGE_KEYS, ERROR_MESSAGES } from '@/common/constants';
 import { hasAnyModelCache } from '@/utils/semantic-similarity-engine';
+import { isNoServiceWorkerError } from '@/common/is-no-service-worker-error';
 
 /**
  * Model configuration state management interface
@@ -156,7 +157,14 @@ export async function handleModelSwitch(
     try {
       await OffscreenManager.getInstance().ensureOffscreenDocument();
     } catch (offscreenError) {
-      console.error('Background: Failed to create offscreen document:', offscreenError);
+      if (isNoServiceWorkerError(offscreenError)) {
+        console.warn(
+          'Background: Offscreen document unavailable during SW startup:',
+          offscreenError,
+        );
+      } else {
+        console.error('Background: Failed to create offscreen document:', offscreenError);
+      }
       const errorMessage = `Failed to create offscreen document: ${offscreenError}`;
       await updateModelStatus('error', 0, errorMessage, 'unknown');
       return { success: false, error: errorMessage };

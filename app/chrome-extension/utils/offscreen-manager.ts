@@ -1,3 +1,5 @@
+import { isNoServiceWorkerError } from '@/common/is-no-service-worker-error';
+
 /**
  * Offscreen Document manager
  * Ensures only one offscreen document is created across the entire extension to avoid conflicts
@@ -66,7 +68,11 @@ export class OffscreenManager {
       this.isCreated = true;
       console.log('OffscreenManager: Offscreen document created successfully');
     } catch (error) {
-      console.error('OffscreenManager: Failed to create offscreen document:', error);
+      if (isNoServiceWorkerError(error)) {
+        console.warn('OffscreenManager: Offscreen creation deferred during SW startup:', error);
+      } else {
+        console.error('OffscreenManager: Failed to create offscreen document:', error);
+      }
       this.isCreated = false;
       throw error;
     }
@@ -103,6 +109,5 @@ export class OffscreenManager {
     this.createPromise = null;
   }
 }
-
 
 export const offscreenManager = OffscreenManager.getInstance();

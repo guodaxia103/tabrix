@@ -2,6 +2,7 @@ import { NativeMessageType } from '@tabrix/shared';
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import { NATIVE_HOST, STORAGE_KEYS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '@/common/constants';
 import { normalizeNativeLastError } from '@/common/normalize-native-last-error';
+import { isNoServiceWorkerError } from '@/common/is-no-service-worker-error';
 import { handleCallTool } from './tools';
 import { listPublished, getFlow } from './record-replay/flow-store';
 import { registerNativeBridgeForwarder, registerNativeBridgeRequester } from './native-bridge';
@@ -64,7 +65,11 @@ async function saveLastNativeError(error: string | null): Promise<void> {
   try {
     await chrome.storage.local.set({ [STORAGE_KEYS.LAST_NATIVE_ERROR]: error });
   } catch (storageError) {
-    console.error(`${LOG_PREFIX} Failed to save last native error`, storageError);
+    if (isNoServiceWorkerError(storageError)) {
+      console.warn(`${LOG_PREFIX} Skipping last native error save during SW startup`, storageError);
+    } else {
+      console.error(`${LOG_PREFIX} Failed to save last native error`, storageError);
+    }
   }
 }
 
@@ -74,7 +79,11 @@ async function loadLastNativeError(): Promise<string | null> {
     const value = result[STORAGE_KEYS.LAST_NATIVE_ERROR];
     return normalizeNativeLastError(value);
   } catch (storageError) {
-    console.error(`${LOG_PREFIX} Failed to load last native error`, storageError);
+    if (isNoServiceWorkerError(storageError)) {
+      console.warn(`${LOG_PREFIX} Last native error not available during SW startup`, storageError);
+    } else {
+      console.error(`${LOG_PREFIX} Failed to load last native error`, storageError);
+    }
     return null;
   }
 }
@@ -100,7 +109,11 @@ async function loadServerStatus(): Promise<ServerStatus> {
       return result[STORAGE_KEYS.SERVER_STATUS];
     }
   } catch (error) {
-    console.error(ERROR_MESSAGES.SERVER_STATUS_LOAD_FAILED, error);
+    if (isNoServiceWorkerError(error)) {
+      console.warn(`${ERROR_MESSAGES.SERVER_STATUS_LOAD_FAILED} (transient SW startup)`, error);
+    } else {
+      console.error(ERROR_MESSAGES.SERVER_STATUS_LOAD_FAILED, error);
+    }
   }
   return {
     isRunning: false,

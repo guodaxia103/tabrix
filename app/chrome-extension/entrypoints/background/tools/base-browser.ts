@@ -142,4 +142,21 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
     if (!tab || !tab.id) throw new Error('Active tab not found');
     return tab;
   }
+
+  /**
+   * Chrome blocks script injection on browser-internal and web-store style pages.
+   */
+  protected isRestrictedUrl(url?: string): boolean {
+    if (!url) return true;
+
+    return (
+      url.startsWith('chrome://') ||
+      url.startsWith('edge://') ||
+      url.startsWith('about:') ||
+      url.startsWith('devtools://') ||
+      url.startsWith('chrome-extension://') ||
+      url.startsWith('https://chrome.google.com/webstore') ||
+      url.startsWith('https://microsoftedge.microsoft.com/')
+    );
+  }
 }

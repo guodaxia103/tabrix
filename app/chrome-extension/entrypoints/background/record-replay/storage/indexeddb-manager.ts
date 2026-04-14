@@ -7,6 +7,7 @@ import type { FlowSchedule } from '../flow-store';
 import type { PublishedFlowInfo } from '../flow-store';
 import type { FlowTrigger } from '../trigger-store';
 import { IndexedDbClient } from '@/utils/indexeddb-client';
+import { isNoServiceWorkerError } from '@/common/is-no-service-worker-error';
 
 type StoreName = 'flows' | 'runs' | 'published' | 'schedules' | 'triggers';
 
@@ -165,7 +166,11 @@ export async function ensureMigratedFromLocal(): Promise<void> {
       await chrome.storage.local.set({ rr_idb_migrated: true });
     } catch (e) {
       migrationFailed = true;
-      console.error('IndexedDbStorage migration failed:', e);
+      if (isNoServiceWorkerError(e)) {
+        console.warn('IndexedDbStorage migration deferred during SW startup:', e);
+      } else {
+        console.error('IndexedDbStorage migration failed:', e);
+      }
       // Re-throw to let callers know migration failed
       throw e;
     }

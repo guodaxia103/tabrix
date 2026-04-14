@@ -1276,7 +1276,7 @@ export const TOOL_SCHEMAS: Tool[] = [
         keys: {
           type: 'string',
           description:
-            'Keys or key combinations to simulate. Examples: "Enter", "Tab", "Ctrl+C", "Shift+Tab", "Hello World".',
+            'Keys or key combinations to simulate. Examples: "Enter", "Tab", "Ctrl+C", "Shift+Tab", "Ctrl+A, Backspace". For plain text typing, use chrome_fill_or_select instead.',
         },
         selector: {
           type: 'string',

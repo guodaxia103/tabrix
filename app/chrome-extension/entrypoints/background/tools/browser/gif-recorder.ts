@@ -1209,7 +1209,7 @@ class GifRecorderTool extends BaseBrowserToolExecutor {
     }
   }
 
-  private isRestrictedUrl(url?: string): boolean {
+  protected isRestrictedUrl(url?: string): boolean {
     if (!url) return false;
     return (
       url.startsWith('chrome://') ||
