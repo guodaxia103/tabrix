@@ -71,9 +71,18 @@ export class SessionRegistry {
     const entry = this.transports.get(sessionId);
     if (!entry) return;
     this.transports.delete(sessionId);
-    void entry.server.close().catch(() => {
-      // Ignore cleanup failures during disconnect/teardown.
-    });
+    void (async () => {
+      try {
+        await entry.transport.close();
+      } catch {
+        // Ignore transport cleanup failures during disconnect/teardown.
+      }
+      try {
+        await entry.server.close();
+      } catch {
+        // Ignore MCP server cleanup failures during disconnect/teardown.
+      }
+    })();
   }
 
   /**
@@ -91,7 +100,16 @@ export class SessionRegistry {
   async closeAll(): Promise<void> {
     const entries = [...this.transports.entries()];
     this.transports.clear();
-    await Promise.allSettled(entries.map(([, entry]) => entry.server.close()));
+    await Promise.allSettled(
+      entries.map(async ([, entry]) => {
+        try {
+          await entry.transport.close();
+        } catch {
+          // Ignore transport cleanup failures during shutdown.
+        }
+        await entry.server.close();
+      }),
+    );
   }
 
   /**

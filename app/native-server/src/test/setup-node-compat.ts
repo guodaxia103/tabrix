@@ -37,11 +37,54 @@ if (typeof writableProto.destroySoon !== 'function') {
   };
 }
 
+const objectProto = Object.prototype as {
+  destroySoon?: () => void;
+  destroy?: () => void;
+  end?: () => void;
+};
+if (typeof objectProto.destroySoon !== 'function') {
+  Object.defineProperty(Object.prototype, 'destroySoon', {
+    configurable: true,
+    writable: true,
+    enumerable: false,
+    value: function destroySoonObjectCompat() {
+      try {
+        this.end?.();
+      } catch {
+        // ignore
+      }
+      try {
+        this.destroy?.();
+      } catch {
+        // ignore
+      }
+    },
+  });
+}
+
 const KNOWN_HONO_SOCKET_ERROR = 'socket.destroySoon is not a function';
 const PROCESS_PATCH_FLAG = '__TABRIX_NATIVE_TEST_SOCKET_PATCH__';
 const processAny = process as NodeJS.Process & { [PROCESS_PATCH_FLAG]?: boolean };
 if (!processAny[PROCESS_PATCH_FLAG]) {
   processAny[PROCESS_PATCH_FLAG] = true;
+  const originalSetTimeout = global.setTimeout.bind(global);
+  global.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+    if (typeof handler !== 'function') {
+      return originalSetTimeout(handler, timeout, ...args);
+    }
+    const wrapped: TimerHandler = (...callbackArgs: unknown[]) => {
+      try {
+        return handler(...callbackArgs);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error ?? '');
+        if (msg.includes(KNOWN_HONO_SOCKET_ERROR)) {
+          return undefined;
+        }
+        throw error;
+      }
+    };
+    return originalSetTimeout(wrapped, timeout, ...args);
+  }) as typeof global.setTimeout;
   process.on('uncaughtException', (error) => {
     const msg = error instanceof Error ? error.message : String(error ?? '');
     if (msg.includes(KNOWN_HONO_SOCKET_ERROR)) {

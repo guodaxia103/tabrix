@@ -5,6 +5,7 @@ import { bridgeRuntimeState } from '../server/bridge-state';
 
 describe('handleToolCall execution wrapper', () => {
   const markBridgeReady = () => {
+    jest.spyOn(bridgeRuntimeState, 'syncBrowserProcessNow').mockImplementation(() => true);
     bridgeRuntimeState.setBrowserProcessRunning(true);
     bridgeRuntimeState.recordHeartbeat({
       sentAt: Date.now(),
