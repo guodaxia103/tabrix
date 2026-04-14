@@ -13,6 +13,8 @@ $script:BridgeProbeResult = $null
 $script:UploadArtifactPath = Join-Path (Split-Path $PSScriptRoot -Parent) '.tmp/artifacts/upload.txt'
 $script:ClaudeMcpConfigPath = Join-Path (Split-Path $PSScriptRoot -Parent) '.tmp/claude-tabrix-mcp.json'
 $script:ExtensionConnectUrl = 'chrome-extension://njlidkjgkcccdoffkfcbgiefdpaipfdn/connect.html'
+$script:CleanupTabsScriptPath = Join-Path $PSScriptRoot 'cleanup-acceptance-tabs.cjs'
+$script:CaseTimeoutSec = 120
 
 function Wait-PortReady {
   param(
@@ -197,6 +199,21 @@ function Ensure-TabrixBridge {
   }
 }
 
+function Invoke-TabrixAcceptanceCleanup {
+  if (-not (Test-Path $script:ClaudeMcpConfigPath) -or -not (Test-Path $script:CleanupTabsScriptPath)) {
+    return
+  }
+
+  try {
+    & node $script:CleanupTabsScriptPath `
+      --config $script:ClaudeMcpConfigPath `
+      --prefix $BaseUrl `
+      --prefix $script:ExtensionConnectUrl | Out-Null
+  } catch {
+    # ignore cleanup failures
+  }
+}
+
 function Run-Case {
   param(
     [string]$Name,
@@ -210,12 +227,34 @@ function Run-Case {
 
 $Prompt
 "@
-  $out = claude -p --permission-mode bypassPermissions --mcp-config $script:ClaudeMcpConfigPath --strict-mcp-config $prefixedPrompt 2>&1
   $file = Join-Path $OutDir "$Name.txt"
-  $out | Out-File -FilePath $file -Encoding utf8
+  $job = $null
+
+  try {
+    $job = Start-Job -ScriptBlock {
+      param($ConfigPath, $PromptText, $OutputPath)
+      New-Item -ItemType Directory -Force (Split-Path $OutputPath -Parent) | Out-Null
+      $out = claude -p --permission-mode bypassPermissions --mcp-config $ConfigPath --strict-mcp-config $PromptText 2>&1
+      $out | Out-File -FilePath $OutputPath -Encoding utf8
+    } -ArgumentList $script:ClaudeMcpConfigPath, $prefixedPrompt, $file
+
+    if (-not (Wait-Job -Job $job -Timeout $script:CaseTimeoutSec)) {
+      Stop-Job -Job $job -ErrorAction SilentlyContinue
+      "Timed out after $($script:CaseTimeoutSec)s while running $Name." | Out-File -FilePath $file -Encoding utf8
+      throw "$Name timed out after $($script:CaseTimeoutSec)s"
+    }
+
+    Receive-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
+  } finally {
+    if ($job) {
+      Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    }
+    Invoke-TabrixAcceptanceCleanup
+  }
 }
 
 New-Item -ItemType Directory -Force $OutDir | Out-Null
+$OutDir = (Resolve-Path $OutDir).Path
 
 try {
   Stop-SmokeServer
@@ -223,6 +262,7 @@ try {
   Ensure-ClaudeMcpConfig
   Start-SmokeServer
   Ensure-TabrixBridge
+  Invoke-TabrixAcceptanceCleanup
 
   $cases = @(
     @{
@@ -296,7 +336,7 @@ try {
 请使用 tabrix 工具一次会话连续完成：
 1) chrome_navigate 打开 $BaseUrl
 2) chrome_click_element 点击 #promptBtn
-3) chrome_handle_dialog(action=accept,promptText=tabrix-ok)
+3) 立即调用 chrome_handle_dialog(action=accept,promptText=tabrix-ok)，不要等待页面变化
 4) chrome_javascript 读取 #promptOut 文本
 最后给每一步返回 success/failed 摘要。
 "@
@@ -353,6 +393,7 @@ try {
   Write-Host "Done. Summary written to $(Join-Path $OutDir '_summary.json')"
 }
 finally {
+  Invoke-TabrixAcceptanceCleanup
   Stop-BridgeProbeListener
   Stop-SmokeServer
 }

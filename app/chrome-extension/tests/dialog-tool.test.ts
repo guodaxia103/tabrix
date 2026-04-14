@@ -49,6 +49,25 @@ describe('handleDialogTool', () => {
     });
   });
 
+  it('continues with direct dialog handling when Page.enable times out', async () => {
+    sendCommandMock
+      .mockRejectedValueOnce(new Error('Enable dialog domain timed out'))
+      .mockResolvedValueOnce({});
+
+    const result = await handleDialogTool.execute({
+      action: 'accept',
+      promptText: 'phase0-dialog',
+      tabId: 123,
+    });
+
+    expect(result.isError).toBe(false);
+    expect(sendCommandMock).toHaveBeenNthCalledWith(1, 123, 'Page.enable');
+    expect(sendCommandMock).toHaveBeenNthCalledWith(2, 123, 'Page.handleJavaScriptDialog', {
+      accept: true,
+      promptText: 'phase0-dialog',
+    });
+  });
+
   it('surfaces an error after exhausting dialog retries', async () => {
     sendCommandMock.mockResolvedValueOnce({});
     for (let attempt = 0; attempt < 10; attempt += 1) {

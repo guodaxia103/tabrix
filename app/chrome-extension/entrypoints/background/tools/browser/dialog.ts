@@ -15,10 +15,16 @@ const DIALOG_HANDLE_MAX_ATTEMPTS = 16;
 const DIALOG_HANDLE_RETRY_DELAY_MS = 80;
 const DIALOG_COMMAND_TIMEOUT_MS = 3000;
 const DIALOG_TOTAL_TIMEOUT_MS = 6000;
+const DIALOG_ENABLE_TIMEOUT_MESSAGE = 'Enable dialog domain timed out';
 
 function isDialogNotReadyError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return message.includes(DIALOG_NOT_SHOWING_MESSAGE);
+}
+
+function isEnableTimeoutError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes(DIALOG_ENABLE_TIMEOUT_MESSAGE);
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -65,11 +71,23 @@ class HandleDialogTool extends BaseBrowserToolExecutor {
 
       // Use shared CDP session manager for safe attach/detach with refcount
       await cdpSessionManager.withSession(tabId, 'dialog', async () => {
-        await withTimeout(
-          cdpSessionManager.sendCommand(tabId, 'Page.enable'),
-          DIALOG_COMMAND_TIMEOUT_MS,
-          'Enable dialog domain timed out',
-        );
+        let pageDomainEnabled = false;
+        try {
+          await withTimeout(
+            cdpSessionManager.sendCommand(tabId, 'Page.enable'),
+            DIALOG_COMMAND_TIMEOUT_MS,
+            DIALOG_ENABLE_TIMEOUT_MESSAGE,
+          );
+          pageDomainEnabled = true;
+        } catch (error) {
+          if (!isEnableTimeoutError(error)) {
+            throw error;
+          }
+          // A visible prompt can block Page.enable on some pages.
+          // Continue with direct dialog handling attempts instead of failing fast.
+          console.warn('[HandleDialogTool] Page.enable timed out; retrying direct dialog handling');
+        }
+
         let lastError: unknown;
         const startedAt = Date.now();
 
@@ -93,7 +111,15 @@ class HandleDialogTool extends BaseBrowserToolExecutor {
           } catch (error) {
             lastError = error;
 
-            if (!isDialogNotReadyError(error) || attempt === DIALOG_HANDLE_MAX_ATTEMPTS - 1) {
+            if (
+              !isDialogNotReadyError(error) &&
+              !(isEnableTimeoutError(error) && !pageDomainEnabled) &&
+              attempt !== DIALOG_HANDLE_MAX_ATTEMPTS - 1
+            ) {
+              throw error;
+            }
+
+            if (attempt === DIALOG_HANDLE_MAX_ATTEMPTS - 1) {
               throw error;
             }
 
