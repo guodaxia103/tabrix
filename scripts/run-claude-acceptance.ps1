@@ -424,11 +424,11 @@ try {
       kind = 'unattended'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
-1) chrome_navigate 打开 $BaseUrl
-2) chrome_click_element 点击 #promptBtn
-3) 立即调用 chrome_handle_dialog(action=accept,promptText=tabrix-ok)，不要等待页面变化
-4) chrome_javascript 读取 #promptOut 文本
-要求：第 3 步必须只使用 chrome_handle_dialog；如果失败，直接标记 failed，不要改用 JS 注入或其它绕过方式。
+1) chrome_navigate 打开 $BaseUrl，并记住返回的 tabId
+2) 在同一个 tabId 上调用 chrome_click_element 点击 #promptBtn
+3) 立即在同一个 tabId 上调用 chrome_handle_dialog(action=accept,promptText=tabrix-ok)，不要等待页面变化
+4) 再在同一个 tabId 上调用 chrome_javascript 读取 #promptOut 文本
+要求：第 2-4 步必须始终使用同一个 tabId；第 3 步必须只使用 chrome_handle_dialog；如果失败，直接标记 failed，不要改用 JS 注入或其它绕过方式。
 最后给每一步返回 success/failed 摘要。
 "@
     },
@@ -437,9 +437,10 @@ try {
       kind = 'unattended'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
-1) chrome_gif_recorder(action=clear)
-2) chrome_gif_recorder(action=start,durationMs=4000,fps=4,filename=claude-full-gif)
-3) chrome_gif_recorder(action=stop)
+1) chrome_navigate 打开 $BaseUrl，确保当前标签页是普通网页而不是 chrome:// 或扩展页面
+2) chrome_gif_recorder(action=clear)
+3) chrome_gif_recorder(action=start,durationMs=4000,fps=4,filename=claude-full-gif)
+4) chrome_gif_recorder(action=stop)
 最后给每一步返回 success/failed 摘要。
 "@
     },

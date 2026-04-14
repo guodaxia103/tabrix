@@ -51,6 +51,91 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
 class HandleDialogTool extends BaseBrowserToolExecutor {
   name = TOOL_NAMES.BROWSER.HANDLE_DIALOG;
 
+  private async handleDialogOnTab(
+    tabId: number,
+    action: 'accept' | 'dismiss',
+    promptText?: string,
+  ): Promise<void> {
+    await cdpSessionManager.withSession(tabId, 'dialog', async () => {
+      let pageDomainEnabled = false;
+      try {
+        await withTimeout(
+          cdpSessionManager.sendCommand(tabId, 'Page.enable'),
+          DIALOG_COMMAND_TIMEOUT_MS,
+          DIALOG_ENABLE_TIMEOUT_MESSAGE,
+        );
+        pageDomainEnabled = true;
+      } catch (error) {
+        if (!isEnableTimeoutError(error)) {
+          throw error;
+        }
+        // A visible prompt can block Page.enable on some pages.
+        // Continue with direct dialog handling attempts instead of failing fast.
+        console.warn('[HandleDialogTool] Page.enable timed out; retrying direct dialog handling');
+      }
+
+      let lastError: unknown;
+      const startedAt = Date.now();
+      const maxAttempts = Math.max(
+        1,
+        Math.ceil(DIALOG_TOTAL_TIMEOUT_MS / DIALOG_HANDLE_RETRY_DELAY_MS),
+      );
+
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        if (Date.now() - startedAt > DIALOG_TOTAL_TIMEOUT_MS) {
+          throw (
+            lastError ||
+            new Error('Dialog handling timed out while waiting for a visible JavaScript dialog')
+          );
+        }
+        try {
+          await withTimeout(
+            cdpSessionManager.sendCommand(tabId, 'Page.handleJavaScriptDialog', {
+              accept: action === 'accept',
+              promptText: action === 'accept' ? promptText : undefined,
+            }),
+            DIALOG_COMMAND_TIMEOUT_MS,
+            'Handling JavaScript dialog timed out',
+          );
+          return;
+        } catch (error) {
+          lastError = error;
+
+          if (
+            !isDialogNotReadyError(error) &&
+            !(isEnableTimeoutError(error) && !pageDomainEnabled) &&
+            attempt !== maxAttempts - 1
+          ) {
+            throw error;
+          }
+
+          if (attempt === maxAttempts - 1) {
+            throw error;
+          }
+
+          await sleep(DIALOG_HANDLE_RETRY_DELAY_MS);
+        }
+      }
+
+      throw lastError;
+    });
+  }
+
+  private async collectCandidateTabs(
+    requestedTabId: number | undefined,
+    windowId: number | undefined,
+  ): Promise<chrome.tabs.Tab[]> {
+    const explicit = await this.tryGetTab(requestedTabId);
+    const primaryTab = explicit || (await this.getActiveTabOrThrowInWindow(windowId));
+    if (!primaryTab?.id) {
+      throw new Error('No target tab found for dialog handling');
+    }
+
+    const allTabs = await chrome.tabs.query({});
+    const remainingTabs = allTabs.filter((tab) => tab.id && tab.id !== primaryTab.id);
+    return [primaryTab, ...remainingTabs];
+  }
+
   async execute(args: HandleDialogParams): Promise<ToolResult> {
     const {
       action,
@@ -63,81 +148,41 @@ class HandleDialogTool extends BaseBrowserToolExecutor {
     }
 
     try {
-      const explicit = await this.tryGetTab(requestedTabId);
-      const targetTab = explicit || (await this.getActiveTabOrThrowInWindow(windowId));
-      if (!targetTab?.id) return createErrorResponse('No target tab found for dialog handling');
-      const tabId = targetTab.id;
+      const candidateTabs = await this.collectCandidateTabs(requestedTabId, windowId);
+      let lastError: unknown;
+      let handledTabId: number | null = null;
 
-      // Use shared CDP session manager for safe attach/detach with refcount
-      await cdpSessionManager.withSession(tabId, 'dialog', async () => {
-        let pageDomainEnabled = false;
+      for (const candidateTab of candidateTabs) {
+        if (!candidateTab.id) {
+          continue;
+        }
+
         try {
-          await withTimeout(
-            cdpSessionManager.sendCommand(tabId, 'Page.enable'),
-            DIALOG_COMMAND_TIMEOUT_MS,
-            DIALOG_ENABLE_TIMEOUT_MESSAGE,
-          );
-          pageDomainEnabled = true;
+          await this.handleDialogOnTab(candidateTab.id, action, promptText);
+          handledTabId = candidateTab.id;
+          break;
         } catch (error) {
-          if (!isEnableTimeoutError(error)) {
+          lastError = error;
+          if (!isDialogNotReadyError(error)) {
             throw error;
           }
-          // A visible prompt can block Page.enable on some pages.
-          // Continue with direct dialog handling attempts instead of failing fast.
-          console.warn('[HandleDialogTool] Page.enable timed out; retrying direct dialog handling');
         }
+      }
 
-        let lastError: unknown;
-        const startedAt = Date.now();
-        const maxAttempts = Math.max(
-          1,
-          Math.ceil(DIALOG_TOTAL_TIMEOUT_MS / DIALOG_HANDLE_RETRY_DELAY_MS),
-        );
-
-        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-          if (Date.now() - startedAt > DIALOG_TOTAL_TIMEOUT_MS) {
-            throw (
-              lastError ||
-              new Error('Dialog handling timed out while waiting for a visible JavaScript dialog')
-            );
-          }
-          try {
-            await withTimeout(
-              cdpSessionManager.sendCommand(tabId, 'Page.handleJavaScriptDialog', {
-                accept: action === 'accept',
-                promptText: action === 'accept' ? promptText : undefined,
-              }),
-              DIALOG_COMMAND_TIMEOUT_MS,
-              'Handling JavaScript dialog timed out',
-            );
-            return;
-          } catch (error) {
-            lastError = error;
-
-            if (
-              !isDialogNotReadyError(error) &&
-              !(isEnableTimeoutError(error) && !pageDomainEnabled) &&
-              attempt !== maxAttempts - 1
-            ) {
-              throw error;
-            }
-
-            if (attempt === maxAttempts - 1) {
-              throw error;
-            }
-
-            await sleep(DIALOG_HANDLE_RETRY_DELAY_MS);
-          }
-        }
-
-        throw lastError;
-      });
+      if (handledTabId === null) {
+        throw lastError || new Error(DIALOG_NOT_SHOWING_MESSAGE);
+      }
 
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ success: true, action, promptText: promptText || null }),
+            text: JSON.stringify({
+              success: true,
+              action,
+              promptText: promptText || null,
+              tabId: handledTabId,
+            }),
           },
         ],
         isError: false,
