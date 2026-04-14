@@ -751,6 +751,7 @@ async function runAllToolsValidation(
 export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
   const steps: SmokeStep[] = [];
   const mcpUrl = options.url || buildDefaultMcpUrl();
+  const debugSmoke = process.env.DEBUG_TABRIX_SMOKE === '1';
   const protocolOnly =
     Boolean(options.protocolOnly) || Boolean(options.url) || Boolean(options.authToken);
   const repeat = Math.max(1, options.repeat || 1);
@@ -767,6 +768,10 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
 
   const record = (name: string, ok: boolean, detail: string): void => {
     steps.push({ name, ok, detail });
+  };
+  const traceStep = (label: string): void => {
+    if (!debugSmoke) return;
+    process.stderr.write(`[smoke] ${label}\n`);
   };
 
   try {
@@ -855,7 +860,13 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     originalTabId =
       windows?.windows?.flatMap((window: any) => window.tabs || []).find((tab: any) => tab.active)
         ?.tabId || null;
-    record('get_windows_and_tabs', Boolean(originalTabId), `Original active tab: ${originalTabId}`);
+    record(
+      'get_windows_and_tabs',
+      Array.isArray(windows?.windows),
+      originalTabId
+        ? `Original active tab: ${originalTabId}`
+        : 'Window/tab snapshot loaded; original active tab unavailable',
+    );
 
     const navigateResult = parseToolText(
       await mcp.callTool('chrome_navigate', {
@@ -1045,6 +1056,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       'Captured console buffer output',
     );
 
+    traceStep('chrome_upload_file:start');
     await mcp.callTool('chrome_upload_file', {
       tabId: tempTabId,
       selector: '#fileInput',
@@ -1067,6 +1079,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       'Uploaded local temp file',
     );
 
+    traceStep('chrome_click_element(download-intercept):start');
     const clickDownload = parseToolText(
       await mcp.callTool('chrome_click_element', {
         tabId: tempTabId,
@@ -1086,6 +1099,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
 
     record('chrome_handle_dialog', true, 'Skipped in default smoke run');
 
+    traceStep('chrome_bookmark_add:start');
     await mcp.callTool('chrome_bookmark_add', {
       url: smokeServer!.baseUrl,
       title: 'Phase0 Smoke Bookmark',
@@ -1104,6 +1118,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       'Added and found temporary bookmark',
     );
 
+    traceStep('chrome_bookmark_delete:start');
     await mcp.callTool('chrome_bookmark_delete', {
       url: smokeServer!.baseUrl,
       title: 'Phase0 Smoke Bookmark',
@@ -1118,6 +1133,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     );
     record('chrome_history', JSON.stringify(historyResult).length > 0, 'History query succeeded');
 
+    traceStep('chrome_gif_recorder(status):start');
     const gifStatus = parseToolText(
       await mcp.callTool('chrome_gif_recorder', {
         action: 'status',
@@ -1130,12 +1146,14 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       'Queried GIF recorder status',
     );
 
+    traceStep('performance_start_trace:start');
     await mcp.callTool('performance_start_trace', {
       reload: false,
       autoStop: true,
       durationMs: 1200,
     });
     await sleep(2000);
+    traceStep('performance_stop_trace:start');
     const perfStop = parseToolText(
       await mcp.callTool('performance_stop_trace', {
         saveToDownloads: false,
@@ -1148,6 +1166,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     );
 
     if (options.allTools) {
+      traceStep('all-tools-validation:start');
       tempTabId = await runAllToolsValidation(
         mcp,
         smokeServer!,
@@ -1158,6 +1177,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     }
 
     if (!options.keepTab) {
+      traceStep('chrome_close_tabs:start');
       await mcp.callTool('chrome_close_tabs', {
         tabIds: [tempTabId],
       });
@@ -1166,6 +1186,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     }
 
     if (originalTabId) {
+      traceStep('chrome_switch_tab(original):start');
       await mcp.callTool('chrome_switch_tab', { tabId: originalTabId });
     }
   } catch (error) {
@@ -1178,6 +1199,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
         : detail,
     );
   } finally {
+    traceStep('cleanup:start');
     if (!options.keepTab && tempTabId) {
       try {
         await mcp.callTool('chrome_close_tabs', { tabIds: [tempTabId] });

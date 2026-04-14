@@ -2,6 +2,7 @@ import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
 import { TOOL_NAMES } from '@tabrix/shared';
 import { cdpSessionManager } from '@/utils/cdp-session-manager';
+import { prepareFileViaNative } from './native-file';
 
 interface FileUploadToolParams {
   selector: string; // CSS selector for the file input element
@@ -172,60 +173,19 @@ class FileUploadTool extends BaseBrowserToolExecutor {
     fileName: string;
   }): Promise<string | null> {
     const { fileUrl, base64Data, fileName } = options;
-
-    return new Promise((resolve) => {
-      const requestId = `file-upload-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const timeout = setTimeout(() => {
-        console.error('File preparation request timed out');
-        resolve(null);
-      }, 30000); // 30 second timeout
-
-      // Create listener for the response
-      const handleMessage = (message: any) => {
-        if (
-          message.type === 'file_operation_response' &&
-          message.responseToRequestId === requestId
-        ) {
-          clearTimeout(timeout);
-          chrome.runtime.onMessage.removeListener(handleMessage);
-
-          if (message.payload?.success && message.payload?.filePath) {
-            resolve(message.payload.filePath);
-          } else {
-            console.error(
-              'Native host failed to prepare file:',
-              message.error || message.payload?.error,
-            );
-            resolve(null);
-          }
-        }
-      };
-
-      // Add listener
-      chrome.runtime.onMessage.addListener(handleMessage);
-
-      // Send message to background script to forward to native host
-      chrome.runtime
-        .sendMessage({
-          type: 'forward_to_native',
-          message: {
-            type: 'file_operation',
-            requestId: requestId,
-            payload: {
-              action: 'prepareFile',
-              fileUrl,
-              base64Data,
-              fileName,
-            },
-          },
-        })
-        .catch((error) => {
-          console.error('Error sending message to background:', error);
-          clearTimeout(timeout);
-          chrome.runtime.onMessage.removeListener(handleMessage);
-          resolve(null);
-        });
-    });
+    try {
+      const prepared = await prepareFileViaNative({
+        fileUrl,
+        base64Data,
+        fileName,
+        timeoutMs: 30000,
+        requestPrefix: 'file-upload',
+      });
+      return prepared.fullPath || null;
+    } catch (error) {
+      console.error('Native host failed to prepare file:', error);
+      return null;
+    }
   }
 }
 

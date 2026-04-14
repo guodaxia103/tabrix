@@ -2,7 +2,7 @@ import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
 import { TOOL_NAMES } from '@tabrix/shared';
 import { cdpSessionManager } from '@/utils/cdp-session-manager';
-import { prepareFileViaNative } from './native-file';
+import { prepareFileViaNative, requestNativeFileOperation } from './native-file';
 
 type OwnerTag = 'performance';
 
@@ -137,43 +137,14 @@ async function saveTraceToNativeTemp(
     const filename = `${filenamePrefix}_${timestamp}.json`;
     const base64 = btoa(unescape(encodeURIComponent(json)));
 
-    const requestId = `trace-temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const timeoutMs = 30000;
-    const resp = await new Promise<any>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        chrome.runtime.onMessage.removeListener(listener);
-        reject(new Error('Native temp save timed out'));
-      }, timeoutMs);
-      const listener = (message: any) => {
-        if (
-          message &&
-          message.type === 'file_operation_response' &&
-          message.responseToRequestId === requestId
-        ) {
-          clearTimeout(timer);
-          chrome.runtime.onMessage.removeListener(listener);
-          resolve(message.payload);
-        }
-      };
-      chrome.runtime.onMessage.addListener(listener);
-      chrome.runtime
-        .sendMessage({
-          type: 'forward_to_native',
-          message: {
-            type: 'file_operation',
-            requestId,
-            payload: {
-              action: 'prepareFile',
-              base64Data: base64,
-              fileName: filename,
-            },
-          },
-        })
-        .catch((err) => {
-          clearTimeout(timer);
-          chrome.runtime.onMessage.removeListener(listener);
-          reject(err);
-        });
+    const resp = await requestNativeFileOperation({
+      timeoutMs: 30000,
+      requestPrefix: 'trace-temp',
+      payload: {
+        action: 'prepareFile',
+        base64Data: base64,
+        fileName: filename,
+      },
     });
 
     if (resp && resp.success && resp.filePath) {
@@ -188,43 +159,14 @@ async function saveTraceToNativeTemp(
 async function cleanupNativeTempFile(filePath: string): Promise<void> {
   if (!filePath) return;
   try {
-    const requestId = `trace-clean-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const timeoutMs = 10000;
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        chrome.runtime.onMessage.removeListener(listener);
-        resolve(); // best-effort
-      }, timeoutMs);
-      const listener = (message: any) => {
-        if (
-          message &&
-          message.type === 'file_operation_response' &&
-          message.responseToRequestId === requestId
-        ) {
-          clearTimeout(timer);
-          chrome.runtime.onMessage.removeListener(listener);
-          resolve();
-        }
-      };
-      chrome.runtime.onMessage.addListener(listener);
-      chrome.runtime
-        .sendMessage({
-          type: 'forward_to_native',
-          message: {
-            type: 'file_operation',
-            requestId,
-            payload: {
-              action: 'cleanupFile',
-              filePath,
-            },
-          },
-        })
-        .catch(() => {
-          clearTimeout(timer);
-          chrome.runtime.onMessage.removeListener(listener);
-          resolve();
-        });
-    });
+    await requestNativeFileOperation({
+      timeoutMs: 10000,
+      requestPrefix: 'trace-clean',
+      payload: {
+        action: 'cleanupFile',
+        filePath,
+      },
+    }).catch(() => {});
   } catch {
     // ignore
   }
@@ -480,39 +422,11 @@ class PerformanceAnalyzeInsightTool extends BaseBrowserToolExecutor {
       const fullPath = (result.saved && (result.saved as any).fullPath) || undefined;
       if (fullPath) {
         try {
-          const requestId = `trace-analyze-${Date.now()}-${Math.random().toString(36).slice(2)}`;
           const timeoutMs = Math.max(10000, Math.min((args as any)?.timeoutMs ?? 60000, 300000));
-          const resp = await new Promise<any>((resolve, reject) => {
-            const timer = setTimeout(() => {
-              chrome.runtime.onMessage.removeListener(listener);
-              reject(new Error('Native trace analysis timed out'));
-            }, timeoutMs);
-            const listener = (message: any) => {
-              if (
-                message &&
-                message.type === 'file_operation_response' &&
-                message.responseToRequestId === requestId
-              ) {
-                clearTimeout(timer);
-                chrome.runtime.onMessage.removeListener(listener);
-                resolve(message.payload);
-              }
-            };
-            chrome.runtime.onMessage.addListener(listener);
-            chrome.runtime
-              .sendMessage({
-                type: 'forward_to_native',
-                message: {
-                  type: 'file_operation',
-                  requestId,
-                  payload: { action: 'analyzeTrace', traceFilePath: fullPath, insightName },
-                },
-              })
-              .catch((err) => {
-                clearTimeout(timer);
-                chrome.runtime.onMessage.removeListener(listener);
-                reject(err);
-              });
+          const resp = await requestNativeFileOperation({
+            timeoutMs,
+            requestPrefix: 'trace-analyze',
+            payload: { action: 'analyzeTrace', traceFilePath: fullPath, insightName },
           });
           if (resp && resp.success) {
             // Best-effort cleanup for temp files (Downloads paths are ignored by native cleaner)

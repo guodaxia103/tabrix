@@ -16,6 +16,7 @@
 import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
 import { TOOL_NAMES } from '@tabrix/shared';
+import { prepareFileViaNative } from './native-file';
 import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import {
   MessageTarget,
@@ -611,89 +612,22 @@ function toSilentGifFilename(rawName?: string): string {
   return `${AUTO_DOWNLOAD_SUBDIR}/${full}`;
 }
 
-function hasNativeFileBridge(): boolean {
-  const runtime = chrome?.runtime as any;
-  return Boolean(
-    runtime &&
-    typeof runtime.sendMessage === 'function' &&
-    runtime.onMessage &&
-    typeof runtime.onMessage.addListener === 'function' &&
-    typeof runtime.onMessage.removeListener === 'function',
-  );
-}
-
 async function saveGifViaNativeHost(opts: {
   dataUrl: string;
   fileName: string;
   timeoutMs?: number;
 }): Promise<{ filename: string; fullPath?: string; source: 'native' }> {
   const { dataUrl, fileName, timeoutMs = 15000 } = opts;
-  if (!hasNativeFileBridge()) {
-    throw new Error('Native file bridge is unavailable');
-  }
-  const requestId = `gif-native-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-
-  const payload = await new Promise<any>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      chrome.runtime.onMessage.removeListener(listener);
-      reject(new Error(`Native GIF save timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    const listener = (message: any) => {
-      if (
-        message &&
-        message.type === 'file_operation_response' &&
-        message.responseToRequestId === requestId
-      ) {
-        clearTimeout(timer);
-        chrome.runtime.onMessage.removeListener(listener);
-        if (message.error) {
-          reject(new Error(String(message.error)));
-          return;
-        }
-        resolve(message.payload || {});
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(listener);
-    chrome.runtime
-      .sendMessage({
-        type: 'forward_to_native',
-        message: {
-          type: 'file_operation',
-          requestId,
-          payload: {
-            action: 'prepareFile',
-            base64Data: dataUrl,
-            fileName,
-          },
-        },
-      })
-      .then((response: any) => {
-        if (response?.success !== true) {
-          clearTimeout(timer);
-          chrome.runtime.onMessage.removeListener(listener);
-          reject(
-            new Error(
-              `Native host unavailable: ${response?.error || 'forward_to_native rejected'}`,
-            ),
-          );
-        }
-      })
-      .catch((error) => {
-        clearTimeout(timer);
-        chrome.runtime.onMessage.removeListener(listener);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      });
+  const payload = await prepareFileViaNative({
+    base64Data: dataUrl,
+    fileName,
+    timeoutMs,
+    requestPrefix: 'gif-native',
   });
 
-  if (!payload?.success || !payload.filePath) {
-    throw new Error(`Native GIF save failed: ${payload?.error || 'missing filePath'}`);
-  }
-
   return {
-    filename: payload.fileName || fileName,
-    fullPath: payload.filePath,
+    filename: payload.filename || fileName,
+    fullPath: payload.fullPath,
     source: 'native',
   };
 }

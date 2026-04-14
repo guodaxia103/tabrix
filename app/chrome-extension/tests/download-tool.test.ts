@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleDownloadTool } from '@/entrypoints/background/tools/browser/download';
+import {
+  registerNativeBridgeForwarder,
+  registerNativeBridgeRequester,
+} from '@/entrypoints/background/native-bridge';
 
 type DownloadListener = (delta: chrome.downloads.DownloadDelta) => void;
 
@@ -16,6 +20,8 @@ describe('handleDownloadTool', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    registerNativeBridgeForwarder(null);
+    registerNativeBridgeRequester(null);
     changedListeners = [];
     createdListeners = [];
     determiningListeners = [];
@@ -114,6 +120,31 @@ describe('handleDownloadTool', () => {
     } as any;
   });
 
+  it('prefers the in-worker native request bridge over runtime message forwarding when available', async () => {
+    registerNativeBridgeRequester(async (request) => {
+      expect(request.requestId).toContain('download-native');
+      return {
+        success: true,
+        filePath: 'C:\\Temp\\chrome-mcp-uploads\\bridge.txt',
+        fileName: 'bridge.txt',
+        size: 456,
+      };
+    });
+
+    const result = await handleDownloadTool.execute({
+      url: 'https://example.com/file.txt',
+      filename: 'bridge.txt',
+      waitForComplete: true,
+      timeoutMs: 3000,
+    });
+
+    expect(result.isError).toBe(false);
+    const text = (result.content[0] as { text: string }).text;
+    const payload = JSON.parse(text);
+    expect(payload.download.savedPath).toContain('bridge.txt');
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+  });
+
   it('downloads via native host by default and returns savedPath', async () => {
     const result = await handleDownloadTool.execute({
       url: 'https://example.com/file.txt',
@@ -147,7 +178,7 @@ describe('handleDownloadTool', () => {
 
     expect(result.isError).toBe(true);
     const text = (result.content[0] as { text: string }).text;
-    expect(text).toContain('Native download timed out');
+    expect(text).toContain('Native file operation timed out');
   });
 
   it('does not fallback to browser download when native bridge is unavailable by default', async () => {

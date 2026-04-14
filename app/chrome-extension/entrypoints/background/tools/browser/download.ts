@@ -1,7 +1,7 @@
 import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
 import { TOOL_NAMES } from '@tabrix/shared';
-import { prepareFileViaNative } from './native-file';
+import { prepareFileViaNative, requestNativeFileOperation } from './native-file';
 
 interface HandleDownloadParams {
   filenameContains?: string;
@@ -258,25 +258,6 @@ function createDownloadErrorResponse(error: unknown): ToolResult {
   );
 }
 
-interface NativeFileResponsePayload {
-  success?: boolean;
-  filePath?: string;
-  fileName?: string;
-  size?: number;
-  error?: string;
-}
-
-function hasNativeFileBridge(): boolean {
-  const runtime = chrome?.runtime as any;
-  return Boolean(
-    runtime &&
-    typeof runtime.sendMessage === 'function' &&
-    runtime.onMessage &&
-    typeof runtime.onMessage.addListener === 'function' &&
-    typeof runtime.onMessage.removeListener === 'function',
-  );
-}
-
 async function downloadViaNativeHost(opts: {
   url: string;
   fileName: string;
@@ -291,76 +272,20 @@ async function downloadViaNativeHost(opts: {
   source: 'native';
 }> {
   const { url, fileName, timeoutMs } = opts;
-  if (!hasNativeFileBridge()) {
+  const payload = await requestNativeFileOperation({
+    timeoutMs,
+    requestPrefix: 'download-native',
+    unavailableMessage: 'Native host is not connected',
+    payload: {
+      action: 'prepareFile',
+      fileUrl: url,
+      fileName,
+    },
+  }).catch((error) => {
     throw new DownloadToolError(
-      'session',
-      'Native file bridge is unavailable in current runtime context',
+      classifyDownloadFailure(error).code,
+      error instanceof Error ? error.message : String(error),
     );
-  }
-  const requestId = `download-native-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-
-  const payload = await new Promise<NativeFileResponsePayload>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      chrome.runtime.onMessage.removeListener(listener);
-      reject(new DownloadToolError('timeout', `Native download timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    const listener = (message: any) => {
-      if (
-        message &&
-        message.type === 'file_operation_response' &&
-        message.responseToRequestId === requestId
-      ) {
-        clearTimeout(timer);
-        chrome.runtime.onMessage.removeListener(listener);
-        if (message.error) {
-          reject(
-            new DownloadToolError('session', `Native download failed: ${String(message.error)}`),
-          );
-          return;
-        }
-        resolve((message.payload || {}) as NativeFileResponsePayload);
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(listener);
-    chrome.runtime
-      .sendMessage({
-        type: 'forward_to_native',
-        message: {
-          type: 'file_operation',
-          requestId,
-          payload: {
-            action: 'prepareFile',
-            fileUrl: url,
-            fileName,
-          },
-        },
-      })
-      .then((response: any) => {
-        if (response?.success !== true) {
-          clearTimeout(timer);
-          chrome.runtime.onMessage.removeListener(listener);
-          reject(
-            new DownloadToolError(
-              'session',
-              `Native host is not connected: ${response?.error || 'forward_to_native rejected'}`,
-            ),
-          );
-        }
-      })
-      .catch((error) => {
-        clearTimeout(timer);
-        chrome.runtime.onMessage.removeListener(listener);
-        reject(
-          new DownloadToolError(
-            'session',
-            `Failed to contact native host for download: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          ),
-        );
-      });
   });
 
   if (!payload?.success || !payload.filePath) {

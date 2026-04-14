@@ -4,6 +4,7 @@ import { NATIVE_HOST, STORAGE_KEYS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '@/c
 import { normalizeNativeLastError } from '@/common/normalize-native-last-error';
 import { handleCallTool } from './tools';
 import { listPublished, getFlow } from './record-replay/flow-store';
+import { registerNativeBridgeForwarder, registerNativeBridgeRequester } from './native-bridge';
 import { acquireKeepalive } from './keepalive-manager';
 
 const LOG_PREFIX = '[NativeHost]';
@@ -34,6 +35,14 @@ let nextNativeConnectionId = 0;
 import type { ServerStatus } from '../../common/connection-state';
 
 let lastNativeError: string | null = null;
+const pendingNativeBridgeRequests = new Map<
+  string,
+  {
+    resolve: (payload: any) => void;
+    reject: (error: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }
+>();
 
 let currentServerStatus: ServerStatus = {
   isRunning: false,
@@ -634,6 +643,16 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
           void setLastNativeError(nativeError);
         }
       } else if (message.type === 'file_operation_response') {
+        const pendingRequestId = String(message.responseToRequestId || '');
+        const pendingRequest = pendingNativeBridgeRequests.get(pendingRequestId);
+        if (pendingRequest) {
+          pendingNativeBridgeRequests.delete(pendingRequestId);
+          if (message.error) {
+            pendingRequest.reject(new Error(String(message.error)));
+          } else {
+            pendingRequest.resolve((message.payload || {}) as any);
+          }
+        }
         // Forward file operation response back to the requesting tool
         chrome.runtime.sendMessage(message).catch(() => {
           // Ignore if no listeners
@@ -662,6 +681,12 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
       manualDisconnectConnectionId = null;
       nativePort = null;
       activeNativeConnectionId = 0;
+
+      for (const [requestId, pendingRequest] of pendingNativeBridgeRequests.entries()) {
+        pendingNativeBridgeRequests.delete(requestId);
+        clearTimeout(pendingRequest.timer);
+        pendingRequest.reject(new Error('Native connection disconnected during file operation'));
+      }
 
       if (wasManualDisconnect) {
         return;
@@ -694,10 +719,99 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
   }
 }
 
+async function forwardMessageToNativeHost(message: any): Promise<void> {
+  if (!nativePort) {
+    if (!autoConnectEnabled) {
+      await setNativeAutoConnectEnabled(true);
+    }
+    const ensured = await ensureNativeConnected('forward_to_native');
+    if (!ensured) {
+      const port = await getPreferredPort();
+      const connected = connectNativeHost(port);
+      if (!connected) {
+        throw new Error('Native host not connected');
+      }
+    }
+  }
+
+  if (nativePort && !currentServerStatus.isRunning) {
+    await waitForServerStatusSettle(800);
+  }
+
+  if (!nativePort) {
+    throw new Error('Native host not connected');
+  }
+
+  nativePort.postMessage(message);
+}
+
+async function requestMessageViaNativeHost(request: {
+  requestId: string;
+  payload: Record<string, unknown>;
+  timeoutMs: number;
+}): Promise<any> {
+  const { requestId, payload, timeoutMs } = request;
+
+  if (!nativePort) {
+    if (!autoConnectEnabled) {
+      await setNativeAutoConnectEnabled(true);
+    }
+    const ensured = await ensureNativeConnected('native_bridge_request');
+    if (!ensured) {
+      const port = await getPreferredPort();
+      const connected = connectNativeHost(port);
+      if (!connected) {
+        throw new Error('Native host not connected');
+      }
+    }
+  }
+
+  if (nativePort && !currentServerStatus.isRunning) {
+    await waitForServerStatusSettle(800);
+  }
+
+  if (!nativePort) {
+    throw new Error('Native host not connected');
+  }
+
+  return await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingNativeBridgeRequests.delete(requestId);
+      reject(new Error(`Native file operation timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    pendingNativeBridgeRequests.set(requestId, {
+      resolve: (responsePayload) => {
+        clearTimeout(timer);
+        resolve(responsePayload);
+      },
+      reject: (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+      timer,
+    });
+
+    try {
+      nativePort!.postMessage({
+        type: 'file_operation',
+        requestId,
+        payload,
+      });
+    } catch (error) {
+      pendingNativeBridgeRequests.delete(requestId);
+      clearTimeout(timer);
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
+  });
+}
+
 /**
  * Initialize native host listeners and load initial state
  */
 export const initNativeHostListener = () => {
+  registerNativeBridgeForwarder((message) => forwardMessageToNativeHost(message));
+  registerNativeBridgeRequester((request) => requestMessageViaNativeHost(request));
   // Initialize server status from storage
   loadServerStatus()
     .then((status) => {
@@ -953,32 +1067,16 @@ export const initNativeHostListener = () => {
 
     // Forward file operation messages to native host
     if (message.type === 'forward_to_native' && message.message) {
-      (async () => {
-        if (!nativePort) {
-          const ensured = await ensureNativeConnected('forward_to_native');
-          if (!ensured) {
-            const port = await getPreferredPort();
-            connectNativeHost(port);
-          }
-        }
-
-        if (nativePort && !currentServerStatus.isRunning) {
-          await waitForServerStatusSettle(800);
-        }
-
-        if (!nativePort) {
-          sendResponse({ success: false, error: 'Native host not connected' });
-          return;
-        }
-
-        nativePort.postMessage(message.message);
-        sendResponse({ success: true });
-      })().catch((error) => {
-        sendResponse({
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
+      forwardMessageToNativeHost(message.message)
+        .then(() => {
+          sendResponse({ success: true });
+        })
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
         });
-      });
       return true;
     }
   });
