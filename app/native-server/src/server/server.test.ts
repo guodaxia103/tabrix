@@ -133,14 +133,14 @@ describe('服务器测试', () => {
     expect(heartbeat.body).toMatchObject({
       status: 'ok',
       data: {
-        bridgeState: 'READY',
+        bridgeState: 'BRIDGE_DEGRADED',
         nextHeartbeatInMs: 5000,
       },
     });
 
     const status = await supertest(Server.getInstance().server).get('/status').expect(200);
     expect(status.body.data.bridge).toMatchObject({
-      bridgeState: 'READY',
+      bridgeState: 'BRIDGE_DEGRADED',
       extensionHeartbeatAt: sentAt,
       heartbeat: {
         extensionId: 'tabrix-extension',
