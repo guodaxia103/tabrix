@@ -56,7 +56,17 @@ interface ExtensionBuildInfo {
 }
 
 function normalizeComparablePath(filePath: string): string {
-  const normalized = path.normalize(filePath);
+  let resolvedPath = filePath;
+  try {
+    resolvedPath =
+      typeof fs.realpathSync.native === 'function'
+        ? fs.realpathSync.native(filePath)
+        : fs.realpathSync(filePath);
+  } catch {
+    resolvedPath = filePath;
+  }
+
+  const normalized = path.normalize(resolvedPath);
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
@@ -88,7 +98,9 @@ function parseExtensionBuildInfo(): ExtensionBuildInfo {
 
       const backgroundPath = path.join(buildDir, 'background.js');
       const manifestMtime = fs.statSync(manifestPath).mtimeMs;
-      const backgroundMtime = fs.existsSync(backgroundPath) ? fs.statSync(backgroundPath).mtimeMs : 0;
+      const backgroundMtime = fs.existsSync(backgroundPath)
+        ? fs.statSync(backgroundPath).mtimeMs
+        : 0;
       const builtAtMs = Math.max(manifestMtime, backgroundMtime || 0);
       const buildId = `${version || 'unknown'}-${(extensionId || 'unknown').slice(0, 8)}-${Math.floor(builtAtMs)}`;
 
@@ -117,9 +129,7 @@ function parseExtensionBuildInfo(): ExtensionBuildInfo {
   };
 }
 
-function resolveLoadedExtensionPath(
-  buildInfo: ExtensionBuildInfo,
-): DetectedExtensionOrigin | null {
+function resolveLoadedExtensionPath(buildInfo: ExtensionBuildInfo): DetectedExtensionOrigin | null {
   const discovered = discoverLoadedExtensionOrigins().detected;
   if (discovered.length === 0) return null;
   if (buildInfo.extensionId) {
