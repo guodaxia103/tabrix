@@ -16,14 +16,10 @@ import { computerTool } from '@/entrypoints/background/tools/browser/computer';
 import { clickTool } from '@/entrypoints/background/tools/browser/interaction';
 import { keyboardTool } from '@/entrypoints/background/tools/browser/keyboard';
 import { getMessage } from '@/utils/i18n';
+import { ensureContextMenuItem } from '../utils/context-menu';
 
 const CONTEXT_MENU_ID = 'element_marker_mark';
 let ensureContextMenuPromise: Promise<void> | null = null;
-
-function isDuplicateMenuError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /duplicate id/i.test(message);
-}
 
 /**
  * Extract error message from MCP tool result
@@ -56,29 +52,10 @@ async function ensureContextMenu() {
   ensureContextMenuPromise = (async () => {
     try {
       if (!(chrome as any).contextMenus?.create) return;
-      try {
-        await chrome.contextMenus.remove(CONTEXT_MENU_ID);
-      } catch {
-        // Ignore remove failures; menu may not exist yet.
-      }
-
-      try {
-        await chrome.contextMenus.create({
-          id: CONTEXT_MENU_ID,
-          title: getMessage('markerAddLabel'),
-          contexts: ['all'],
-        });
-      } catch (error) {
-        if (!isDuplicateMenuError(error)) throw error;
-        try {
-          await chrome.contextMenus.update(CONTEXT_MENU_ID, {
-            title: getMessage('markerAddLabel'),
-            contexts: ['all'],
-          });
-        } catch {
-          // Ignore update failure; duplicate menu already exists.
-        }
-      }
+      await ensureContextMenuItem(CONTEXT_MENU_ID, {
+        title: getMessage('markerAddLabel'),
+        contexts: ['all'],
+      });
     } catch {
       // Context menu creation can fail when contextMenus permission is missing.
     } finally {
