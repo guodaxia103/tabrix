@@ -325,6 +325,10 @@ export function describeBridgeStatusForDoctor(
   const bridgeState = typeof bridge?.bridgeState === 'string' ? bridge.bridgeState : undefined;
   const lastErrorCode =
     typeof bridge?.lastBridgeErrorCode === 'string' ? bridge.lastBridgeErrorCode : undefined;
+  const commandChannelConnected =
+    typeof bridge?.commandChannelConnected === 'boolean' ? bridge.commandChannelConnected : false;
+  const commandChannelType =
+    typeof bridge?.commandChannelType === 'string' ? bridge.commandChannelType : undefined;
 
   switch (bridgeState) {
     case 'READY':
@@ -368,14 +372,26 @@ export function describeBridgeStatusForDoctor(
     case 'BRIDGE_DEGRADED':
       return {
         summary: '桥接暂时降级',
-        hint: '最近曾经就绪，但当前心跳或附着状态正在波动。',
-        fix: [`${COMMAND_NAME} doctor --fix`, `${COMMAND_NAME} status`],
-        nextSteps: [`${COMMAND_NAME} doctor --fix`],
+        hint: commandChannelConnected
+          ? `扩展最近仍在通过${commandChannelType || '执行桥'}回连，但心跳或执行链路正在波动。`
+          : '浏览器与扩展最近有活动，但当前执行桥尚未 ready；通常需要等待重连或刷新扩展。',
+        fix: commandChannelConnected
+          ? [`${COMMAND_NAME} status`, `${COMMAND_NAME} smoke`, `${COMMAND_NAME} doctor --fix`]
+          : [
+              '在 chrome://extensions 中刷新 Tabrix 扩展',
+              `${COMMAND_NAME} status`,
+              `${COMMAND_NAME} doctor --fix`,
+            ],
+        nextSteps: commandChannelConnected
+          ? [`${COMMAND_NAME} status`, `${COMMAND_NAME} smoke`]
+          : ['在 chrome://extensions 中刷新 Tabrix 扩展', `${COMMAND_NAME} doctor --fix`],
       };
     case 'BRIDGE_BROKEN':
       return {
         summary: '桥接恢复失败',
-        hint: '自动恢复已尝试，但浏览器自动化仍未回到可执行状态。',
+        hint: commandChannelConnected
+          ? '自动恢复已尝试，但执行桥仍无法稳定执行浏览器命令。'
+          : '自动恢复已尝试，但浏览器自动化仍未回到可执行状态。',
         fix: [
           `${COMMAND_NAME} doctor --fix`,
           `${COMMAND_NAME} report --copy`,

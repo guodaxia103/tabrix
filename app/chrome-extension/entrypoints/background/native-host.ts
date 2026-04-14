@@ -1,3 +1,9 @@
+import type {
+  BridgeCommandMessage,
+  BridgeHeartbeatMessage,
+  BridgeHelloMessage,
+  BridgeResultMessage,
+} from '@tabrix/shared';
 import { NativeMessageType } from '@tabrix/shared';
 import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import { NATIVE_HOST, STORAGE_KEYS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '@/common/constants';
@@ -20,6 +26,7 @@ const RECONNECT_MAX_DELAY_MS = 60_000;
 const RECONNECT_MAX_FAST_ATTEMPTS = 8;
 const RECONNECT_COOLDOWN_DELAY_MS = 5 * 60_000;
 const HEARTBEAT_INTERVAL_MS = 5_000;
+const BRIDGE_WS_BACKOFF_MS = [1_000, 2_000, 5_000, 10_000] as const;
 
 // ==================== Auto-connect State ====================
 
@@ -51,6 +58,10 @@ let currentServerStatus: ServerStatus = {
   lastUpdated: Date.now(),
 };
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let bridgeSocket: WebSocket | null = null;
+let bridgeSocketConnectionId: string | null = null;
+let bridgeSocketReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let bridgeSocketReconnectAttempt = 0;
 
 /**
  * Save server status to chrome.storage
@@ -429,7 +440,9 @@ async function collectHeartbeatSnapshot() {
 
   return {
     extensionId: chrome.runtime.id,
-    connectionId: activeNativeConnectionId ? String(activeNativeConnectionId) : null,
+    connectionId:
+      bridgeSocketConnectionId ??
+      (activeNativeConnectionId ? String(activeNativeConnectionId) : null),
     sentAt: Date.now(),
     nativeConnected: nativePort !== null,
     browserVersion: navigator.userAgent,
@@ -439,11 +452,217 @@ async function collectHeartbeatSnapshot() {
   };
 }
 
+function clearBridgeSocketReconnectTimer(): void {
+  if (!bridgeSocketReconnectTimer) return;
+  clearTimeout(bridgeSocketReconnectTimer);
+  bridgeSocketReconnectTimer = null;
+}
+
+async function sendBridgeSocketMessage(message: object): Promise<void> {
+  if (!bridgeSocket || bridgeSocket.readyState !== WebSocket.OPEN) {
+    throw new Error('Bridge websocket not connected');
+  }
+  bridgeSocket.send(JSON.stringify(message));
+}
+
+async function postFileOperationViaHttp(request: {
+  requestId: string;
+  payload: Record<string, unknown>;
+  timeoutMs: number;
+}): Promise<any> {
+  const port = await getPreferredPort();
+  const response = await fetch(`http://127.0.0.1:${port}/bridge/file-operation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requestId: request.requestId,
+      payload: request.payload,
+    }),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Bridge file operation failed: HTTP ${response.status}`);
+  }
+
+  const body = (await response.json()) as
+    | {
+        status?: string;
+        payload?: any;
+        message?: string;
+      }
+    | undefined;
+  if (body?.status !== 'success') {
+    throw new Error(body?.message || 'Bridge file operation failed');
+  }
+  return body?.payload;
+}
+
+async function handleBridgeCommandMessage(message: BridgeCommandMessage): Promise<void> {
+  const sendResult = async (result: BridgeResultMessage): Promise<void> => {
+    try {
+      await sendBridgeSocketMessage(result);
+    } catch (error) {
+      console.warn(`${LOG_PREFIX} Failed to send bridge result`, error);
+    }
+  };
+
+  try {
+    if (message.command.action === 'call_tool') {
+      const result = await handleCallTool(message.command.payload);
+      await sendResult({
+        type: 'result',
+        requestId: message.requestId,
+        connectionId: bridgeSocketConnectionId || message.connectionId,
+        extensionId: chrome.runtime.id,
+        sentAt: Date.now(),
+        success: true,
+        payload: {
+          status: 'success',
+          message: SUCCESS_MESSAGES.TOOL_EXECUTED,
+          data: result,
+        },
+      });
+      return;
+    }
+
+    if (message.command.action === 'list_published_flows') {
+      const published = await listPublished();
+      const items = [] as any[];
+      for (const entry of published) {
+        const flow = await getFlow(entry.id);
+        if (!flow) continue;
+        items.push({
+          id: entry.id,
+          slug: entry.slug,
+          version: entry.version,
+          name: entry.name,
+          description: entry.description || flow.description || '',
+          variables: flow.variables || [],
+          meta: flow.meta || {},
+        });
+      }
+
+      await sendResult({
+        type: 'result',
+        requestId: message.requestId,
+        connectionId: bridgeSocketConnectionId || message.connectionId,
+        extensionId: chrome.runtime.id,
+        sentAt: Date.now(),
+        success: true,
+        payload: {
+          status: 'success',
+          items,
+        },
+      });
+      return;
+    }
+
+    throw new Error(`Unsupported bridge command action: ${message.command.action}`);
+  } catch (error) {
+    await sendResult({
+      type: 'result',
+      requestId: message.requestId,
+      connectionId: bridgeSocketConnectionId || message.connectionId,
+      extensionId: chrome.runtime.id,
+      sentAt: Date.now(),
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function scheduleBridgeSocketReconnect(reason: string): void {
+  if (bridgeSocketReconnectTimer) return;
+  const delay =
+    BRIDGE_WS_BACKOFF_MS[Math.min(bridgeSocketReconnectAttempt, BRIDGE_WS_BACKOFF_MS.length - 1)];
+  bridgeSocketReconnectTimer = setTimeout(() => {
+    bridgeSocketReconnectTimer = null;
+    bridgeSocketReconnectAttempt += 1;
+    void connectBridgeSocket(`retry:${reason}`).catch(() => {});
+  }, delay);
+}
+
+async function connectBridgeSocket(trigger: string): Promise<void> {
+  if (bridgeSocket && bridgeSocket.readyState === WebSocket.OPEN) {
+    return;
+  }
+  if (bridgeSocket && bridgeSocket.readyState === WebSocket.CONNECTING) {
+    return;
+  }
+
+  const port = await getPreferredPort();
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/bridge/ws`);
+  bridgeSocket = socket;
+  bridgeSocketConnectionId = crypto.randomUUID();
+
+  socket.addEventListener('open', () => {
+    if (bridgeSocket !== socket) return;
+    clearBridgeSocketReconnectTimer();
+    bridgeSocketReconnectAttempt = 0;
+
+    const hello: BridgeHelloMessage = {
+      type: 'hello',
+      connectionId: bridgeSocketConnectionId!,
+      extensionId: chrome.runtime.id,
+      sentAt: Date.now(),
+      browserVersion: navigator.userAgent,
+      nativeConnected: nativePort !== null,
+      autoConnectEnabled,
+    };
+
+    void sendBridgeSocketMessage(hello).catch((error) => {
+      console.warn(`${LOG_PREFIX} Failed to send bridge hello (${trigger})`, error);
+    });
+    void postBridgeHeartbeat('bridge_ws_open');
+  });
+
+  socket.addEventListener('message', (event) => {
+    try {
+      const parsed = JSON.parse(String(event.data)) as BridgeCommandMessage;
+      if (parsed?.type === 'command') {
+        void handleBridgeCommandMessage(parsed);
+      }
+    } catch (error) {
+      console.warn(`${LOG_PREFIX} Failed to parse bridge command`, error);
+    }
+  });
+
+  const handleSocketLoss = () => {
+    if (bridgeSocket !== socket) return;
+    bridgeSocket = null;
+    bridgeSocketConnectionId = null;
+    scheduleBridgeSocketReconnect(trigger);
+  };
+
+  socket.addEventListener('close', handleSocketLoss);
+  socket.addEventListener('error', handleSocketLoss);
+}
+
 async function postBridgeHeartbeat(reason: string): Promise<void> {
+  const payload = await collectHeartbeatSnapshot();
+  if (bridgeSocket && bridgeSocket.readyState === WebSocket.OPEN && bridgeSocketConnectionId) {
+    const heartbeatMessage: BridgeHeartbeatMessage = {
+      type: 'heartbeat',
+      connectionId: bridgeSocketConnectionId,
+      extensionId: payload.extensionId,
+      sentAt: payload.sentAt,
+      nativeConnected: payload.nativeConnected,
+      browserVersion: payload.browserVersion,
+      tabCount: payload.tabCount,
+      windowCount: payload.windowCount,
+      autoConnectEnabled: payload.autoConnectEnabled,
+    };
+    try {
+      await sendBridgeSocketMessage(heartbeatMessage);
+    } catch {
+      // Ignore and still try HTTP heartbeat below for compatibility.
+    }
+  }
+
   const port = await getPreferredPort();
   if (!port) return;
 
-  const payload = await collectHeartbeatSnapshot();
   try {
     const response = await fetch(`http://127.0.0.1:${port}/bridge/heartbeat`, {
       method: 'POST',
@@ -498,7 +717,11 @@ async function tryRecoverAddressInUseStatus(nativeError: string): Promise<boolea
 }
 
 function getEffectiveServerStatus(): ServerStatus {
-  if (!nativePort && currentServerStatus.isRunning) {
+  const commandChannelReady =
+    bridgeSocket?.readyState === WebSocket.OPEN ||
+    currentServerStatus.bridge?.commandChannelConnected === true;
+
+  if (!nativePort && !commandChannelReady && currentServerStatus.isRunning) {
     return {
       isRunning: false,
       port: currentServerStatus.port,
@@ -696,6 +919,7 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         await saveServerStatus(currentServerStatus);
         broadcastServerStatusChange(currentServerStatus);
         pulseBridgeHeartbeat('server_started');
+        void connectBridgeSocket('server_started').catch(() => {});
         // Server is confirmed running - now we can reset reconnect state
         resetReconnectState();
         console.log(`${SUCCESS_MESSAGES.SERVER_STARTED} on port ${port}`);
@@ -721,6 +945,7 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         await saveServerStatus(currentServerStatus);
         broadcastServerStatusChange(currentServerStatus);
         pulseBridgeHeartbeat('remote_access_changed');
+        void connectBridgeSocket('remote_access_changed').catch(() => {});
         console.log(
           `[NativeHost] Remote access ${message.payload?.enabled ? 'enabled' : 'disabled'}, host=${message.payload?.host}`,
         );
@@ -895,14 +1120,53 @@ async function requestMessageViaNativeHost(request: {
   });
 }
 
+function isBridgeSocketReady(): boolean {
+  return bridgeSocket !== null && bridgeSocket.readyState === WebSocket.OPEN;
+}
+
+async function forwardMessageToAvailableBridge(message: any): Promise<void> {
+  if (nativePort) {
+    await forwardMessageToNativeHost(message);
+    return;
+  }
+
+  await postFileOperationViaHttp({
+    requestId:
+      typeof message?.requestId === 'string' ? message.requestId : `bridge-forward-${Date.now()}`,
+    payload:
+      message && typeof message.payload === 'object' && message.payload !== null
+        ? message.payload
+        : {},
+    timeoutMs: 30000,
+  });
+}
+
+async function requestMessageViaAvailableBridge(request: {
+  requestId: string;
+  payload: Record<string, unknown>;
+  timeoutMs: number;
+}): Promise<any> {
+  if (nativePort) {
+    return await requestMessageViaNativeHost(request);
+  }
+
+  if (isBridgeSocketReady() || currentServerStatus.isRunning) {
+    return await postFileOperationViaHttp(request);
+  }
+
+  return await requestMessageViaNativeHost(request);
+}
+
 /**
  * Initialize native host listeners and load initial state
  */
 export const initNativeHostListener = () => {
-  registerNativeBridgeForwarder((message) => forwardMessageToNativeHost(message));
-  registerNativeBridgeRequester((request) => requestMessageViaNativeHost(request));
+  registerNativeBridgeForwarder((message) => forwardMessageToAvailableBridge(message));
+  registerNativeBridgeRequester((request) => requestMessageViaAvailableBridge(request));
   stopHeartbeatLoop();
   ensureHeartbeatLoop();
+  clearBridgeSocketReconnectTimer();
+  void connectBridgeSocket('sw_init').catch(() => {});
   pulseBridgeHeartbeat('sw_init');
   // Initialize server status from storage
   loadServerStatus()
@@ -938,11 +1202,13 @@ export const initNativeHostListener = () => {
   // Auto-connect on Chrome browser startup
   chrome.runtime.onStartup.addListener(() => {
     void ensureNativeConnected('onStartup').catch(() => {});
+    void connectBridgeSocket('onStartup').catch(() => {});
   });
 
   // Auto-connect on extension install/update
   chrome.runtime.onInstalled.addListener(() => {
     void ensureNativeConnected('onInstalled').catch(() => {});
+    void connectBridgeSocket('onInstalled').catch(() => {});
   });
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

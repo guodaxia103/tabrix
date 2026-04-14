@@ -34,6 +34,8 @@ import { registerAgentRoutes } from './routes';
 import { sessionManager } from '../execution/session-manager';
 import { SessionRegistry, type ConnectedClient, type TransportsSnapshot } from './session-registry';
 import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from './bridge-state';
+import { bridgeCommandChannel } from './bridge-command-channel';
+import fileHandler from '../file-handler';
 
 // Compatibility guard:
 // @hono/node-server may call socket.destroySoon() while draining incoming requests.
@@ -76,6 +78,11 @@ interface BridgeHeartbeatPayload {
   tabCount?: unknown;
   windowCount?: unknown;
   autoConnectEnabled?: unknown;
+}
+
+interface BridgeFileOperationPayload {
+  requestId?: unknown;
+  payload?: unknown;
 }
 
 interface ServerStatusSnapshot {
@@ -155,6 +162,7 @@ export class Server {
 
   constructor() {
     this.fastify = Fastify({ logger: SERVER_CONFIG.LOGGER_ENABLED });
+    bridgeCommandChannel.attach(this.fastify.server);
     this.agentStreamManager = new AgentStreamManager();
     this.agentChatService = new AgentChatService({
       engines: [new CodexEngine(), new ClaudeEngine()],
@@ -452,6 +460,39 @@ export class Server {
         });
       },
     );
+
+    this.fastify.post(
+      '/bridge/file-operation',
+      async (
+        request: FastifyRequest<{ Body: BridgeFileOperationPayload }>,
+        reply: FastifyReply,
+      ) => {
+        if (!LOCALHOST_IPS.has(request.ip)) {
+          return reply.status(403).send({
+            status: 'error',
+            message: 'Forbidden – bridge file operations are only available from localhost.',
+          });
+        }
+
+        try {
+          const body = (request.body || {}) as BridgeFileOperationPayload;
+          const payload =
+            body && typeof body.payload === 'object' && body.payload !== null ? body.payload : {};
+          const result = await fileHandler.handleFileRequest(payload);
+          return reply.status(HTTP_STATUS.OK).send({
+            status: 'success',
+            requestId:
+              typeof body.requestId === 'string' && body.requestId.trim() ? body.requestId : null,
+            payload: result,
+          });
+        } catch (error) {
+          return reply.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).send({
+            status: 'error',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      },
+    );
   }
 
   // ============================================================
@@ -614,6 +655,7 @@ export class Server {
       this.listeningPort = port;
       this.isRunning = true;
       this.bridgeState.startWatching();
+      bridgeCommandChannel.attach(this.fastify.server);
     } catch (err) {
       this.listeningPort = null;
       this.isRunning = false;
@@ -636,6 +678,7 @@ export class Server {
       this.bridgeState.stopWatching();
       this.bridgeState.reset();
       this.clearNativeHost();
+      bridgeCommandChannel.reset();
     } catch (err) {
       this.listeningPort = null;
       this.isRunning = false;
@@ -643,6 +686,7 @@ export class Server {
       this.bridgeState.stopWatching();
       this.bridgeState.reset();
       this.clearNativeHost();
+      bridgeCommandChannel.reset();
       throw err;
     }
   }
@@ -664,6 +708,7 @@ export class Server {
     }
 
     this.fastify = Fastify({ logger: SERVER_CONFIG.LOGGER_ENABLED });
+    bridgeCommandChannel.attach(this.fastify.server);
     this.setupPlugins();
     this.setupRoutes();
 

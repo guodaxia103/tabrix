@@ -426,7 +426,28 @@ function describeBridgeFromStatus(snapshot?: Record<string, unknown>): string {
   const bridgeState = typeof bridge?.bridgeState === 'string' ? bridge.bridgeState : 'unknown';
   const nativeAttached =
     typeof bridge?.nativeHostAttached === 'boolean' ? bridge.nativeHostAttached : undefined;
-  return `bridge=${bridgeState}${typeof nativeAttached === 'boolean' ? `; nativeHostAttached=${nativeAttached}` : ''}`;
+  const commandChannelConnected =
+    typeof bridge?.commandChannelConnected === 'boolean'
+      ? bridge.commandChannelConnected
+      : undefined;
+  const commandChannelType =
+    typeof bridge?.commandChannelType === 'string' ? bridge.commandChannelType : undefined;
+  const activeConnectionId =
+    typeof bridge?.activeConnectionId === 'string' ? bridge.activeConnectionId : undefined;
+
+  return [
+    `bridge=${bridgeState}`,
+    typeof nativeAttached === 'boolean' ? `nativeHostAttached=${nativeAttached}` : null,
+    typeof commandChannelConnected === 'boolean'
+      ? `commandChannelConnected=${commandChannelConnected}`
+      : null,
+    commandChannelConnected && commandChannelType
+      ? `commandChannelType=${commandChannelType}`
+      : null,
+    commandChannelConnected && activeConnectionId ? `connectionId=${activeConnectionId}` : null,
+  ]
+    .filter(Boolean)
+    .join('; ');
 }
 
 async function probeStatus(

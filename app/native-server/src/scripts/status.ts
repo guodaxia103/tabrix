@@ -21,6 +21,10 @@ interface StatusPayload {
       browserProcessRunning?: boolean;
       extensionHeartbeatAt?: number | null;
       nativeHostAttached?: boolean;
+      commandChannelConnected?: boolean;
+      commandChannelType?: string | null;
+      activeConnectionId?: string | null;
+      lastCommandChannelAt?: number | null;
       lastBridgeErrorCode?: string | null;
       lastBridgeErrorMessage?: string | null;
     };
@@ -109,6 +113,20 @@ function describeBridge(payload: StatusPayload['data']['bridge']): string[] {
     lines.push(`Extension heartbeat: ${new Date(payload.extensionHeartbeatAt).toLocaleString()}`);
   } else {
     lines.push('Extension heartbeat: missing');
+  }
+
+  lines.push(
+    `Command channel: ${
+      payload.commandChannelConnected
+        ? `${payload.commandChannelType || 'connected'}${payload.activeConnectionId ? ` (${payload.activeConnectionId})` : ''}`
+        : 'missing'
+    }`,
+  );
+
+  if (typeof payload.lastCommandChannelAt === 'number') {
+    lines.push(
+      `Command channel last seen: ${new Date(payload.lastCommandChannelAt).toLocaleString()}`,
+    );
   }
 
   if (payload.lastBridgeErrorCode || payload.lastBridgeErrorMessage) {

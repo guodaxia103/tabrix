@@ -22,6 +22,10 @@ export interface BridgeRuntimeSnapshot {
     autoConnectEnabled: boolean | null;
   };
   nativeHostAttached: boolean;
+  commandChannelConnected: boolean;
+  commandChannelType: string | null;
+  activeConnectionId: string | null;
+  lastCommandChannelAt: number | null;
   lastBridgeReadyAt: number | null;
   lastBridgeErrorCode: string | null;
   lastBridgeErrorMessage: string | null;
@@ -99,6 +103,10 @@ export class BridgeStateManager {
       autoConnectEnabled: null,
     },
     nativeHostAttached: false,
+    commandChannelConnected: false,
+    commandChannelType: null,
+    activeConnectionId: null,
+    lastCommandChannelAt: null,
     lastBridgeReadyAt: null,
     lastBridgeErrorCode: null,
     lastBridgeErrorMessage: null,
@@ -126,6 +134,10 @@ export class BridgeStateManager {
         autoConnectEnabled: null,
       },
       nativeHostAttached: false,
+      commandChannelConnected: false,
+      commandChannelType: null,
+      activeConnectionId: null,
+      lastCommandChannelAt: null,
       lastBridgeReadyAt: null,
       lastBridgeErrorCode: null,
       lastBridgeErrorMessage: null,
@@ -172,6 +184,52 @@ export class BridgeStateManager {
       this.snapshot.lastBridgeErrorCode = null;
       this.snapshot.lastBridgeErrorMessage = null;
     }
+    this.refreshDerivedState();
+  }
+
+  setCommandChannelConnected(
+    connected: boolean,
+    options: {
+      type?: string | null;
+      connectionId?: string | null;
+      seenAt?: number | null;
+    } = {},
+  ): void {
+    this.snapshot.commandChannelConnected = connected;
+    if (connected) {
+      this.snapshot.commandChannelType =
+        this.normalizeNullableString(options.type) ??
+        this.snapshot.commandChannelType ??
+        'websocket';
+      this.snapshot.activeConnectionId = this.normalizeNullableString(options.connectionId);
+      this.snapshot.lastCommandChannelAt =
+        this.normalizeNullableNumber(options.seenAt) ?? Date.now();
+      this.snapshot.lastBridgeReadyAt = Date.now();
+      this.snapshot.lastBridgeErrorCode = null;
+      this.snapshot.lastBridgeErrorMessage = null;
+    } else {
+      this.snapshot.commandChannelType = null;
+      this.snapshot.activeConnectionId = null;
+    }
+    this.refreshDerivedState();
+  }
+
+  recordCommandChannelActivity(
+    options: {
+      type?: string | null;
+      connectionId?: string | null;
+      seenAt?: number | null;
+    } = {},
+  ): void {
+    this.snapshot.commandChannelConnected = true;
+    this.snapshot.commandChannelType =
+      this.normalizeNullableString(options.type) ?? this.snapshot.commandChannelType ?? 'websocket';
+    this.snapshot.activeConnectionId =
+      this.normalizeNullableString(options.connectionId) ?? this.snapshot.activeConnectionId;
+    this.snapshot.lastCommandChannelAt = this.normalizeNullableNumber(options.seenAt) ?? Date.now();
+    this.snapshot.lastBridgeReadyAt = Date.now();
+    this.snapshot.lastBridgeErrorCode = null;
+    this.snapshot.lastBridgeErrorMessage = null;
     this.refreshDerivedState();
   }
 
@@ -247,7 +305,8 @@ export class BridgeStateManager {
     const heartbeatFresh =
       this.snapshot.extensionHeartbeatAt !== null &&
       now - this.snapshot.extensionHeartbeatAt <= HEARTBEAT_TIMEOUT_MS;
-    const bridgeReady = this.snapshot.nativeHostAttached && heartbeatFresh;
+    const commandReady = this.snapshot.commandChannelConnected || this.snapshot.nativeHostAttached;
+    const bridgeReady = commandReady && heartbeatFresh;
 
     if (this.snapshot.recoveryInFlight) {
       this.snapshot.bridgeState = 'BRIDGE_CONNECTING';
@@ -264,7 +323,10 @@ export class BridgeStateManager {
       return;
     }
 
-    if (heartbeatFresh && !this.snapshot.nativeHostAttached) {
+    if (
+      (heartbeatFresh && !commandReady) ||
+      (this.snapshot.commandChannelConnected && !heartbeatFresh)
+    ) {
       this.snapshot.bridgeState = 'BRIDGE_DEGRADED';
       return;
     }
@@ -272,6 +334,9 @@ export class BridgeStateManager {
     const recentlyReady =
       this.snapshot.lastBridgeReadyAt !== null &&
       now - this.snapshot.lastBridgeReadyAt <= DEGRADED_WINDOW_MS;
+    const recentlyHadCommandChannel =
+      this.snapshot.lastCommandChannelAt !== null &&
+      now - this.snapshot.lastCommandChannelAt <= DEGRADED_WINDOW_MS;
     const recoveryFailedAfterReady =
       this.snapshot.lastRecoveryAt !== null &&
       this.snapshot.lastBridgeReadyAt !== null &&
@@ -283,7 +348,7 @@ export class BridgeStateManager {
       return;
     }
 
-    if (recentlyReady) {
+    if (recentlyReady || recentlyHadCommandChannel) {
       this.snapshot.bridgeState = 'BRIDGE_DEGRADED';
       return;
     }

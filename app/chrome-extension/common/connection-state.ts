@@ -41,6 +41,10 @@ export interface ServerStatus {
       autoConnectEnabled?: boolean | null;
     };
     nativeHostAttached?: boolean;
+    commandChannelConnected?: boolean;
+    commandChannelType?: string | null;
+    activeConnectionId?: string | null;
+    lastCommandChannelAt?: number | null;
     lastBridgeReadyAt?: number | null;
     lastBridgeErrorCode?: string | null;
     lastBridgeErrorMessage?: string | null;

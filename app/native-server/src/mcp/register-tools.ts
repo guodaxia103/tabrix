@@ -11,6 +11,7 @@ import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { spawn, spawnSync } from 'node:child_process';
 import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from '../server/bridge-state';
+import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { collectRuntimeConsistencySnapshot } from '../scripts/runtime-consistency';
 
 /**
@@ -147,6 +148,35 @@ function isHeartbeatFresh(snapshot: BridgeRuntimeSnapshot): boolean {
   return (
     typeof snapshot.extensionHeartbeatAt === 'number' &&
     Date.now() - snapshot.extensionHeartbeatAt <= BRIDGE_HEARTBEAT_WAIT_MS
+  );
+}
+
+function hasExecutableBridge(snapshot: BridgeRuntimeSnapshot): boolean {
+  return snapshot.commandChannelConnected || snapshot.nativeHostAttached;
+}
+
+async function invokeExtensionCommand(
+  action: 'call_tool' | 'list_published_flows',
+  payload: any,
+  timeoutMs: number,
+): Promise<any> {
+  const snapshot = getBridgeSnapshot();
+  if (snapshot.commandChannelConnected && bridgeCommandChannel.isConnected()) {
+    return await bridgeCommandChannel.sendCommand(action, payload, timeoutMs);
+  }
+
+  if (action === 'call_tool') {
+    return await nativeMessagingHostInstance.sendRequestToExtensionAndWait(
+      payload,
+      NativeMessageType.CALL_TOOL,
+      timeoutMs,
+    );
+  }
+
+  return await nativeMessagingHostInstance.sendRequestToExtensionAndWait(
+    {},
+    'rr_list_published_flows',
+    timeoutMs,
   );
 }
 
@@ -356,17 +386,17 @@ function buildBridgeFailurePayload(
     };
   }
 
-  if (!snapshot.nativeHostAttached) {
+  if (!hasExecutableBridge(snapshot)) {
     return {
-      code: 'TABRIX_NATIVE_HOST_ATTACH_TIMEOUT',
-      message: 'Tabrix 扩展已恢复心跳，但 Native Host 仍未附着完成。',
+      code: 'TABRIX_BRIDGE_COMMAND_CHANNEL_MISSING',
+      message: 'Tabrix 扩展已恢复心跳，但浏览器执行通道尚未就绪。',
       bridgeState: snapshot.bridgeState,
       recoveryAttempted,
-      suggestions: ['在扩展里执行一次连接', '运行 tabrix doctor --fix 后重试'],
+      suggestions: ['刷新扩展或等待扩展自动重连后重试', '运行 tabrix doctor --fix 后重试'],
     };
   }
 
-  if (recoveryAttempted && snapshot.bridgeState === 'READY' && snapshot.nativeHostAttached) {
+  if (recoveryAttempted && snapshot.bridgeState === 'READY' && hasExecutableBridge(snapshot)) {
     return {
       code: 'TABRIX_BRIDGE_RECOVERY_FAILED',
       message: 'Tabrix 已完成桥接恢复，但原始浏览器操作仍未成功执行。',
@@ -411,7 +441,7 @@ async function waitForBridgeRecoveryReady(totalBudgetMs: number): Promise<boolea
     0,
     Math.min(BRIDGE_ATTACH_WAIT_MS, totalBudgetMs - (Date.now() - startedAt)),
   );
-  return await waitForCondition(() => getBridgeSnapshot().nativeHostAttached, attachBudget);
+  return await waitForCondition(() => hasExecutableBridge(getBridgeSnapshot()), attachBudget);
 }
 
 async function attemptBridgeRecovery(
@@ -515,7 +545,7 @@ async function callWithBridgeRecovery(
       precheckSnapshot,
     );
     const afterRecovery = getBridgeSnapshot();
-    if (afterRecovery.bridgeState !== 'READY' || !afterRecovery.nativeHostAttached) {
+    if (afterRecovery.bridgeState !== 'READY' || !hasExecutableBridge(afterRecovery)) {
       const failure = buildBridgeFailurePayload(afterRecovery, true);
       return {
         response: { status: 'error', error: formatRecoveryError(failure, recovery) },
@@ -576,11 +606,7 @@ async function callWithBridgeRecovery(
 
 async function listDynamicFlowTools(): Promise<Tool[]> {
   try {
-    const response = await nativeMessagingHostInstance.sendRequestToExtensionAndWait(
-      {},
-      'rr_list_published_flows',
-      20000,
-    );
+    const response = await invokeExtensionCommand('list_published_flows', {}, 20000);
     if (response && response.status === 'success' && Array.isArray(response.items)) {
       const tools: Tool[] = [];
       for (const item of response.items) {
@@ -690,11 +716,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     if (name && name.startsWith('flow.')) {
       // We need to resolve flow by slug to ID
       try {
-        const resp = await nativeMessagingHostInstance.sendRequestToExtensionAndWait(
-          {},
-          'rr_list_published_flows',
-          20000,
-        );
+        const resp = await invokeExtensionCommand('list_published_flows', {}, 20000);
         const items = (resp && resp.items) || [];
         const slug = name.slice('flow.'.length);
         const match = items.find((it: any) => it.slug === slug);
@@ -702,9 +724,9 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         const flowArgs = { flowId: match.id, args };
         const { response: proxyRes, bridgeFailure } = await callWithBridgeRecovery(
           () =>
-            nativeMessagingHostInstance.sendRequestToExtensionAndWait(
+            invokeExtensionCommand(
+              'call_tool',
               { name: 'record_replay_flow_run', args: flowArgs },
-              NativeMessageType.CALL_TOOL,
               120000,
             ),
           `flow:${name}`,
@@ -759,13 +781,13 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     // 发送请求到Chrome扩展并等待响应
     const { response, bridgeFailure } = await callWithBridgeRecovery(
       () =>
-        nativeMessagingHostInstance.sendRequestToExtensionAndWait(
+        invokeExtensionCommand(
+          'call_tool',
           {
             name,
             args,
           },
-          NativeMessageType.CALL_TOOL,
-          120000, // 延长到 120 秒，避免性能分析等长任务超时
+          120000,
         ),
       `tool:${name}`,
     );

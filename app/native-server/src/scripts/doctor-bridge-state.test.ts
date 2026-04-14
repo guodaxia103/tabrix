@@ -37,4 +37,31 @@ describe('describeBridgeStatusForDoctor', () => {
     expect(guidance.fix).toHaveLength(0);
     expect(guidance.nextSteps).toHaveLength(0);
   });
+
+  it('describes degraded state as command-channel issue when heartbeat exists but channel is missing', () => {
+    const guidance = describeBridgeStatusForDoctor({
+      bridge: {
+        bridgeState: 'BRIDGE_DEGRADED',
+        commandChannelConnected: false,
+      },
+    });
+
+    expect(guidance.summary).toBe('桥接暂时降级');
+    expect(guidance.hint).toContain('执行桥尚未 ready');
+    expect(guidance.fix).toContain('在 chrome://extensions 中刷新 Tabrix 扩展');
+  });
+
+  it('describes degraded state as transient when command channel is still connected', () => {
+    const guidance = describeBridgeStatusForDoctor({
+      bridge: {
+        bridgeState: 'BRIDGE_DEGRADED',
+        commandChannelConnected: true,
+        commandChannelType: 'websocket',
+      },
+    });
+
+    expect(guidance.summary).toBe('桥接暂时降级');
+    expect(guidance.hint).toContain('websocket');
+    expect(guidance.nextSteps).toContain('tabrix smoke');
+  });
 });

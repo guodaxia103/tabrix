@@ -156,7 +156,62 @@ function createChromeHarness(
   };
 }
 
+function createMockWebSocketHarness() {
+  const instances: MockWebSocket[] = [];
+
+  class MockWebSocket {
+    static CONNECTING = 0;
+    static OPEN = 1;
+    static CLOSING = 2;
+    static CLOSED = 3;
+
+    readyState = MockWebSocket.CONNECTING;
+    sent: string[] = [];
+    private listeners = new Map<string, Array<(event?: any) => void>>();
+
+    constructor(public readonly url: string) {
+      instances.push(this);
+    }
+
+    addEventListener(type: string, listener: (event?: any) => void) {
+      const list = this.listeners.get(type) || [];
+      list.push(listener);
+      this.listeners.set(type, list);
+    }
+
+    send(payload: string) {
+      this.sent.push(payload);
+    }
+
+    close() {
+      this.readyState = MockWebSocket.CLOSED;
+      this.emit('close');
+    }
+
+    emitOpen() {
+      this.readyState = MockWebSocket.OPEN;
+      this.emit('open');
+    }
+
+    emitMessage(payload: any) {
+      this.emit('message', { data: JSON.stringify(payload) });
+    }
+
+    emit(type: string, event?: any) {
+      const list = this.listeners.get(type) || [];
+      list.forEach((listener) => listener(event));
+    }
+  }
+
+  return {
+    MockWebSocket,
+    instances,
+  };
+}
+
 describe('native host reconnect behavior', () => {
+  const originalWebSocket = (globalThis as any).WebSocket;
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
@@ -180,6 +235,11 @@ describe('native host reconnect behavior', () => {
     vi.restoreAllMocks();
     vi.resetModules();
     delete (globalThis as any).fetch;
+    if (originalWebSocket) {
+      (globalThis as any).WebSocket = originalWebSocket;
+    } else {
+      delete (globalThis as any).WebSocket;
+    }
   });
 
   it('reconnects after unexpected native disconnect and preserves last error', async () => {
@@ -498,5 +558,82 @@ describe('native host reconnect behavior', () => {
         headers: { 'Content-Type': 'application/json' },
       }),
     );
+  });
+
+  it('opens websocket bridge and sends hello plus heartbeat', async () => {
+    const firstPort = createMockPort();
+    const harness = createChromeHarness([firstPort]);
+    const wsHarness = createMockWebSocketHarness();
+    (globalThis as any).chrome = harness.chromeMock;
+    (globalThis as any).WebSocket = wsHarness.MockWebSocket as any;
+
+    const nativeHostModule = await import('@/entrypoints/background/native-host');
+    nativeHostModule.initNativeHostListener();
+    await flushMicrotasks();
+
+    expect(wsHarness.instances).toHaveLength(1);
+    expect(wsHarness.instances[0].url).toBe('ws://127.0.0.1:12306/bridge/ws');
+
+    wsHarness.instances[0].emitOpen();
+    await flushMicrotasks();
+
+    const hello = JSON.parse(wsHarness.instances[0].sent[0]);
+    expect(hello).toMatchObject({
+      type: 'hello',
+      extensionId: 'test-extension-id',
+    });
+
+    await vi.advanceTimersByTimeAsync(5000);
+    await flushMicrotasks();
+
+    expect(
+      wsHarness.instances[0].sent.some((entry) => JSON.parse(entry).type === 'heartbeat'),
+    ).toBe(true);
+  });
+
+  it('executes websocket bridge commands and posts results back', async () => {
+    const firstPort = createMockPort();
+    const harness = createChromeHarness([firstPort]);
+    const wsHarness = createMockWebSocketHarness();
+    (globalThis as any).chrome = harness.chromeMock;
+    (globalThis as any).WebSocket = wsHarness.MockWebSocket as any;
+
+    const toolsModule = await import('@/entrypoints/background/tools');
+    vi.mocked(toolsModule.handleCallTool).mockResolvedValue({
+      content: [{ type: 'text', text: 'ok' }],
+      isError: false,
+    } as any);
+
+    const nativeHostModule = await import('@/entrypoints/background/native-host');
+    nativeHostModule.initNativeHostListener();
+    await flushMicrotasks();
+
+    wsHarness.instances[0].emitOpen();
+    await flushMicrotasks();
+    wsHarness.instances[0].sent.length = 0;
+
+    wsHarness.instances[0].emitMessage({
+      type: 'command',
+      requestId: 'req-1',
+      connectionId: 'bridge-1',
+      sentAt: Date.now(),
+      command: {
+        action: 'call_tool',
+        payload: { name: 'chrome_read_page', args: { tabId: 1 } },
+      },
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(toolsModule.handleCallTool).toHaveBeenCalledWith({
+      name: 'chrome_read_page',
+      args: { tabId: 1 },
+    });
+    expect(wsHarness.instances[0].sent).toHaveLength(1);
+    expect(JSON.parse(wsHarness.instances[0].sent[0])).toMatchObject({
+      type: 'result',
+      requestId: 'req-1',
+      success: true,
+    });
   });
 });

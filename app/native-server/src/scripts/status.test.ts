@@ -50,6 +50,10 @@ describe('status script', () => {
           browserProcessRunning: true,
           extensionHeartbeatAt: 1710000000000,
           nativeHostAttached: true,
+          commandChannelConnected: true,
+          commandChannelType: 'websocket',
+          activeConnectionId: 'conn-1',
+          lastCommandChannelAt: 1710000001000,
         },
         transports: {
           total: 1,
@@ -71,6 +75,7 @@ describe('status script', () => {
     const output = stdoutSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
     expect(output).toContain('Active sessions: 1 (streamable-http: 1, sse: 0)');
     expect(output).toContain('Bridge state: ready');
+    expect(output).toContain('Command channel: websocket (conn-1)');
     expect(output).not.toContain('undefined');
   });
 
@@ -87,6 +92,8 @@ describe('status script', () => {
           browserProcessRunning: true,
           extensionHeartbeatAt: 1710000000000,
           nativeHostAttached: true,
+          commandChannelConnected: true,
+          commandChannelType: 'websocket',
         },
         transports: {
           total: 2,
@@ -124,6 +131,7 @@ describe('status script', () => {
           browserProcessRunning: true,
           extensionHeartbeatAt: 1710000000000,
           nativeHostAttached: true,
+          commandChannelConnected: true,
         },
         transports: {
           total: 1,
@@ -173,6 +181,7 @@ describe('status script', () => {
           browserProcessRunning: true,
           extensionHeartbeatAt: null,
           nativeHostAttached: false,
+          commandChannelConnected: false,
           lastBridgeErrorCode: 'TABRIX_EXTENSION_NOT_CONNECTED',
           lastBridgeErrorMessage: 'Chrome 已运行，但 Tabrix 扩展尚未与本地服务建立连接。',
         },

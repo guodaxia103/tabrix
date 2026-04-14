@@ -65,7 +65,8 @@
     "is-admin": "^4.0.0",
     "node-fetch": "2",
     "pino": "^10.3.1",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
@@ -74,6 +75,7 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^22.15.3",
     "@types/supertest": "^6.0.3",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/parser": "^8.58.1",
     "cross-env": "^7.0.3",
     "husky": "^9.1.7",
