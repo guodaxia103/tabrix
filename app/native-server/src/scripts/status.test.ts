@@ -45,6 +45,12 @@ describe('status script', () => {
         host: SERVER_CONFIG.HOST,
         port: NATIVE_SERVER_PORT,
         nativeHostAttached: true,
+        bridge: {
+          bridgeState: 'READY',
+          browserProcessRunning: true,
+          extensionHeartbeatAt: 1710000000000,
+          nativeHostAttached: true,
+        },
         transports: {
           total: 1,
           streamableHttp: 1,
@@ -64,6 +70,7 @@ describe('status script', () => {
     expect(stdoutSpy).toHaveBeenCalled();
     const output = stdoutSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
     expect(output).toContain('Active sessions: 1 (streamable-http: 1, sse: 0)');
+    expect(output).toContain('Bridge state: ready');
     expect(output).not.toContain('undefined');
   });
 
@@ -75,6 +82,12 @@ describe('status script', () => {
         host: SERVER_CONFIG.HOST,
         port: NATIVE_SERVER_PORT,
         nativeHostAttached: true,
+        bridge: {
+          bridgeState: 'READY',
+          browserProcessRunning: true,
+          extensionHeartbeatAt: 1710000000000,
+          nativeHostAttached: true,
+        },
         transports: {
           total: 2,
           sse: 0,
@@ -106,6 +119,12 @@ describe('status script', () => {
         host: '0.0.0.0',
         port: NATIVE_SERVER_PORT,
         nativeHostAttached: true,
+        bridge: {
+          bridgeState: 'READY',
+          browserProcessRunning: true,
+          extensionHeartbeatAt: 1710000000000,
+          nativeHostAttached: true,
+        },
         transports: {
           total: 1,
           sse: 0,
@@ -139,5 +158,43 @@ describe('status script', () => {
     const errorOutput = stderrSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
     expect(errorOutput).toContain('Status failed: fetch failed');
     expect(errorOutput).toContain('doctor --fix');
+  });
+
+  test('prints bridge diagnostics when extension is unavailable', async () => {
+    const json = {
+      status: 'ok',
+      data: {
+        isRunning: true,
+        host: SERVER_CONFIG.HOST,
+        port: NATIVE_SERVER_PORT,
+        nativeHostAttached: false,
+        bridge: {
+          bridgeState: 'BROWSER_RUNNING_EXTENSION_UNAVAILABLE',
+          browserProcessRunning: true,
+          extensionHeartbeatAt: null,
+          nativeHostAttached: false,
+          lastBridgeErrorCode: 'TABRIX_EXTENSION_NOT_CONNECTED',
+          lastBridgeErrorMessage: 'Chrome 已运行，但 Tabrix 扩展尚未与本地服务建立连接。',
+        },
+        transports: {
+          total: 0,
+          streamableHttp: 0,
+          sse: 0,
+        },
+      },
+    };
+
+    globalThis.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => json,
+    })) as unknown as FetchMock;
+
+    const code = await runStatus();
+
+    expect(code).toBe(0);
+    const output = stdoutSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
+    expect(output).toContain('Bridge state: extension-unavailable');
+    expect(output).toContain('Extension heartbeat: missing');
+    expect(output).toContain('Bridge last error: TABRIX_EXTENSION_NOT_CONNECTED');
   });
 });

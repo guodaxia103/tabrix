@@ -76,6 +76,7 @@ interface BridgeRecoveryResult {
   waitMs: number;
   bridgeStateBefore: string;
   bridgeStateAfter?: string;
+  failureCodeHint?: string;
 }
 
 interface BridgeFailurePayload {
@@ -309,6 +310,7 @@ function shouldSkipBrowserLaunchForError(error: unknown): boolean {
 function buildBridgeFailurePayload(
   snapshot: BridgeRuntimeSnapshot,
   recoveryAttempted: boolean,
+  recovery?: BridgeRecoveryResult,
 ): BridgeFailurePayload {
   if (!snapshot.browserProcessRunning) {
     return {
@@ -317,6 +319,30 @@ function buildBridgeFailurePayload(
       bridgeState: snapshot.bridgeState,
       recoveryAttempted,
       suggestions: ['手动打开 Chrome 后重试', '确认系统中安装的是 Chrome 或 Chromium'],
+    };
+  }
+
+  if (recovery?.failureCodeHint === 'TABRIX_EXTENSION_NOT_INSTALLED_OR_DISABLED') {
+    return {
+      code: 'TABRIX_EXTENSION_NOT_INSTALLED_OR_DISABLED',
+      message:
+        'Chrome 已运行，但未检测到可用的 Tabrix 扩展连接入口，可能未安装、被禁用或未加载最新构建。',
+      bridgeState: snapshot.bridgeState,
+      recoveryAttempted,
+      suggestions: [
+        '确认 Tabrix 扩展已安装、启用，并加载的是最新构建目录',
+        '在 chrome://extensions 中刷新扩展后重试',
+      ],
+    };
+  }
+
+  if (recovery?.failureCodeHint === 'TABRIX_EXTENSION_NOT_CONNECTED') {
+    return {
+      code: 'TABRIX_EXTENSION_NOT_CONNECTED',
+      message: 'Chrome 已运行，但 Tabrix 扩展尚未与本地服务建立连接。',
+      bridgeState: snapshot.bridgeState,
+      recoveryAttempted,
+      suggestions: ['打开扩展并执行一次连接', '刷新扩展或重启浏览器后重试'],
     };
   }
 
@@ -337,6 +363,16 @@ function buildBridgeFailurePayload(
       bridgeState: snapshot.bridgeState,
       recoveryAttempted,
       suggestions: ['在扩展里执行一次连接', '运行 tabrix doctor --fix 后重试'],
+    };
+  }
+
+  if (recoveryAttempted && snapshot.bridgeState === 'READY' && snapshot.nativeHostAttached) {
+    return {
+      code: 'TABRIX_BRIDGE_RECOVERY_FAILED',
+      message: 'Tabrix 已完成桥接恢复，但原始浏览器操作仍未成功执行。',
+      bridgeState: snapshot.bridgeState,
+      recoveryAttempted,
+      suggestions: ['重试原始操作并检查页面现场', '运行 tabrix doctor --fix 获取更详细诊断'],
     };
   }
 
@@ -411,6 +447,7 @@ async function attemptBridgeRecovery(
   bridgeRuntimeState.markRecoveryStarted(action);
 
   let launch: LaunchAttemptResult = { launched: false };
+  let failureCodeHint: string | undefined;
   if (shouldLaunchBrowser) {
     launch = await requestExtensionReconnectBestEffort();
     if (!launch.launched) {
@@ -418,17 +455,17 @@ async function attemptBridgeRecovery(
     }
   } else if (browserAlreadyRunning) {
     launch = await requestExtensionReconnectBestEffort();
+    if (!launch.launched) {
+      failureCodeHint =
+        launch.command === 'skip:no_extension_id'
+          ? 'TABRIX_EXTENSION_NOT_INSTALLED_OR_DISABLED'
+          : 'TABRIX_EXTENSION_NOT_CONNECTED';
+    }
   }
 
   const ready = await waitForBridgeRecoveryReady(BRIDGE_RECOVERY_TOTAL_BUDGET_MS);
   const snapshotAfter = getBridgeSnapshot();
-  bridgeRuntimeState.markRecoveryFinished(
-    ready,
-    ready ? null : buildBridgeFailurePayload(snapshotAfter, true).code,
-    ready ? null : buildBridgeFailurePayload(snapshotAfter, true).message,
-  );
-
-  return {
+  const recoveryContext: BridgeRecoveryResult = {
     attempted: true,
     launched: launch.launched,
     action,
@@ -436,7 +473,16 @@ async function attemptBridgeRecovery(
     waitMs: Date.now() - recoveryStartedAt,
     bridgeStateBefore: snapshotBefore.bridgeState,
     bridgeStateAfter: snapshotAfter.bridgeState,
+    failureCodeHint,
   };
+  const failure = ready ? null : buildBridgeFailurePayload(snapshotAfter, true, recoveryContext);
+  bridgeRuntimeState.markRecoveryFinished(
+    ready,
+    ready ? null : (failure?.code ?? null),
+    ready ? null : (failure?.message ?? null),
+  );
+
+  return recoveryContext;
 }
 
 function formatRecoveryError(
@@ -487,7 +533,7 @@ async function callWithBridgeRecovery(
     const recovery = await attemptBridgeRecovery(context, response.error || response.message);
     const retry = await invoker();
     if (responseNeedsBridgeRecovery(retry)) {
-      const failure = buildBridgeFailurePayload(getBridgeSnapshot(), recovery.attempted);
+      const failure = buildBridgeFailurePayload(getBridgeSnapshot(), recovery.attempted, recovery);
       return {
         response: {
           ...retry,
@@ -506,7 +552,11 @@ async function callWithBridgeRecovery(
     try {
       const retry = await invoker();
       if (responseNeedsBridgeRecovery(retry)) {
-        const failure = buildBridgeFailurePayload(getBridgeSnapshot(), recovery.attempted);
+        const failure = buildBridgeFailurePayload(
+          getBridgeSnapshot(),
+          recovery.attempted,
+          recovery,
+        );
         return {
           response: {
             ...retry,
@@ -518,7 +568,7 @@ async function callWithBridgeRecovery(
       }
       return { response: retry, recovery };
     } catch (retryError) {
-      const failure = buildBridgeFailurePayload(getBridgeSnapshot(), recovery.attempted);
+      const failure = buildBridgeFailurePayload(getBridgeSnapshot(), recovery.attempted, recovery);
       throw new Error(formatRecoveryError(failure, recovery));
     }
   }

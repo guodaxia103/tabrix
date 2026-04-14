@@ -16,6 +16,14 @@ interface StatusPayload {
     host: string;
     port: number | null;
     nativeHostAttached: boolean;
+    bridge?: {
+      bridgeState?: string;
+      browserProcessRunning?: boolean;
+      extensionHeartbeatAt?: number | null;
+      nativeHostAttached?: boolean;
+      lastBridgeErrorCode?: string | null;
+      lastBridgeErrorMessage?: string | null;
+    };
     transports: {
       total: number;
       sse?: number;
@@ -70,6 +78,48 @@ function normalizeTransports(payload: StatusPayload['data']['transports']): {
   };
 }
 
+function formatBridgeStateLabel(state?: string): string {
+  switch (state) {
+    case 'READY':
+      return 'ready';
+    case 'BROWSER_NOT_RUNNING':
+      return 'browser-not-running';
+    case 'BROWSER_RUNNING_EXTENSION_UNAVAILABLE':
+      return 'extension-unavailable';
+    case 'BRIDGE_CONNECTING':
+      return 'connecting';
+    case 'BRIDGE_DEGRADED':
+      return 'degraded';
+    case 'BRIDGE_BROKEN':
+      return 'broken';
+    default:
+      return state || 'unknown';
+  }
+}
+
+function describeBridge(payload: StatusPayload['data']['bridge']): string[] {
+  if (!payload) return [];
+
+  const lines = [
+    `Bridge state: ${formatBridgeStateLabel(payload.bridgeState)}`,
+    `Browser process: ${payload.browserProcessRunning ? 'running' : 'not-running'}`,
+  ];
+
+  if (typeof payload.extensionHeartbeatAt === 'number') {
+    lines.push(`Extension heartbeat: ${new Date(payload.extensionHeartbeatAt).toLocaleString()}`);
+  } else {
+    lines.push('Extension heartbeat: missing');
+  }
+
+  if (payload.lastBridgeErrorCode || payload.lastBridgeErrorMessage) {
+    lines.push(
+      `Bridge last error: ${payload.lastBridgeErrorCode || 'unknown'}${payload.lastBridgeErrorMessage ? ` - ${payload.lastBridgeErrorMessage}` : ''}`,
+    );
+  }
+
+  return lines;
+}
+
 function renderPretty(payload: EnrichedStatusPayload): string {
   const { data } = payload;
   const transports = normalizeTransports(data.transports);
@@ -82,6 +132,7 @@ function renderPretty(payload: EnrichedStatusPayload): string {
     `Native host attached: ${data.nativeHostAttached ? 'yes' : 'no'}`,
     `Active sessions: ${transports.total} (streamable-http: ${transports.streamableHttp}, sse: ${transports.sse})`,
   ];
+  lines.push(...describeBridge(data.bridge));
 
   if (transports.sessionIds.length > 0) {
     lines.push(`Session IDs: ${transports.sessionIds.join(', ')}`);
@@ -149,7 +200,9 @@ export async function runStatus(options: StatusOptions = {}): Promise<number> {
     }
 
     const payload = (await response.json()) as StatusPayload;
-    let runtimeConsistency: Awaited<ReturnType<typeof collectRuntimeConsistencySnapshot>> | undefined;
+    let runtimeConsistency:
+      | Awaited<ReturnType<typeof collectRuntimeConsistencySnapshot>>
+      | undefined;
     try {
       runtimeConsistency = await collectRuntimeConsistencySnapshot();
     } catch {
@@ -159,7 +212,9 @@ export async function runStatus(options: StatusOptions = {}): Promise<number> {
       ...payload,
       ...(runtimeConsistency ? { runtimeConsistency } : {}),
     };
-    const output = options.json ? JSON.stringify(enrichedPayload, null, 2) : renderPretty(enrichedPayload);
+    const output = options.json
+      ? JSON.stringify(enrichedPayload, null, 2)
+      : renderPretty(enrichedPayload);
     process.stdout.write(output + '\n');
     return 0;
   } catch (error) {
