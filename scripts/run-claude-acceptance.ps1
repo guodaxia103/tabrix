@@ -149,7 +149,7 @@ function Ensure-ClaudeMcpConfig {
     mcpServers = @{
       tabrix = @{
         type = 'http'
-        url = 'http://192.168.5.69:12306/mcp'
+        url = 'http://127.0.0.1:12306/mcp'
         headers = @{
           Authorization = "Bearer $token"
         }
@@ -167,10 +167,14 @@ function Wait-TabrixBridgeReady {
   while ((Get-Date) -lt $deadline) {
     try {
       $status = tabrix status --json | ConvertFrom-Json
+      $bridge = $status.data.bridge
       if (
-        $status.data.nativeHostAttached -and
-        $status.data.bridge -and
-        $status.data.bridge.bridgeState -eq 'READY'
+        $bridge -and
+        $bridge.bridgeState -eq 'READY' -and
+        (
+          $bridge.commandChannelConnected -eq $true -or
+          $status.data.nativeHostAttached -eq $true
+        )
       ) {
         return $true
       }

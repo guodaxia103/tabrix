@@ -2,14 +2,50 @@
  * Image processing utility functions
  */
 
+function decodeBase64(input: string): Uint8Array {
+  if (typeof atob !== 'function') {
+    throw new Error('Base64 decoding is unavailable in this runtime');
+  }
+
+  const binary = atob(input);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function dataUrlToBlob(url: string): Blob {
+  const match = /^data:([^;,]+)?((?:;[^;,=]+=[^;,=]+)*)(;base64)?,(.*)$/s.exec(url);
+  if (!match) {
+    throw new Error('Invalid data URL');
+  }
+
+  const mimeType = match[1] || 'application/octet-stream';
+  const isBase64 = Boolean(match[3]);
+  const payload = match[4] || '';
+
+  if (isBase64) {
+    const normalizedBytes = new Uint8Array(Array.from(decodeBase64(payload)));
+    return new Blob([normalizedBytes], { type: mimeType });
+  }
+
+  const decoded = decodeURIComponent(payload);
+  return new Blob([decoded], { type: mimeType });
+}
+
 /**
  * Create ImageBitmap from data URL (for OffscreenCanvas)
  * @param dataUrl Image data URL
  * @returns Created ImageBitmap object
  */
 export async function createImageBitmapFromUrl(dataUrl: string): Promise<ImageBitmap> {
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
+  const blob = dataUrl.startsWith('data:')
+    ? dataUrlToBlob(dataUrl)
+    : await (async () => {
+        const response = await fetch(dataUrl);
+        return await response.blob();
+      })();
   return await createImageBitmap(blob);
 }
 
