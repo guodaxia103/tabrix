@@ -1,4 +1,5 @@
- 
+/* global chrome, window */
+
 /**
  * Network Capture Helper
  *
@@ -232,7 +233,7 @@ if (window.__NETWORK_CAPTURE_HELPER_INITIALIZED__) {
         response: responseData,
       };
     } catch (error) {
-      console.error('Error replaying request:', error);
+      console.warn('Error replaying request:', error);
       return {
         success: false,
         error: `Error replaying request: ${error.message}`,

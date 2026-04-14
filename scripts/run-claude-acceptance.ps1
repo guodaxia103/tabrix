@@ -220,10 +220,12 @@ function Run-Case {
     [string]$Prompt
   )
   Write-Host "Running $Name ..."
-  $prefixedPrompt = @"
+$prefixedPrompt = @"
 仅使用已连接的 tabrix MCP 工具完成以下任务。
 不要使用 Playwright 或其他 MCP/内置浏览器工具。
 如果 tabrix 工具不可用，请明确说明“tabrix 不可用”，不要回退到其它工具。
+严格只按我给出的 URL、选择器、参数执行，不要自行改写为 data: URL、其它网站 URL 或其它选择器。
+如果某一步失败，请直接标记 failed，不要用 JS 注入、用户脚本或其它旁路方法伪造成功。
 
 $Prompt
 "@
@@ -281,12 +283,13 @@ try {
       name = 'group-core-2'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
-1) chrome_click_element 点击 #clickBtn
-2) chrome_fill_or_select 填 #textInput=hello-tabrix
-3) chrome_keyboard 对 #textInput 执行 Ctrl+A, Backspace
-4) chrome_fill_or_select 再填 #textInput=world
-5) chrome_javascript 读取 #textInput 当前值
-6) chrome_console(snapshot)
+1) chrome_navigate 打开 $BaseUrl
+2) chrome_click_element 点击 #clickBtn
+3) chrome_fill_or_select 填 #textInput=hello-tabrix
+4) chrome_keyboard 对 #textInput 执行 Ctrl+A, Backspace
+5) chrome_fill_or_select 再填 #textInput=world
+6) chrome_javascript 读取 #textInput 当前值
+7) chrome_console(snapshot)
 注意：chrome_keyboard 只用于快捷键或特殊按键，不要把纯文本 world 作为 keys 传入。
 最后给每一步返回 success/failed 摘要。
 "@
@@ -338,6 +341,7 @@ try {
 2) chrome_click_element 点击 #promptBtn
 3) 立即调用 chrome_handle_dialog(action=accept,promptText=tabrix-ok)，不要等待页面变化
 4) chrome_javascript 读取 #promptOut 文本
+要求：第 3 步必须只使用 chrome_handle_dialog；如果失败，直接标记 failed，不要改用 JS 注入或其它绕过方式。
 最后给每一步返回 success/failed 摘要。
 "@
     },
