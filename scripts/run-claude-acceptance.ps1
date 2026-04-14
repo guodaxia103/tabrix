@@ -407,7 +407,7 @@ try {
       kind = 'unattended'
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
-1) chrome_switch_tab 切换到 URL 包含 127.0.0.1:62100 的标签
+1) chrome_navigate 打开 $BaseUrl
 2) chrome_computer(action=screenshot, saveToDownloads=false)
 3) performance_start_trace(autoStop=true,durationMs=1200)
 4) performance_stop_trace(saveToDownloads=false)
