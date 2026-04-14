@@ -13,6 +13,28 @@ interface WebFetcherToolParams {
   windowId?: number; // target window id to pick active tab or create tab
 }
 
+function summarizeVisibleText(text: string) {
+  const normalized = (text || '').replace(/\s+/g, ' ').trim();
+  const lineCount = (text || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean).length;
+  const charCount = (text || '').length;
+  const normalizedLength = normalized.length;
+  const sparse = normalizedLength < 80 || lineCount < 3;
+
+  return {
+    charCount,
+    normalizedLength,
+    lineCount,
+    sparse,
+    quality: sparse ? 'sparse' : 'usable',
+    warning: sparse
+      ? 'Visible text is sparse. Prefer chrome_read_page for structured UI extraction before escalating to higher-risk tools.'
+      : null,
+  };
+}
+
 class WebFetcherTool extends BaseBrowserToolExecutor {
   name = TOOL_NAMES.BROWSER.WEB_FETCHER;
 
@@ -68,9 +90,10 @@ class WebFetcherTool extends BaseBrowserToolExecutor {
             ...(typeof windowId === 'number' ? { windowId } : {}),
           });
 
-          // Wait for page to load
-          console.log('Waiting for page to load...');
-          await new Promise((resolve) => setTimeout(resolve, 3000));
+          if (tab.id) {
+            console.log('Waiting for newly opened tab to settle...');
+            tab = (await this.waitForTabSettled(tab.id)).tab;
+          }
         }
       } else {
         // Use active tab (prefer specified window)
@@ -90,8 +113,10 @@ class WebFetcherTool extends BaseBrowserToolExecutor {
 
       // Optionally bring tab/window to foreground
       if (!background) {
-        await chrome.tabs.update(tab.id, { active: true });
-        await chrome.windows.update(tab.windowId, { focused: true });
+        await this.ensureFocus(tab, {
+          activate: true,
+          focusWindow: true,
+        });
       }
 
       // Prepare result object
@@ -127,6 +152,7 @@ class WebFetcherTool extends BaseBrowserToolExecutor {
 
         if (textResponse.success) {
           result.textContent = textResponse.textContent;
+          result.textSummary = summarizeVisibleText(textResponse.textContent || '');
 
           // Include article metadata if available
           if (textResponse.article) {
@@ -142,6 +168,11 @@ class WebFetcherTool extends BaseBrowserToolExecutor {
           // Include page metadata if available
           if (textResponse.metadata) {
             result.metadata = textResponse.metadata;
+          }
+
+          if (result.textSummary.sparse) {
+            result.extractionHint =
+              'Visible text is sparse for this route. Prefer chrome_read_page to inspect structured UI before using javascript or coordinate-based fallbacks.';
           }
         } else {
           console.error('Failed to get text content:', textResponse.error);

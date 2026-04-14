@@ -19,6 +19,21 @@ interface ReadPageParams {
   windowId?: number; // when no tabId, pick active tab from this window
 }
 
+function summarizePageContent(pageContent: string) {
+  const normalized = (pageContent || '').replace(/\s+/g, ' ').trim();
+  const lineCount = (pageContent || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean).length;
+
+  return {
+    charCount: pageContent.length,
+    normalizedLength: normalized.length,
+    lineCount,
+    quality: normalized.length < 120 || lineCount < 10 ? 'sparse' : 'usable',
+  };
+}
+
 class ReadPageTool extends BaseBrowserToolExecutor {
   name = TOOL_NAMES.BROWSER.READ_PAGE;
 
@@ -48,7 +63,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
     try {
       // Tip text returned to callers to guide next action
       const standardTips =
-        "If the specific element you need is missing from the returned data, use the 'screenshot' tool to capture the current viewport and confirm the element's on-screen coordinates. Also note: 'markedElements' are user-marked elements and have the highest priority when choosing targets.";
+        "Stay on the safe path first: prefer ref-based actions from chrome_read_page or chrome_get_interactive_elements. If the specific element you need is still missing, use chrome_screenshot for visual confirmation and coordinates. Reserve chrome_computer or chrome_javascript for explicit fallback/debug cases only. Also note: 'markedElements' are user-marked elements and have the highest priority when choosing targets.";
 
       const explicit = await this.tryGetTab(args?.tabId);
       const tab = explicit || (await this.getActiveTabOrThrowInWindow(args?.windowId));
@@ -96,6 +111,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         ? pageContent.split('\n').filter((l: string) => l.trim().length > 0).length
         : 0;
       const refCount = Array.isArray(resp?.refMap) ? resp.refMap.length : 0;
+      const contentSummary = summarizePageContent(pageContent);
 
       // Skip sparse heuristics when user explicitly controls output
       const isSparse = !userControlled && lines < 10 && refCount < 3;
@@ -137,6 +153,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         success: true,
         filter: filter || 'all',
         pageContent,
+        contentSummary,
         tips: standardTips,
         viewport: treeOk ? resp.viewport : { width: null, height: null, dpr: null },
         stats: stats || { processed: 0, included: 0, durationMs: 0 },

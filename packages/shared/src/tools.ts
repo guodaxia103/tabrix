@@ -202,7 +202,7 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.READ_PAGE,
     description:
-      'Get an accessibility tree representation of visible elements on the page. Only returns elements that are visible in the viewport. Optionally filter for only interactive elements.\nTip: If the returned elements do not include the specific element you need, use the computer tool\'s screenshot (action="screenshot") to capture the element\'s on-screen coordinates, then operate by coordinates.\nLimitation: Does not work on chrome:// or browser-internal pages; returns degraded output on sparse localhost pages.',
+      'Get an accessibility-tree representation of visible page elements. Only returns elements visible in the viewport, and can optionally focus on interactive elements only.\nSafe-first guidance: prefer this tool before screenshots, coordinate clicks, or javascript. If the element you need is still missing, use chrome_screenshot for visual confirmation. Reserve chrome_computer and chrome_javascript for explicit fallback/debug cases.\nLimitation: Does not work on chrome:// or browser-internal pages; may return degraded output on sparse localhost pages.',
     annotations: {
       readOnlyHint: true,
     },
@@ -239,7 +239,7 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.COMPUTER,
     description:
-      "Use a mouse and keyboard to interact with a web browser, and take screenshots.\n* Whenever you intend to click on an element like an icon, you should consult a read_page to determine the ref of the element before moving the cursor.\n* If you tried clicking on a program or link but it failed to load, even after waiting, try screenshot and then adjusting your click location so that the tip of the cursor visually falls on the element that you want to click.\n* Make sure to click any buttons, links, icons, etc with the cursor tip in the center of the element. Don't click boxes on their edges unless asked.",
+      'High-risk fallback tool for mouse/keyboard/drag/scroll interactions and screenshots.\nUse this only after ref-based or DOM-based tools (chrome_read_page, chrome_get_interactive_elements, chrome_click_element, chrome_fill_or_select, chrome_keyboard, chrome_navigate, chrome_switch_tab) are insufficient.\nDo not use chrome_computer for routine page-settle waits, simple tab switching, or basic DOM discovery. When you must use it, prefer precise refs over raw coordinates and keep actions minimal.',
     annotations: {
       destructiveHint: true,
     },
@@ -450,7 +450,7 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.NAVIGATE,
     description:
-      'Navigate to a URL, refresh the current tab, or navigate browser history (back/forward)',
+      'Navigate to a URL, refresh the current tab, or move browser history (back/forward). Returns navigation/settle details including final URL and page status, so prefer this over using chrome_computer wait after normal navigation.',
     annotations: {
       destructiveHint: true,
     },
@@ -503,7 +503,7 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.SCREENSHOT,
     description:
-      '[Prefer read_page over taking a screenshot and Prefer chrome_computer] Take a screenshot of the current page or a specific element. For new usage, use chrome_computer with action="screenshot". Use this tool if you need advanced options.\nLimitation: Full-page or large-viewport captures may time out on complex pages. If the capture fails, try a smaller viewport or use chrome_computer action="screenshot" instead.',
+      'Take a screenshot of the current page or a specific element. Prefer chrome_read_page before using screenshots for routine discovery, and use this tool for visual evidence or coordinate confirmation when the DOM/ref path is insufficient.\nLimitation: Full-page or large-viewport captures may time out on complex pages. If capture fails, try a smaller viewport before escalating to chrome_computer.',
     annotations: {
       readOnlyHint: true,
     },
@@ -574,7 +574,8 @@ export const TOOL_SCHEMAS: Tool[] = [
   },
   {
     name: TOOL_NAMES.BROWSER.SWITCH_TAB,
-    description: 'Switch to a specific browser tab',
+    description:
+      'Switch to a specific browser tab and confirm activation/focus state. Returns the active tab URL and page status so callers can avoid extra wait or debugger-only fallback for simple tab changes.',
     annotations: {
       readOnlyHint: false,
       idempotentHint: true,
@@ -596,7 +597,8 @@ export const TOOL_SCHEMAS: Tool[] = [
   },
   {
     name: TOOL_NAMES.BROWSER.WEB_FETCHER,
-    description: 'Fetch content from a web page',
+    description:
+      'Fetch visible text or HTML content from a web page. Returns content-quality hints when a route is text-sparse, so prefer chrome_read_page before escalating to javascript on highly interactive pages.',
     annotations: {
       readOnlyHint: true,
     },
@@ -1051,7 +1053,7 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.JAVASCRIPT,
     description:
-      'Execute JavaScript code in a browser tab and return the result. Uses CDP Runtime.evaluate with awaitPromise and returnByValue; automatically falls back to chrome.scripting.executeScript if the debugger is busy. Output is sanitized (sensitive data redacted) and truncated by default.',
+      'Execute JavaScript code in a browser tab and return the result. This is a high-risk debugger/fallback capability: do not use it for routine tab discovery, normal navigation waits, or simple content extraction when chrome_read_page, chrome_get_web_content, chrome_get_interactive_elements, chrome_click_element, or chrome_fill_or_select can do the job. Uses CDP Runtime.evaluate with awaitPromise and returnByValue; automatically falls back to chrome.scripting.executeScript if the debugger is busy. Output is sanitized (sensitive data redacted) and truncated by default.',
     annotations: {
       destructiveHint: true,
     },

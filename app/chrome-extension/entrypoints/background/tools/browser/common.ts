@@ -35,6 +35,20 @@ function shouldAddWwwVariant(hostname: string): boolean {
   return hostname.includes('.');
 }
 
+function normalizeComparableUrl(url?: string): string {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    const normalizedPath =
+      parsed.pathname !== '/' && parsed.pathname.endsWith('/')
+        ? parsed.pathname.slice(0, -1)
+        : parsed.pathname || '/';
+    return `${parsed.origin}${normalizedPath}${parsed.search}`;
+  } catch {
+    return url.trim();
+  }
+}
+
 export function buildNavigateUrlPatterns(input: string): string[] {
   const patterns = new Set<string>();
 
@@ -117,12 +131,17 @@ class NavigateTool extends BaseBrowserToolExecutor {
         // Get target tab (explicit or active in provided window)
         const targetTab = explicit || (await this.getActiveTabOrThrowInWindow(windowId));
         if (!targetTab.id) return createErrorResponse('No target tab found to refresh');
+        const previousUrl = targetTab.url;
         await chrome.tabs.reload(targetTab.id);
+        const settleResult = await this.waitForTabSettled(targetTab.id, {
+          previousUrl,
+          requireUrlChange: false,
+        });
 
         console.log(`Refreshed tab ID: ${targetTab.id}`);
 
         // Get updated tab information
-        const updatedTab = await chrome.tabs.get(targetTab.id);
+        const updatedTab = settleResult.tab;
 
         // Trigger auto-capture on refresh
         await this.triggerAutoCapture(updatedTab.id!, updatedTab.url);
@@ -137,6 +156,11 @@ class NavigateTool extends BaseBrowserToolExecutor {
                 tabId: updatedTab.id,
                 windowId: updatedTab.windowId,
                 url: updatedTab.url,
+                status: updatedTab.status,
+                settled: settleResult.settled,
+                settleReason: settleResult.reason,
+                waitedMs: settleResult.waitedMs,
+                readyState: settleResult.readyState,
               }),
             },
           ],
@@ -162,6 +186,7 @@ class NavigateTool extends BaseBrowserToolExecutor {
           activate: background !== true,
           focusWindow: background !== true,
         });
+        const previousUrl = targetTab.url;
 
         if (url === 'forward') {
           await chrome.tabs.goForward(targetTab.id);
@@ -171,7 +196,11 @@ class NavigateTool extends BaseBrowserToolExecutor {
           console.log(`Navigated back in tab ID: ${targetTab.id}`);
         }
 
-        const updatedTab = await chrome.tabs.get(targetTab.id);
+        const settleResult = await this.waitForTabSettled(targetTab.id, {
+          previousUrl,
+          requireUrlChange: true,
+        });
+        const updatedTab = settleResult.tab;
 
         // Trigger auto-capture on history navigation
         await this.triggerAutoCapture(updatedTab.id!, updatedTab.url);
@@ -186,6 +215,11 @@ class NavigateTool extends BaseBrowserToolExecutor {
                 tabId: updatedTab.id,
                 windowId: updatedTab.windowId,
                 url: updatedTab.url,
+                status: updatedTab.status,
+                settled: settleResult.settled,
+                settleReason: settleResult.reason,
+                waitedMs: settleResult.waitedMs,
+                readyState: settleResult.readyState,
               }),
             },
           ],
@@ -277,8 +311,13 @@ class NavigateTool extends BaseBrowserToolExecutor {
         console.log(
           `URL already open in Tab ID: ${existingTab.id}, Window ID: ${existingTab.windowId}`,
         );
+        const previousUrl = existingTab.url;
+        const shouldNavigateExplicitTab =
+          explicitTab?.id === existingTab.id &&
+          normalizeComparableUrl(explicitTab.url) !== normalizeComparableUrl(url);
+
         // Update URL only when explicit tab specified and url differs
-        if (explicitTab && typeof explicitTab.id === 'number') {
+        if (shouldNavigateExplicitTab && explicitTab && typeof explicitTab.id === 'number') {
           await chrome.tabs.update(explicitTab.id, { url });
         }
         // Optionally bring to foreground based on background flag
@@ -288,8 +327,11 @@ class NavigateTool extends BaseBrowserToolExecutor {
         });
 
         console.log(`Activated existing Tab ID: ${existingTab.id}`);
-        // Get updated tab information and return it
-        const updatedTab = await chrome.tabs.get(existingTab.id);
+        const settleResult = await this.waitForTabSettled(existingTab.id, {
+          previousUrl,
+          requireUrlChange: shouldNavigateExplicitTab,
+        });
+        const updatedTab = settleResult.tab;
 
         // Trigger auto-capture on existing tab activation
         await this.triggerAutoCapture(updatedTab.id!, updatedTab.url);
@@ -300,10 +342,21 @@ class NavigateTool extends BaseBrowserToolExecutor {
               type: 'text',
               text: JSON.stringify({
                 success: true,
-                message: 'Activated existing tab',
+                message: shouldNavigateExplicitTab
+                  ? 'Navigated explicit tab to requested URL'
+                  : 'Activated matching existing tab',
                 tabId: updatedTab.id,
                 windowId: updatedTab.windowId,
-                url: updatedTab.url,
+                requestedUrl: url,
+                finalUrl: updatedTab.url,
+                status: updatedTab.status,
+                activated: background !== true,
+                usedExistingTab: true,
+                navigatedExplicitTab: shouldNavigateExplicitTab,
+                settled: settleResult.settled,
+                settleReason: settleResult.reason,
+                waitedMs: settleResult.waitedMs,
+                readyState: settleResult.readyState,
               }),
             },
           ],
@@ -331,28 +384,37 @@ class NavigateTool extends BaseBrowserToolExecutor {
           // Trigger auto-capture if the new window has a tab
           const firstTab = newWindow.tabs?.[0];
           if (firstTab?.id) {
-            await this.triggerAutoCapture(firstTab.id, firstTab.url);
-          }
+            const settleResult = await this.waitForTabSettled(firstTab.id);
+            await this.triggerAutoCapture(firstTab.id, settleResult.tab.url);
 
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  success: true,
-                  message: 'Opened URL in new window',
-                  windowId: newWindow.id,
-                  tabs: newWindow.tabs
-                    ? newWindow.tabs.map((tab) => ({
-                        tabId: tab.id,
-                        url: tab.url,
-                      }))
-                    : [],
-                }),
-              },
-            ],
-            isError: false,
-          };
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    message: 'Opened URL in new window',
+                    windowId: newWindow.id,
+                    tabId: settleResult.tab.id,
+                    requestedUrl: url,
+                    finalUrl: settleResult.tab.url,
+                    status: settleResult.tab.status,
+                    settled: settleResult.settled,
+                    settleReason: settleResult.reason,
+                    waitedMs: settleResult.waitedMs,
+                    readyState: settleResult.readyState,
+                    tabs: newWindow.tabs
+                      ? newWindow.tabs.map((tab) => ({
+                          tabId: tab.id,
+                          url: tab.url,
+                        }))
+                      : [],
+                  }),
+                },
+              ],
+              isError: false,
+            };
+          }
         }
       } else {
         console.log('Opening URL in the last active window.');
@@ -381,9 +443,11 @@ class NavigateTool extends BaseBrowserToolExecutor {
             `URL opened in new Tab ID: ${newTab.id} in existing Window ID: ${targetWindow.id}`,
           );
 
+          const settleResult = newTab.id ? await this.waitForTabSettled(newTab.id) : null;
+
           // Trigger auto-capture on new tab
           if (newTab.id) {
-            await this.triggerAutoCapture(newTab.id, newTab.url);
+            await this.triggerAutoCapture(newTab.id, settleResult?.tab.url || newTab.url);
           }
 
           return {
@@ -393,9 +457,15 @@ class NavigateTool extends BaseBrowserToolExecutor {
                 text: JSON.stringify({
                   success: true,
                   message: 'Opened URL in new tab in existing window',
-                  tabId: newTab.id,
+                  tabId: settleResult?.tab.id || newTab.id,
                   windowId: targetWindow.id,
-                  url: newTab.url,
+                  requestedUrl: url,
+                  finalUrl: settleResult?.tab.url || newTab.url,
+                  status: settleResult?.tab.status || newTab.status,
+                  settled: settleResult?.settled ?? false,
+                  settleReason: settleResult?.reason || null,
+                  waitedMs: settleResult?.waitedMs || 0,
+                  readyState: settleResult?.readyState || null,
                 }),
               },
             ],
@@ -419,28 +489,37 @@ class NavigateTool extends BaseBrowserToolExecutor {
             // Trigger auto-capture if fallback window has a tab
             const firstTab = fallbackWindow.tabs?.[0];
             if (firstTab?.id) {
-              await this.triggerAutoCapture(firstTab.id, firstTab.url);
-            }
+              const settleResult = await this.waitForTabSettled(firstTab.id);
+              await this.triggerAutoCapture(firstTab.id, settleResult.tab.url);
 
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    success: true,
-                    message: 'Opened URL in new window',
-                    windowId: fallbackWindow.id,
-                    tabs: fallbackWindow.tabs
-                      ? fallbackWindow.tabs.map((tab) => ({
-                          tabId: tab.id,
-                          url: tab.url,
-                        }))
-                      : [],
-                  }),
-                },
-              ],
-              isError: false,
-            };
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify({
+                      success: true,
+                      message: 'Opened URL in new window',
+                      windowId: fallbackWindow.id,
+                      tabId: settleResult.tab.id,
+                      requestedUrl: url,
+                      finalUrl: settleResult.tab.url,
+                      status: settleResult.tab.status,
+                      settled: settleResult.settled,
+                      settleReason: settleResult.reason,
+                      waitedMs: settleResult.waitedMs,
+                      readyState: settleResult.readyState,
+                      tabs: fallbackWindow.tabs
+                        ? fallbackWindow.tabs.map((tab) => ({
+                            tabId: tab.id,
+                            url: tab.url,
+                          }))
+                        : [],
+                    }),
+                  },
+                ],
+                isError: false,
+              };
+            }
           }
         }
       }
@@ -663,12 +742,26 @@ class SwitchTabTool extends BaseBrowserToolExecutor {
     console.log(`Attempting to switch to tab ID: ${tabId} in window ID: ${windowId}`);
 
     try {
-      if (windowId !== undefined) {
-        await chrome.windows.update(windowId, { focused: true });
+      const targetTab = await chrome.tabs.get(tabId);
+      if (windowId !== undefined && targetTab.windowId !== windowId) {
+        return createErrorResponse(`Tab ${tabId} does not belong to window ${windowId}`);
       }
-      await chrome.tabs.update(tabId, { active: true });
 
-      const updatedTab = await chrome.tabs.get(tabId);
+      await this.ensureFocus(targetTab, {
+        activate: true,
+        focusWindow: true,
+      });
+
+      const activationResult = await this.waitForTabActivated(tabId, {
+        expectedWindowId: targetTab.windowId,
+        requireFocusedWindow: true,
+      });
+
+      const settleResult =
+        activationResult.tab.status === 'complete'
+          ? null
+          : await this.waitForTabSettled(tabId, { timeoutMs: 5000 });
+      const updatedTab = settleResult?.tab || activationResult.tab;
 
       return {
         content: [
@@ -680,6 +773,15 @@ class SwitchTabTool extends BaseBrowserToolExecutor {
               tabId: updatedTab.id,
               windowId: updatedTab.windowId,
               url: updatedTab.url,
+              status: updatedTab.status,
+              activated: activationResult.activated,
+              activationTimedOut: activationResult.timedOut,
+              activationWaitedMs: activationResult.waitedMs,
+              windowFocused: activationResult.windowFocused,
+              settled: settleResult ? settleResult.settled : updatedTab.status === 'complete',
+              settleReason: settleResult?.reason || 'already_complete',
+              settleWaitedMs: settleResult?.waitedMs || 0,
+              readyState: settleResult?.readyState || null,
             }),
           },
         ],
