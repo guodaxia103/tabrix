@@ -98,6 +98,10 @@ export class NativeMessagingHost {
     stdin.on('error', () => {
       this.cleanup();
     });
+
+    // Keep the native host process alive while Chrome owns the stdio pipe.
+    // Without resume(), Node may exit before the first native message arrives.
+    stdin.resume();
   }
 
   private async handleMessage(message: any): Promise<void> {

@@ -88,6 +88,43 @@ function Stop-BridgeProbeListener {
   }
 }
 
+function Get-FreeBridgeProbePort {
+  for ($attempt = 1; $attempt -le 20; $attempt++) {
+    $candidate = Get-Random -Minimum 62050 -Maximum 62999
+    $inUse = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+      Where-Object { $_.LocalAddress -eq '127.0.0.1' -and $_.LocalPort -eq $candidate } |
+      Select-Object -First 1
+    if (-not $inUse) {
+      return $candidate
+    }
+  }
+
+  throw 'Failed to allocate a free bridge probe port.'
+}
+
+function Start-BridgeProbeListener {
+  for ($attempt = 1; $attempt -le 10; $attempt++) {
+    $probePort = Get-FreeBridgeProbePort
+    $listener = [System.Net.HttpListener]::new()
+    $listener.Prefixes.Add("http://127.0.0.1:$probePort/")
+    try {
+      $listener.Start()
+      return @{
+        Port = $probePort
+        Listener = $listener
+      }
+    } catch {
+      try {
+        $listener.Close()
+      } catch {
+        # ignore
+      }
+    }
+  }
+
+  throw 'Failed to start bridge probe listener.'
+}
+
 function Ensure-AcceptanceArtifacts {
   $artifactDir = Split-Path $script:UploadArtifactPath -Parent
   New-Item -ItemType Directory -Force $artifactDir | Out-Null
@@ -156,70 +193,73 @@ function Ensure-TabrixBridge {
     throw 'Chrome executable not found while ensuring Tabrix bridge.'
   }
 
-  Stop-BridgeProbeListener
-  $script:BridgeProbeResult = $null
-  $probePort = 62101
-  $listener = [System.Net.HttpListener]::new()
-  $listener.Prefixes.Add("http://127.0.0.1:$probePort/")
-  $listener.Start()
-  $script:BridgeProbeListener = $listener
+  for ($attempt = 1; $attempt -le 3; $attempt++) {
+    Stop-BridgeProbeListener
+    $script:BridgeProbeResult = $null
+    $probe = Start-BridgeProbeListener
+    $probePort = $probe.Port
+    $listener = $probe.Listener
+    $script:BridgeProbeListener = $listener
 
-  $callbackUrl = "http://127.0.0.1:$probePort/"
-  $encodedCallbackUrl = [System.Uri]::EscapeDataString($callbackUrl)
-  $connectUrl = "$script:ExtensionConnectUrl?callback=$encodedCallbackUrl"
-  Start-Process -FilePath $chromePath -ArgumentList $connectUrl | Out-Null
+    $callbackUrl = "http://127.0.0.1:$probePort/"
+    $encodedCallbackUrl = [System.Uri]::EscapeDataString($callbackUrl)
+    $connectUrl = "$script:ExtensionConnectUrl?callback=$encodedCallbackUrl"
+    Start-Process -FilePath $chromePath -ArgumentList '--new-tab', $connectUrl | Out-Null
 
-  $deadline = (Get-Date).AddSeconds(20)
-  while ((Get-Date) -lt $deadline) {
-    $asyncContext = $listener.BeginGetContext($null, $null)
-    if (-not $asyncContext.AsyncWaitHandle.WaitOne([TimeSpan]::FromSeconds(3))) {
-      continue
-    }
-
-    try {
-      $context = $listener.EndGetContext($asyncContext)
-      $body = ''
-      $queryPayload = $context.Request.QueryString['payload']
-      if ($queryPayload) {
-        $payload = $queryPayload | ConvertFrom-Json
-      } else {
-        $reader = [System.IO.StreamReader]::new($context.Request.InputStream, $context.Request.ContentEncoding)
-        $body = $reader.ReadToEnd()
-        $reader.Dispose()
-        $payload = if ($body) { $body | ConvertFrom-Json } else { $null }
+    $deadline = (Get-Date).AddSeconds(20)
+    while ((Get-Date) -lt $deadline) {
+      $asyncContext = $listener.BeginGetContext($null, $null)
+      if (-not $asyncContext.AsyncWaitHandle.WaitOne([TimeSpan]::FromSeconds(3))) {
+        continue
       }
 
-      $buffer = [System.Text.Encoding]::UTF8.GetBytes('ok')
-      $context.Response.StatusCode = 200
-      $context.Response.OutputStream.Write($buffer, 0, $buffer.Length)
-      $context.Response.OutputStream.Close()
-
-      if ($payload) {
-        $script:BridgeProbeResult = $payload
-        if ($payload.status -and $payload.status -ne 'pending') {
-          break
+      try {
+        $context = $listener.EndGetContext($asyncContext)
+        $body = ''
+        $queryPayload = $context.Request.QueryString['payload']
+        if ($queryPayload) {
+          $payload = $queryPayload | ConvertFrom-Json
+        } else {
+          $reader = [System.IO.StreamReader]::new($context.Request.InputStream, $context.Request.ContentEncoding)
+          $body = $reader.ReadToEnd()
+          $reader.Dispose()
+          $payload = if ($body) { $body | ConvertFrom-Json } else { $null }
         }
+
+        $buffer = [System.Text.Encoding]::UTF8.GetBytes('ok')
+        $context.Response.StatusCode = 200
+        $context.Response.OutputStream.Write($buffer, 0, $buffer.Length)
+        $context.Response.OutputStream.Close()
+
+        if ($payload) {
+          $script:BridgeProbeResult = $payload
+          if ($payload.status -and $payload.status -ne 'pending') {
+            break
+          }
+        }
+      } catch {
+        $script:BridgeProbeResult = @{
+          status = 'error'
+          reason = "probe callback failed: $($_.Exception.Message)"
+        }
+        break
       }
-    } catch {
-      $script:BridgeProbeResult = @{
-        status = 'error'
-        reason = "probe callback failed: $($_.Exception.Message)"
-      }
-      break
     }
-  }
 
-  Stop-BridgeProbeListener
+    Stop-BridgeProbeListener
 
-  $callbackSucceeded =
-    $script:BridgeProbeResult `
-    -and $script:BridgeProbeResult.status -eq 'success' `
-    -and $script:BridgeProbeResult.response `
-    -and $script:BridgeProbeResult.response.success -eq $true `
-    -and $script:BridgeProbeResult.response.connected -eq $true
+    $callbackSucceeded =
+      $script:BridgeProbeResult `
+      -and $script:BridgeProbeResult.status -eq 'success' `
+      -and $script:BridgeProbeResult.response `
+      -and $script:BridgeProbeResult.response.success -eq $true `
+      -and $script:BridgeProbeResult.response.connected -eq $true
 
-  if ($callbackSucceeded) {
-    return
+    if ($callbackSucceeded) {
+      return
+    }
+
+    Start-Sleep -Milliseconds 500
   }
 
   if (-not (Wait-TabrixBridgeReady -TimeoutSec 20)) {
