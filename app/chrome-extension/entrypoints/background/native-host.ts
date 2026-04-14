@@ -953,12 +953,32 @@ export const initNativeHostListener = () => {
 
     // Forward file operation messages to native host
     if (message.type === 'forward_to_native' && message.message) {
-      if (nativePort) {
+      (async () => {
+        if (!nativePort) {
+          const ensured = await ensureNativeConnected('forward_to_native');
+          if (!ensured) {
+            const port = await getPreferredPort();
+            connectNativeHost(port);
+          }
+        }
+
+        if (nativePort && !currentServerStatus.isRunning) {
+          await waitForServerStatusSettle(800);
+        }
+
+        if (!nativePort) {
+          sendResponse({ success: false, error: 'Native host not connected' });
+          return;
+        }
+
         nativePort.postMessage(message.message);
         sendResponse({ success: true });
-      } else {
-        sendResponse({ success: false, error: 'Native host not connected' });
-      }
+      })().catch((error) => {
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
       return true;
     }
   });

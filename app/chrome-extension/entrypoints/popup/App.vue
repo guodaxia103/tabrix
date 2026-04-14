@@ -1013,6 +1013,31 @@ function waitMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isNoServiceWorkerError(error: unknown): boolean {
+  const message = normalizeNativeLastError(error) ?? String(error ?? '');
+  return /\bno sw\b/i.test(message) || /service worker/i.test(message);
+}
+
+async function sendRuntimeMessageWithNoSwRetry<T = any>(
+  message: Record<string, unknown>,
+  attempts = 3,
+  delayMs = 180,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return (await chrome.runtime.sendMessage(message)) as T;
+    } catch (error) {
+      lastError = error;
+      if (!isNoServiceWorkerError(error) || attempt === attempts - 1) {
+        throw error;
+      }
+      await waitMs(delayMs);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 async function createDefaultRemoteToken(): Promise<boolean> {
   try {
     const res = await fetch(`${getServerBaseUrl()}/auth/refresh`, {
@@ -1784,7 +1809,7 @@ const checkServerStatus = async () => {
 
 const refreshServerStatus = async () => {
   try {
-    const response = await chrome.runtime.sendMessage({
+    const response = await sendRuntimeMessageWithNoSwRetry({
       type: BACKGROUND_MESSAGE_TYPES.REFRESH_SERVER_STATUS,
     });
     if (response?.success && response.serverStatus) {
@@ -1801,7 +1826,9 @@ const refreshServerStatus = async () => {
     await refreshStandaloneDaemonStatus();
     await fetchConnectedClients();
   } catch (error) {
-    console.error('Failed to refresh server status:', error);
+    if (!isNoServiceWorkerError(error)) {
+      console.error('Failed to refresh server status:', error);
+    }
     applyDisconnectedPopupSnapshot();
     await refreshStandaloneDaemonStatus();
   }

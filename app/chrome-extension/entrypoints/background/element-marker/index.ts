@@ -18,6 +18,12 @@ import { keyboardTool } from '@/entrypoints/background/tools/browser/keyboard';
 import { getMessage } from '@/utils/i18n';
 
 const CONTEXT_MENU_ID = 'element_marker_mark';
+let ensureContextMenuPromise: Promise<void> | null = null;
+
+function isDuplicateMenuError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /duplicate id/i.test(message);
+}
 
 /**
  * Extract error message from MCP tool result
@@ -46,21 +52,40 @@ function extractToolError(result: any): string | undefined {
 }
 
 async function ensureContextMenu() {
-  try {
-    // Guard: contextMenus permission may be missing
-    if (!(chrome as any).contextMenus?.create) return;
-    // Remove and re-create our single menu to avoid duplication
+  if (ensureContextMenuPromise) return ensureContextMenuPromise;
+  ensureContextMenuPromise = (async () => {
     try {
-      await chrome.contextMenus.remove(CONTEXT_MENU_ID);
-    } catch {}
-    await chrome.contextMenus.create({
-      id: CONTEXT_MENU_ID,
-      title: getMessage('markerAddLabel'),
-      contexts: ['all'],
-    });
-  } catch {
-    // Context menu creation can fail when contextMenus permission is missing.
-  }
+      if (!(chrome as any).contextMenus?.create) return;
+      try {
+        await chrome.contextMenus.remove(CONTEXT_MENU_ID);
+      } catch {
+        // Ignore remove failures; menu may not exist yet.
+      }
+
+      try {
+        await chrome.contextMenus.create({
+          id: CONTEXT_MENU_ID,
+          title: getMessage('markerAddLabel'),
+          contexts: ['all'],
+        });
+      } catch (error) {
+        if (!isDuplicateMenuError(error)) throw error;
+        try {
+          await chrome.contextMenus.update(CONTEXT_MENU_ID, {
+            title: getMessage('markerAddLabel'),
+            contexts: ['all'],
+          });
+        } catch {
+          // Ignore update failure; duplicate menu already exists.
+        }
+      }
+    } catch {
+      // Context menu creation can fail when contextMenus permission is missing.
+    } finally {
+      ensureContextMenuPromise = null;
+    }
+  })();
+  return ensureContextMenuPromise;
 }
 
 /**

@@ -16,6 +16,12 @@ import { getMessage } from '@/utils/i18n';
 const CONTEXT_MENU_ID = 'web_editor_toggle';
 const COMMAND_KEY = 'toggle_web_editor';
 const DEFAULT_NATIVE_SERVER_PORT = 12306;
+let ensureContextMenuPromise: Promise<void> | null = null;
+
+function isDuplicateMenuError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /duplicate id/i.test(message);
+}
 
 /** Storage key prefix for TX change session data (per-tab isolation) */
 const WEB_EDITOR_TX_CHANGED_SESSION_KEY_PREFIX = 'web-editor-v2-tx-changed-';
@@ -671,19 +677,39 @@ function buildAgentPrompt(payload: WebEditorApplyPayload): string {
 }
 
 async function ensureContextMenu(): Promise<void> {
-  try {
-    if (!(chrome as any).contextMenus?.create) return;
+  if (ensureContextMenuPromise) return ensureContextMenuPromise;
+  ensureContextMenuPromise = (async () => {
     try {
-      await chrome.contextMenus.remove(CONTEXT_MENU_ID);
-    } catch {}
-    await chrome.contextMenus.create({
-      id: CONTEXT_MENU_ID,
-      title: getMessage('popupEnableWebEditor'),
-      contexts: ['all'],
-    });
-  } catch (error) {
-    console.warn('[WebEditor] Failed to ensure context menu:', error);
-  }
+      if (!(chrome as any).contextMenus?.create) return;
+      try {
+        await chrome.contextMenus.remove(CONTEXT_MENU_ID);
+      } catch {
+        // Ignore remove failures; menu may not exist yet.
+      }
+      try {
+        await chrome.contextMenus.create({
+          id: CONTEXT_MENU_ID,
+          title: getMessage('popupEnableWebEditor'),
+          contexts: ['all'],
+        });
+      } catch (error) {
+        if (!isDuplicateMenuError(error)) throw error;
+        try {
+          await chrome.contextMenus.update(CONTEXT_MENU_ID, {
+            title: getMessage('popupEnableWebEditor'),
+            contexts: ['all'],
+          });
+        } catch {
+          // Ignore update failure; duplicate menu already exists.
+        }
+      }
+    } catch (error) {
+      console.warn('[WebEditor] Failed to ensure context menu:', error);
+    } finally {
+      ensureContextMenuPromise = null;
+    }
+  })();
+  return ensureContextMenuPromise;
 }
 
 /**
