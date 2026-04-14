@@ -1,10 +1,11 @@
-import { describe, expect, test, afterAll, beforeAll } from '@jest/globals';
+import { describe, expect, test, afterAll, beforeAll, jest } from '@jest/globals';
 import supertest from 'supertest';
 import Server from './index';
 import { SERVER_CONFIG } from '../constant';
 import { sessionManager } from '../execution/session-manager';
 import { tokenManager } from './auth';
 import type { TokenData } from './auth';
+import { bridgeRuntimeState } from './bridge-state';
 
 /** 非本机 IP，用于触发 onRequest 中的 Bearer 校验分支 */
 const REMOTE_CLIENT_IP = '192.168.99.1';
@@ -114,6 +115,13 @@ describe('服务器测试', () => {
   });
 
   test('POST /bridge/heartbeat 应记录扩展心跳并更新 bridge 快照', async () => {
+    const syncBrowserSpy = jest
+      .spyOn(bridgeRuntimeState, 'syncBrowserProcessNow')
+      .mockImplementation(() => {
+        bridgeRuntimeState.setBrowserProcessRunning(true);
+        return true;
+      });
+    bridgeRuntimeState.setBrowserProcessRunning(true);
     const sentAt = Date.now();
     const heartbeat = await supertest(Server.getInstance().server)
       .post('/bridge/heartbeat')
@@ -151,6 +159,8 @@ describe('服务器测试', () => {
         autoConnectEnabled: true,
       },
     });
+    syncBrowserSpy.mockRestore();
+    bridgeRuntimeState.reset();
   });
 
   test('GET /status 应暴露 execution 快照', async () => {
