@@ -33,7 +33,7 @@ import { closeDb } from '../agent/db';
 import { registerAgentRoutes } from './routes';
 import { sessionManager } from '../execution/session-manager';
 import { SessionRegistry, type ConnectedClient, type TransportsSnapshot } from './session-registry';
-import { BridgeStateManager, type BridgeRuntimeSnapshot } from './bridge-state';
+import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from './bridge-state';
 
 // Compatibility guard:
 // @hono/node-server may call socket.destroySoon() while draining incoming requests.
@@ -149,7 +149,7 @@ export class Server {
   private nativeHost: NativeMessagingHost | null = null;
   private sessions = new SessionRegistry();
   private listeningPort: number | null = null;
-  private bridgeState = new BridgeStateManager();
+  private bridgeState = bridgeRuntimeState;
   private agentStreamManager: AgentStreamManager;
   private agentChatService: AgentChatService;
 
@@ -634,12 +634,14 @@ export class Server {
       this.listeningPort = null;
       this.isRunning = false;
       this.bridgeState.stopWatching();
+      this.bridgeState.reset();
       this.clearNativeHost();
     } catch (err) {
       this.listeningPort = null;
       this.isRunning = false;
       closeDb();
       this.bridgeState.stopWatching();
+      this.bridgeState.reset();
       this.clearNativeHost();
       throw err;
     }

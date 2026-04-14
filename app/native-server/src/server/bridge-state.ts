@@ -110,6 +110,32 @@ export class BridgeStateManager {
 
   private watchTimer: NodeJS.Timeout | null = null;
 
+  reset(): void {
+    this.stopWatching();
+    this.snapshot = {
+      bridgeState: 'BROWSER_NOT_RUNNING',
+      browserProcessRunning: false,
+      browserProcessDetectedAt: null,
+      extensionHeartbeatAt: null,
+      heartbeat: {
+        extensionId: null,
+        connectionId: null,
+        browserVersion: null,
+        tabCount: null,
+        windowCount: null,
+        autoConnectEnabled: null,
+      },
+      nativeHostAttached: false,
+      lastBridgeReadyAt: null,
+      lastBridgeErrorCode: null,
+      lastBridgeErrorMessage: null,
+      lastRecoveryAction: null,
+      lastRecoveryAt: null,
+      recoveryAttempts: 0,
+      recoveryInFlight: false,
+    };
+  }
+
   startWatching(): void {
     this.syncBrowserProcessNow();
     if (this.watchTimer) return;
@@ -129,10 +155,14 @@ export class BridgeStateManager {
 
   syncBrowserProcessNow(): boolean {
     const running = this.detectBrowserProcess();
+    this.setBrowserProcessRunning(running);
+    return running;
+  }
+
+  setBrowserProcessRunning(running: boolean): void {
     this.snapshot.browserProcessRunning = running;
     this.snapshot.browserProcessDetectedAt = running ? Date.now() : null;
     this.refreshDerivedState();
-    return running;
   }
 
   setNativeHostAttached(attached: boolean): void {
@@ -256,3 +286,5 @@ export class BridgeStateManager {
     this.snapshot.bridgeState = 'BROWSER_RUNNING_EXTENSION_UNAVAILABLE';
   }
 }
+
+export const bridgeRuntimeState = new BridgeStateManager();

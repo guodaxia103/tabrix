@@ -1,10 +1,23 @@
 import nativeMessagingHostInstance from '../native-messaging-host';
 import { handleToolCall } from './register-tools';
 import { sessionManager } from '../execution/session-manager';
+import { bridgeRuntimeState } from '../server/bridge-state';
 
 describe('handleToolCall execution wrapper', () => {
+  const markBridgeReady = () => {
+    bridgeRuntimeState.setBrowserProcessRunning(true);
+    bridgeRuntimeState.recordHeartbeat({
+      sentAt: Date.now(),
+      nativeConnected: true,
+      extensionId: 'test-extension',
+      connectionId: 'test-connection',
+    });
+    bridgeRuntimeState.setNativeHostAttached(true);
+  };
+
   afterEach(() => {
     jest.restoreAllMocks();
+    bridgeRuntimeState.reset();
     sessionManager.reset();
     delete process.env.ENABLE_MCP_TOOLS;
     delete process.env.DISABLE_MCP_TOOLS;
@@ -12,6 +25,7 @@ describe('handleToolCall execution wrapper', () => {
   });
 
   it('tracks a successful tool call as a completed execution session', async () => {
+    markBridgeReady();
     jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
       status: 'success',
       items: [],
@@ -37,6 +51,7 @@ describe('handleToolCall execution wrapper', () => {
   });
 
   it('tracks a rejected tool call as a failed execution session', async () => {
+    markBridgeReady();
     process.env.ENABLE_MCP_TOOLS = 'chrome_read_page';
     jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValue({
       status: 'success',
@@ -54,6 +69,7 @@ describe('handleToolCall execution wrapper', () => {
   });
 
   it('blocks sensitive tools when MCP_DISABLE_SENSITIVE_TOOLS is set', async () => {
+    markBridgeReady();
     process.env.MCP_DISABLE_SENSITIVE_TOOLS = 'true';
     jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValue({
       status: 'success',
@@ -70,6 +86,7 @@ describe('handleToolCall execution wrapper', () => {
   });
 
   it('allows non-sensitive tools when MCP_DISABLE_SENSITIVE_TOOLS is set', async () => {
+    markBridgeReady();
     process.env.MCP_DISABLE_SENSITIVE_TOOLS = 'true';
     jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
       status: 'success',

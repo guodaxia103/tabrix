@@ -1,4 +1,4 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
   CallToolResult,
@@ -10,6 +10,8 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { spawn, spawnSync } from 'node:child_process';
+import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from '../server/bridge-state';
+import { collectRuntimeConsistencySnapshot } from '../scripts/runtime-consistency';
 
 /**
  * Tools with elevated risk: arbitrary JS execution, data deletion, file system
@@ -69,15 +71,49 @@ function createErrorResult(text: string): CallToolResult {
 interface BridgeRecoveryResult {
   attempted: boolean;
   launched: boolean;
+  action: 'launch_browser' | 'extension_reconnect' | 'wait_for_extension' | 'none';
   command?: string;
   waitMs: number;
+  bridgeStateBefore: string;
+  bridgeStateAfter?: string;
 }
 
-const BRIDGE_RECOVERY_WAIT_MS = 2500;
+interface BridgeFailurePayload {
+  code: string;
+  message: string;
+  bridgeState: string;
+  recoveryAttempted: boolean;
+  suggestions: string[];
+}
+
+interface LaunchAttemptResult {
+  launched: boolean;
+  command?: string;
+}
+
+const BRIDGE_LAUNCH_WAIT_MS = 12_000;
+const BRIDGE_HEARTBEAT_WAIT_MS = 15_000;
+const BRIDGE_ATTACH_WAIT_MS = 10_000;
+const BRIDGE_RECOVERY_TOTAL_BUDGET_MS = 30_000;
+const BRIDGE_RECOVERY_POLL_MS = 500;
 
 function stringifyUnknownError(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+function isBrowserAutomationTool(name: string): boolean {
+  return name.startsWith('chrome_') || name.startsWith('flow.');
+}
+
+function isBrowserAutomationContext(context: string): boolean {
+  if (context.startsWith('tool:')) {
+    return isBrowserAutomationTool(context.slice('tool:'.length));
+  }
+  if (context.startsWith('flow:')) {
+    return true;
+  }
+  return false;
 }
 
 function isRecoverableBridgeIssue(error: unknown): boolean {
@@ -99,6 +135,31 @@ function responseNeedsBridgeRecovery(response: any): boolean {
 
 async function wait(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getBridgeSnapshot(): BridgeRuntimeSnapshot {
+  bridgeRuntimeState.syncBrowserProcessNow();
+  return bridgeRuntimeState.getSnapshot();
+}
+
+function isHeartbeatFresh(snapshot: BridgeRuntimeSnapshot): boolean {
+  return (
+    typeof snapshot.extensionHeartbeatAt === 'number' &&
+    Date.now() - snapshot.extensionHeartbeatAt <= BRIDGE_HEARTBEAT_WAIT_MS
+  );
+}
+
+async function waitForCondition(
+  predicate: () => boolean,
+  timeoutMs: number,
+  pollMs: number = BRIDGE_RECOVERY_POLL_MS,
+): Promise<boolean> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (predicate()) return true;
+    await wait(pollMs);
+  }
+  return predicate();
 }
 
 async function tryLaunchCommand(command: string, args: string[]): Promise<boolean> {
@@ -131,7 +192,50 @@ async function tryLaunchCommand(command: string, args: string[]): Promise<boolea
   });
 }
 
-async function launchBrowserBestEffort(): Promise<{ launched: boolean; command?: string }> {
+async function requestExtensionReconnectBestEffort(): Promise<LaunchAttemptResult> {
+  try {
+    const consistency = await collectRuntimeConsistencySnapshot();
+    const extensionId = consistency.extensionBuild.extensionId;
+    if (!extensionId) {
+      return { launched: false, command: 'skip:no_extension_id' };
+    }
+
+    const connectUrl = `chrome-extension://${extensionId}/connect.html`;
+    const candidates =
+      process.platform === 'win32'
+        ? [
+            { command: 'cmd', args: ['/c', 'start', '', 'chrome', connectUrl] },
+            { command: 'cmd', args: ['/c', 'start', '', 'chromium', connectUrl] },
+          ]
+        : process.platform === 'darwin'
+          ? [
+              { command: 'open', args: ['-a', 'Google Chrome', connectUrl] },
+              { command: 'open', args: ['-a', 'Chromium', connectUrl] },
+            ]
+          : [
+              { command: 'google-chrome', args: [connectUrl] },
+              { command: 'google-chrome-stable', args: [connectUrl] },
+              { command: 'chromium', args: [connectUrl] },
+              { command: 'chromium-browser', args: [connectUrl] },
+            ];
+
+    for (const candidate of candidates) {
+      const launched = await tryLaunchCommand(candidate.command, candidate.args);
+      if (launched) {
+        return {
+          launched: true,
+          command: `${candidate.command} ${candidate.args.join(' ')}`.trim(),
+        };
+      }
+    }
+  } catch {
+    // Fall through to a failed reconnect attempt.
+  }
+
+  return { launched: false, command: 'skip:extension_reconnect_unavailable' };
+}
+
+async function launchBrowserBestEffort(): Promise<LaunchAttemptResult> {
   const candidates =
     process.platform === 'win32'
       ? [
@@ -202,46 +306,179 @@ function shouldSkipBrowserLaunchForError(error: unknown): boolean {
   return message.includes('forward_to_native rejected');
 }
 
-async function attemptBridgeRecovery(
-  _context: string,
-  firstError: unknown,
-): Promise<BridgeRecoveryResult> {
-  if (!isRecoverableBridgeIssue(firstError)) {
-    return { attempted: false, launched: false, waitMs: 0 };
+function buildBridgeFailurePayload(
+  snapshot: BridgeRuntimeSnapshot,
+  recoveryAttempted: boolean,
+): BridgeFailurePayload {
+  if (!snapshot.browserProcessRunning) {
+    return {
+      code: 'TABRIX_BROWSER_NOT_RUNNING',
+      message: 'Chrome 浏览器未运行，Tabrix 已尝试恢复但未检测到可用浏览器进程。',
+      bridgeState: snapshot.bridgeState,
+      recoveryAttempted,
+      suggestions: ['手动打开 Chrome 后重试', '确认系统中安装的是 Chrome 或 Chromium'],
+    };
   }
-  const browserAlreadyRunning = hasBrowserProcessRunning();
-  const skipLaunch = browserAlreadyRunning || shouldSkipBrowserLaunchForError(firstError);
-  const launch = skipLaunch
-    ? {
-        launched: false,
-        command: browserAlreadyRunning
-          ? 'skip:browser-already-running'
-          : 'skip:forward_to_native_rejected',
-      }
-    : await launchBrowserBestEffort();
-  await wait(BRIDGE_RECOVERY_WAIT_MS);
+
+  if (!isHeartbeatFresh(snapshot)) {
+    return {
+      code: 'TABRIX_EXTENSION_HEARTBEAT_MISSING',
+      message: 'Chrome 已运行，但 Tabrix 扩展心跳未恢复，浏览器自动化暂不可用。',
+      bridgeState: snapshot.bridgeState,
+      recoveryAttempted,
+      suggestions: ['确认 Tabrix 扩展已启用并已加载最新构建', '刷新扩展或重启浏览器后重试'],
+    };
+  }
+
+  if (!snapshot.nativeHostAttached) {
+    return {
+      code: 'TABRIX_NATIVE_HOST_ATTACH_TIMEOUT',
+      message: 'Tabrix 扩展已恢复心跳，但 Native Host 仍未附着完成。',
+      bridgeState: snapshot.bridgeState,
+      recoveryAttempted,
+      suggestions: ['在扩展里执行一次连接', '运行 tabrix doctor --fix 后重试'],
+    };
+  }
+
   return {
-    attempted: true,
-    launched: launch.launched,
-    command: launch.command,
-    waitMs: BRIDGE_RECOVERY_WAIT_MS,
+    code: 'TABRIX_BRIDGE_RECOVERY_TIMEOUT',
+    message: 'Tabrix 桥接恢复超时，浏览器自动化尚未达到可执行状态。',
+    bridgeState: snapshot.bridgeState,
+    recoveryAttempted,
+    suggestions: [
+      '确认浏览器、扩展与本地服务都在同一台机器上运行',
+      '运行 tabrix doctor --fix 获取更详细诊断',
+    ],
   };
 }
 
-function formatRecoveryError(error: unknown, recovery: BridgeRecoveryResult): string {
-  const base = stringifyUnknownError(error);
-  const code = recovery.attempted ? 'TABRIX_BRIDGE_RECOVERY_FAILED' : 'TABRIX_BRIDGE_NOT_READY';
-  const launchPart = recovery.attempted
+async function waitForBridgeRecoveryReady(totalBudgetMs: number): Promise<boolean> {
+  const startedAt = Date.now();
+
+  const browserReady = await waitForCondition(
+    () => getBridgeSnapshot().browserProcessRunning,
+    Math.min(BRIDGE_LAUNCH_WAIT_MS, totalBudgetMs),
+  );
+  if (!browserReady) return false;
+
+  const heartbeatBudget = Math.max(
+    0,
+    Math.min(BRIDGE_HEARTBEAT_WAIT_MS, totalBudgetMs - (Date.now() - startedAt)),
+  );
+  const heartbeatReady = await waitForCondition(
+    () => isHeartbeatFresh(getBridgeSnapshot()),
+    heartbeatBudget,
+  );
+  if (!heartbeatReady) return false;
+
+  const attachBudget = Math.max(
+    0,
+    Math.min(BRIDGE_ATTACH_WAIT_MS, totalBudgetMs - (Date.now() - startedAt)),
+  );
+  return await waitForCondition(() => getBridgeSnapshot().nativeHostAttached, attachBudget);
+}
+
+async function attemptBridgeRecovery(
+  _context: string,
+  firstError: unknown,
+  initialSnapshot?: BridgeRuntimeSnapshot,
+): Promise<BridgeRecoveryResult> {
+  const recoveryStartedAt = Date.now();
+  const snapshotBefore = initialSnapshot ?? getBridgeSnapshot();
+  if (!isRecoverableBridgeIssue(firstError) && snapshotBefore.bridgeState === 'READY') {
+    return {
+      attempted: false,
+      launched: false,
+      action: 'none',
+      waitMs: 0,
+      bridgeStateBefore: snapshotBefore.bridgeState,
+      bridgeStateAfter: snapshotBefore.bridgeState,
+    };
+  }
+
+  const browserAlreadyRunning = snapshotBefore.browserProcessRunning;
+  const shouldLaunchBrowser =
+    !browserAlreadyRunning &&
+    !shouldSkipBrowserLaunchForError(firstError) &&
+    snapshotBefore.bridgeState === 'BROWSER_NOT_RUNNING';
+
+  const action: BridgeRecoveryResult['action'] = shouldLaunchBrowser
+    ? 'launch_browser'
+    : browserAlreadyRunning
+      ? 'extension_reconnect'
+      : 'wait_for_extension';
+
+  bridgeRuntimeState.markRecoveryStarted(action);
+
+  let launch: LaunchAttemptResult = { launched: false };
+  if (shouldLaunchBrowser) {
+    launch = await requestExtensionReconnectBestEffort();
+    if (!launch.launched) {
+      launch = await launchBrowserBestEffort();
+    }
+  } else if (browserAlreadyRunning) {
+    launch = await requestExtensionReconnectBestEffort();
+  }
+
+  const ready = await waitForBridgeRecoveryReady(BRIDGE_RECOVERY_TOTAL_BUDGET_MS);
+  const snapshotAfter = getBridgeSnapshot();
+  bridgeRuntimeState.markRecoveryFinished(
+    ready,
+    ready ? null : buildBridgeFailurePayload(snapshotAfter, true).code,
+    ready ? null : buildBridgeFailurePayload(snapshotAfter, true).message,
+  );
+
+  return {
+    attempted: true,
+    launched: launch.launched,
+    action,
+    command: launch.command,
+    waitMs: Date.now() - recoveryStartedAt,
+    bridgeStateBefore: snapshotBefore.bridgeState,
+    bridgeStateAfter: snapshotAfter.bridgeState,
+  };
+}
+
+function formatRecoveryError(
+  failure: BridgeFailurePayload,
+  recovery: BridgeRecoveryResult | undefined,
+): string {
+  const launchPart = recovery?.attempted
     ? ` launch=${recovery.launched ? 'ok' : 'failed'}`
     : ' launch=skipped';
-  const commandPart = recovery.command ? ` command="${recovery.command}"` : '';
-  return `[${code}] ${base}; recoveryAttempted=${recovery.attempted}; waitMs=${recovery.waitMs};${launchPart}${commandPart}. Open Chrome and ensure Tabrix extension remains connected.`;
+  const commandPart = recovery?.command ? ` command="${recovery.command}"` : '';
+  const recoveryPart = recovery
+    ? ` recoveryAttempted=${recovery.attempted}; waitMs=${recovery.waitMs}; action=${recovery.action};`
+    : ' recoveryAttempted=false;';
+  return `${JSON.stringify(failure)};${recoveryPart}${launchPart}${commandPart}`;
 }
 
 async function callWithBridgeRecovery(
   invoker: () => Promise<any>,
   context: string,
-): Promise<{ response: any; recovery?: BridgeRecoveryResult }> {
+): Promise<{
+  response: any;
+  recovery?: BridgeRecoveryResult;
+  bridgeFailure?: BridgeFailurePayload;
+}> {
+  const precheckSnapshot = getBridgeSnapshot();
+  if (isBrowserAutomationContext(context) && precheckSnapshot.bridgeState !== 'READY') {
+    const recovery = await attemptBridgeRecovery(
+      context,
+      'bridge is unavailable',
+      precheckSnapshot,
+    );
+    const afterRecovery = getBridgeSnapshot();
+    if (afterRecovery.bridgeState !== 'READY' || !afterRecovery.nativeHostAttached) {
+      const failure = buildBridgeFailurePayload(afterRecovery, true);
+      return {
+        response: { status: 'error', error: formatRecoveryError(failure, recovery) },
+        recovery,
+        bridgeFailure: failure,
+      };
+    }
+  }
+
   try {
     const response = await invoker();
     if (!responseNeedsBridgeRecovery(response)) {
@@ -250,12 +487,14 @@ async function callWithBridgeRecovery(
     const recovery = await attemptBridgeRecovery(context, response.error || response.message);
     const retry = await invoker();
     if (responseNeedsBridgeRecovery(retry)) {
+      const failure = buildBridgeFailurePayload(getBridgeSnapshot(), recovery.attempted);
       return {
         response: {
           ...retry,
-          error: formatRecoveryError(retry.error || retry.message, recovery),
+          error: formatRecoveryError(failure, recovery),
         },
         recovery,
+        bridgeFailure: failure,
       };
     }
     return { response: retry, recovery };
@@ -267,17 +506,20 @@ async function callWithBridgeRecovery(
     try {
       const retry = await invoker();
       if (responseNeedsBridgeRecovery(retry)) {
+        const failure = buildBridgeFailurePayload(getBridgeSnapshot(), recovery.attempted);
         return {
           response: {
             ...retry,
-            error: formatRecoveryError(retry.error || retry.message, recovery),
+            error: formatRecoveryError(failure, recovery),
           },
           recovery,
+          bridgeFailure: failure,
         };
       }
       return { response: retry, recovery };
     } catch (retryError) {
-      throw new Error(formatRecoveryError(retryError, recovery));
+      const failure = buildBridgeFailurePayload(getBridgeSnapshot(), recovery.attempted);
+      throw new Error(formatRecoveryError(failure, recovery));
     }
   }
 }
@@ -340,7 +582,7 @@ async function listDynamicFlowTools(): Promise<Tool[]> {
   }
 }
 
-export const setupTools = (server: Server) => {
+export const setupTools = (server: McpServer) => {
   // List tools handler
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const dynamicTools = await listDynamicFlowTools();
@@ -408,7 +650,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         const match = items.find((it: any) => it.slug === slug);
         if (!match) throw new Error(`Flow not found for tool ${name}`);
         const flowArgs = { flowId: match.id, args };
-        const { response: proxyRes } = await callWithBridgeRecovery(
+        const { response: proxyRes, bridgeFailure } = await callWithBridgeRecovery(
           () =>
             nativeMessagingHostInstance.sendRequestToExtensionAndWait(
               { name: 'record_replay_flow_run', args: flowArgs },
@@ -429,11 +671,17 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           });
           return proxyRes.data;
         }
-        const result = createErrorResult(`Error calling dynamic flow tool: ${proxyRes.error}`);
+        const result = createErrorResult(
+          bridgeFailure
+            ? JSON.stringify(bridgeFailure)
+            : `Error calling dynamic flow tool: ${proxyRes.error}`,
+        );
         sessionManager.completeStep(session.sessionId, step.stepId, {
           status: 'failed',
-          errorCode: 'dynamic_flow_error',
-          errorSummary: String(proxyRes.error || 'Unknown dynamic flow error'),
+          errorCode: bridgeFailure ? bridgeFailure.code.toLowerCase() : 'dynamic_flow_error',
+          errorSummary: bridgeFailure
+            ? bridgeFailure.message
+            : String(proxyRes.error || 'Unknown dynamic flow error'),
           resultSummary: `Dynamic flow ${name} failed`,
         });
         sessionManager.finishSession(session.sessionId, {
@@ -459,7 +707,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       }
     }
     // 发送请求到Chrome扩展并等待响应
-    const { response } = await callWithBridgeRecovery(
+    const { response, bridgeFailure } = await callWithBridgeRecovery(
       () =>
         nativeMessagingHostInstance.sendRequestToExtensionAndWait(
           {
@@ -485,12 +733,20 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     } else {
       const responseError = String(response.error || 'Unknown tool error');
       const isBridgeError =
-        responseError.includes('TABRIX_BRIDGE_') || isRecoverableBridgeIssue(responseError);
-      const result = createErrorResult(`Error calling tool: ${responseError}`);
+        Boolean(bridgeFailure) ||
+        responseError.includes('TABRIX_BRIDGE_') ||
+        isRecoverableBridgeIssue(responseError);
+      const result = createErrorResult(
+        bridgeFailure ? JSON.stringify(bridgeFailure) : `Error calling tool: ${responseError}`,
+      );
       sessionManager.completeStep(session.sessionId, step.stepId, {
         status: 'failed',
-        errorCode: isBridgeError ? 'browser_bridge_not_ready' : 'tool_call_error',
-        errorSummary: responseError,
+        errorCode: bridgeFailure
+          ? bridgeFailure.code.toLowerCase()
+          : isBridgeError
+            ? 'browser_bridge_not_ready'
+            : 'tool_call_error',
+        errorSummary: bridgeFailure ? bridgeFailure.message : responseError,
         resultSummary: `Tool ${name} failed`,
       });
       sessionManager.finishSession(session.sessionId, {
