@@ -8,6 +8,8 @@ param(
 $ErrorActionPreference = 'Continue'
 $script:SmokeServerProcess = $null
 $script:SmokeServerPort = 62100
+$script:BridgeProbeListener = $null
+$script:BridgeProbeResult = $null
 $script:UploadArtifactPath = Join-Path (Split-Path $PSScriptRoot -Parent) '.tmp/artifacts/upload.txt'
 $script:ClaudeMcpConfigPath = Join-Path (Split-Path $PSScriptRoot -Parent) '.tmp/claude-tabrix-mcp.json'
 $script:ExtensionConnectUrl = 'chrome-extension://njlidkjgkcccdoffkfcbgiefdpaipfdn/connect.html'
@@ -68,6 +70,19 @@ function Start-SmokeServer {
   if (-not (Wait-PortReady -Port $script:SmokeServerPort -TimeoutSec 10)) {
     Stop-SmokeServer
     throw "Smoke server failed to start on port $script:SmokeServerPort"
+  }
+}
+
+function Stop-BridgeProbeListener {
+  if ($script:BridgeProbeListener) {
+    try {
+      $script:BridgeProbeListener.Stop()
+      $script:BridgeProbeListener.Close()
+    } catch {
+      # ignore cleanup failures
+    } finally {
+      $script:BridgeProbeListener = $null
+    }
   }
 }
 
@@ -139,10 +154,46 @@ function Ensure-TabrixBridge {
     throw 'Chrome executable not found while ensuring Tabrix bridge.'
   }
 
-  Start-Process -FilePath $chromePath -ArgumentList $script:ExtensionConnectUrl | Out-Null
+  Stop-BridgeProbeListener
+  $script:BridgeProbeResult = $null
+  $probePort = 62101
+  $listener = [System.Net.HttpListener]::new()
+  $listener.Prefixes.Add("http://127.0.0.1:$probePort/")
+  $listener.Start()
+  $script:BridgeProbeListener = $listener
+
+  $connectUrl = "$script:ExtensionConnectUrl?callback=http://127.0.0.1:$probePort/"
+  Start-Process -FilePath $chromePath -ArgumentList $connectUrl | Out-Null
+
+  $asyncContext = $listener.BeginGetContext($null, $null)
+  if ($asyncContext.AsyncWaitHandle.WaitOne([TimeSpan]::FromSeconds(15))) {
+    try {
+      $context = $listener.EndGetContext($asyncContext)
+      $reader = [System.IO.StreamReader]::new($context.Request.InputStream, $context.Request.ContentEncoding)
+      $body = $reader.ReadToEnd()
+      $reader.Dispose()
+      $script:BridgeProbeResult = if ($body) { $body | ConvertFrom-Json } else { $null }
+      $buffer = [System.Text.Encoding]::UTF8.GetBytes('ok')
+      $context.Response.StatusCode = 200
+      $context.Response.OutputStream.Write($buffer, 0, $buffer.Length)
+      $context.Response.OutputStream.Close()
+    } catch {
+      $script:BridgeProbeResult = @{
+        status = 'error'
+        reason = "probe callback failed: $($_.Exception.Message)"
+      }
+    }
+  }
+
+  Stop-BridgeProbeListener
 
   if (-not (Wait-TabrixBridgeReady -TimeoutSec 20)) {
-    throw 'Tabrix bridge did not attach after opening connect.html. Reload the extension once and retry.'
+    $probeDetail = if ($script:BridgeProbeResult) {
+      ($script:BridgeProbeResult | ConvertTo-Json -Depth 8 -Compress)
+    } else {
+      'no connect callback received'
+    }
+    throw "Tabrix bridge did not attach after opening connect.html. Detail: $probeDetail"
   }
 }
 
@@ -299,5 +350,6 @@ try {
   Write-Host "Done. Summary written to $(Join-Path $OutDir '_summary.json')"
 }
 finally {
+  Stop-BridgeProbeListener
   Stop-SmokeServer
 }

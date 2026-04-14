@@ -1,6 +1,21 @@
 import { NativeMessageType } from '@tabrix/shared';
 
 const root = document.querySelector<HTMLDivElement>('#app');
+const callbackUrl = new URLSearchParams(window.location.search).get('callback');
+
+async function reportResult(payload: Record<string, unknown>) {
+  if (!callbackUrl) return;
+  try {
+    await fetch(callbackUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+  } catch {
+    // Best-effort only.
+  }
+}
 
 function render(status: 'pending' | 'success' | 'error', detail: string) {
   if (!root) return;
@@ -19,6 +34,7 @@ function render(status: 'pending' | 'success' | 'error', detail: string) {
 
 async function connect() {
   render('pending', '正在连接 Native Host，请稍候...');
+  await reportResult({ status: 'pending' });
 
   try {
     const response = await chrome.runtime.sendMessage({
@@ -27,14 +43,18 @@ async function connect() {
 
     if (response?.success && response?.connected) {
       render('success', '连接成功。现在可以关闭此页面，继续使用 Tabrix。');
+      await reportResult({ status: 'success', response });
       return;
     }
 
     const reason =
       response?.lastError || response?.error || '连接未建立，请检查扩展和本地服务状态。';
     render('error', `连接失败：${String(reason)}`);
+    await reportResult({ status: 'error', reason, response });
   } catch (error) {
-    render('error', `连接失败：${error instanceof Error ? error.message : String(error)}`);
+    const reason = error instanceof Error ? error.message : String(error);
+    render('error', `连接失败：${reason}`);
+    await reportResult({ status: 'error', reason });
   }
 }
 
