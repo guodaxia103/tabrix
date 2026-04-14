@@ -8,6 +8,9 @@ param(
 $ErrorActionPreference = 'Continue'
 $script:SmokeServerProcess = $null
 $script:SmokeServerPort = 62100
+$script:UploadArtifactPath = Join-Path (Split-Path $PSScriptRoot -Parent) '.tmp/artifacts/upload.txt'
+$script:ClaudeMcpConfigPath = Join-Path (Split-Path $PSScriptRoot -Parent) '.tmp/claude-tabrix-mcp.json'
+$script:ExtensionConnectUrl = 'chrome-extension://njlidkjgkcccdoffkfcbgiefdpaipfdn/connect.html'
 
 function Wait-PortReady {
   param(
@@ -68,13 +71,95 @@ function Start-SmokeServer {
   }
 }
 
+function Ensure-AcceptanceArtifacts {
+  $artifactDir = Split-Path $script:UploadArtifactPath -Parent
+  New-Item -ItemType Directory -Force $artifactDir | Out-Null
+  Set-Content -Path $script:UploadArtifactPath -Value 'tabrix-claude-upload' -Encoding utf8
+}
+
+function Ensure-ClaudeMcpConfig {
+  $tokenFile = Join-Path $env:USERPROFILE '.tabrix/auth-token.json'
+  if (-not (Test-Path $tokenFile)) {
+    throw "Missing Tabrix auth token file: $tokenFile"
+  }
+
+  $token = (Get-Content $tokenFile -Raw | ConvertFrom-Json).token
+  if ([string]::IsNullOrWhiteSpace($token)) {
+    throw 'Tabrix auth token is empty.'
+  }
+
+  $configDir = Split-Path $script:ClaudeMcpConfigPath -Parent
+  New-Item -ItemType Directory -Force $configDir | Out-Null
+
+  @{
+    mcpServers = @{
+      tabrix = @{
+        type = 'http'
+        url = 'http://192.168.5.69:12306/mcp'
+        headers = @{
+          Authorization = "Bearer $token"
+        }
+      }
+    }
+  } | ConvertTo-Json -Depth 8 | Set-Content -Path $script:ClaudeMcpConfigPath -Encoding utf8
+}
+
+function Wait-TabrixBridgeReady {
+  param(
+    [int]$TimeoutSec = 15
+  )
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSec)
+  while ((Get-Date) -lt $deadline) {
+    try {
+      $status = tabrix status --json | ConvertFrom-Json
+      if ($status.data.nativeHostAttached) {
+        return $true
+      }
+    } catch {
+      # keep polling
+    }
+    Start-Sleep -Milliseconds 500
+  }
+
+  return $false
+}
+
+function Ensure-TabrixBridge {
+  if (Wait-TabrixBridgeReady -TimeoutSec 2) {
+    return
+  }
+
+  $chromePath = @(
+    'C:\Program Files\Google\Chrome\Application\chrome.exe',
+    'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'
+  ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+  if (-not $chromePath) {
+    throw 'Chrome executable not found while ensuring Tabrix bridge.'
+  }
+
+  Start-Process -FilePath $chromePath -ArgumentList $script:ExtensionConnectUrl | Out-Null
+
+  if (-not (Wait-TabrixBridgeReady -TimeoutSec 20)) {
+    throw 'Tabrix bridge did not attach after opening connect.html. Reload the extension once and retry.'
+  }
+}
+
 function Run-Case {
   param(
     [string]$Name,
     [string]$Prompt
   )
   Write-Host "Running $Name ..."
-  $out = claude -p --permission-mode bypassPermissions $Prompt 2>&1
+  $prefixedPrompt = @"
+仅使用已连接的 tabrix MCP 工具完成以下任务。
+不要使用 Playwright 或其他 MCP/内置浏览器工具。
+如果 tabrix 工具不可用，请明确说明“tabrix 不可用”，不要回退到其它工具。
+
+$Prompt
+"@
+  $out = claude -p --permission-mode bypassPermissions --mcp-config $script:ClaudeMcpConfigPath --strict-mcp-config $prefixedPrompt 2>&1
   $file = Join-Path $OutDir "$Name.txt"
   $out | Out-File -FilePath $file -Encoding utf8
 }
@@ -83,7 +168,10 @@ New-Item -ItemType Directory -Force $OutDir | Out-Null
 
 try {
   Stop-SmokeServer
+  Ensure-AcceptanceArtifacts
+  Ensure-ClaudeMcpConfig
   Start-SmokeServer
+  Ensure-TabrixBridge
 
   $cases = @(
     @{
@@ -174,8 +262,19 @@ try {
       prompt = @"
 请使用 tabrix 工具一次会话连续完成：
 1) chrome_navigate 打开 $BaseUrl
-2) chrome_upload_file(selector=#fileInput,filePath=E:/projects/AI/copaw/mcp-chrome/.tmp/artifacts/upload.txt)
+2) chrome_upload_file(selector=#fileInput,filePath=$($script:UploadArtifactPath -replace '\\','/'))
 3) chrome_request_element_selection(requests=[{name:'Login按钮'}],timeoutMs=5000)
+最后给每一步返回 success/failed 摘要。
+"@
+      },
+      @{
+        name = 'group-full-4-close-tabs'
+        prompt = @"
+请使用 tabrix 工具一次会话连续完成：
+1) chrome_navigate 打开 ${BaseUrl}page2.html 并使用 newWindow=true
+2) get_windows_and_tabs 列出当前窗口和标签页
+3) 找到标题为 Page2 或 URL 包含 /page2.html 的标签页并调用 chrome_switch_tab 切换过去
+4) chrome_close_tabs 关闭刚才这个 Page2 标签页
 最后给每一步返回 success/failed 摘要。
 "@
       }
