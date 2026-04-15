@@ -16,6 +16,40 @@ $script:ExtensionConnectUrl = 'chrome-extension://njlidkjgkcccdoffkfcbgiefdpaipf
 $script:CleanupTabsScriptPath = Join-Path $PSScriptRoot 'cleanup-acceptance-tabs.cjs'
 $script:CaseTimeoutSec = 120
 
+function Start-HiddenProcess {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$FilePath,
+    [string[]]$ArgumentList = @(),
+    [string]$WorkingDirectory = ''
+  )
+
+  $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+  $startInfo.FileName = $FilePath
+  $startInfo.UseShellExecute = $false
+  $startInfo.CreateNoWindow = $true
+  $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+
+  if (-not [string]::IsNullOrWhiteSpace($WorkingDirectory)) {
+    $startInfo.WorkingDirectory = $WorkingDirectory
+  }
+
+  if ($ArgumentList.Count -gt 0) {
+    $startInfo.Arguments = [string]::Join(' ', ($ArgumentList | ForEach-Object {
+      if ($_ -match '\s|"') {
+        '"' + ($_ -replace '"', '\"') + '"'
+      } else {
+        $_
+      }
+    }))
+  }
+
+  $process = New-Object System.Diagnostics.Process
+  $process.StartInfo = $startInfo
+  [void]$process.Start()
+  return $process
+}
+
 function Wait-PortReady {
   param(
     [int]$Port,
@@ -63,11 +97,10 @@ function Stop-SmokeServer {
 
 function Start-SmokeServer {
   $serverScript = Join-Path $PSScriptRoot 'claude-smoke-server.cjs'
-  $script:SmokeServerProcess = Start-Process -FilePath 'node' `
-    -ArgumentList $serverScript `
-    -WorkingDirectory (Split-Path $PSScriptRoot -Parent) `
-    -WindowStyle Hidden `
-    -PassThru
+  $script:SmokeServerProcess = Start-HiddenProcess `
+    -FilePath 'node' `
+    -ArgumentList @($serverScript) `
+    -WorkingDirectory (Split-Path $PSScriptRoot -Parent)
 
   if (-not (Wait-PortReady -Port $script:SmokeServerPort -TimeoutSec 10)) {
     Stop-SmokeServer
@@ -212,7 +245,12 @@ function Ensure-TabrixBridge {
     $callbackUrl = "http://127.0.0.1:$probePort/"
     $encodedCallbackUrl = [System.Uri]::EscapeDataString($callbackUrl)
     $connectUrl = "$script:ExtensionConnectUrl?callback=$encodedCallbackUrl"
-    Start-Process -FilePath $chromePath -ArgumentList '--new-tab', $connectUrl | Out-Null
+    $chromeProcess = Start-HiddenProcess -FilePath $chromePath -ArgumentList @('--new-tab', $connectUrl)
+    try {
+      $chromeProcess.Dispose()
+    } catch {
+      # ignore process disposal failures
+    }
 
     $deadline = (Get-Date).AddSeconds(20)
     while ((Get-Date) -lt $deadline) {
