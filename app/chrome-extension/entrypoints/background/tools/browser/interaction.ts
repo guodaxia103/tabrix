@@ -28,6 +28,327 @@ interface ClickToolParams {
   windowId?: number; // when no tabId, pick active tab from this window
 }
 
+type PostActionConfidence = 'low' | 'medium' | 'high';
+
+interface AppliedFilter {
+  label: string;
+  path?: string[];
+  rawValue?: string;
+}
+
+interface PostActionSummary {
+  urlChanged: boolean;
+  domChanged: boolean;
+  visibleTextChanged: boolean;
+  selectedStateChanged: boolean;
+  appliedFilters?: AppliedFilter[];
+  mainRegionChanged: boolean;
+  postActionConfidence: PostActionConfidence;
+}
+
+interface LightweightPageState {
+  url: string;
+  title: string;
+  bodyTextDigest: string;
+  mainRegionDigest: string;
+  domSignature: string;
+  formStateSignature: string;
+  selectedLabels: string[];
+}
+
+interface InteractionSchemeGuard {
+  allowed: boolean;
+  scheme: string;
+  pageType: 'web_page' | 'extension_page' | 'browser_internal_page' | 'devtools_page' | 'unsupported_page';
+  unsupportedPageType: string | null;
+  recommendedAction: string | null;
+}
+
+function inferInteractionSchemeGuard(url: string): InteractionSchemeGuard {
+  const raw = String(url || '');
+  const lower = raw.toLowerCase();
+
+  if (lower.startsWith('http://') || lower.startsWith('https://')) {
+    return {
+      allowed: true,
+      scheme: lower.startsWith('https://') ? 'https' : 'http',
+      pageType: 'web_page',
+      unsupportedPageType: null,
+      recommendedAction: null,
+    };
+  }
+
+  if (lower.startsWith('chrome-extension://')) {
+    return {
+      allowed: false,
+      scheme: 'chrome-extension',
+      pageType: 'extension_page',
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
+  if (lower.startsWith('chrome://')) {
+    return {
+      allowed: false,
+      scheme: 'chrome',
+      pageType: 'browser_internal_page',
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
+  if (lower.startsWith('devtools://')) {
+    return {
+      allowed: false,
+      scheme: 'devtools',
+      pageType: 'devtools_page',
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
+  const scheme = raw.includes(':') ? raw.slice(0, raw.indexOf(':')).toLowerCase() : 'unknown';
+  return {
+    allowed: false,
+    scheme,
+    pageType: 'unsupported_page',
+    unsupportedPageType: 'non_web_tab',
+    recommendedAction: 'switch_to_http_tab',
+  };
+}
+
+function createUnsupportedTabResponse(action: string, tab: chrome.tabs.Tab, guard: InteractionSchemeGuard): ToolResult {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          success: false,
+          action,
+          reason: 'unsupported_page_type',
+          pageType: guard.pageType,
+          scheme: guard.scheme,
+          unsupportedPageType: guard.unsupportedPageType,
+          recommendedAction: guard.recommendedAction,
+          message: `Current tab is not a regular web page for ${action}`,
+          tabId: tab.id ?? null,
+          title: String(tab.title || ''),
+          url: String(tab.url || ''),
+        }),
+      },
+    ],
+    isError: false,
+  };
+}
+
+function buildPostActionSummary(
+  before: LightweightPageState | null,
+  after: LightweightPageState | null,
+): PostActionSummary | null {
+  if (!before || !after) {
+    return null;
+  }
+
+  const urlChanged = before.url !== after.url;
+  const domChanged =
+    before.domSignature !== after.domSignature || before.formStateSignature !== after.formStateSignature;
+  const visibleTextChanged = before.bodyTextDigest !== after.bodyTextDigest;
+  const selectedStateChanged = before.selectedLabels.join('|') !== after.selectedLabels.join('|');
+  const mainRegionChanged = before.mainRegionDigest !== after.mainRegionDigest;
+
+  const beforeLabels = new Set(before.selectedLabels);
+  const appliedLabels = after.selectedLabels.filter((label) => !beforeLabels.has(label));
+  const stableLabels = appliedLabels.length > 0 ? appliedLabels : after.selectedLabels;
+
+  let postActionConfidence: PostActionConfidence = 'low';
+  if (urlChanged || selectedStateChanged || mainRegionChanged) {
+    postActionConfidence = 'high';
+  } else if (domChanged || visibleTextChanged) {
+    postActionConfidence = 'medium';
+  }
+
+  return {
+    urlChanged,
+    domChanged,
+    visibleTextChanged,
+    selectedStateChanged,
+    appliedFilters:
+      stableLabels.length > 0
+        ? stableLabels.slice(0, 8).map((label) => ({
+            label,
+            path: [label],
+            rawValue: label,
+          }))
+        : undefined,
+    mainRegionChanged,
+    postActionConfidence,
+  };
+}
+
+async function captureLightweightPageState(
+  tabId: number,
+  frameId?: number,
+): Promise<LightweightPageState | null> {
+  try {
+    const target: chrome.scripting.InjectionTarget = {
+      tabId,
+      ...(typeof frameId === 'number' ? { frameIds: [frameId] } : {}),
+    };
+    const [result] = await chrome.scripting.executeScript({
+      target,
+      func: () => {
+        const normalize = (value: unknown, max = 600) => {
+          if (typeof value !== 'string') return '';
+          return value.replace(/\s+/g, ' ').trim().slice(0, max);
+        };
+
+        const isVisible = (element: Element | null): element is HTMLElement => {
+          if (!(element instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return (
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            rect.width > 0 &&
+            rect.height > 0
+          );
+        };
+
+        const readText = (element: Element | null, max = 600) =>
+          normalize(element instanceof HTMLElement ? element.innerText || element.textContent || '' : '', max);
+
+        const candidateSelectors = [
+          'main',
+          '[role="main"]',
+          '[role="tabpanel"]',
+          'article',
+          'section',
+          '[data-testid*="content"]',
+          '[data-testid*="main"]',
+          '[class*="content"]',
+          '[class*="panel"]',
+          '[class*="result"]',
+          '[class*="main"]',
+          '[class*="list"]',
+        ];
+
+        const candidateElements = candidateSelectors
+          .flatMap((selector) => Array.from(document.querySelectorAll(selector)))
+          .filter(isVisible);
+
+        const mainElement =
+          candidateElements.sort(
+            (left, right) => readText(right, 2000).length - readText(left, 2000).length,
+          )[0] || document.body;
+
+        const selectedSelectors = [
+          '[aria-selected="true"]',
+          '[aria-pressed="true"]',
+          '[aria-checked="true"]',
+          '[data-state="active"]',
+          '[data-state="selected"]',
+          '.selected',
+          '.is-selected',
+          '.is-active',
+          '.arco-tag-checked',
+          '.arco-tabs-header-title-active',
+          'input:checked',
+          'option:checked',
+        ];
+
+        const selectedLabels = Array.from(
+          new Set(
+            selectedSelectors
+              .flatMap((selector) => Array.from(document.querySelectorAll(selector)))
+              .filter(isVisible)
+              .map((element) => {
+                if (element instanceof HTMLInputElement) {
+                  return normalize(
+                    element.labels?.[0]?.innerText ||
+                      element.getAttribute('aria-label') ||
+                      element.value ||
+                      element.name ||
+                      element.id,
+                    120,
+                  );
+                }
+                return normalize(
+                  element.getAttribute('aria-label') ||
+                    (element as HTMLElement).innerText ||
+                    element.textContent ||
+                    '',
+                  120,
+                );
+              })
+              .filter(Boolean),
+          ),
+        ).slice(0, 12);
+
+        const formStateSignature = Array.from(document.querySelectorAll('input, textarea, select'))
+          .filter(isVisible)
+          .slice(0, 30)
+          .map((element) => {
+            if (element instanceof HTMLInputElement) {
+              const value =
+                element.type === 'checkbox' || element.type === 'radio'
+                  ? String(element.checked)
+                  : normalize(element.value, 80);
+              return `${element.name || element.id || element.type}:${element.type}:${value}`;
+            }
+            if (element instanceof HTMLTextAreaElement) {
+              return `${element.name || element.id || 'textarea'}:${normalize(element.value, 80)}`;
+            }
+            if (element instanceof HTMLSelectElement) {
+              return `${element.name || element.id || 'select'}:${normalize(element.value, 80)}`;
+            }
+            return '';
+          })
+          .filter(Boolean)
+          .join('|');
+
+        const bodyTextDigest = readText(document.body, 600);
+        const mainRegionDigest = readText(mainElement, 600);
+        const domSignature = [
+          document.body?.childElementCount || 0,
+          document.querySelectorAll('*').length,
+          mainRegionDigest,
+          selectedLabels.join('|'),
+        ].join('::');
+
+        return {
+          url: window.location.href,
+          title: document.title,
+          bodyTextDigest,
+          mainRegionDigest,
+          domSignature,
+          formStateSignature,
+          selectedLabels,
+        };
+      },
+    });
+    return (result?.result as LightweightPageState | undefined) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function capturePageStateWithRetries(
+  tabId: number,
+  frameId?: number,
+  delaysMs: number[] = [],
+): Promise<LightweightPageState | null> {
+  let latest = await captureLightweightPageState(tabId, frameId);
+  for (const delayMs of delaysMs) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    const next = await captureLightweightPageState(tabId, frameId);
+    if (next) {
+      latest = next;
+    }
+  }
+  return latest;
+}
+
 /**
  * Tool for clicking elements on web pages
  */
@@ -165,6 +486,12 @@ class ClickTool extends BaseBrowserToolExecutor {
       if (!tab.id) {
         return createErrorResponse(ERROR_MESSAGES.TAB_NOT_FOUND + ': Active tab has no ID');
       }
+      const schemeGuard = inferInteractionSchemeGuard(String(tab.url || ''));
+      if (!schemeGuard.allowed) {
+        return createUnsupportedTabResponse('click', tab, schemeGuard);
+      }
+
+      const beforeState = await captureLightweightPageState(tab.id, frameId);
 
       let finalRef = args.ref;
       let finalSelector = selector;
@@ -314,6 +641,21 @@ class ClickTool extends BaseBrowserToolExecutor {
         };
       }
 
+        const interactionText = String(
+          result?.elementInfo?.text || result?.elementInfo?.ariaLabel || finalSelector || finalRef || '',
+        ).trim();
+        const shouldWaitLonger =
+          result?.elementInfo?.tagName === 'BUTTON' ||
+          interactionText.includes('查看') ||
+          interactionText.includes('垂类') ||
+          interactionText.includes('美食');
+        const afterState = await capturePageStateWithRetries(
+          tab.id,
+          frameId,
+          shouldWaitLonger ? [180, 420, 900] : [150],
+        );
+        const postActionSummary = buildPostActionSummary(beforeState, afterState);
+
       // Determine actual click method used
       let clickMethod: string;
       if (coordinates) {
@@ -332,10 +674,14 @@ class ClickTool extends BaseBrowserToolExecutor {
             type: 'text',
             text: JSON.stringify({
               success: true,
-              message: result.message || 'Click operation successful',
+              message:
+                postActionSummary?.postActionConfidence === 'low'
+                  ? `${result.message || 'Click operation successful'} (success=true but state_change=weak)`
+                  : result.message || 'Click operation successful',
               elementInfo: result.elementInfo,
               navigationOccurred: result.navigationOccurred,
               clickMethod,
+              postActionSummary,
             }),
           },
         ],
@@ -391,6 +737,12 @@ class FillTool extends BaseBrowserToolExecutor {
       if (!tab.id) {
         return createErrorResponse(ERROR_MESSAGES.TAB_NOT_FOUND + ': Active tab has no ID');
       }
+      const schemeGuard = inferInteractionSchemeGuard(String(tab.url || ''));
+      if (!schemeGuard.allowed) {
+        return createUnsupportedTabResponse('fill', tab, schemeGuard);
+      }
+
+      const beforeState = await captureLightweightPageState(tab.id, frameId);
 
       let finalRef = ref;
       let finalSelector = selector;
@@ -441,14 +793,21 @@ class FillTool extends BaseBrowserToolExecutor {
         return createErrorResponse(result.error);
       }
 
+      const afterState = await capturePageStateWithRetries(tab.id, frameId, [120, 300]);
+      const postActionSummary = buildPostActionSummary(beforeState, afterState);
+
       return {
         content: [
           {
             type: 'text',
             text: JSON.stringify({
               success: true,
-              message: result.message || 'Fill operation successful',
+              message:
+                postActionSummary?.postActionConfidence === 'low'
+                  ? `${result.message || 'Fill operation successful'} (success=true but state_change=weak)`
+                  : result.message || 'Fill operation successful',
               elementInfo: result.elementInfo,
+              postActionSummary,
             }),
           },
         ],
