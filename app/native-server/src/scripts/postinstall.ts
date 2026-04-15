@@ -213,13 +213,15 @@ async function tryRegisterNativeHost(): Promise<void> {
         // User-level installation failed, suggest using register command
         console.log(
           colorText(
-            'User-level installation failed, system-level installation may be needed',
+            'Automatic browser registration did not complete. If Chrome/Chromium is not installed yet, install one first.',
             'yellow',
           ),
         );
         console.log(
-          colorText('Please run the following command for system-level installation:', 'blue'),
+          colorText('After the browser is ready, run one of the following commands:', 'blue'),
         );
+        console.log(`  ${COMMAND_NAME} register`);
+        console.log(`  ${COMMAND_NAME} doctor --fix`);
         console.log(`  ${COMMAND_NAME} register --system`);
         printManualInstructions();
       }

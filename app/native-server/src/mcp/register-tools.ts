@@ -15,6 +15,11 @@ import path from 'node:path';
 import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { collectRuntimeConsistencySnapshot } from '../scripts/runtime-consistency';
+import {
+  readPersistedBrowserLaunchConfig,
+  resolveAndPersistBrowserLaunchConfig,
+} from '../browser-launch-config';
+import { BrowserType, resolveBrowserExecutable } from '../scripts/browser-config';
 
 /**
  * Tools with elevated risk: arbitrary JS execution, data deletion, file system
@@ -231,28 +236,25 @@ async function tryLaunchCommand(command: string, args: string[]): Promise<boolea
 }
 
 function getWindowsBrowserExecutables(): string[] {
-  const localAppData = process.env.LOCALAPPDATA || '';
-  const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
-  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
-
-  const candidates = [
-    path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    path.join(programFiles, 'Chromium', 'Application', 'chromium.exe'),
-    path.join(programFilesX86, 'Chromium', 'Application', 'chromium.exe'),
-    path.join(localAppData, 'Chromium', 'Application', 'chromium.exe'),
-    'chrome.exe',
-    'chromium.exe',
-  ];
+  const persisted = readPersistedBrowserLaunchConfig();
+  const persistedCandidate =
+    persisted &&
+    (!path.isAbsolute(persisted.executablePath) || existsSync(persisted.executablePath))
+      ? [persisted.executablePath]
+      : [];
+  const preferred = resolveAndPersistBrowserLaunchConfig();
+  const preferredCandidate = preferred ? [preferred.executablePath] : [];
+  const discoveredCandidates = [BrowserType.CHROME, BrowserType.CHROMIUM]
+    .map((browser) => resolveBrowserExecutable(browser)?.executablePath)
+    .filter((candidate): candidate is string => Boolean(candidate));
+  const candidates = [...persistedCandidate, ...preferredCandidate, ...discoveredCandidates];
 
   const seen = new Set<string>();
   return candidates.filter((candidate) => {
     const normalized = candidate.toLowerCase();
     if (seen.has(normalized)) return false;
     seen.add(normalized);
-    if (/^[a-z0-9_.-]+\.exe$/i.test(candidate)) return true;
-    return existsSync(candidate);
+    return !path.isAbsolute(candidate) || existsSync(candidate);
   });
 }
 

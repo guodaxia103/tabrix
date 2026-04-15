@@ -118,11 +118,11 @@ program
         if (targetBrowsers.length === 0) {
           console.log(
             colorText(
-              'No supported browsers detected, will register for Chrome and Chromium',
+              'No supported Chrome/Chromium executable detected. Registration will stop until a supported browser is installed.',
               'yellow',
             ),
           );
-          targetBrowsers = undefined; // Will use default behavior
+          targetBrowsers = [];
         }
       }
       // If neither option specified, tryRegisterUserLevelHost will detect browsers
@@ -162,12 +162,13 @@ program
         } else {
           console.log(
             colorText(
-              'User-level registration failed, please try the following methods:',
+              'User-level registration did not complete. If Chrome/Chromium is not installed yet, install one first.',
               'yellow',
             ),
           );
-          console.log(colorText('  1. sudo tabrix register', 'yellow'));
-          console.log(colorText('  2. tabrix register --system', 'yellow'));
+          console.log(colorText('  1. tabrix register', 'yellow'));
+          console.log(colorText('  2. tabrix doctor --fix', 'yellow'));
+          console.log(colorText('  3. tabrix register --system', 'yellow'));
           process.exit(1);
         }
       }

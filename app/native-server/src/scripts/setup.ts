@@ -5,7 +5,7 @@
 import fs from 'fs';
 import path from 'path';
 import { colorText, tryRegisterUserLevelHost, writeNodePathFile, getLogDir } from './utils';
-import { detectInstalledBrowsers } from './browser-config';
+import { detectInstalledBrowsers, resolvePreferredBrowserExecutable } from './browser-config';
 
 const UPSTREAM_RELEASE = 'https://github.com/guodaxia103/tabrix/releases';
 
@@ -30,8 +30,17 @@ export async function runSetup(): Promise<number> {
     console.log(colorText(`  Log dir: ${logDir}`, 'green'));
 
     const browsers = detectInstalledBrowsers();
-    if (browsers.length > 0) {
+    const preferredBrowser = resolvePreferredBrowserExecutable(browsers);
+    if (browsers.length > 0 && preferredBrowser) {
       console.log(colorText(`  Detected browsers: ${browsers.join(', ')}`, 'green'));
+      console.log(colorText(`  Browser executable: ${preferredBrowser.executablePath}`, 'green'));
+    } else {
+      console.log(
+        colorText(
+          '  No supported Chrome/Chromium executable detected yet. Setup will continue, but browser automation is not ready.',
+          'yellow',
+        ),
+      );
     }
 
     console.log(colorText('  Registering Native Messaging host...', 'blue'));
@@ -39,7 +48,7 @@ export async function runSetup(): Promise<number> {
     if (!ok) {
       console.error(
         colorText(
-          'Registration failed. Try: sudo tabrix register   or   tabrix register --system',
+          'Registration could not complete. Install Chrome/Chromium if needed, then run: tabrix register',
           'yellow',
         ),
       );

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { HOST_NAME } from './constant';
 
 export enum BrowserType {
@@ -16,6 +16,13 @@ export interface BrowserConfig {
   systemManifestPath: string;
   registryKey?: string; // Windows only
   systemRegistryKey?: string; // Windows only
+}
+
+export interface BrowserExecutableResolution {
+  type: BrowserType;
+  displayName: string;
+  executablePath: string;
+  source: 'app-path' | 'install-dir' | 'path' | 'mac-app' | 'linux-which';
 }
 
 /**
@@ -197,61 +204,190 @@ export function getBrowserConfig(browser: BrowserType): BrowserConfig {
   };
 }
 
+function tryExecFile(command: string, args: string[]): string | null {
+  try {
+    return execFileSync(command, args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 2500,
+      windowsHide: true,
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function parseRegistryDefaultValue(output: string): string | null {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (const line of lines) {
+    const match = line.match(/\bREG_(?:SZ|EXPAND_SZ)\b\s+(.*)$/i);
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+  return null;
+}
+
+function expandWindowsEnvVars(raw: string): string {
+  return raw.replace(/%([^%]+)%/g, (_match, key: string) => {
+    return (
+      process.env[key] ?? process.env[key.toUpperCase()] ?? process.env[key.toLowerCase()] ?? _match
+    );
+  });
+}
+
+function getWindowsAppPathCandidates(browser: BrowserType): string[] {
+  const exeName = browser === BrowserType.CHROMIUM ? 'chromium.exe' : 'chrome.exe';
+  const keys = [
+    `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\${exeName}`,
+    `HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\${exeName}`,
+  ];
+
+  const results: string[] = [];
+  for (const key of keys) {
+    const output = tryExecFile('reg', ['query', key, '/ve']);
+    if (!output) continue;
+    const parsed = parseRegistryDefaultValue(output);
+    if (!parsed) continue;
+    const expanded = expandWindowsEnvVars(parsed.replace(/^"(.*)"$/, '$1'));
+    results.push(expanded);
+  }
+  return results;
+}
+
+function getWindowsInstallDirCandidates(browser: BrowserType): string[] {
+  const localAppData = process.env.LOCALAPPDATA || '';
+  const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+
+  if (browser === BrowserType.CHROMIUM) {
+    return [
+      path.join(programFiles, 'Chromium', 'Application', 'chromium.exe'),
+      path.join(programFilesX86, 'Chromium', 'Application', 'chromium.exe'),
+      path.join(localAppData, 'Chromium', 'Application', 'chromium.exe'),
+    ];
+  }
+
+  return [
+    path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+  ];
+}
+
+function uniquePaths(candidates: string[]): string[] {
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const key = path.normalize(candidate).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function resolveBrowserExecutable(browser: BrowserType): BrowserExecutableResolution | null {
+  const config = getBrowserConfig(browser);
+
+  if (os.platform() === 'win32') {
+    for (const executablePath of uniquePaths(getWindowsAppPathCandidates(browser))) {
+      if (fs.existsSync(executablePath)) {
+        return {
+          type: browser,
+          displayName: config.displayName,
+          executablePath,
+          source: 'app-path',
+        };
+      }
+    }
+    for (const executablePath of uniquePaths(getWindowsInstallDirCandidates(browser))) {
+      if (fs.existsSync(executablePath)) {
+        return {
+          type: browser,
+          displayName: config.displayName,
+          executablePath,
+          source: 'install-dir',
+        };
+      }
+    }
+    const exeName = browser === BrowserType.CHROMIUM ? 'chromium.exe' : 'chrome.exe';
+    const fromPath = tryExecFile('where', [exeName]);
+    if (fromPath) {
+      const executablePath = fromPath
+        .split(/\r?\n/)
+        .find((line) => line.trim())
+        ?.trim();
+      if (executablePath) {
+        return {
+          type: browser,
+          displayName: config.displayName,
+          executablePath,
+          source: 'path',
+        };
+      }
+    }
+    return null;
+  }
+
+  if (os.platform() === 'darwin') {
+    const executablePath =
+      browser === BrowserType.CHROMIUM
+        ? '/Applications/Chromium.app/Contents/MacOS/Chromium'
+        : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    if (fs.existsSync(executablePath)) {
+      return {
+        type: browser,
+        displayName: config.displayName,
+        executablePath,
+        source: 'mac-app',
+      };
+    }
+    return null;
+  }
+
+  const commands =
+    browser === BrowserType.CHROMIUM
+      ? ['chromium', 'chromium-browser']
+      : ['google-chrome', 'google-chrome-stable'];
+  for (const command of commands) {
+    const executablePath = tryExecFile('which', [command]);
+    if (executablePath) {
+      return {
+        type: browser,
+        displayName: config.displayName,
+        executablePath: executablePath.split(/\r?\n/)[0].trim(),
+        source: 'linux-which',
+      };
+    }
+  }
+  return null;
+}
+
+export function resolvePreferredBrowserExecutable(
+  targetBrowsers?: BrowserType[],
+): BrowserExecutableResolution | null {
+  const preferredOrder =
+    targetBrowsers && targetBrowsers.length > 0
+      ? targetBrowsers
+      : [BrowserType.CHROME, BrowserType.CHROMIUM];
+
+  for (const browser of preferredOrder) {
+    const resolved = resolveBrowserExecutable(browser);
+    if (resolved) return resolved;
+  }
+
+  return null;
+}
+
 /**
  * Detect installed browsers on the system
  */
 export function detectInstalledBrowsers(): BrowserType[] {
-  const detectedBrowsers: BrowserType[] = [];
-  const platform = os.platform();
-
-  if (platform === 'win32') {
-    // Check Windows registry for installed browsers
-    const browsers: Array<{ type: BrowserType; registryPath: string }> = [
-      { type: BrowserType.CHROME, registryPath: 'HKLM\\SOFTWARE\\Google\\Chrome' },
-      { type: BrowserType.CHROMIUM, registryPath: 'HKLM\\SOFTWARE\\Chromium' },
-    ];
-
-    for (const browser of browsers) {
-      try {
-        execSync(`reg query "${browser.registryPath}" 2>nul`, { stdio: 'pipe' });
-        detectedBrowsers.push(browser.type);
-      } catch {
-        // Browser not installed
-      }
-    }
-  } else if (platform === 'darwin') {
-    // Check macOS Applications folder
-    const browsers: Array<{ type: BrowserType; appPath: string }> = [
-      { type: BrowserType.CHROME, appPath: '/Applications/Google Chrome.app' },
-      { type: BrowserType.CHROMIUM, appPath: '/Applications/Chromium.app' },
-    ];
-
-    for (const browser of browsers) {
-      if (fs.existsSync(browser.appPath)) {
-        detectedBrowsers.push(browser.type);
-      }
-    }
-  } else {
-    // Check Linux paths using which command
-    const browsers: Array<{ type: BrowserType; commands: string[] }> = [
-      { type: BrowserType.CHROME, commands: ['google-chrome', 'google-chrome-stable'] },
-      { type: BrowserType.CHROMIUM, commands: ['chromium', 'chromium-browser'] },
-    ];
-
-    for (const browser of browsers) {
-      for (const cmd of browser.commands) {
-        try {
-          execSync(`which ${cmd} 2>/dev/null`, { stdio: 'pipe' });
-          detectedBrowsers.push(browser.type);
-          break; // Found one command, no need to check others
-        } catch {
-          // Command not found
-        }
-      }
-    }
-  }
-
-  return detectedBrowsers;
+  return [BrowserType.CHROME, BrowserType.CHROMIUM].filter(
+    (browser) => resolveBrowserExecutable(browser) !== null,
+  );
 }
 
 /**

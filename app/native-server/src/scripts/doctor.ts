@@ -17,7 +17,13 @@ import {
   detectInstalledBrowsers,
   getBrowserConfig,
   parseBrowserType,
+  resolvePreferredBrowserExecutable,
 } from './browser-config';
+import {
+  getBrowserLaunchConfigPath,
+  readPersistedBrowserLaunchConfig,
+  resolveAndPersistBrowserLaunchConfig,
+} from '../browser-launch-config';
 import {
   colorText,
   ensureExecutionPermissions,
@@ -798,6 +804,13 @@ async function attemptFixes(
     await ensureExecutionPermissions();
   });
 
+  await attempt('browser.launch-config', 'Detect and persist browser executable path', async () => {
+    const persisted = resolveAndPersistBrowserLaunchConfig(targetBrowsers);
+    if (!persisted) {
+      throw new Error('No supported Chrome/Chromium executable detected');
+    }
+  });
+
   const sqliteProbe = probeBetterSqliteBinding(distDir);
   if (!sqliteProbe.ok) {
     await attempt('native.sqlite', 'Rebuild better-sqlite3 native binding', async () => {
@@ -1526,6 +1539,28 @@ export async function collectDoctorReport(options: DoctorOptions): Promise<Docto
   }
 
   // Check 5: Manifest checks per browser
+  const preferredBrowserExecutable = resolvePreferredBrowserExecutable(browsersToCheck);
+  const persistedBrowserExecutable = readPersistedBrowserLaunchConfig();
+  checks.push({
+    id: 'browser.executable',
+    title: 'Browser executable',
+    status: preferredBrowserExecutable ? 'ok' : 'error',
+    message: preferredBrowserExecutable
+      ? `${preferredBrowserExecutable.executablePath} (${preferredBrowserExecutable.source})`
+      : 'No supported Chrome/Chromium executable detected',
+    details: {
+      persisted: persistedBrowserExecutable,
+      persistedPath: getBrowserLaunchConfigPath(),
+      fix: preferredBrowserExecutable
+        ? undefined
+        : ['Install Chrome/Chromium, then run tabrix register or tabrix doctor --fix'],
+    },
+  });
+  if (!preferredBrowserExecutable) {
+    nextSteps.push('Install Chrome/Chromium');
+    nextSteps.push(`${COMMAND_NAME} doctor --fix`);
+  }
+
   const discoveredOrigins = discoverLoadedExtensionOrigins(browsersToCheck);
   const fallbackOrigin = `chrome-extension://${EXTENSION_ID}/`;
   const expectedOrigins =

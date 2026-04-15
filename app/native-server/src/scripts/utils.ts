@@ -6,6 +6,7 @@ import { execSync } from 'child_process';
 import { promisify } from 'util';
 import { COMMAND_NAME, DESCRIPTION, EXTENSION_ID, HOST_NAME } from './constant';
 import { BrowserType, getBrowserConfig, detectInstalledBrowsers } from './browser-config';
+import { resolveAndPersistBrowserLaunchConfig } from '../browser-launch-config';
 
 export const access = promisify(fs.access);
 export const mkdir = promisify(fs.mkdir);
@@ -481,14 +482,30 @@ export async function tryRegisterUserLevelHost(targetBrowsers?: BrowserType[]): 
 
     // 2. 确定要注册的浏览器
     const browsersToRegister = targetBrowsers || detectInstalledBrowsers();
-    if (browsersToRegister.length === 0) {
-      // 如果没有检测到浏览器，默认注册Chrome和Chromium
-      browsersToRegister.push(BrowserType.CHROME, BrowserType.CHROMIUM);
+    const persistedBrowser = resolveAndPersistBrowserLaunchConfig(browsersToRegister);
+    if (browsersToRegister.length === 0 || !persistedBrowser) {
       console.log(
-        colorText('No browsers detected, registering for Chrome and Chromium by default', 'yellow'),
+        colorText(
+          'No supported Chrome/Chromium executable was detected on this machine.',
+          'yellow',
+        ),
       );
+      console.log(
+        colorText(
+          'Tabrix is installed, but browser automation is not ready until Chrome/Chromium is installed.',
+          'yellow',
+        ),
+      );
+      console.log(colorText(`After installing a browser, run: ${COMMAND_NAME} register`, 'blue'));
+      return false;
     } else {
       console.log(colorText(`Detected browsers: ${browsersToRegister.join(', ')}`, 'blue'));
+      console.log(
+        colorText(
+          `Using browser executable: ${persistedBrowser.executablePath} (${persistedBrowser.source})`,
+          'green',
+        ),
+      );
     }
 
     // 3. 创建清单内容
@@ -591,13 +608,19 @@ export async function registerWithElevatedPermissions(
 
     // 3. 确定要注册的浏览器
     const browsersToRegister = [...(targetBrowsers || detectInstalledBrowsers())];
-    if (browsersToRegister.length === 0) {
-      browsersToRegister.push(BrowserType.CHROME, BrowserType.CHROMIUM);
-      console.log(
-        colorText('No browsers detected, registering for Chrome and Chromium by default', 'yellow'),
+    const persistedBrowser = resolveAndPersistBrowserLaunchConfig(browsersToRegister);
+    if (browsersToRegister.length === 0 || !persistedBrowser) {
+      throw new Error(
+        `No supported Chrome/Chromium executable was detected. Install Chrome or Chromium, then rerun ${COMMAND_NAME} register --system`,
       );
     } else {
       console.log(colorText(`Target browsers: ${browsersToRegister.join(', ')}`, 'blue'));
+      console.log(
+        colorText(
+          `Using browser executable: ${persistedBrowser.executablePath} (${persistedBrowser.source})`,
+          'green',
+        ),
+      );
     }
 
     // 4. 创建临时清单文件
