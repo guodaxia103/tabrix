@@ -34,6 +34,21 @@ function createLaunchProcess(onLaunch?: () => void) {
   };
 }
 
+function withMockedPlatform<T>(
+  platform: NodeJS.Platform,
+  run: () => Promise<T> | T,
+): Promise<T> | T {
+  const original = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: platform });
+  try {
+    return run();
+  } finally {
+    if (original) {
+      Object.defineProperty(process, 'platform', original);
+    }
+  }
+}
+
 describe('bridge recovery orchestration', () => {
   afterEach(() => {
     jest.useRealTimers();
@@ -43,43 +58,47 @@ describe('bridge recovery orchestration', () => {
   });
 
   it('launches the browser and continues the tool call when bridge becomes ready', async () => {
-    let browserRunning = false;
-    mockTasklist(browserRunning);
+    await withMockedPlatform('win32', async () => {
+      let browserRunning = false;
+      mockTasklist(browserRunning);
 
-    (spawn as jest.Mock).mockImplementation(() =>
-      createLaunchProcess(() => {
-        browserRunning = true;
-        mockTasklist(browserRunning);
-        bridgeRuntimeState.recordHeartbeat({
-          sentAt: Date.now(),
-          nativeConnected: true,
-          extensionId: 'njlidkjgkcccdoffkfcbgiefdpaipfdn',
-          connectionId: 'conn-1',
-        });
-        bridgeRuntimeState.setNativeHostAttached(true);
-      }),
-    );
+      (spawn as jest.Mock).mockImplementation(() =>
+        createLaunchProcess(() => {
+          browserRunning = true;
+          mockTasklist(browserRunning);
+          bridgeRuntimeState.recordHeartbeat({
+            sentAt: Date.now(),
+            nativeConnected: true,
+            extensionId: 'njlidkjgkcccdoffkfcbgiefdpaipfdn',
+            connectionId: 'conn-1',
+          });
+          bridgeRuntimeState.setNativeHostAttached(true);
+        }),
+      );
 
-    const nativeRequestSpy = jest
-      .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
-      .mockResolvedValueOnce({
-        status: 'success',
-        items: [],
-      } as never)
-      .mockResolvedValueOnce({
-        status: 'success',
-        data: {
-          content: [{ type: 'text', text: 'ok' }],
-          isError: false,
-        },
-      } as never);
+      const nativeRequestSpy = jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({
+          status: 'success',
+          items: [],
+        } as never)
+        .mockResolvedValueOnce({
+          status: 'success',
+          data: {
+            content: [{ type: 'text', text: 'ok' }],
+            isError: false,
+          },
+        } as never);
 
-    const result = await handleToolCall('chrome_read_page', { tabId: 1 });
+      const result = await handleToolCall('chrome_read_page', { tabId: 1 });
 
-    expect(result.isError).toBe(false);
-    expect(spawn).toHaveBeenCalled();
-    expect(nativeRequestSpy).toHaveBeenCalledTimes(2);
-    expect(bridgeRuntimeState.getSnapshot().bridgeState).toBe('READY');
+      expect(result.isError).toBe(false);
+      expect(spawn).toHaveBeenCalled();
+      expect((spawn as jest.Mock).mock.calls[0][0]).toMatch(/chrome|chromium/i);
+      expect((spawn as jest.Mock).mock.calls[0][0]).not.toBe('cmd');
+      expect(nativeRequestSpy).toHaveBeenCalledTimes(2);
+      expect(bridgeRuntimeState.getSnapshot().bridgeState).toBe('READY');
+    });
   });
 
   it('returns a structured bridge error when extension heartbeat never recovers', async () => {
@@ -109,42 +128,46 @@ describe('bridge recovery orchestration', () => {
   });
 
   it('reconnects the extension without launching a new browser when Chrome is already running', async () => {
-    mockTasklist(true);
-    bridgeRuntimeState.syncBrowserProcessNow();
+    await withMockedPlatform('win32', async () => {
+      mockTasklist(true);
+      bridgeRuntimeState.syncBrowserProcessNow();
 
-    (spawn as jest.Mock).mockImplementation((command: string, args: string[]) =>
-      createLaunchProcess(() => {
-        bridgeRuntimeState.recordHeartbeat({
-          sentAt: Date.now(),
-          nativeConnected: true,
-          extensionId: 'njlidkjgkcccdoffkfcbgiefdpaipfdn',
-          connectionId: 'conn-2',
-        });
-        bridgeRuntimeState.setNativeHostAttached(true);
-      }),
-    );
+      (spawn as jest.Mock).mockImplementation((_command: string, _args: string[]) =>
+        createLaunchProcess(() => {
+          bridgeRuntimeState.recordHeartbeat({
+            sentAt: Date.now(),
+            nativeConnected: true,
+            extensionId: 'njlidkjgkcccdoffkfcbgiefdpaipfdn',
+            connectionId: 'conn-2',
+          });
+          bridgeRuntimeState.setNativeHostAttached(true);
+        }),
+      );
 
-    jest
-      .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
-      .mockResolvedValueOnce({
-        status: 'success',
-        items: [],
-      } as never)
-      .mockResolvedValueOnce({
-        status: 'success',
-        data: {
-          content: [{ type: 'text', text: 'ok' }],
-          isError: false,
-        },
-      } as never);
+      jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({
+          status: 'success',
+          items: [],
+        } as never)
+        .mockResolvedValueOnce({
+          status: 'success',
+          data: {
+            content: [{ type: 'text', text: 'ok' }],
+            isError: false,
+          },
+        } as never);
 
-    const result = await handleToolCall('chrome_read_page', { tabId: 2 });
+      const result = await handleToolCall('chrome_read_page', { tabId: 2 });
 
-    expect(result.isError).toBe(false);
-    expect(spawn).toHaveBeenCalled();
-    const launchArgs = ((spawn as jest.Mock).mock.calls[0][1] as string[]).join(' ');
-    expect(launchArgs).toContain('chrome-extension://');
-    expect(launchArgs).toContain('connect.html');
-    expect(launchArgs).not.toContain('about:blank');
+      expect(result.isError).toBe(false);
+      expect(spawn).toHaveBeenCalled();
+      expect((spawn as jest.Mock).mock.calls[0][0]).toMatch(/chrome|chromium/i);
+      expect((spawn as jest.Mock).mock.calls[0][0]).not.toBe('cmd');
+      const launchArgs = ((spawn as jest.Mock).mock.calls[0][1] as string[]).join(' ');
+      expect(launchArgs).toContain('chrome-extension://');
+      expect(launchArgs).toContain('connect.html');
+      expect(launchArgs).not.toContain('about:blank');
+    });
   });
 });

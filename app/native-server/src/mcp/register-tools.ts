@@ -10,6 +10,8 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { spawn, spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { collectRuntimeConsistencySnapshot } from '../scripts/runtime-consistency';
@@ -91,6 +93,11 @@ interface BridgeFailurePayload {
 interface LaunchAttemptResult {
   launched: boolean;
   command?: string;
+}
+
+interface LaunchCandidate {
+  command: string;
+  args: string[];
 }
 
 const BRIDGE_LAUNCH_WAIT_MS = 12_000;
@@ -223,6 +230,46 @@ async function tryLaunchCommand(command: string, args: string[]): Promise<boolea
   });
 }
 
+function getWindowsBrowserExecutables(): string[] {
+  const localAppData = process.env.LOCALAPPDATA || '';
+  const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+
+  const candidates = [
+    path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(programFiles, 'Chromium', 'Application', 'chromium.exe'),
+    path.join(programFilesX86, 'Chromium', 'Application', 'chromium.exe'),
+    path.join(localAppData, 'Chromium', 'Application', 'chromium.exe'),
+    'chrome.exe',
+    'chromium.exe',
+  ];
+
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const normalized = candidate.toLowerCase();
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    if (/^[a-z0-9_.-]+\.exe$/i.test(candidate)) return true;
+    return existsSync(candidate);
+  });
+}
+
+function getWindowsReconnectCandidates(connectUrl: string): LaunchCandidate[] {
+  return getWindowsBrowserExecutables().map((command) => ({
+    command,
+    args: [connectUrl],
+  }));
+}
+
+function getWindowsBrowserLaunchCandidates(): LaunchCandidate[] {
+  return getWindowsBrowserExecutables().map((command) => ({
+    command,
+    args: ['--new-window', 'about:blank'],
+  }));
+}
+
 async function requestExtensionReconnectBestEffort(): Promise<LaunchAttemptResult> {
   try {
     const consistency = await collectRuntimeConsistencySnapshot();
@@ -234,10 +281,7 @@ async function requestExtensionReconnectBestEffort(): Promise<LaunchAttemptResul
     const connectUrl = `chrome-extension://${extensionId}/connect.html`;
     const candidates =
       process.platform === 'win32'
-        ? [
-            { command: 'cmd', args: ['/c', 'start', '', 'chrome', connectUrl] },
-            { command: 'cmd', args: ['/c', 'start', '', 'chromium', connectUrl] },
-          ]
+        ? getWindowsReconnectCandidates(connectUrl)
         : process.platform === 'darwin'
           ? [
               { command: 'open', args: ['-a', 'Google Chrome', connectUrl] },
@@ -269,10 +313,7 @@ async function requestExtensionReconnectBestEffort(): Promise<LaunchAttemptResul
 async function launchBrowserBestEffort(): Promise<LaunchAttemptResult> {
   const candidates =
     process.platform === 'win32'
-      ? [
-          { command: 'cmd', args: ['/c', 'start', '', 'chrome', '--new-window', 'about:blank'] },
-          { command: 'cmd', args: ['/c', 'start', '', 'chromium', '--new-window', 'about:blank'] },
-        ]
+      ? getWindowsBrowserLaunchCandidates()
       : process.platform === 'darwin'
         ? [
             { command: 'open', args: ['-a', 'Google Chrome', 'about:blank'] },
@@ -296,6 +337,12 @@ async function launchBrowserBestEffort(): Promise<LaunchAttemptResult> {
   }
   return { launched: false };
 }
+
+export const __bridgeLaunchInternals = {
+  getWindowsBrowserExecutables,
+  getWindowsReconnectCandidates,
+  getWindowsBrowserLaunchCandidates,
+};
 
 function hasBrowserProcessRunning(): boolean {
   try {
