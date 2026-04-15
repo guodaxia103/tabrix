@@ -1,6 +1,6 @@
 {
   "name": "@tabrix/wasm-simd",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "description": "SIMD-optimized WebAssembly math functions for Tabrix",
   "main": "pkg/simd_math.js",
   "types": "pkg/simd_math.d.ts",

@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.0.8] - 2026-04-15
+
+### Added
+
+- Browser executable path detection and persistence during setup, register, and doctor flows.
+- Current acceptance matrix documentation for the Claude real-session baseline.
+
+### Changed
+
+- Lockstep package versions moved to `2.0.8`:
+  - `tabrix-monorepo`
+  - `@tabrix/tabrix`
+  - `@tabrix/extension`
+  - `@tabrix/shared`
+  - `@tabrix/wasm-simd`
+- `@tabrix/tabrix` dependency updated to `@tabrix/shared@^2.0.8`.
+- Browser auto-launch on Windows now prefers direct executable startup instead of `cmd /c start`.
+
+### Fixed
+
+- Stabilized Claude dialog acceptance flow to complete without blocking desktop prompt leftovers.
+- Added structured guards for non-web tabs instead of content-script injection failures.
+- Unified platform detection in browser-config tests so GitHub Actions quality checks no longer fail on cross-platform assumptions.
+- Reduced extension startup noise from duplicate context menu registration and CSP-blocked data URL fetches.
+
 ## [v2.0.5] - 2026-04-10
 
 ### Added
