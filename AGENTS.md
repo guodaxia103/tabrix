@@ -17,5 +17,8 @@ Default expectations:
 7. For browser-viewable GitHub troubleshooting, prefer Tabrix first, then use API/CLI only when the page view is insufficient.
 8. Run the smallest required test matrix for the change type before committing.
 9. When runtime behavior is part of the claim, make sure the local MCP service and unpacked extension are actually running the new build.
+10. If the working tree is dirty, do not blindly pull/rebase/merge on top of it; fetch first, assess risk, and prefer a separate branch or worktree when needed.
+11. When instructions conflict, follow this order: system/developer instructions, the user's current task, repository task docs, this file, then general heuristics.
+12. End each task with a clear status summary: what changed, what was verified, what was not verified, and what risks remain.
 
 If a task conflicts with these rules, stop and surface the tradeoff instead of guessing.
