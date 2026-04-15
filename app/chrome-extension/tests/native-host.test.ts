@@ -561,7 +561,7 @@ describe('native host reconnect behavior', () => {
     );
   });
 
-  it('acknowledges extension reload requests before reloading the runtime', async () => {
+  it('registers the reload callback before reloading the runtime', async () => {
     const harness = createChromeHarness([]);
     (globalThis as any).chrome = harness.chromeMock;
 
@@ -571,14 +571,42 @@ describe('native host reconnect behavior', () => {
 
     const response = await harness.sendRuntimeMessage({
       type: NativeMessageType.RELOAD_EXTENSION,
+      callbackUrl: 'http://127.0.0.1:40123/',
     });
 
-    expect(response).toMatchObject({ success: true, reloading: true });
+    expect(response).toMatchObject({ success: true, reloading: true, callbackRegistered: true });
+    expect(harness.storageState[STORAGE_KEYS.PENDING_EXTENSION_RELOAD_CALLBACK]).toMatchObject({
+      callbackUrl: 'http://127.0.0.1:40123/',
+    });
     expect(harness.chromeMock.runtime.reload).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(50);
 
     expect(harness.chromeMock.runtime.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('flushes the pending reload callback after the reloaded worker starts', async () => {
+    const harness = createChromeHarness([]);
+    harness.storageState[STORAGE_KEYS.PENDING_EXTENSION_RELOAD_CALLBACK] = {
+      callbackUrl: 'http://127.0.0.1:40123/',
+      requestedAt: Date.now(),
+    };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    (globalThis as any).fetch = fetchMock;
+    (globalThis as any).chrome = harness.chromeMock;
+
+    const nativeHostModule = await import('@/entrypoints/background/native-host');
+    nativeHostModule.initNativeHostListener();
+    await flushMicrotasks();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:40123/',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    expect(harness.storageState[STORAGE_KEYS.PENDING_EXTENSION_RELOAD_CALLBACK]).toBeUndefined();
   });
 
   it('opens websocket bridge and sends hello plus heartbeat', async () => {

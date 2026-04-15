@@ -42,7 +42,7 @@ node ./scripts/audit-prod.mjs
 
 对应实现文件：
 
-- [scripts/audit-prod.mjs](E:\projects\AI\copaw\mcp-chrome\scripts\audit-prod.mjs)
+- [`scripts/audit-prod.mjs`](../scripts/audit-prod.mjs)
 
 它的工作流程是：
 

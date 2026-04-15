@@ -223,6 +223,7 @@ export const STORAGE_KEYS = {
   LAST_NATIVE_ERROR: 'lastNativeError',
   NATIVE_SERVER_PORT: 'nativeServerPort',
   NATIVE_AUTO_CONNECT_ENABLED: 'nativeAutoConnectEnabled',
+  PENDING_EXTENSION_RELOAD_CALLBACK: 'pendingExtensionReloadCallback',
   SEMANTIC_MODEL: 'selectedModel',
   USER_PREFERENCES: 'userPreferences',
   VECTOR_INDEX: 'vectorIndex',

@@ -76,9 +76,16 @@ async function connect() {
     try {
       const response = await chrome.runtime.sendMessage({
         type: NativeMessageType.RELOAD_EXTENSION,
+        callbackUrl,
       });
-      render('success', '刷新请求已发送。扩展将立即重新加载。');
-      await reportResult({ status: 'success', action: 'reload', response });
+      if (!response?.success) {
+        const reason = response?.error || '刷新请求未被扩展接受。';
+        render('error', `刷新失败：${String(reason)}`);
+        await reportResult({ status: 'error', action: 'reload', reason, response });
+        return;
+      }
+
+      render('pending', '刷新请求已发送，等待扩展完成重载...');
       return;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);

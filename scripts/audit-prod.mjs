@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 const HIGH_SEVERITY_LEVELS = new Set(['HIGH', 'CRITICAL']);
 const PNPM_LIST_ARGS = ['list', '-r', '--prod', '--json', '--depth', 'Infinity'];
@@ -130,9 +131,64 @@ async function queryPackageVulns(packages) {
   return { packageToVulnIds, vulnIds: Array.from(vulnIds) };
 }
 
-function parseSeverity(detail) {
+function parseNumericSeverity(score) {
+  if (!Number.isFinite(score)) return null;
+  if (score >= 9.0) return 'CRITICAL';
+  if (score >= 7.0) return 'HIGH';
+  if (score >= 4.0) return 'MODERATE';
+  if (score > 0) return 'LOW';
+  return null;
+}
+
+function parseOsvSeverityEntries(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return null;
+  }
+
+  let bestSeverity = null;
+  let sawUnparsedEntry = false;
+  const rank = { LOW: 1, MODERATE: 2, HIGH: 3, CRITICAL: 4 };
+
+  for (const entry of entries) {
+    const rawScore = typeof entry?.score === 'string' ? entry.score.trim() : '';
+    const keywordMatch = rawScore.match(/\b(CRITICAL|HIGH|MODERATE|LOW)\b/i);
+    if (keywordMatch?.[1]) {
+      const severity = keywordMatch[1].toUpperCase();
+      if (!bestSeverity || rank[severity] > rank[bestSeverity]) {
+        bestSeverity = severity;
+      }
+      continue;
+    }
+
+    const numericScore =
+      typeof entry?.score === 'number'
+        ? entry.score
+        : /^\d+(?:\.\d+)?$/.test(rawScore)
+          ? Number(rawScore)
+          : Number.NaN;
+    const parsed = parseNumericSeverity(numericScore);
+    if (parsed) {
+      if (!bestSeverity || rank[parsed] > rank[bestSeverity]) {
+        bestSeverity = parsed;
+      }
+      continue;
+    }
+
+    sawUnparsedEntry = true;
+  }
+
+  if (bestSeverity) return bestSeverity;
+  if (sawUnparsedEntry) return 'HIGH';
+  return null;
+}
+
+export function parseSeverity(detail) {
   const value = detail?.database_specific?.severity;
-  return typeof value === 'string' ? value.toUpperCase() : 'UNKNOWN';
+  if (typeof value === 'string' && value.trim()) {
+    return value.toUpperCase();
+  }
+
+  return parseOsvSeverityEntries(detail?.severity) ?? 'UNKNOWN';
 }
 
 async function fetchVulnDetails(vulnIds) {
@@ -203,7 +259,9 @@ async function main() {
   process.exitCode = 1;
 }
 
-main().catch((error) => {
-  console.error(`tabrix audit failed: ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(`tabrix audit failed: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });
+}

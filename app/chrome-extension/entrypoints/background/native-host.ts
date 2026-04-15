@@ -63,6 +63,11 @@ let bridgeSocketConnectionId: string | null = null;
 let bridgeSocketReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let bridgeSocketReconnectAttempt = 0;
 
+type PendingExtensionReloadCallback = {
+  callbackUrl: string;
+  requestedAt: number;
+};
+
 /**
  * Save server status to chrome.storage
  */
@@ -110,6 +115,67 @@ async function setLastNativeError(error: unknown): Promise<void> {
 async function clearLastNativeError(): Promise<void> {
   lastNativeError = null;
   await saveLastNativeError(null);
+}
+
+async function loadPendingExtensionReloadCallback(): Promise<PendingExtensionReloadCallback | null> {
+  try {
+    const result = await chrome.storage.local.get([STORAGE_KEYS.PENDING_EXTENSION_RELOAD_CALLBACK]);
+    const value = result[STORAGE_KEYS.PENDING_EXTENSION_RELOAD_CALLBACK];
+    if (
+      value &&
+      typeof value === 'object' &&
+      typeof (value as PendingExtensionReloadCallback).callbackUrl === 'string' &&
+      typeof (value as PendingExtensionReloadCallback).requestedAt === 'number'
+    ) {
+      return value as PendingExtensionReloadCallback;
+    }
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} Failed to load pending extension reload callback`, error);
+  }
+
+  return null;
+}
+
+async function savePendingExtensionReloadCallback(callbackUrl: string): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.PENDING_EXTENSION_RELOAD_CALLBACK]: {
+      callbackUrl,
+      requestedAt: Date.now(),
+    } satisfies PendingExtensionReloadCallback,
+  });
+}
+
+async function clearPendingExtensionReloadCallback(): Promise<void> {
+  await chrome.storage.local.remove(STORAGE_KEYS.PENDING_EXTENSION_RELOAD_CALLBACK);
+}
+
+async function flushPendingExtensionReloadCallback(): Promise<void> {
+  const pending = await loadPendingExtensionReloadCallback();
+  if (!pending) return;
+
+  const maxAgeMs = 60_000;
+  if (Date.now() - pending.requestedAt > maxAgeMs) {
+    await clearPendingExtensionReloadCallback();
+    return;
+  }
+
+  try {
+    await fetch(pending.callbackUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        status: 'success',
+        action: 'reload',
+        reloaded: true,
+        extensionId: chrome.runtime.id,
+        completedAt: Date.now(),
+      }),
+      keepalive: true,
+    });
+    await clearPendingExtensionReloadCallback();
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} Failed to flush extension reload callback`, error);
+  }
 }
 
 /**
@@ -1168,6 +1234,9 @@ export const initNativeHostListener = () => {
   clearBridgeSocketReconnectTimer();
   void connectBridgeSocket('sw_init').catch(() => {});
   pulseBridgeHeartbeat('sw_init');
+  void flushPendingExtensionReloadCallback().catch((error) => {
+    console.warn(`${LOG_PREFIX} Failed to process pending extension reload callback`, error);
+  });
   // Initialize server status from storage
   loadServerStatus()
     .then((status) => {
@@ -1298,14 +1367,33 @@ export const initNativeHostListener = () => {
     }
 
     if (msgType === NativeMessageType.RELOAD_EXTENSION) {
-      sendResponse({ success: true, reloading: true });
-      setTimeout(() => {
-        try {
-          chrome.runtime.reload();
-        } catch (error) {
-          console.error(`${LOG_PREFIX} Failed to reload extension`, error);
+      const callbackUrl =
+        typeof message === 'object' && typeof message.callbackUrl === 'string'
+          ? message.callbackUrl
+          : null;
+
+      (async () => {
+        if (callbackUrl) {
+          await savePendingExtensionReloadCallback(callbackUrl);
+        } else {
+          await clearPendingExtensionReloadCallback();
         }
-      }, 50);
+
+        sendResponse({ success: true, reloading: true, callbackRegistered: !!callbackUrl });
+        setTimeout(() => {
+          try {
+            chrome.runtime.reload();
+          } catch (error) {
+            console.error(`${LOG_PREFIX} Failed to reload extension`, error);
+          }
+        }, 50);
+      })().catch((error) => {
+        sendResponse({
+          success: false,
+          reloading: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
       return true;
     }
 
