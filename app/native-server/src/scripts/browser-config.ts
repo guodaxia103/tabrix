@@ -25,11 +25,15 @@ export interface BrowserExecutableResolution {
   source: 'app-path' | 'install-dir' | 'path' | 'mac-app' | 'linux-which';
 }
 
+function getPlatform(): NodeJS.Platform {
+  return process.platform;
+}
+
 /**
  * Get the user-level manifest path for a specific browser
  */
 function getUserManifestPathForBrowser(browser: BrowserType): string {
-  const platform = os.platform();
+  const platform = getPlatform();
 
   if (platform === 'win32') {
     const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
@@ -104,7 +108,7 @@ function getUserManifestPathForBrowser(browser: BrowserType): string {
  * Get the system-level manifest path for a specific browser
  */
 function getSystemManifestPathForBrowser(browser: BrowserType): string {
-  const platform = os.platform();
+  const platform = getPlatform();
 
   if (platform === 'win32') {
     const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
@@ -172,7 +176,7 @@ function getSystemManifestPathForBrowser(browser: BrowserType): string {
  * Get Windows registry keys for a browser
  */
 function getRegistryKeys(browser: BrowserType): { user: string; system: string } | undefined {
-  if (os.platform() !== 'win32') return undefined;
+  if (getPlatform() !== 'win32') return undefined;
 
   const browserPaths: Record<BrowserType, { user: string; system: string }> = {
     [BrowserType.CHROME]: {
@@ -291,7 +295,7 @@ function uniquePaths(candidates: string[]): string[] {
 export function resolveBrowserExecutable(browser: BrowserType): BrowserExecutableResolution | null {
   const config = getBrowserConfig(browser);
 
-  if (os.platform() === 'win32') {
+  if (getPlatform() === 'win32') {
     for (const executablePath of uniquePaths(getWindowsAppPathCandidates(browser))) {
       if (fs.existsSync(executablePath)) {
         return {
@@ -331,7 +335,7 @@ export function resolveBrowserExecutable(browser: BrowserType): BrowserExecutabl
     return null;
   }
 
-  if (os.platform() === 'darwin') {
+  if (getPlatform() === 'darwin') {
     const executablePath =
       browser === BrowserType.CHROMIUM
         ? '/Applications/Chromium.app/Contents/MacOS/Chromium'
