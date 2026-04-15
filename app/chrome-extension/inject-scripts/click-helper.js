@@ -1,4 +1,4 @@
-/* global window, document, Element, MouseEvent, chrome */
+/* global window, document, Element, MouseEvent, PointerEvent, HTMLElement, SVGElement, HTMLInputElement, HTMLButtonElement, HTMLAnchorElement, HTMLLabelElement, chrome */
 
 // click-helper.js
 // This script is injected into the page to handle click operations
@@ -31,6 +31,72 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
       let elementInfo = null;
       let clickX, clickY;
 
+      const resolvePreferredClickTarget = (candidate) => {
+        if (!(candidate instanceof Element)) return null;
+        const candidateRect = candidate.getBoundingClientRect();
+        const candidateArea = Math.max(1, candidateRect.width * candidateRect.height);
+        const candidateText = (candidate.innerText || candidate.textContent || '').trim();
+        const comboAncestor =
+          candidate.closest?.(
+            '[role="combobox"], .arco-cascader, .arco-select-view, .arco-picker, .arco-input-tag',
+          ) || null;
+        if (comboAncestor instanceof Element) {
+          return comboAncestor;
+        }
+        const ancestorSelector =
+          'button, a[href], label, summary, option, input, textarea, select, [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], [onclick], [tabindex]:not([tabindex^="-"])';
+        const ancestors = [];
+        let current = candidate;
+        let depth = 0;
+        while (current && current instanceof Element && depth < 8) {
+          if (current.matches?.(ancestorSelector)) {
+            ancestors.push(current);
+          }
+          current = current.parentElement;
+          depth += 1;
+        }
+        const scored = ancestors
+          .map((el) => {
+            const rect = el.getBoundingClientRect();
+            const area = Math.max(1, rect.width * rect.height);
+            const text = (el.innerText || el.textContent || '').trim();
+            let score = 0;
+
+            if (text && candidateText && text === candidateText) score += 30;
+            if (el.tagName === 'BUTTON' || el.tagName === 'A') score += 28;
+            if (
+              el.matches?.(
+                '[role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"]',
+              )
+            ) {
+              score += 24;
+            }
+            if (el.matches?.('[aria-haspopup], [aria-expanded], [aria-controls]')) score += 12;
+            if (area <= candidateArea * 6) score += 18;
+            if (area > candidateArea * 20) score -= 35;
+            if (/^arco-tabs-\d+-panel-\d+$/.test(el.id || '')) score -= 80;
+            if (
+              el.tagName === 'DIV' &&
+              area > 30000 &&
+              el.querySelectorAll?.(ancestorSelector).length > 3
+            ) {
+              score -= 40;
+            }
+
+            return { el, score, area };
+          })
+          .sort((left, right) => {
+            if (right.score !== left.score) return right.score - left.score;
+            return left.area - right.area;
+          });
+
+        if (scored.length > 0 && scored[0].score > 0) {
+          return scored[0].el;
+        }
+
+        return candidate;
+      };
+
       if (ref && typeof ref === 'string') {
         // Resolve element from weak map
         let target = null;
@@ -48,7 +114,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
           };
         }
 
-        element = target;
+        element = resolvePreferredClickTarget(target);
         element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
         await new Promise((resolve) => setTimeout(resolve, 80));
 
@@ -84,7 +150,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         clickX = coordinates.x;
         clickY = coordinates.y;
 
-        element = document.elementFromPoint(clickX, clickY);
+        element = resolvePreferredClickTarget(document.elementFromPoint(clickX, clickY));
 
         if (element) {
           const rect = element.getBoundingClientRect();
@@ -117,7 +183,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
           };
         }
       } else {
-        element = document.querySelector(selector);
+        element = resolvePreferredClickTarget(document.querySelector(selector));
         if (!element) {
           return {
             error: `Element with selector "${selector}" not found`,
@@ -316,6 +382,15 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
 
   function dispatchClickSequence(element, x, y, options = {}, isDouble = false) {
     const base = normalizeMouseOpts(x, y, options);
+    const pointerBase = {
+      ...base,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+    };
+    try {
+      element.dispatchEvent(new PointerEvent('pointerdown', pointerBase));
+    } catch {}
     const down = new MouseEvent('mousedown', base);
     const up = new MouseEvent('mouseup', base);
     const click = new MouseEvent('click', base);
@@ -328,6 +403,21 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
     try {
       element.dispatchEvent(click);
     } catch {}
+    try {
+      element.dispatchEvent(new PointerEvent('pointerup', pointerBase));
+    } catch {}
+    const nativeClickable =
+      element instanceof HTMLElement ||
+      element instanceof SVGElement ||
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLButtonElement ||
+      element instanceof HTMLAnchorElement ||
+      element instanceof HTMLLabelElement;
+    if (nativeClickable && typeof element.click === 'function') {
+      try {
+        element.click();
+      } catch {}
+    }
     if (base.button === 2) {
       // right button contextmenu
       const ctx = new MouseEvent('contextmenu', base);
@@ -347,6 +437,11 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         try {
           element.dispatchEvent(new MouseEvent('click', base));
         } catch {}
+        if (nativeClickable && typeof element.click === 'function') {
+          try {
+            element.click();
+          } catch {}
+        }
         try {
           element.dispatchEvent(new MouseEvent('dblclick', base));
         } catch {}
