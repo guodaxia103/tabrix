@@ -286,6 +286,7 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 - [快速入门](docs/STABLE_QUICKSTART.md)
 - [平台自检查（Windows / Ubuntu / macOS）](docs/PLATFORM_SELF_CHECK_2026-04-15_zh.md)
 - [Ubuntu Docker 自检](docs/UBUNTU_DOCKER_SELF_CHECK_zh.md)
+- [Ubuntu Xvfb 增强自检](docs/UBUNTU_XVFB_SELF_CHECK_zh.md)
 - [macOS 静态自检](docs/MACOS_STATIC_SELF_CHECK_zh.md)
 - [传输模式 (HTTP / SSE / stdio)](docs/TRANSPORT.md)
 - [Popup 排障](docs/POPUP_TROUBLESHOOTING.md)

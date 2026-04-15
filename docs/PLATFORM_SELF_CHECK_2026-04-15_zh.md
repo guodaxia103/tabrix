@@ -209,6 +209,10 @@
 - 结论是 Ubuntu 的服务层与浏览器探测链是可以跑通的
 - 详细流程见：
   - [UBUNTU_DOCKER_SELF_CHECK_zh.md](E:\projects\AI\copaw\mcp-chrome\docs\UBUNTU_DOCKER_SELF_CHECK_zh.md)
+- 本轮也补了一层 `Ubuntu + Xvfb + Chrome` 增强自检
+- 可进一步确认 Chrome 能在类桌面图形会话中被拉起并短时间保持存活
+- 详细流程见：
+  - [UBUNTU_XVFB_SELF_CHECK_zh.md](E:\projects\AI\copaw\mcp-chrome\docs\UBUNTU_XVFB_SELF_CHECK_zh.md)
 
 ### 4.2 macOS
 
