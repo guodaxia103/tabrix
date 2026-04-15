@@ -16,6 +16,12 @@ Tabrix 在 Windows 电脑上的详细安装和配置步骤
 npm install -g @tabrix/tabrix@latest
 ```
 
+说明：
+
+- `tabrix` 安装成功，不代表浏览器自动化已经就绪
+- 安装完成后，`tabrix register`、`tabrix setup`、`tabrix doctor --fix` 会继续检测 Chrome/Chromium 的真实安装路径
+- 如果当前机器还没装 Chrome/Chromium，Tabrix 会提示“浏览器自动化未就绪”，而不是把安装直接判失败
+
 3. **加载 Chrome 扩展**
    - 打开 Chrome 并访问 `chrome://extensions/`
    - 启用"开发者模式"
@@ -59,6 +65,13 @@ tabrix doctor
 ```bash
 tabrix doctor --fix
 ```
+
+现在 `doctor` 会额外显示：
+
+- `Browser executable`
+- 持久化后的浏览器路径配置位置：`C:\Users\<你的用户名>\.tabrix\browser.json`
+
+如果这里没有绿色结果，说明 Tabrix 已安装，但浏览器自动化仍未就绪。
 
 ### 点击扩展的连接按钮后如果没连接成功
 

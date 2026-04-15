@@ -49,6 +49,12 @@ npm install -g @tabrix/tabrix@latest
 pnpm install -g @tabrix/tabrix@latest
 ```
 
+现在 Tabrix 会把“安装成功”和“浏览器自动化已就绪”分开处理：
+
+- CLI 安装可以先成功，即使当前机器还没安装 Chrome/Chromium
+- `tabrix register`、`tabrix setup`、`tabrix doctor --fix` 会检测受支持浏览器是否就绪
+- 检测到的浏览器可执行路径会被持久化保存，后续自动拉起浏览器时优先复用
+
 如果 pnpm 未执行 postinstall：
 
 ```bash
@@ -73,6 +79,12 @@ tabrix status
 ```bash
 tabrix doctor --fix
 ```
+
+重点看这几个信号：
+
+- `tabrix doctor --json` 里会新增 `browser.executable`
+- 如果已检测到 Chrome/Chromium，Tabrix 会保存真实浏览器路径，后续自动启动优先使用它
+- 如果未检测到受支持浏览器，Tabrix 仍算安装成功，但会明确提示“浏览器自动化未就绪”
 
 ### 4) MCP 客户端连接（Streamable HTTP）
 

@@ -56,7 +56,33 @@ tabrix register
 
 ---
 
-## 4. Node.js 版本管理器（nvm / fnm / volta）导致找不到 node
+## 4. 安装成功了，但浏览器自动化仍然不可用
+
+**原因**：Tabrix 已安装成功，但当前机器还没有检测到可用的 Chrome/Chromium 可执行文件。
+
+**说明**：
+
+- 这是“浏览器自动化未就绪”，不是“Tabrix 安装失败”
+- `register`、`setup`、`doctor --fix` 会继续检测并保存浏览器真实路径
+- 检测成功后，后续自动拉起浏览器会优先使用这个持久化路径
+
+**修复**：
+
+```powershell
+tabrix doctor --fix
+tabrix register
+```
+
+然后重点看：
+
+- `tabrix doctor --json` 中的 `browser.executable`
+- 持久化配置文件：`C:\Users\<你的用户名>\.tabrix\browser.json`
+
+如果仍为空，请先安装 Chrome 或 Chromium。
+
+---
+
+## 5. Node.js 版本管理器（nvm / fnm / volta）导致找不到 node
 
 **原因**：Native host 进程使用 manifest 中的绝对路径启动脚本，如果 node 是版本管理器提供的 shim，Chrome 可能无法正确解析。
 
@@ -75,7 +101,7 @@ tabrix doctor --fix
 
 ---
 
-## 5. 端口 12306 被占用（EADDRINUSE）
+## 6. 端口 12306 被占用（EADDRINUSE）
 
 **原因**：另一个进程已占用 12306 端口，或上一次 bridge 没有正确退出。
 
@@ -91,7 +117,7 @@ taskkill /PID <pid> /F
 
 ---
 
-## 6. 防火墙或安全软件拦截 localhost
+## 7. 防火墙或安全软件拦截 localhost
 
 **原因**：某些企业安全软件会拦截 `127.0.0.1` 的连接。
 
@@ -102,7 +128,7 @@ taskkill /PID <pid> /F
 
 ---
 
-## 7. JSON 配置中的路径转义
+## 8. JSON 配置中的路径转义
 
 **原因**：Windows 路径使用 `\`，在 JSON 中需要转义。
 
@@ -126,7 +152,7 @@ taskkill /PID <pid> /F
 
 ---
 
-## 8. 扩展重新加载后连接断开 / "Access to the specified native messaging host is forbidden"
+## 9. 扩展重新加载后连接断开 / "Access to the specified native messaging host is forbidden"
 
 **原因**：Chrome 扩展的 Extension ID 变化后，Native Messaging manifest 中 `allowed_origins` 仍指向旧 ID。
 
@@ -153,7 +179,7 @@ tabrix register
 
 ---
 
-## 9. 构建时 dist 目录 EBUSY 警告
+## 10. 构建时 dist 目录 EBUSY 警告
 
 **原因**：Windows 下如果 native host 进程正在运行，`dist` 目录的文件会被锁定。
 
@@ -165,7 +191,7 @@ tabrix register
 
 ---
 
-## 10. Chrome 加载了旧的扩展目录
+## 11. Chrome 加载了旧的扩展目录
 
 **原因**：Chrome 记住的是**首次加载时的目录路径**。换目录重新构建后，Chrome 仍然读取旧目录。
 
@@ -182,7 +208,7 @@ robocopy .\app\chrome-extension\.output\chrome-mv3 C:\stable-ext /MIR
 
 ---
 
-## 11. 远程连接后 Popup 配置中 IP 不正确
+## 12. 远程连接后 Popup 配置中 IP 不正确
 
 **原因**：开启远程访问（通过扩展开关或 `MCP_HTTP_HOST=0.0.0.0`）后，Popup 自动选择本机网卡 IP 显示在配置模板中。如果机器上有 VPN 或虚拟网卡，可能选中了非预期的 IP。
 
@@ -192,7 +218,7 @@ robocopy .\app\chrome-extension\.output\chrome-mv3 C:\stable-ext /MIR
 
 ---
 
-## 12. 远程连接被防火墙拦截
+## 13. 远程连接被防火墙拦截
 
 **原因**：Windows 防火墙默认不允许外部访问 12306 端口。
 
@@ -212,7 +238,7 @@ netstat -ano | findstr :12306
 
 ---
 
-## 13. 远程连接返回 401 Unauthorized
+## 14. 远程连接返回 401 Unauthorized
 
 **原因**：Token 缺失、不匹配或已过期。监听 `0.0.0.0` 时远程 IP 需携带正确 Token。
 

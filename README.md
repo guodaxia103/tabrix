@@ -49,6 +49,12 @@ npm install -g @tabrix/tabrix@latest
 pnpm install -g @tabrix/tabrix@latest
 ```
 
+Tabrix installation and browser readiness are now treated separately:
+
+- CLI install can succeed even if Chrome/Chromium is not installed yet
+- Browser automation becomes ready after `tabrix register`, `tabrix setup`, or `tabrix doctor --fix` detects a supported browser executable
+- The detected browser path is persisted and reused for later auto-launch
+
 If pnpm does not run postinstall scripts:
 
 ```bash
@@ -73,6 +79,12 @@ Run automatic recovery:
 ```bash
 tabrix doctor --fix
 ```
+
+What to look for:
+
+- `tabrix doctor --json` now includes `browser.executable`
+- If Chrome/Chromium is ready, Tabrix persists the resolved path for later browser auto-launch
+- If no supported browser is detected, Tabrix stays installed but reports browser automation as not ready
 
 ### 4) Connect from MCP Client (Streamable HTTP)
 

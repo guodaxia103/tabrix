@@ -8,6 +8,12 @@ This guide is the shortest path to a stable local setup on Windows with the curr
 npm install -g @tabrix/tabrix@latest
 ```
 
+Important:
+
+- Installing Tabrix does not hard-fail just because Chrome/Chromium is missing
+- Browser automation becomes ready only after `setup`, `register`, or `doctor --fix` detects a supported browser executable
+- The detected executable path is persisted and reused for later browser auto-launch
+
 If you are developing from source, build and register from the repo:
 
 ```powershell
@@ -59,6 +65,7 @@ Expected healthy output:
 
 - `status` shows `Running: yes`
 - `doctor` shows green checks for:
+  - `Browser executable`
   - `Chrome extension path`
   - `Connectivity`
   - `Runtime status`
@@ -103,6 +110,8 @@ tabrix daemon stop
 ```
 
 The daemon listens on the same port (default `12306`) and serves all non-browser MCP tools. Browser-specific tools (like `chrome_screenshot`) will return an error until Chrome opens and the extension connects.
+
+If Chrome/Chromium is installed, `doctor --fix` now persists the resolved browser path so later recovery can launch the real browser executable directly.
 
 ### Autostart on boot (Windows)
 
