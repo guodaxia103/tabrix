@@ -13,5 +13,7 @@ Default expectations:
 3. Add the smallest regression test that proves the change is correct.
 4. Do not bundle unrelated files into the same commit.
 5. Verify before committing; commit promptly after verification.
+6. When diagnosing GitHub-visible failures, first distinguish historical commit failures from the current head state.
+7. For browser-viewable GitHub troubleshooting, prefer Tabrix first, then use API/CLI only when the page view is insufficient.
 
 If a task conflicts with these rules, stop and surface the tradeoff instead of guessing.
