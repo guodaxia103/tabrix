@@ -298,7 +298,7 @@ GitHub 会保留每个 commit SHA 自己当时的检查结果。
 3. **扩展代码改动**
    - `pnpm -C app/chrome-extension test`
    - `pnpm -C app/chrome-extension typecheck`
-   - 如果改动影响真实浏览器行为，还必须重新 build 并在浏览器里 reload 后再做现场验证
+   - 如果改动影响真实浏览器行为，还必须重新 build，并优先执行 `pnpm run extension:reload` 后再做现场验证
 
 4. **native-server / MCP 服务改动**
    - 至少跑对应 `jest` 定向测试
@@ -402,7 +402,7 @@ GitHub 会保留每个 commit SHA 自己当时的检查结果。
    - 只代表新的 `dist` / `.output` 产物已生成
 
 3. **运行实例切到新代码**
-   - 需要服务重启、扩展 reload、或重新部署后才成立
+   - 需要服务重启、扩展 reload（优先使用 `pnpm run extension:reload`）、或重新部署后才成立
 
 不允许：
 
@@ -548,6 +548,18 @@ GitHub 会保留每个 commit SHA 自己当时的检查结果。
 3. **浏览器里 reload unpacked 扩展**
 4. **再做真实浏览器验收**
 
+默认优先顺序是：
+
+1. `pnpm -C app/chrome-extension build`
+2. `pnpm run extension:reload`
+3. 再做真实浏览器验收
+
+只有在以下情况，才回退到人工在 `chrome://extensions` 里点击 `Reload`：
+
+- 当前浏览器里加载的还是不支持自刷新的旧扩展实例
+- 当前扩展 ID 与本机脚本配置不一致，尚未更新
+- 浏览器策略/现场限制导致自动刷新命令不可用
+
 必须明确：
 
 - `.output/chrome-mv3` 是产物目录，不会因为源码变了就自动更新浏览器里的已加载扩展
@@ -556,7 +568,7 @@ GitHub 会保留每个 commit SHA 自己当时的检查结果。
 不允许：
 
 - 没 build 就说扩展已更新
-- build 了但没 reload，就说浏览器现场已验证通过
+- build 了但既没执行 `pnpm run extension:reload`，也没人工 reload，就说浏览器现场已验证通过
 - 把“代码级测试通过”误说成“浏览器扩展运行中已通过”
 
 如果任务涉及发布产物，还要区分：

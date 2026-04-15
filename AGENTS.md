@@ -29,5 +29,6 @@ Default expectations:
 11. When instructions conflict, follow this order: system/developer instructions, the user's current task, repository task docs, this file, then general heuristics.
 12. End each task with a clear status summary: what changed, what was verified, what was not verified, and what risks remain.
 13. If a CI or platform failure is caused by a retired upstream endpoint or broken external integration, do not stop at "ignore the error"; restore a real verification path before treating the issue as resolved.
+14. When extension code changes, the default local acceptance loop is: `pnpm -C app/chrome-extension build` -> `pnpm run extension:reload` -> real browser validation. Do not claim browser-side verification if the unpacked extension has not been reloaded.
 
 If a task conflicts with these rules, stop and surface the tradeoff instead of guessing.
