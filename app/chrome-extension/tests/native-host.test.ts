@@ -89,6 +89,7 @@ function createChromeHarness(
     runtime: {
       id: 'test-extension-id',
       lastError: undefined as { message: string } | undefined,
+      reload: vi.fn(),
       sendMessage: vi.fn().mockResolvedValue(undefined),
       connectNative,
       onMessage: {
@@ -558,6 +559,26 @@ describe('native host reconnect behavior', () => {
         headers: { 'Content-Type': 'application/json' },
       }),
     );
+  });
+
+  it('acknowledges extension reload requests before reloading the runtime', async () => {
+    const harness = createChromeHarness([]);
+    (globalThis as any).chrome = harness.chromeMock;
+
+    const nativeHostModule = await import('@/entrypoints/background/native-host');
+    nativeHostModule.initNativeHostListener();
+    await flushMicrotasks();
+
+    const response = await harness.sendRuntimeMessage({
+      type: NativeMessageType.RELOAD_EXTENSION,
+    });
+
+    expect(response).toMatchObject({ success: true, reloading: true });
+    expect(harness.chromeMock.runtime.reload).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(harness.chromeMock.runtime.reload).toHaveBeenCalledTimes(1);
   });
 
   it('opens websocket bridge and sends hello plus heartbeat', async () => {

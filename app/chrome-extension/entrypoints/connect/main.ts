@@ -2,6 +2,7 @@ import { NativeMessageType } from '@tabrix/shared';
 
 const root = document.querySelector<HTMLDivElement>('#app');
 const callbackUrl = new URLSearchParams(window.location.search).get('callback');
+const action = new URLSearchParams(window.location.search).get('action');
 
 function buildCallbackNavigationUrl(payload: Record<string, unknown>): string | null {
   if (!callbackUrl) return null;
@@ -68,6 +69,25 @@ function render(status: 'pending' | 'success' | 'error', detail: string) {
 }
 
 async function connect() {
+  if (action === 'reload') {
+    render('pending', '正在刷新 Tabrix 扩展，请稍候...');
+    await reportResult({ status: 'pending', action: 'reload' });
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: NativeMessageType.RELOAD_EXTENSION,
+      });
+      render('success', '刷新请求已发送。扩展将立即重新加载。');
+      await reportResult({ status: 'success', action: 'reload', response });
+      return;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      render('error', `刷新失败：${reason}`);
+      await reportResult({ status: 'error', action: 'reload', reason });
+      return;
+    }
+  }
+
   render('pending', '正在连接 Native Host，请稍候...');
   await reportResult({ status: 'pending' });
 

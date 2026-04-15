@@ -1297,6 +1297,18 @@ export const initNativeHostListener = () => {
       return true;
     }
 
+    if (msgType === NativeMessageType.RELOAD_EXTENSION) {
+      sendResponse({ success: true, reloading: true });
+      setTimeout(() => {
+        try {
+          chrome.runtime.reload();
+        } catch (error) {
+          console.error(`${LOG_PREFIX} Failed to reload extension`, error);
+        }
+      }, 50);
+      return true;
+    }
+
     if (msgType === 'set_remote_access') {
       const enable = typeof message === 'object' ? !!message.enable : false;
       (async () => {

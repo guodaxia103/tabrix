@@ -18,6 +18,7 @@ export enum NativeMessageType {
   ENSURE_NATIVE = 'ensure_native',
   PING_NATIVE = 'ping_native',
   DISCONNECT_NATIVE = 'disconnect_native',
+  RELOAD_EXTENSION = 'reload_extension',
   SET_REMOTE_ACCESS = 'set_remote_access',
   REMOTE_ACCESS_CHANGED = 'remote_access_changed',
 }
