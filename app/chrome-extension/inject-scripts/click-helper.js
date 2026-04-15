@@ -36,15 +36,17 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         const candidateRect = candidate.getBoundingClientRect();
         const candidateArea = Math.max(1, candidateRect.width * candidateRect.height);
         const candidateText = (candidate.innerText || candidate.textContent || '').trim();
-        const comboAncestor =
-          candidate.closest?.(
-            '[role="combobox"], .arco-cascader, .arco-select-view, .arco-picker, .arco-input-tag',
-          ) || null;
-        if (comboAncestor instanceof Element) {
-          return comboAncestor;
-        }
         const ancestorSelector =
           'button, a[href], label, summary, option, input, textarea, select, [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], [onclick], [tabindex]:not([tabindex^="-"])';
+        const candidateIsActionable = candidate.matches?.(ancestorSelector) === true;
+        const comboAncestor = !candidateIsActionable
+          ? candidate.closest?.(
+              '[role="combobox"], .arco-cascader, .arco-select-view, .arco-picker, .arco-input-tag',
+            ) || null
+          : null;
+        if (comboAncestor instanceof Element && comboAncestor !== candidate) {
+          return comboAncestor;
+        }
         const ancestors = [];
         let current = candidate;
         let depth = 0;
@@ -382,6 +384,14 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
 
   function dispatchClickSequence(element, x, y, options = {}, isDouble = false) {
     const base = normalizeMouseOpts(x, y, options);
+    const nativeClickable =
+      element instanceof HTMLElement ||
+      element instanceof SVGElement ||
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLButtonElement ||
+      element instanceof HTMLAnchorElement ||
+      element instanceof HTMLLabelElement;
+    const useNativeClick = nativeClickable && base.button === 0;
     const pointerBase = {
       ...base,
       pointerId: 1,
@@ -401,21 +411,15 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
       element.dispatchEvent(up);
     } catch {}
     try {
-      element.dispatchEvent(click);
-    } catch {}
-    try {
       element.dispatchEvent(new PointerEvent('pointerup', pointerBase));
     } catch {}
-    const nativeClickable =
-      element instanceof HTMLElement ||
-      element instanceof SVGElement ||
-      element instanceof HTMLInputElement ||
-      element instanceof HTMLButtonElement ||
-      element instanceof HTMLAnchorElement ||
-      element instanceof HTMLLabelElement;
-    if (nativeClickable && typeof element.click === 'function') {
+    if (useNativeClick && typeof element.click === 'function') {
       try {
         element.click();
+      } catch {}
+    } else {
+      try {
+        element.dispatchEvent(click);
       } catch {}
     }
     if (base.button === 2) {
@@ -434,12 +438,13 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         try {
           element.dispatchEvent(new MouseEvent('mouseup', base));
         } catch {}
-        try {
-          element.dispatchEvent(new MouseEvent('click', base));
-        } catch {}
-        if (nativeClickable && typeof element.click === 'function') {
+        if (useNativeClick && typeof element.click === 'function') {
           try {
             element.click();
+          } catch {}
+        } else {
+          try {
+            element.dispatchEvent(new MouseEvent('click', base));
           } catch {}
         }
         try {
