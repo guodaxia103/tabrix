@@ -4,6 +4,7 @@ This repository uses a strict "small, verifiable, low-regression" workflow for A
 
 Before changing code, every AI assistant working in this repository must read:
 
+- [docs/AI_ONBOARDING_QUICKSTART_zh.md](./docs/AI_ONBOARDING_QUICKSTART_zh.md)
 - [docs/AI_DEV_RULES_zh.md](./docs/AI_DEV_RULES_zh.md)
 
 Default expectations:
