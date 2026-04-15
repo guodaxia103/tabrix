@@ -91,26 +91,61 @@ async function startCallbackServer() {
 
   server.on('request', (req, res) => {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
-    const payloadRaw = url.searchParams.get('payload');
-    res.statusCode = 204;
-    res.end();
-    clearTimeout(timer);
-    try {
-      server.close();
-    } catch {
-      // ignore close failures after callback
-    }
+    const finishWithPayload = (payloadRaw) => {
+      res.statusCode = 204;
+      res.end();
 
-    if (!payloadRaw) {
-      rejectPayload(new Error('Extension reload callback did not include payload.'));
+      if (!payloadRaw) {
+        clearTimeout(timer);
+        try {
+          server.close();
+        } catch {
+          // ignore close failures after callback
+        }
+        rejectPayload(new Error('Extension reload callback did not include payload.'));
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(payloadRaw);
+        if (parsed && typeof parsed === 'object' && parsed.status === 'pending') {
+          return;
+        }
+        clearTimeout(timer);
+        try {
+          server.close();
+        } catch {
+          // ignore close failures after callback
+        }
+        resolvePayload(parsed);
+      } catch (error) {
+        clearTimeout(timer);
+        try {
+          server.close();
+        } catch {
+          // ignore close failures after callback
+        }
+        rejectPayload(error);
+      }
+    };
+
+    if (req.method === 'POST') {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        finishWithPayload(body);
+      });
+      req.on('error', (error) => {
+        clearTimeout(timer);
+        rejectPayload(error);
+      });
       return;
     }
 
-    try {
-      resolvePayload(JSON.parse(payloadRaw));
-    } catch (error) {
-      rejectPayload(error);
-    }
+    finishWithPayload(url.searchParams.get('payload'));
   });
 
   server.on('error', (error) => {
