@@ -2,14 +2,35 @@ import http from 'http';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawn } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 
-const STABLE_EXTENSION_ID = process.env.TABRIX_EXTENSION_ID || 'njlidkjgkcccdoffkfcbgiefdpaipfdn';
+const DEFAULT_EXTENSION_ID = 'njlidkjgkcccdoffkfcbgiefdpaipfdn';
 const BROWSER_CONFIG_PATH = path.join(os.homedir(), '.tabrix', 'browser.json');
 const CALLBACK_TIMEOUT_MS = 15_000;
 
 function log(message) {
   process.stdout.write(`${message}\n`);
+}
+
+function readUserExtensionId() {
+  if (process.platform !== 'win32') return '';
+  try {
+    return execFileSync(
+      'powershell',
+      [
+        '-NoProfile',
+        '-Command',
+        "[Environment]::GetEnvironmentVariable('TABRIX_EXTENSION_ID','User')",
+      ],
+      { encoding: 'utf8' },
+    ).trim();
+  } catch {
+    return '';
+  }
+}
+
+function resolveExtensionId() {
+  return process.env.TABRIX_EXTENSION_ID?.trim() || readUserExtensionId() || DEFAULT_EXTENSION_ID;
 }
 
 function readPersistedBrowserPath() {
@@ -181,10 +202,11 @@ async function startCallbackServer() {
 }
 
 async function main() {
+  const extensionId = resolveExtensionId();
   const browserCommand = resolveBrowserCommand();
   const callbackSetup = await startCallbackServer();
 
-  const reloadUrl = `chrome-extension://${STABLE_EXTENSION_ID}/connect.html?action=reload&callback=${encodeURIComponent(callbackSetup.callbackUrl)}`;
+  const reloadUrl = `chrome-extension://${extensionId}/connect.html?action=reload&callback=${encodeURIComponent(callbackSetup.callbackUrl)}`;
 
   const child = spawn(browserCommand, ['--new-tab', reloadUrl], {
     detached: true,
