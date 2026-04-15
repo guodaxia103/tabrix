@@ -33,6 +33,24 @@ interface StatusPayload {
       sse?: number;
       streamableHttp?: number;
       sessionIds?: string[];
+      clients?: Array<{
+        clientId?: string;
+        clientName?: string;
+        clientIp?: string;
+        sessionCount?: number;
+        lastSeenAt?: number;
+        userAgent?: string;
+      }>;
+      sessionStates?: {
+        active?: number;
+        stale?: number;
+        disconnected?: number;
+      };
+      cleanup?: {
+        staleAfterMs?: number;
+        disconnectedRetentionMs?: number;
+        lastSweepAt?: number | null;
+      };
     };
   };
 }
@@ -68,17 +86,61 @@ function normalizeSessionIds(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
 }
 
+function normalizeClients(value: unknown): Array<{
+  clientId: string;
+  clientName: string;
+  clientIp: string;
+  sessionCount: number;
+  lastSeenAt: number | null;
+}> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+    .map((item) => ({
+      clientId: typeof item.clientId === 'string' ? item.clientId : '',
+      clientName: typeof item.clientName === 'string' ? item.clientName : '',
+      clientIp: typeof item.clientIp === 'string' ? item.clientIp : '',
+      sessionCount: Number.isFinite(item.sessionCount) ? Number(item.sessionCount) : 0,
+      lastSeenAt: Number.isFinite(item.lastSeenAt) ? Number(item.lastSeenAt) : null,
+      userAgent: typeof item.userAgent === 'string' ? item.userAgent : '',
+    }));
+}
+
 function normalizeTransports(payload: StatusPayload['data']['transports']): {
   total: number;
   streamableHttp: number;
   sse: number;
   sessionIds: string[];
+  clients: ReturnType<typeof normalizeClients>;
+  sessionStates: {
+    active: number;
+    stale: number;
+    disconnected: number;
+  };
+  cleanup: {
+    staleAfterMs: number;
+    disconnectedRetentionMs: number;
+    lastSweepAt: number | null;
+  };
 } {
   return {
     total: normalizeCount(payload.total),
     streamableHttp: normalizeCount(payload.streamableHttp),
     sse: normalizeCount(payload.sse),
     sessionIds: normalizeSessionIds(payload.sessionIds),
+    clients: normalizeClients(payload.clients),
+    sessionStates: {
+      active: normalizeCount(payload.sessionStates?.active),
+      stale: normalizeCount(payload.sessionStates?.stale),
+      disconnected: normalizeCount(payload.sessionStates?.disconnected),
+    },
+    cleanup: {
+      staleAfterMs: normalizeCount(payload.cleanup?.staleAfterMs),
+      disconnectedRetentionMs: normalizeCount(payload.cleanup?.disconnectedRetentionMs),
+      lastSweepAt: Number.isFinite(payload.cleanup?.lastSweepAt)
+        ? Number(payload.cleanup?.lastSweepAt)
+        : null,
+    },
   };
 }
 
@@ -149,11 +211,49 @@ function renderPretty(payload: EnrichedStatusPayload): string {
     `Port: ${data.port ?? 'unknown'}`,
     `Native host attached: ${data.nativeHostAttached ? 'yes' : 'no'}`,
     `Active sessions: ${transports.total} (streamable-http: ${transports.streamableHttp}, sse: ${transports.sse})`,
+    `Active clients: ${transports.clients.length}`,
   ];
   lines.push(...describeBridge(data.bridge));
 
   if (transports.sessionIds.length > 0) {
     lines.push(`Session IDs: ${transports.sessionIds.join(', ')}`);
+  }
+
+  if (
+    transports.sessionStates.active > 0 ||
+    transports.sessionStates.stale > 0 ||
+    transports.sessionStates.disconnected > 0
+  ) {
+    lines.push(
+      `Session states: active=${transports.sessionStates.active}, stale=${transports.sessionStates.stale}, disconnected=${transports.sessionStates.disconnected}`,
+    );
+  }
+
+  if (transports.cleanup.staleAfterMs > 0 || transports.cleanup.disconnectedRetentionMs > 0) {
+    lines.push(
+      `Session cleanup: stale>${Math.round(transports.cleanup.staleAfterMs / 1000)}s, retain terminal sessions ${Math.round(transports.cleanup.disconnectedRetentionMs / 1000)}s`,
+    );
+    if (transports.cleanup.lastSweepAt) {
+      lines.push(
+        `Session cleanup last sweep: ${new Date(transports.cleanup.lastSweepAt).toLocaleString()}`,
+      );
+    }
+  }
+
+  if (transports.clients.length > 0) {
+    lines.push('Active client groups:');
+    for (const client of transports.clients) {
+      const name = client.clientName || 'unknown-client';
+      const sessionLabel =
+        client.sessionCount > 1 ? `${client.sessionCount} sessions` : '1 session';
+      const lastSeen =
+        typeof client.lastSeenAt === 'number'
+          ? new Date(client.lastSeenAt).toLocaleTimeString()
+          : 'unknown';
+      lines.push(
+        `  - ${name} @ ${client.clientIp || 'unknown-ip'} (${sessionLabel}, lastSeen ${lastSeen})`,
+      );
+    }
   }
 
   if (payload.runtimeConsistency) {

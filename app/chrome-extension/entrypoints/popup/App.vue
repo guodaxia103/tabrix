@@ -110,8 +110,8 @@
                 >
                   <div class="client-info">
                     <span class="client-dot"></span>
-                    <span class="client-name">{{
-                      client.clientName || getMessage('popupUnknownClient')
+                    <span class="client-name" :title="formatClientNameTitle(client)">{{
+                      formatClientDisplayName(client)
                     }}</span>
                     <span class="client-meta" :title="formatClientMetaTitle(client)">{{
                       formatClientMeta(client)
@@ -629,6 +629,8 @@ import { ConnectionState, stateToStatusClass, type ServerStatus } from '@/common
 import { resolvePopupConnectAction } from '@/common/popup-connect-action';
 import {
   describePopupClientOrigin,
+  inferPopupClientProduct,
+  isGenericPopupClientName,
   normalizePopupConnectedClients,
   shouldPopupAutoConnect,
   shouldApplyConnectedClientsResponse,
@@ -879,6 +881,26 @@ function formatClientOriginLabel(client: PopupConnectedClient): string {
 
 function formatClientMeta(client: PopupConnectedClient): string {
   return formatClientOriginLabel(client);
+}
+
+function formatClientDisplayName(client: PopupConnectedClient): string {
+  const inferred = inferPopupClientProduct(client);
+  if (inferred) return inferred;
+  if (client.clientName && !isGenericPopupClientName(client.clientName)) {
+    return client.clientName;
+  }
+  if (client.clientName) {
+    return getMessage('popupGenericMcpClient');
+  }
+  return getMessage('popupUnknownClient');
+}
+
+function formatClientNameTitle(client: PopupConnectedClient): string | undefined {
+  const details = [];
+  if (client.clientName) details.push(client.clientName);
+  if (client.clientVersion) details.push(client.clientVersion);
+  if (client.userAgent) details.push(client.userAgent);
+  return details.length > 0 ? details.join(' · ') : undefined;
 }
 
 function formatClientMetaTitle(client: PopupConnectedClient): string | undefined {

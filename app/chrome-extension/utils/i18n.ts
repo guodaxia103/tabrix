@@ -155,10 +155,19 @@ const fallbackMessages: Record<string, string> = {
 
   // Popup page
   popupOpenTroubleshootingGuide: 'Open Troubleshooting Guide',
+  popupActiveClientsLabel: 'Active clients ({0})',
   popupConnectedClientsLabel: 'Connected clients ({0})',
+  popupClientLastSeenLabel: '{0}',
+  popupClientSessionsLabel: '{0} session(s)',
+  popupClientLocalHttpLabel: 'Local · HTTP (no token)',
+  popupClientRemoteHttpLabel: 'Remote · HTTP · {0}',
+  popupClientLocalSseLabel: 'Local · SSE',
+  popupClientRemoteSseLabel: 'Remote · SSE · {0}',
   popupRefreshClientsTitle: 'Refresh client list',
   popupUnknownClient: 'Unknown client',
+  popupGenericMcpClient: 'MCP client',
   popupDisconnectClientTitle: 'Disconnect this client',
+  popupNoActiveClients: 'No active clients',
   popupNoConnectedClients: 'No MCP client connected',
   popupMcpConfigLabel: 'MCP Configuration',
   popupRemoteAccessTitle: 'Remote Access',
@@ -205,7 +214,6 @@ const fallbackMessages: Record<string, string> = {
     'Remote access is enabled. A default token is being created automatically.',
   popupRemoteSecurityWarning:
     'Remote mode requires Bearer Token. A default token is being created automatically, or generate one manually in Token Management.',
-  popupLocalTab: 'Local',
   popupRemoteTab: 'Remote',
   popupTabHintLocal: 'For local clients like Cursor / Claude Desktop / CherryStudio / Windsurf',
   popupTabHintStdio: 'For CLI clients like Claude Code CLI (npm i -g tabrix@latest first)',

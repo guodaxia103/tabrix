@@ -693,6 +693,64 @@
     },
     "description": "自动同步键: popupConnectedClientsLabel"
   },
+  "popupActiveClientsLabel": {
+    "message": "有效活跃客户端 ($ARG1$)",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "自动同步键: popupActiveClientsLabel"
+  },
+  "popupClientLastSeenLabel": {
+    "message": "$ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "2 分钟前"
+      }
+    },
+    "description": "自动同步键: popupClientLastSeenLabel"
+  },
+  "popupClientSessionsLabel": {
+    "message": "$ARG1$ 个会话",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "2"
+      }
+    },
+    "description": "自动同步键: popupClientSessionsLabel"
+  },
+  "popupClientLocalHttpLabel": {
+    "message": "本机 · HTTP（免 Token）",
+    "description": "自动同步键: popupClientLocalHttpLabel"
+  },
+  "popupClientRemoteHttpLabel": {
+    "message": "远程 · HTTP · $ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "192.168.5.23"
+      }
+    },
+    "description": "自动同步键: popupClientRemoteHttpLabel"
+  },
+  "popupClientLocalSseLabel": {
+    "message": "本机 · SSE",
+    "description": "自动同步键: popupClientLocalSseLabel"
+  },
+  "popupClientRemoteSseLabel": {
+    "message": "远程 · SSE · $ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "192.168.5.23"
+      }
+    },
+    "description": "自动同步键: popupClientRemoteSseLabel"
+  },
   "popupCopiedFullScript": {
     "message": "✅ 已复制完整脚本",
     "description": "自动同步键: popupCopiedFullScript"
@@ -804,6 +862,10 @@
   "popupNoConnectedClients": {
     "message": "暂无客户端连接",
     "description": "自动同步键: popupNoConnectedClients"
+  },
+  "popupNoActiveClients": {
+    "message": "暂无活跃客户端",
+    "description": "自动同步键: popupNoActiveClients"
   },
   "popupOpenDocs": {
     "message": "文档",
@@ -966,6 +1028,10 @@
   "popupUnknownClient": {
     "message": "未知客户端",
     "description": "自动同步键: popupUnknownClient"
+  },
+  "popupGenericMcpClient": {
+    "message": "MCP 客户端",
+    "description": "自动同步键: popupGenericMcpClient"
   },
   "popupWorkflowManagementDesc": {
     "message": "录制与回放自动化流程",

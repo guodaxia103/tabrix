@@ -693,6 +693,64 @@
     },
     "description": "Auto-synced key: popupConnectedClientsLabel"
   },
+  "popupActiveClientsLabel": {
+    "message": "Active clients ($ARG1$)",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "1"
+      }
+    },
+    "description": "Auto-synced key: popupActiveClientsLabel"
+  },
+  "popupClientLastSeenLabel": {
+    "message": "$ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "2 minutes ago"
+      }
+    },
+    "description": "Auto-synced key: popupClientLastSeenLabel"
+  },
+  "popupClientSessionsLabel": {
+    "message": "$ARG1$ session(s)",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "2"
+      }
+    },
+    "description": "Auto-synced key: popupClientSessionsLabel"
+  },
+  "popupClientLocalHttpLabel": {
+    "message": "Local · HTTP (no token)",
+    "description": "Auto-synced key: popupClientLocalHttpLabel"
+  },
+  "popupClientRemoteHttpLabel": {
+    "message": "Remote · HTTP · $ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "192.168.5.23"
+      }
+    },
+    "description": "Auto-synced key: popupClientRemoteHttpLabel"
+  },
+  "popupClientLocalSseLabel": {
+    "message": "Local · SSE",
+    "description": "Auto-synced key: popupClientLocalSseLabel"
+  },
+  "popupClientRemoteSseLabel": {
+    "message": "Remote · SSE · $ARG1$",
+    "placeholders": {
+      "arg1": {
+        "content": "$1",
+        "example": "192.168.5.23"
+      }
+    },
+    "description": "Auto-synced key: popupClientRemoteSseLabel"
+  },
   "popupCopiedFullScript": {
     "message": "Copied full script",
     "description": "Auto-synced key: popupCopiedFullScript"
@@ -804,6 +862,10 @@
   "popupNoConnectedClients": {
     "message": "No client connected",
     "description": "Auto-synced key: popupNoConnectedClients"
+  },
+  "popupNoActiveClients": {
+    "message": "No active clients",
+    "description": "Auto-synced key: popupNoActiveClients"
   },
   "popupOpenDocs": {
     "message": "Docs",
@@ -966,6 +1028,10 @@
   "popupUnknownClient": {
     "message": "Unknown client",
     "description": "Auto-synced key: popupUnknownClient"
+  },
+  "popupGenericMcpClient": {
+    "message": "MCP client",
+    "description": "Auto-synced key: popupGenericMcpClient"
   },
   "popupWorkflowManagementDesc": {
     "message": "Record/replay automation flows",

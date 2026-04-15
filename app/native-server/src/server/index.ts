@@ -315,6 +315,25 @@ export class Server {
         }
       },
     );
+
+    this.fastify.delete(
+      '/status/clients/:clientId',
+      async (request: FastifyRequest<{ Params: { clientId: string } }>, reply: FastifyReply) => {
+        const { clientId } = request.params;
+        const disconnectedSessions = this.forceDisconnectClient(clientId);
+        if (disconnectedSessions > 0) {
+          reply.status(HTTP_STATUS.OK).send({
+            status: 'ok',
+            message: 'Client disconnected',
+            data: { disconnectedSessions },
+          });
+        } else {
+          reply
+            .status(HTTP_STATUS.NOT_FOUND)
+            .send({ status: 'error', message: 'Client not found' });
+        }
+      },
+    );
   }
 
   // ============================================================
@@ -504,6 +523,9 @@ export class Server {
     this.fastify.post('/mcp', async (request, reply) => {
       const sessionId = request.headers['mcp-session-id'] as string | undefined;
       const managedEntry = sessionId ? this.sessions.get(sessionId) : undefined;
+      if (sessionId && managedEntry) {
+        this.sessions.touch(sessionId);
+      }
       let transport: StreamableHTTPServerTransport | undefined =
         managedEntry?.kind === 'streamable-http' ? managedEntry.transport : undefined;
       let newSessionId: string | undefined;
@@ -518,6 +540,13 @@ export class Server {
         newSessionId = createdSessionId;
         const server = createMcpServer();
         const clientIp = request.ip;
+        const userAgentHeader = request.headers['user-agent'];
+        const userAgent =
+          typeof userAgentHeader === 'string'
+            ? userAgentHeader
+            : Array.isArray(userAgentHeader)
+              ? userAgentHeader[0] || ''
+              : '';
         const initBody = request.body as {
           params?: { clientInfo?: { name?: string; version?: string } };
         };
@@ -537,11 +566,12 @@ export class Server {
           clientIp,
           clientName,
           clientVersion,
+          userAgent,
           connectedAt,
         });
 
         transport.onclose = () => {
-          this.sessions.remove(createdSessionId);
+          this.sessions.remove(createdSessionId, 'client-closed');
         };
         await server.connect(transport);
       } else {
@@ -554,11 +584,11 @@ export class Server {
 
         // If initialize failed, remove the pre-registered session to avoid leaks.
         if (newSessionId && reply.raw.statusCode >= HTTP_STATUS.BAD_REQUEST) {
-          this.sessions.remove(newSessionId);
+          this.sessions.remove(newSessionId, 'initialize-failed');
         }
       } catch (error) {
         if (newSessionId) {
-          this.sessions.remove(newSessionId);
+          this.sessions.remove(newSessionId, 'initialize-failed');
         }
         if (canWriteReply(reply)) {
           reply
@@ -572,6 +602,9 @@ export class Server {
     this.fastify.get('/mcp', async (request, reply) => {
       const sessionId = request.headers['mcp-session-id'] as string | undefined;
       const sseEntry = sessionId ? this.sessions.get(sessionId) : undefined;
+      if (sessionId && sseEntry) {
+        this.sessions.touch(sessionId);
+      }
       const transport = sseEntry?.kind === 'streamable-http' ? sseEntry.transport : undefined;
 
       if (!transport) {
@@ -597,6 +630,9 @@ export class Server {
       }
 
       const delEntry = sessionId ? this.sessions.get(sessionId) : undefined;
+      if (sessionId && delEntry) {
+        this.sessions.touch(sessionId);
+      }
       const transport = delEntry?.kind === 'streamable-http' ? delEntry.transport : undefined;
 
       if (!transport) {
@@ -769,7 +805,11 @@ export class Server {
    * Used by the popup "kick" button via DELETE /status/sessions/:sessionId.
    */
   public forceDisconnectSession(sessionId: string): boolean {
-    return this.sessions.disconnect(sessionId);
+    return this.sessions.disconnect(sessionId, 'manual');
+  }
+
+  public forceDisconnectClient(clientId: string): number {
+    return this.sessions.disconnectClient(clientId, 'manual');
   }
 }
 

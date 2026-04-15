@@ -14,6 +14,7 @@ export interface PopupConnectedClient {
   clientIp: string;
   clientName: string;
   clientVersion: string;
+  userAgent: string;
   connectedAt: number;
   lastSeenAt: number;
 }
@@ -25,6 +26,45 @@ export interface PopupClientOriginDescriptor {
   scope: PopupClientOriginScope;
   transport: PopupClientTransport;
   address: string;
+}
+
+const GENERIC_CLIENT_NAMES = new Set(['mcp', 'client', 'sdk', 'unknown-client', 'unknown client']);
+
+export function isGenericPopupClientName(name: string): boolean {
+  return GENERIC_CLIENT_NAMES.has((name || '').trim().toLowerCase());
+}
+
+export function inferPopupClientProduct(
+  client: Pick<PopupConnectedClient, 'clientName' | 'userAgent'>,
+): string | null {
+  if (!isGenericPopupClientName(client.clientName || '')) return null;
+
+  const userAgent = (client.userAgent || '').toLowerCase();
+  if (!userAgent) return null;
+
+  if (userAgent.includes('claude-code') || userAgent.includes('claude code')) {
+    return 'Claude Code';
+  }
+  if (userAgent.includes('claude')) {
+    return 'Claude';
+  }
+  if (userAgent.includes('codex')) {
+    return 'Codex';
+  }
+  if (userAgent.includes('cline')) {
+    return 'Cline';
+  }
+  if (userAgent.includes('cursor')) {
+    return 'Cursor';
+  }
+  if (userAgent.includes('qwen')) {
+    return 'Qwen';
+  }
+  if (userAgent.includes('copaw')) {
+    return 'CoPaw';
+  }
+
+  return null;
 }
 
 export function shouldPopupAutoConnect(search: string | URLSearchParams): boolean {
@@ -66,6 +106,7 @@ export function normalizePopupConnectedClients(value: unknown): PopupConnectedCl
       clientIp: typeof item.clientIp === 'string' ? item.clientIp : '',
       clientName: typeof item.clientName === 'string' ? item.clientName : '',
       clientVersion: typeof item.clientVersion === 'string' ? item.clientVersion : '',
+      userAgent: typeof item.userAgent === 'string' ? item.userAgent : '',
       connectedAt: Number.isFinite(item.connectedAt) ? Number(item.connectedAt) : 0,
       lastSeenAt: Number.isFinite(item.lastSeenAt) ? Number(item.lastSeenAt) : 0,
     }))

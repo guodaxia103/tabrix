@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   describePopupClientOrigin,
+  inferPopupClientProduct,
+  isGenericPopupClientName,
   isLoopbackClientIp,
   normalizePopupConnectedClients,
   shouldPopupAutoConnect,
@@ -58,6 +60,7 @@ describe('popup connected client response guard', () => {
           clientIp: '192.168.1.9',
           clientName: 'Claude CLI',
           clientVersion: '1.0.0',
+          userAgent: 'claude-code/1.0.0',
           connectedAt: 100,
           lastSeenAt: 200,
         },
@@ -77,6 +80,7 @@ describe('popup connected client response guard', () => {
         clientIp: '192.168.1.9',
         clientName: 'Claude CLI',
         clientVersion: '1.0.0',
+        userAgent: 'claude-code/1.0.0',
         connectedAt: 100,
         lastSeenAt: 200,
       },
@@ -96,6 +100,7 @@ describe('popup connected client response guard', () => {
           clientIp: '127.0.0.1',
           clientName: 'Claude CLI',
           clientVersion: '1.0.0',
+          userAgent: 'claude-code/1.0.0',
           connectedAt: 100,
           lastSeenAt: 200,
         },
@@ -109,6 +114,7 @@ describe('popup connected client response guard', () => {
           clientIp: '127.0.0.1',
           clientName: 'Codex',
           clientVersion: '1.0.0',
+          userAgent: 'codex/1.0.0',
           connectedAt: 150,
           lastSeenAt: 220,
         },
@@ -148,5 +154,38 @@ describe('popup connected client response guard', () => {
       transport: 'http',
       address: '192.168.5.23',
     });
+  });
+
+  it('treats mcp and similar placeholders as generic client names', () => {
+    expect(isGenericPopupClientName('mcp')).toBe(true);
+    expect(isGenericPopupClientName('client')).toBe(true);
+    expect(isGenericPopupClientName('Codex')).toBe(false);
+  });
+
+  it('infers known products from user agent when the reported client name is generic', () => {
+    expect(
+      inferPopupClientProduct({
+        clientName: 'mcp',
+        userAgent: 'claude-code/1.2.3',
+      }),
+    ).toBe('Claude Code');
+    expect(
+      inferPopupClientProduct({
+        clientName: 'mcp',
+        userAgent: 'codex-cli/0.1.0',
+      }),
+    ).toBe('Codex');
+    expect(
+      inferPopupClientProduct({
+        clientName: 'mcp',
+        userAgent: 'cursor-agent/0.1.0',
+      }),
+    ).toBe('Cursor');
+    expect(
+      inferPopupClientProduct({
+        clientName: 'mcp',
+        userAgent: 'node',
+      }),
+    ).toBeNull();
   });
 });
