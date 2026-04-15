@@ -284,6 +284,7 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 
 - [CLI 命令参考](docs/CLI_zh.md)
 - [快速入门](docs/STABLE_QUICKSTART.md)
+- [平台自检查（Windows / Ubuntu / macOS）](docs/PLATFORM_SELF_CHECK_2026-04-15_zh.md)
 - [传输模式 (HTTP / SSE / stdio)](docs/TRANSPORT.md)
 - [Popup 排障](docs/POPUP_TROUBLESHOOTING.md)
 - [故障排除](docs/TROUBLESHOOTING_zh.md)
@@ -295,6 +296,7 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 ### 开发者文档
 
 - [架构设计](docs/ARCHITECTURE_zh.md)
+- [当前验收矩阵](docs/ACCEPTANCE_MATRIX_2026-04-15_zh.md)
 - [项目结构指南](docs/PROJECT_STRUCTURE_zh.md)
 - [产品定位与技术原则](docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md)
 - [工具分层与风险分级清单](docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md)

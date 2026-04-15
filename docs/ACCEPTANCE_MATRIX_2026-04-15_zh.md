@@ -15,6 +15,13 @@
   - `powershell -ExecutionPolicy Bypass -File scripts\run-claude-acceptance.ps1 -Profile fast`
   - `powershell -ExecutionPolicy Bypass -File scripts\run-claude-acceptance.ps1 -Profile full`
 
+并补充纳入本轮 `v2.0.8` 发布后验收：
+
+- `tabrix status --json`
+- `tabrix smoke --json`
+- 发布后的扩展 reload / 版本对齐检查
+- Windows 桌面黑窗回归观察
+
 ---
 
 ## 1. 当前结论
@@ -32,7 +39,21 @@
 5. 无人值守主线工具在真实会话中可连续完成
 6. 验收结束后无监听残留、无临时标签页残留、无桌面阻塞弹框残留
 
-### 1.2 当前不应误解的点
+### 1.2 `v2.0.8` 发布后追加结论
+
+`v2.0.8` 发布后，本机再次完成了一轮发布后最小真实验收，结论如下：
+
+1. 本地 CLI、daemon、扩展产物已统一到 `2.0.8`
+2. `tabrix status --json` 返回：
+   - `bridgeState=READY`
+   - `commandChannelConnected=true`
+   - `commandChannelType=websocket`
+   - `runtimeConsistency.verdict=consistent`
+3. `tabrix smoke --json` 通过
+4. `Claude fast / full` 再次通过，无残留 `62100/62101` 监听
+5. Windows 下验收辅助进程黑窗问题已补强，但仍建议后续继续观察真实桌面现场
+
+### 1.3 当前不应误解的点
 
 1. `nativeHostAttached=false` 不再代表 daemon 模式不可用
    - 当前 daemon 模式以 WebSocket 执行桥为准
@@ -167,7 +188,27 @@
 
 ---
 
-## 8. 是否具备继续发版准备条件
+## 8. 平台自检查摘要
+
+本轮已对 Ubuntu / macOS 的部署安装路径做过一轮静态自检查，结论是：
+
+1. 不是“未支持”，而是“基础支持已具备，仍有边界需要明确”
+2. 已有能力包括：
+   - Linux 使用 `which google-chrome / google-chrome-stable / chromium / chromium-browser`
+   - macOS 使用应用 bundle 路径探测 Chrome / Chromium
+   - Linux daemon 自启使用 `systemctl --user`
+   - macOS daemon 自启使用 `launchctl`
+   - Unix Native Host 使用 `run_host.sh`
+3. 当前已识别的主要风险：
+   - macOS 目前主要检测 `/Applications/...`，未覆盖 `~/Applications/...` 等非常见安装位置
+   - Ubuntu/Linux 的 daemon 自启依赖 `systemctl --user`，在无 user-systemd 或 headless 极简环境下可能需要手动处理
+   - 文档过去更偏 Windows / Chrome 主路径，已补说明但仍值得继续完善
+
+详细结论见：
+
+- [PLATFORM_SELF_CHECK_2026-04-15_zh.md](E:\projects\AI\copaw\mcp-chrome\docs\PLATFORM_SELF_CHECK_2026-04-15_zh.md)
+
+## 9. 是否具备继续发版准备条件
 
 当前结论：**具备进入下一步发版准备的条件**。
 

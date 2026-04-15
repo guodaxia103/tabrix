@@ -285,6 +285,7 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 
 - [CLI Commands](docs/CLI.md)
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md)
+- [Platform Self-Check (ZH)](docs/PLATFORM_SELF_CHECK_2026-04-15_zh.md)
 - [Transport Modes (HTTP / SSE / stdio)](docs/TRANSPORT.md)
 - [Popup Troubleshooting](docs/POPUP_TROUBLESHOOTING.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
@@ -296,6 +297,7 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 ### For Developers
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Current Acceptance Matrix (ZH)](docs/ACCEPTANCE_MATRIX_2026-04-15_zh.md)
 - [Project Structure Guide](docs/PROJECT_STRUCTURE.md)
 - [Product Positioning and Technical Principles (ZH)](docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md)
 - [Tool Layering and Risk Classification (ZH)](docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md)
