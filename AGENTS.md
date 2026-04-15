@@ -2,6 +2,13 @@
 
 This repository uses a strict "small, verifiable, low-regression" workflow for AI-assisted development.
 
+All code changes in this repository must follow the `karpathy-guidelines` skill:
+
+- think before coding
+- keep the change as small as possible
+- define a verifiable success condition
+- prefer a real fix over a temporary suppression
+
 Before changing code, every AI assistant working in this repository must read:
 
 - [docs/AI_ONBOARDING_QUICKSTART_zh.md](./docs/AI_ONBOARDING_QUICKSTART_zh.md)
@@ -21,5 +28,6 @@ Default expectations:
 10. If the working tree is dirty, do not blindly pull/rebase/merge on top of it; fetch first, assess risk, and prefer a separate branch or worktree when needed.
 11. When instructions conflict, follow this order: system/developer instructions, the user's current task, repository task docs, this file, then general heuristics.
 12. End each task with a clear status summary: what changed, what was verified, what was not verified, and what risks remain.
+13. If a CI or platform failure is caused by a retired upstream endpoint or broken external integration, do not stop at "ignore the error"; restore a real verification path before treating the issue as resolved.
 
 If a task conflicts with these rules, stop and surface the tradeoff instead of guessing.
