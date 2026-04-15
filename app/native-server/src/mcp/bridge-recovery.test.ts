@@ -118,6 +118,7 @@ describe('bridge recovery orchestration', () => {
 
   it('returns a structured bridge error when extension heartbeat never recovers', async () => {
     jest.useFakeTimers();
+    mockCurrentPlatform('win32');
     mockTasklist(true);
     bridgeRuntimeState.syncBrowserProcessNow();
 
