@@ -147,7 +147,11 @@ function inferSchemeGuard(url: string): SchemeGuardSummary {
   };
 }
 
-function inferPageUnderstanding(pageContent: string, url: string, title: string): PageUnderstandingSummary {
+function inferPageUnderstanding(
+  pageContent: string,
+  url: string,
+  title: string,
+): PageUnderstandingSummary {
   const footerAnchors = findAnchorTexts(pageContent, [
     '帐号授权协议',
     '用户服务协议',
@@ -224,7 +228,8 @@ function inferPageUnderstanding(pageContent: string, url: string, title: string)
 
   if (
     creatorHomeAnchors.length >= 2 ||
-    (lowerUrl.includes('creator') && (pageContent.includes('最新作品') || pageContent.includes('数据中心')))
+    (lowerUrl.includes('creator') &&
+      (pageContent.includes('最新作品') || pageContent.includes('数据中心')))
   ) {
     return {
       pageRole: 'creator_home',
@@ -253,8 +258,11 @@ function inferPageUnderstanding(pageContent: string, url: string, title: string)
     return {
       pageRole: footerOnly ? 'outer_shell' : 'hotspot_topic_list',
       primaryRegion: footerOnly ? 'footer' : hotspotTopicAnchors[0] || 'topic_list',
-      primaryRegionConfidence:
-        footerOnly ? 'low' : hotspotTopicAnchors.length >= 1 ? 'high' : 'medium',
+      primaryRegionConfidence: footerOnly
+        ? 'low'
+        : hotspotTopicAnchors.length >= 1
+          ? 'high'
+          : 'medium',
       footerOnly,
       anchorTexts: hotspotTopicAnchors,
     };
@@ -268,8 +276,11 @@ function inferPageUnderstanding(pageContent: string, url: string, title: string)
     return {
       pageRole: footerOnly ? 'outer_shell' : 'hotspot_rank_list',
       primaryRegion: footerOnly ? 'footer' : hotspotRankAnchors[0] || 'rank_list',
-      primaryRegionConfidence:
-        footerOnly ? 'low' : hotspotRankAnchors.length >= 1 ? 'high' : 'medium',
+      primaryRegionConfidence: footerOnly
+        ? 'low'
+        : hotspotRankAnchors.length >= 1
+          ? 'high'
+          : 'medium',
       footerOnly,
       anchorTexts: hotspotRankAnchors,
     };
@@ -517,7 +528,11 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       };
 
       const applyPageUnderstanding = () => {
-        const summary = inferPageUnderstanding(basePayload.pageContent || '', currentUrl, currentTitle);
+        const summary = inferPageUnderstanding(
+          basePayload.pageContent || '',
+          currentUrl,
+          currentTitle,
+        );
         basePayload.pageRole = summary.pageRole;
         basePayload.primaryRegion = summary.primaryRegion;
         basePayload.primaryRegionConfidence = summary.primaryRegionConfidence;

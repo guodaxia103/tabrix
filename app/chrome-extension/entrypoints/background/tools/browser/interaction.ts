@@ -59,7 +59,12 @@ interface LightweightPageState {
 interface InteractionSchemeGuard {
   allowed: boolean;
   scheme: string;
-  pageType: 'web_page' | 'extension_page' | 'browser_internal_page' | 'devtools_page' | 'unsupported_page';
+  pageType:
+    | 'web_page'
+    | 'extension_page'
+    | 'browser_internal_page'
+    | 'devtools_page'
+    | 'unsupported_page';
   unsupportedPageType: string | null;
   recommendedAction: string | null;
 }
@@ -118,7 +123,11 @@ function inferInteractionSchemeGuard(url: string): InteractionSchemeGuard {
   };
 }
 
-function createUnsupportedTabResponse(action: string, tab: chrome.tabs.Tab, guard: InteractionSchemeGuard): ToolResult {
+function createUnsupportedTabResponse(
+  action: string,
+  tab: chrome.tabs.Tab,
+  guard: InteractionSchemeGuard,
+): ToolResult {
   return {
     content: [
       {
@@ -152,7 +161,8 @@ function buildPostActionSummary(
 
   const urlChanged = before.url !== after.url;
   const domChanged =
-    before.domSignature !== after.domSignature || before.formStateSignature !== after.formStateSignature;
+    before.domSignature !== after.domSignature ||
+    before.formStateSignature !== after.formStateSignature;
   const visibleTextChanged = before.bodyTextDigest !== after.bodyTextDigest;
   const selectedStateChanged = before.selectedLabels.join('|') !== after.selectedLabels.join('|');
   const mainRegionChanged = before.mainRegionDigest !== after.mainRegionDigest;
@@ -216,7 +226,10 @@ async function captureLightweightPageState(
         };
 
         const readText = (element: Element | null, max = 600) =>
-          normalize(element instanceof HTMLElement ? element.innerText || element.textContent || '' : '', max);
+          normalize(
+            element instanceof HTMLElement ? element.innerText || element.textContent || '' : '',
+            max,
+          );
 
         const candidateSelectors = [
           'main',
@@ -641,20 +654,24 @@ class ClickTool extends BaseBrowserToolExecutor {
         };
       }
 
-        const interactionText = String(
-          result?.elementInfo?.text || result?.elementInfo?.ariaLabel || finalSelector || finalRef || '',
-        ).trim();
-        const shouldWaitLonger =
-          result?.elementInfo?.tagName === 'BUTTON' ||
-          interactionText.includes('查看') ||
-          interactionText.includes('垂类') ||
-          interactionText.includes('美食');
-        const afterState = await capturePageStateWithRetries(
-          tab.id,
-          frameId,
-          shouldWaitLonger ? [180, 420, 900] : [150],
-        );
-        const postActionSummary = buildPostActionSummary(beforeState, afterState);
+      const interactionText = String(
+        result?.elementInfo?.text ||
+          result?.elementInfo?.ariaLabel ||
+          finalSelector ||
+          finalRef ||
+          '',
+      ).trim();
+      const shouldWaitLonger =
+        result?.elementInfo?.tagName === 'BUTTON' ||
+        interactionText.includes('查看') ||
+        interactionText.includes('垂类') ||
+        interactionText.includes('美食');
+      const afterState = await capturePageStateWithRetries(
+        tab.id,
+        frameId,
+        shouldWaitLonger ? [180, 420, 900] : [150],
+      );
+      const postActionSummary = buildPostActionSummary(beforeState, afterState);
 
       // Determine actual click method used
       let clickMethod: string;
