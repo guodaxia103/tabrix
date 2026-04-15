@@ -90,7 +90,9 @@
             >
               <div class="connected-clients-header">
                 <p class="connected-clients-label">{{
-                  getMessage('popupConnectedClientsLabel', [connectedClients.length.toString()])
+                  getMessage('popupActiveClientsLabel', [
+                    connectedClientsSummary.activeClients.toString(),
+                  ])
                 }}</p>
                 <button
                   class="refresh-status-button"
@@ -103,7 +105,7 @@
               <div class="connected-clients-list">
                 <div
                   v-for="client in connectedClients"
-                  :key="client.sessionId"
+                  :key="client.clientId"
                   class="connected-client-item"
                 >
                   <div class="client-info">
@@ -111,16 +113,15 @@
                     <span class="client-name">{{
                       client.clientName || getMessage('popupUnknownClient')
                     }}</span>
-                    <span class="client-meta"
-                      >{{ client.clientIp }} ·
-                      {{ client.kind === 'streamable-http' ? 'HTTP' : 'SSE' }}</span
-                    >
+                    <span class="client-meta" :title="formatClientMetaTitle(client)">{{
+                      formatClientMeta(client)
+                    }}</span>
                   </div>
                   <div class="client-actions">
-                    <span class="client-time">{{ formatConnectedTime(client.connectedAt) }}</span>
+                    <span class="client-time">{{ formatRelativeTime(client.lastSeenAt) }}</span>
                     <button
                       class="client-disconnect-btn"
-                      @click="disconnectClient(client.sessionId)"
+                      @click="disconnectClient(client.clientId)"
                       :title="getMessage('popupDisconnectClientTitle')"
                       >✕</button
                     >
@@ -132,7 +133,7 @@
               v-else-if="showMcpConfig"
               class="connected-clients-section connected-clients-empty"
             >
-              <p class="connected-clients-label">{{ getMessage('popupNoConnectedClients') }}</p>
+              <p class="connected-clients-label">{{ getMessage('popupNoActiveClients') }}</p>
             </div>
 
             <div v-if="showMcpConfig" class="mcp-config-section">
@@ -626,7 +627,14 @@ import { BACKGROUND_MESSAGE_TYPES } from '@/common/message-types';
 import { LINKS } from '@/common/constants';
 import { ConnectionState, stateToStatusClass, type ServerStatus } from '@/common/connection-state';
 import { resolvePopupConnectAction } from '@/common/popup-connect-action';
-import { shouldApplyConnectedClientsResponse } from '@/common/popup-connected-clients';
+import {
+  describePopupClientOrigin,
+  normalizePopupConnectedClients,
+  shouldPopupAutoConnect,
+  shouldApplyConnectedClientsResponse,
+  summarizePopupConnectedClients,
+  type PopupConnectedClient,
+} from '@/common/popup-connected-clients';
 import { createDisconnectedPopupSnapshot } from '@/common/popup-connection-state';
 import { resolvePopupPortUpdate } from '@/common/popup-port-input';
 import { shouldApplyPopupServerStatusMessage } from '@/common/popup-server-status-message';
@@ -851,16 +859,33 @@ const connectActionState = computed(() =>
 
 // ==================== Connected Clients ====================
 
-interface ConnectedClient {
-  sessionId: string;
-  kind: 'sse' | 'streamable-http';
-  clientIp: string;
-  clientName: string;
-  clientVersion: string;
-  connectedAt: number;
+const connectedClients = ref<PopupConnectedClient[]>([]);
+const connectedClientsSummary = computed(() =>
+  summarizePopupConnectedClients(connectedClients.value),
+);
+
+function formatClientOriginLabel(client: PopupConnectedClient): string {
+  const origin = describePopupClientOrigin(client);
+  if (origin.scope === 'local') {
+    return getMessage(
+      origin.transport === 'http' ? 'popupClientLocalHttpLabel' : 'popupClientLocalSseLabel',
+    );
+  }
+  return getMessage(
+    origin.transport === 'http' ? 'popupClientRemoteHttpLabel' : 'popupClientRemoteSseLabel',
+    [origin.address],
+  );
 }
 
-const connectedClients = ref<ConnectedClient[]>([]);
+function formatClientMeta(client: PopupConnectedClient): string {
+  return formatClientOriginLabel(client);
+}
+
+function formatClientMetaTitle(client: PopupConnectedClient): string | undefined {
+  const originLabel = formatClientOriginLabel(client);
+  if ((client.sessionCount || 0) <= 1) return originLabel;
+  return `${originLabel} · ${getMessage('popupClientSessionsLabel', [client.sessionCount.toString()])}`;
+}
 
 function applyDisconnectedPopupSnapshot() {
   const snapshot = createDisconnectedPopupSnapshot(serverStatus.value);
@@ -931,22 +956,22 @@ async function fetchConnectedClients(): Promise<void> {
       connectedClients.value = [];
       return;
     }
-    connectedClients.value = json?.data?.transports?.clients ?? [];
+    connectedClients.value = normalizePopupConnectedClients(json?.data?.transports?.clients);
   } catch {
     connectedClients.value = [];
   }
 }
 
-async function disconnectClient(sessionId: string): Promise<void> {
+async function disconnectClient(clientId: string): Promise<void> {
   try {
-    await fetch(`${getServerBaseUrl()}/status/sessions/${sessionId}`, { method: 'DELETE' });
+    await fetch(`${getServerBaseUrl()}/status/clients/${clientId}`, { method: 'DELETE' });
   } catch {
     // best-effort
   }
   await fetchConnectedClients();
 }
 
-function formatConnectedTime(ts: number): string {
+function formatRelativeTime(ts: number): string {
   const diff = Date.now() - ts;
   if (diff < 60_000) return getMessage('popupJustNow');
   if (diff < 3_600_000) {
@@ -962,9 +987,9 @@ const copiedTroubleshootingCommand = ref<string | null>(null);
 const copiedTroubleshootingScript = ref(false);
 const remoteToggleCopiedText = ref('');
 
-type ConfigTabId = 'local' | 'stdio' | 'remote';
+type ConfigTabId = 'stdio' | 'remote';
 
-const activeConfigTab = ref<ConfigTabId>('local');
+const activeConfigTab = ref<ConfigTabId>('remote');
 
 const serverPort = computed(() => serverStatus.value.port || nativeServerPort.value);
 
@@ -1098,14 +1123,56 @@ async function waitForRemoteAccessState(
 }
 
 const configTabs: Array<{ id: ConfigTabId; label: string }> = [
-  { id: 'local', label: getMessage('popupLocalTab') },
-  { id: 'stdio', label: 'stdio' },
   { id: 'remote', label: getMessage('popupRemoteTab') },
+  { id: 'stdio', label: 'stdio' },
 ];
+
+const remoteDefaultEnsured = ref(false);
+const remoteDefaultInFlight = ref(false);
+
+async function ensureRemoteDefaultReady(): Promise<void> {
+  if (remoteDefaultEnsured.value || remoteDefaultInFlight.value) return;
+  if (connectionState.value !== ConnectionState.RUNNING) return;
+
+  remoteDefaultInFlight.value = true;
+  try {
+    if (!remoteAccessEnabled.value) {
+      const response = await chrome.runtime.sendMessage({
+        type: 'set_remote_access',
+        enable: true,
+      });
+      if (!response?.success) return;
+      await waitMs(400);
+      const enabled = await waitForRemoteAccessState(true);
+      if (!enabled) return;
+    }
+
+    const tokenReady = await ensureRemoteTokenReady();
+    if (remoteAccessEnabled.value && tokenReady) {
+      remoteDefaultEnsured.value = true;
+      if (activeConfigTab.value === 'remote') {
+        await fetchTokenInfo({ autoCreateWhenMissing: true });
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to ensure remote default ready:', error);
+  } finally {
+    remoteDefaultInFlight.value = false;
+  }
+}
 
 watch(activeConfigTab, (tab) => {
   if (tab === 'remote') fetchTokenInfo({ autoCreateWhenMissing: true });
 });
+
+watch(
+  () => connectionState.value,
+  () => {
+    if (connectionState.value === ConnectionState.RUNNING) {
+      void ensureRemoteDefaultReady();
+    }
+  },
+);
 
 const canExposeConfigJson = computed(() => connectionState.value === ConnectionState.RUNNING);
 const canShowActiveConfig = computed(
@@ -1123,18 +1190,6 @@ const activeConfigJson = computed(() => {
   const lanIp = lanIpAddress.value;
 
   switch (activeConfigTab.value) {
-    case 'local':
-      return JSON.stringify(
-        {
-          mcpServers: {
-            tabrix: {
-              url: `http://127.0.0.1:${port}/mcp`,
-            },
-          },
-        },
-        null,
-        2,
-      );
     case 'stdio':
       return JSON.stringify(
         {
@@ -2467,11 +2522,9 @@ onMounted(async () => {
     await checkSemanticEngineStatus();
     setupServerStatusListener();
 
-    // Unattended recovery: when popup opens and native is disconnected,
-    // proactively trigger the same connect flow as the "Connect" button.
-    // `?autoconnect=0` can be used to disable this behavior for debugging.
-    const search = new URLSearchParams(window.location.search);
-    const allowAutoConnect = search.get('autoconnect') !== '0';
+    // Popup should default to a read-only status view.
+    // Only enable auto-connect when explicitly requested via `?autoconnect=1`.
+    const allowAutoConnect = shouldPopupAutoConnect(window.location.search);
     if (allowAutoConnect && nativeConnectionStatus.value !== 'connected') {
       await testNativeConnection();
       await refreshServerStatus();
