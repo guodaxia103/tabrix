@@ -223,6 +223,13 @@
    - 非标准安装路径
    - `launchctl` 真实机器行为
 
+补充：
+
+- 当前已经补了一份“没有真实 macOS 机器时可先执行的静态自检清单”
+- 这份清单不替代真实动态验收，但能帮助我们先把路径、自启动、文档边界检查扎实
+- 详细流程见：
+  - [MACOS_STATIC_SELF_CHECK_zh.md](E:\projects\AI\copaw\mcp-chrome\docs\MACOS_STATIC_SELF_CHECK_zh.md)
+
 ---
 
 ## 5. 当前最合理的对外说法
