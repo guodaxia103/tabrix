@@ -286,6 +286,7 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 - [CLI Commands](docs/CLI.md)
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md)
 - [Platform Self-Check (ZH)](docs/PLATFORM_SELF_CHECK_2026-04-15_zh.md)
+- [Ubuntu Docker Self-Check (ZH)](docs/UBUNTU_DOCKER_SELF_CHECK_zh.md)
 - [Transport Modes (HTTP / SSE / stdio)](docs/TRANSPORT.md)
 - [Popup Troubleshooting](docs/POPUP_TROUBLESHOOTING.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)

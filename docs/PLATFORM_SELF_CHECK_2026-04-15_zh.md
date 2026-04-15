@@ -203,6 +203,13 @@
    - `systemctl --user`
    - headless / server 环境
 
+补充：
+
+- 本轮已经用 Docker 做过一轮真实“安装 / 注册 / daemon / status”自检
+- 结论是 Ubuntu 的服务层与浏览器探测链是可以跑通的
+- 详细流程见：
+  - [UBUNTU_DOCKER_SELF_CHECK_zh.md](E:\projects\AI\copaw\mcp-chrome\docs\UBUNTU_DOCKER_SELF_CHECK_zh.md)
+
 ### 4.2 macOS
 
 当前评级：**可部署，建议补路径与自启动专项验收**

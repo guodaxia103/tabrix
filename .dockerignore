@@ -1,0 +1,14 @@
+.git
+.github
+.husky
+.tmp
+node_modules
+**/node_modules
+app/chrome-extension/.output
+app/native-server/dist
+packages/shared/dist
+packages/wasm-simd/dist
+packages/wasm-simd/pkg
+coverage
+dist
+

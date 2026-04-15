@@ -285,6 +285,7 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 - [CLI 命令参考](docs/CLI_zh.md)
 - [快速入门](docs/STABLE_QUICKSTART.md)
 - [平台自检查（Windows / Ubuntu / macOS）](docs/PLATFORM_SELF_CHECK_2026-04-15_zh.md)
+- [Ubuntu Docker 自检](docs/UBUNTU_DOCKER_SELF_CHECK_zh.md)
 - [传输模式 (HTTP / SSE / stdio)](docs/TRANSPORT.md)
 - [Popup 排障](docs/POPUP_TROUBLESHOOTING.md)
 - [故障排除](docs/TROUBLESHOOTING_zh.md)
