@@ -34,6 +34,24 @@ interface SchemeGuardSummary {
   recommendedAction: string | null;
 }
 
+type PageRole =
+  | 'unknown'
+  | 'hotspot_rank_list'
+  | 'hotspot_topic_list'
+  | 'hotspot_detail'
+  | 'creator_home'
+  | 'creator_overview'
+  | 'login_required'
+  | 'outer_shell';
+
+interface PageUnderstandingSummary {
+  pageRole: PageRole;
+  primaryRegion: string | null;
+  primaryRegionConfidence: 'low' | 'medium' | 'high' | null;
+  footerOnly: boolean;
+  anchorTexts: string[];
+}
+
 function inferSchemeGuard(url: string): SchemeGuardSummary {
   const raw = String(url || '');
   const lower = raw.toLowerCase();
@@ -89,6 +107,124 @@ function inferSchemeGuard(url: string): SchemeGuardSummary {
     supportedForContentScript: false,
     unsupportedPageType: 'non_web_tab',
     recommendedAction: 'switch_to_http_tab',
+  };
+}
+
+function collectAnchorTexts(pageContent: string) {
+  const anchors = [
+    '视频总榜',
+    '话题榜',
+    '话题总榜',
+    '热度飙升的话题榜',
+    '话题名称',
+    '热度趋势',
+    '热度值',
+    '视频量',
+    '播放量',
+    '稿均播放量',
+    '查看',
+    '发布视频',
+    '趋势',
+    '关联内容',
+    '用户关注',
+    '评论',
+    '账号总览',
+    '近30天未发布新作品',
+    '手机号',
+    '验证码',
+  ];
+
+  return anchors.filter((anchor) => pageContent.includes(anchor));
+}
+
+function inferPageUnderstanding(url: string, pageContent: string): PageUnderstandingSummary {
+  const lowerUrl = String(url || '').toLowerCase();
+  const content = String(pageContent || '');
+  const anchorTexts = collectAnchorTexts(content);
+  const footerOnly =
+    anchorTexts.length <= 2 &&
+    /账号授权协议|用户服务协议|隐私政策|联系我们/.test(content) &&
+    !/热度值|播放量|查看|发布视频|话题名称/.test(content);
+
+  if (/手机号|验证码/.test(content) && /登录|抖音/.test(content)) {
+    return {
+      pageRole: 'login_required',
+      primaryRegion: 'login_gate',
+      primaryRegionConfidence: 'high',
+      footerOnly,
+      anchorTexts,
+    };
+  }
+
+  if (lowerUrl.includes('/creator') || lowerUrl.includes('creator')) {
+    if (/账号总览|播放量|互动指数|视频完播率/.test(content)) {
+      return {
+        pageRole: 'creator_overview',
+        primaryRegion: 'creator_metrics',
+        primaryRegionConfidence: 'medium',
+        footerOnly,
+        anchorTexts,
+      };
+    }
+
+    return {
+      pageRole: 'creator_home',
+      primaryRegion: footerOnly ? 'footer_shell' : 'creator_shell',
+      primaryRegionConfidence: footerOnly ? 'low' : 'medium',
+      footerOnly,
+      anchorTexts,
+    };
+  }
+
+  if (lowerUrl.includes('active_tab=hotspot_topic')) {
+    const isTopicTable =
+      /话题名称|热度趋势|热度值|视频量|播放量|稿均播放量/.test(content) ||
+      /发布视频查看/.test(content);
+
+    return {
+      pageRole: isTopicTable
+        ? 'hotspot_topic_list'
+        : footerOnly
+          ? 'outer_shell'
+          : 'hotspot_topic_list',
+      primaryRegion: isTopicTable ? 'topic_table' : footerOnly ? 'footer_shell' : 'topic_shell',
+      primaryRegionConfidence: isTopicTable ? 'high' : footerOnly ? 'low' : 'medium',
+      footerOnly,
+      anchorTexts,
+    };
+  }
+
+  if (
+    lowerUrl.includes('active_tab=hotspot_all') ||
+    /视频总榜|低粉爆款视频榜|高完播率视频榜|高涨粉率视频榜/.test(content)
+  ) {
+    return {
+      pageRole: footerOnly ? 'outer_shell' : 'hotspot_rank_list',
+      primaryRegion: /视频总榜|低粉爆款视频榜|高完播率视频榜|高涨粉率视频榜/.test(content)
+        ? 'rank_panels'
+        : 'rank_shell',
+      primaryRegionConfidence: footerOnly ? 'low' : /视频总榜/.test(content) ? 'high' : 'medium',
+      footerOnly,
+      anchorTexts,
+    };
+  }
+
+  if (/趋势|关联内容|用户关注/.test(content)) {
+    return {
+      pageRole: 'hotspot_detail',
+      primaryRegion: 'detail_evidence',
+      primaryRegionConfidence: 'medium',
+      footerOnly,
+      anchorTexts,
+    };
+  }
+
+  return {
+    pageRole: footerOnly ? 'outer_shell' : 'unknown',
+    primaryRegion: footerOnly ? 'footer_shell' : null,
+    primaryRegionConfidence: footerOnly ? 'low' : null,
+    footerOnly,
+    anchorTexts,
   };
 }
 
@@ -216,6 +352,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       const treeOk = resp && resp.success === true;
       const pageContent: string =
         resp && typeof resp.pageContent === 'string' ? resp.pageContent : '';
+      const pageUnderstanding = inferPageUnderstanding(currentUrl, pageContent);
 
       // Extract stats from response
       const stats: ReadPageStats | null =
@@ -279,6 +416,13 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         stats: stats || { processed: 0, included: 0, durationMs: 0 },
         refMapCount: refCount,
         sparse: treeOk ? isSparse : false,
+        pageType: schemeGuard.pageType,
+        scheme: schemeGuard.scheme,
+        pageRole: pageUnderstanding.pageRole,
+        primaryRegion: pageUnderstanding.primaryRegion,
+        primaryRegionConfidence: pageUnderstanding.primaryRegionConfidence,
+        footerOnly: pageUnderstanding.footerOnly,
+        anchorTexts: pageUnderstanding.anchorTexts,
         depth: requestedDepth ?? null,
         focus: focusRefId ? { refId: focusRefId, found: treeOk } : null,
         markedElements,
@@ -338,6 +482,15 @@ class ReadPageTool extends BaseBrowserToolExecutor {
           if (!basePayload.pageContent) {
             basePayload.pageContent = formatElementsAsPageContent(merged);
           }
+          const fallbackUnderstanding = inferPageUnderstanding(
+            currentUrl,
+            String(basePayload.pageContent || ''),
+          );
+          basePayload.pageRole = fallbackUnderstanding.pageRole;
+          basePayload.primaryRegion = fallbackUnderstanding.primaryRegion;
+          basePayload.primaryRegionConfidence = fallbackUnderstanding.primaryRegionConfidence;
+          basePayload.footerOnly = fallbackUnderstanding.footerOnly;
+          basePayload.anchorTexts = fallbackUnderstanding.anchorTexts;
 
           return {
             content: [{ type: 'text', text: JSON.stringify(basePayload) }],
