@@ -15,5 +15,7 @@ Default expectations:
 5. Verify before committing; commit promptly after verification.
 6. When diagnosing GitHub-visible failures, first distinguish historical commit failures from the current head state.
 7. For browser-viewable GitHub troubleshooting, prefer Tabrix first, then use API/CLI only when the page view is insufficient.
+8. Run the smallest required test matrix for the change type before committing.
+9. When runtime behavior is part of the claim, make sure the local MCP service and unpacked extension are actually running the new build.
 
 If a task conflicts with these rules, stop and surface the tradeoff instead of guessing.
