@@ -33,18 +33,32 @@ pnpm run test:core
 pnpm run audit
 ```
 
+审计门禁说明：
+
+- `pnpm run audit` 现在不再依赖已退役的 npm 旧审计端点，而是使用仓库内置的 OSV 生产依赖安全门禁。
+- 设计、范围与维护规则见：
+  [`docs/OSV_AUDIT_GATE_zh.md`](./OSV_AUDIT_GATE_zh.md)
+
+如果本次版本包含新的第三方复用，还必须完成人工合规检查：
+
+- 复用项目已经进入 [`docs/THIRD_PARTY_REUSE_MATRIX_zh.md`](./THIRD_PARTY_REUSE_MATRIX_zh.md)
+- `代码复用` 已补来源记录，且需要时已更新根目录 `NOTICE`
+- `设计借鉴` 已补设计参考记录
+- `AGPL`、商业许可、混合许可或目录级例外边界已完成人工复核
+
 ## 正式发布步骤
 
 1. 更新版本号与对应发布说明。
-2. 将改动合并到 `main`。
-3. 创建并推送 Tag：
+2. 如本版本引入新的第三方复用，先完成来源记录 / `NOTICE` / 人工许可证复核。
+3. 将改动合并到 `main`。
+4. 创建并推送 Tag：
 
 ```bash
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-4. GitHub Actions（`Release Tabrix`）会自动执行：
+5. GitHub Actions（`Release Tabrix`）会自动执行：
 
 - 发布元数据校验
 - 质量闸门检查
@@ -65,3 +79,12 @@ git push origin vX.Y.Z
 - 不覆盖已发布的 npm 版本。
 - 如需修复，递增补丁号（`X.Y.Z+1`）并重新发布。
 - 若仅 GitHub Release 文案有误，直接编辑 Release 内容，保持 Tag 不变。
+
+## 第三方复用发布闸门
+
+出现以下任一情况时，不应发布：
+
+- 本次发布新增了第三方代码/资产复用，但没有来源记录
+- 本次发布需要更新 `NOTICE`，但尚未更新
+- 本次发布引用了未进入复用矩阵的外部项目
+- 对 `AGPL`、商业许可、混合许可或目录级例外没有完成人工复核

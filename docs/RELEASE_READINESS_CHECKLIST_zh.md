@@ -20,6 +20,12 @@ pnpm --filter @tabrix/tabrix test
 pnpm build
 ```
 
+补充说明：
+
+- `pnpm run audit` 现在会走仓库内置的 OSV 生产依赖审计，不再依赖已退役的 npm 旧审计端点。
+- 若审计门禁异常，先查看：
+  [`docs/OSV_AUDIT_GATE_zh.md`](./OSV_AUDIT_GATE_zh.md)
+
 通过标准：
 
 - 所有命令退出码为 `0`
@@ -199,10 +205,26 @@ npm list -g @tabrix/tabrix
 - 客户端能连上 `/mcp`，但工具调用失败
 - `daemon start` 后 `daemon status` 显示 unhealthy 或无日志输出
 - 远程模式下 Token 验证流程不通（无 Token 能访问 / 有效 Token 被拒）
+- 本次发布涉及第三方复用，但缺少来源记录、设计参考记录或 `NOTICE` 更新
+- 本次发布引用了未进入复用矩阵的重点外部项目
+- `AGPL`、商业许可、混合许可或目录级例外没有完成人工复核
 
 ---
 
-## 10. 2026-04-08 当前基线
+## 10. 第三方复用合规检查
+
+如果本次版本触及外部复用，请额外确认：
+
+- 已检查 [`docs/THIRD_PARTY_REUSE_MATRIX_zh.md`](./THIRD_PARTY_REUSE_MATRIX_zh.md)
+- 重点外部项目分类完整
+- `代码复用` 已补来源记录
+- `设计借鉴` 已补设计参考记录
+- 需要时已更新根目录 `NOTICE`
+- 许可证边界已经人工复核
+
+---
+
+## 11. 2026-04-08 当前基线
 
 本仓库在 `2026-04-08` 已重新实测通过：
 
