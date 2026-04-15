@@ -1,4 +1,5 @@
- 
+/* global window, document, Element, CSS, Node, XPathResult, chrome */
+
 // interactive-elements-helper.js
 // This script is injected into the page to find interactive elements.
 // Final version by Calvin, featuring a multi-layered fallback strategy
@@ -108,6 +109,17 @@
 
     const rect = el.getBoundingClientRect();
     return rect.width > 0 || rect.height > 0 || el.tagName === 'A'; // Allow zero-size anchors as they can still be navigated
+  }
+
+  function isElementInViewport(el) {
+    if (!el || !el.isConnected) return false;
+    const rect = el.getBoundingClientRect();
+    return (
+      rect.bottom > 0 &&
+      rect.right > 0 &&
+      rect.top < window.innerHeight &&
+      rect.left < window.innerWidth
+    );
   }
 
   /**
@@ -245,7 +257,151 @@
         },
       };
     }
+    info.inViewport = isElementInViewport(el);
     return info;
+  }
+
+  function countInteractiveDescendants(el, limit = 12) {
+    if (!el || !(el instanceof Element)) return 0;
+    let count = 0;
+    const descendants = el.querySelectorAll(ANY_INTERACTIVE_SELECTOR);
+    for (const node of descendants) {
+      if (!(node instanceof Element)) continue;
+      if (!isElementVisible(node) || !isElementInteractive(node)) continue;
+      count += 1;
+      if (count >= limit) return count;
+    }
+    return count;
+  }
+
+  function getQueryMatchKind(text, query) {
+    const normalizedText = String(text || '')
+      .trim()
+      .toLowerCase();
+    const normalizedQuery = String(query || '')
+      .trim()
+      .toLowerCase();
+    if (!normalizedText || !normalizedQuery) return 'none';
+    if (normalizedText === normalizedQuery) return 'exact';
+    if (normalizedText.startsWith(normalizedQuery)) return 'prefix';
+    if (normalizedText.includes(normalizedQuery)) return 'substring';
+    if (fuzzyMatch(normalizedText, normalizedQuery)) return 'fuzzy';
+    return 'none';
+  }
+
+  function scoreElementForQuery(el, textQuery) {
+    const accessibleName = (getAccessibleName(el) || '').trim();
+    const text = (accessibleName || el.textContent || '').trim();
+    const rect = el.getBoundingClientRect();
+    const area = Math.max(1, rect.width * rect.height);
+    const tag = el.tagName.toLowerCase();
+    const query = String(textQuery || '').trim();
+    const matchKind = getQueryMatchKind(text, query);
+    const interactiveDescendants = countInteractiveDescendants(el);
+    const textLength = text.length;
+    const queryLength = query.length;
+    let score = 0;
+
+    if (query) {
+      if (matchKind === 'exact') score += 120;
+      else if (matchKind === 'prefix') score += 80;
+      else if (matchKind === 'substring') score += 50;
+      else if (matchKind === 'fuzzy') score += 20;
+    }
+
+    if (isElementInViewport(el)) score += 40;
+    if (isElementInteractive(el)) score += 15;
+
+    if (tag === 'button' || tag === 'a') score += 20;
+    if (
+      el.matches('[role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"]')
+    )
+      score += 18;
+    if (el.matches('select, [role="combobox"]')) score += 16;
+    if (el.matches('input, textarea')) score += 12;
+    if (el.matches('[aria-haspopup], [aria-expanded], [aria-controls]')) score += 14;
+    if (
+      el.matches(
+        '.arco-btn, .arco-link, .arco-cascader-list-item, .arco-dropdown-option, .arco-table-cell',
+      )
+    )
+      score += 10;
+
+    if (queryLength > 0) {
+      if (textLength > queryLength + 18) score -= 12;
+      if (textLength > queryLength + 48) score -= 28;
+      if (matchKind === 'exact' && textLength <= queryLength + 4) score += 18;
+    }
+
+    if (area < 2500) score += 12;
+    else if (area < 12000) score += 6;
+    else if (area > 150000) score -= 25;
+    else if (area > 60000) score -= 12;
+
+    if (interactiveDescendants >= 6) score -= 18;
+    if (interactiveDescendants >= 10) score -= 18;
+
+    if (tag === 'div' || tag === 'section' || tag === 'main' || tag === 'article') {
+      score -= 10;
+      if (area > 30000) score -= 18;
+      if (interactiveDescendants >= 4) score -= 24;
+    }
+
+    if (
+      tag === 'li' &&
+      (el.matches('[role="option"], [role="menuitem"]') ||
+        el.className.includes('option') ||
+        el.className.includes('item'))
+    ) {
+      score += 12;
+    }
+
+    if (el.id && /^arco-tabs-\d+-panel-\d+$/.test(el.id)) {
+      score -= 80;
+    }
+
+    return score;
+  }
+
+  function sortElementsForQuery(elements, textQuery) {
+    return [...elements].sort((left, right) => {
+      const scoreDiff =
+        scoreElementForQuery(right, textQuery) - scoreElementForQuery(left, textQuery);
+      if (scoreDiff !== 0) return scoreDiff;
+
+      const leftRect = left.getBoundingClientRect();
+      const rightRect = right.getBoundingClientRect();
+      const leftArea = Math.max(1, leftRect.width * leftRect.height);
+      const rightArea = Math.max(1, rightRect.width * rightRect.height);
+      if (leftArea !== rightArea) return leftArea - rightArea;
+
+      return leftRect.top - rightRect.top;
+    });
+  }
+
+  function findTextElementsByContent(textQuery) {
+    const query = String(textQuery || '').trim();
+    if (!query) return [];
+
+    const matched = new Set();
+    const allElements = document.body ? Array.from(document.body.querySelectorAll('*')) : [];
+
+    for (const el of allElements) {
+      if (!(el instanceof Element)) continue;
+      if (!isElementVisible(el)) continue;
+
+      const text = (getAccessibleName(el) || el.textContent || '').trim();
+      const matchKind = getQueryMatchKind(text, query);
+      if (matchKind === 'none') continue;
+
+      matched.add(el);
+    }
+
+    const reduced = Array.from(matched).filter((el) => {
+      return !Array.from(matched).some((other) => other !== el && el.contains(other));
+    });
+
+    return sortElementsForQuery(reduced, query);
   }
 
   /**
@@ -280,7 +436,25 @@
       }
       results.push(createElementInfo(el, elementType, includeCoordinates));
     }
-    return results;
+    if (!textQuery) return results;
+    const sorted = sortElementsForQuery(
+      Array.from(uniqueElements).filter((el) => {
+        if (!isElementVisible(el) || !isElementInteractive(el)) return false;
+        const accessibleName = getAccessibleName(el);
+        return fuzzyMatch(accessibleName, textQuery);
+      }),
+      textQuery,
+    );
+    return sorted.map((el) => {
+      let elementType = 'unknown';
+      for (const [type, typeSelector] of Object.entries(ELEMENT_CONFIG)) {
+        if (el.matches(typeSelector)) {
+          elementType = type;
+          break;
+        }
+      }
+      return createElementInfo(el, elementType, includeCoordinates);
+    });
   }
 
   /**
@@ -317,19 +491,31 @@
       for (let i = 0; i < textNodes.snapshotLength; i++) {
         const parentElement = textNodes.snapshotItem(i).parentElement;
         if (parentElement) {
-          const interactiveAncestor = parentElement.closest(ANY_INTERACTIVE_SELECTOR);
-          if (
-            interactiveAncestor &&
-            isElementVisible(interactiveAncestor) &&
-            isElementInteractive(interactiveAncestor)
-          ) {
-            interactiveElements.add(interactiveAncestor);
+          const candidates = [];
+          let current = parentElement;
+          let depth = 0;
+          while (current && current instanceof Element && depth < 8) {
+            if (
+              current.matches &&
+              current.matches(ANY_INTERACTIVE_SELECTOR) &&
+              isElementVisible(current) &&
+              isElementInteractive(current)
+            ) {
+              candidates.push(current);
+            }
+            current = current.parentElement;
+            depth += 1;
+          }
+
+          const bestAncestor = sortElementsForQuery(candidates, textQuery)[0];
+          if (bestAncestor) {
+            interactiveElements.add(bestAncestor);
           }
         }
       }
 
       if (interactiveElements.size > 0) {
-        return Array.from(interactiveElements).map((el) => {
+        return sortElementsForQuery(Array.from(interactiveElements), textQuery).map((el) => {
           let elementType = 'interactive';
           for (const [type, typeSelector] of Object.entries(ELEMENT_CONFIG)) {
             if (el.matches(typeSelector)) {
@@ -351,11 +537,18 @@
       }
     }
 
+    const fallbackMatches = findTextElementsByContent(textQuery);
+    for (const el of fallbackMatches) {
+      leafElements.add(el);
+    }
+
     const finalElements = Array.from(leafElements).filter((el) => {
       return ![...leafElements].some((otherEl) => el !== otherEl && el.contains(otherEl));
     });
 
-    return finalElements.map((el) => createElementInfo(el, 'text', includeCoordinates, true));
+    return sortElementsForQuery(finalElements, textQuery).map((el) =>
+      createElementInfo(el, 'text', includeCoordinates, true),
+    );
   }
 
   // --- Chrome Message Listener ---
@@ -366,7 +559,7 @@
         if (request.selector) {
           // If a selector is provided, bypass the text-based logic and use a direct query.
           const foundEls = querySelectorAllDeep(request.selector);
-          elements = foundEls.map((el) =>
+          elements = sortElementsForQuery(foundEls, request.textQuery || '').map((el) =>
             createElementInfo(
               el,
               'selected',
