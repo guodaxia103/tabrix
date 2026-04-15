@@ -216,4 +216,44 @@ describe('browser settle guidance', () => {
     expect(payload.tips).toContain('chrome_screenshot');
     expect(payload.tips).toContain('chrome_computer');
   });
+
+  it('classifies hotspot topic list pages in read_page metadata', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 42,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://creator.douyin.com/creator-micro/data/hotspot?active_tab=hotspot_topic',
+      title: '热点话题榜',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent:
+        '话题名称\n热度趋势\n热度值\n视频量\n播放量\n稿均播放量\n发布视频\n查看\n示例话题 A\n示例话题 B',
+      refMap: ['ref_10', 'ref_11', 'ref_12'],
+      stats: {
+        processed: 18,
+        included: 8,
+        durationMs: 14,
+      },
+      viewport: { width: 1440, height: 900, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({});
+
+    expect(result.isError).toBe(false);
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    expect(payload).toMatchObject({
+      pageType: 'web_page',
+      scheme: 'https',
+      pageRole: 'hotspot_topic_list',
+      primaryRegion: 'topic_table',
+      primaryRegionConfidence: 'high',
+      footerOnly: false,
+    });
+    expect(payload.anchorTexts).toEqual(
+      expect.arrayContaining(['话题名称', '热度趋势', '热度值', '视频量', '播放量', '稿均播放量']),
+    );
+  });
 });
