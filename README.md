@@ -5,6 +5,7 @@
 [![NPM Downloads](https://img.shields.io/npm/dm/%40tabrix%2Ftabrix)](https://www.npmjs.com/package/@tabrix/tabrix)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-blue.svg)](https://www.typescriptlang.org/)
+[![SafeSkill 44/100](https://img.shields.io/badge/SafeSkill-44%2F100_Use%20with%20Caution-orange)](https://safeskill.dev/scan/guodaxia103-tabrix)
 
 Turn real Chrome into an MCP-native AI execution layer.
 
