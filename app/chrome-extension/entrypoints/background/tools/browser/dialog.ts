@@ -15,6 +15,7 @@ const DIALOG_HANDLE_RETRY_DELAY_MS = 80;
 const DIALOG_COMMAND_TIMEOUT_MS = 3000;
 const DIALOG_TOTAL_TIMEOUT_MS = 6000;
 const DIALOG_ENABLE_TIMEOUT_MESSAGE = 'Enable dialog domain timed out';
+const CHROME_INTERNAL_URL_ERROR = 'Cannot access a chrome:// URL';
 
 function isDialogNotReadyError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -24,6 +25,11 @@ function isDialogNotReadyError(error: unknown): boolean {
 function isEnableTimeoutError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return message.includes(DIALOG_ENABLE_TIMEOUT_MESSAGE);
+}
+
+function isInaccessibleTabError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes(CHROME_INTERNAL_URL_ERROR);
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -163,7 +169,7 @@ class HandleDialogTool extends BaseBrowserToolExecutor {
           break;
         } catch (error) {
           lastError = error;
-          if (!isDialogNotReadyError(error)) {
+          if (!isDialogNotReadyError(error) && !isInaccessibleTabError(error)) {
             throw error;
           }
         }

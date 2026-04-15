@@ -10,7 +10,7 @@ const html = `<!doctype html><html><head><meta charset='utf-8'><title>Tabrix Cla
 <select id='selectInput'><option value='a'>A</option><option value='b'>B</option></select>
 <input id='checkInput' type='checkbox' />
 <button id='alertBtn' onclick="alert('hello-alert')">Alert</button>
-<button id='promptBtn' onclick="document.getElementById('promptOut').textContent='pending';setTimeout(()=>{const v=prompt('Enter value','default');document.getElementById('promptOut').textContent=v||'';},1000);">Prompt</button>
+<button id='promptBtn' onclick="document.getElementById('promptOut').textContent='pending';setTimeout(()=>{const v=prompt('Enter value','default');document.getElementById('promptOut').textContent=v||'';},50);">Prompt</button>
 <span id='promptOut'></span>
 <input id='fileInput' type='file' />
 <a id='downloadTxt' href='/download.txt' download='download-source.txt'>Download txt</a>

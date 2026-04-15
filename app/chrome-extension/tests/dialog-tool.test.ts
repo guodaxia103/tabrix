@@ -175,6 +175,48 @@ describe('handleDialogTool', () => {
     expect((result.content[0] as { text: string }).text).toContain('"tabId":456');
   });
 
+  it('skips chrome internal tabs while searching for a visible dialog', async () => {
+    vi.useFakeTimers();
+
+    vi.mocked(chrome.tabs.query).mockResolvedValue([
+      { id: 123, windowId: 1, active: true, url: 'http://127.0.0.1:62100/' } as chrome.tabs.Tab,
+      { id: 456, windowId: 2, active: true, url: 'chrome://extensions/' } as chrome.tabs.Tab,
+      { id: 789, windowId: 3, active: true, url: 'http://127.0.0.1:62100/' } as chrome.tabs.Tab,
+    ]);
+
+    sendCommandMock.mockImplementation(async (tabId: number, method: string) => {
+      if (method === 'Page.enable') {
+        return {};
+      }
+      if (tabId === 123) {
+        throw new Error('No dialog is showing');
+      }
+      if (tabId === 456) {
+        throw new Error('Cannot access a chrome:// URL');
+      }
+      if (tabId === 789) {
+        return {};
+      }
+      throw new Error(`Unexpected tab ${tabId}`);
+    });
+
+    const resultPromise = handleDialogTool.execute({
+      action: 'accept',
+      promptText: 'phase0-dialog',
+      tabId: 123,
+    });
+
+    await vi.advanceTimersByTimeAsync(6200);
+    const result = await resultPromise;
+
+    expect(result.isError).toBe(false);
+    expect(sendCommandMock).toHaveBeenLastCalledWith(789, 'Page.handleJavaScriptDialog', {
+      accept: true,
+      promptText: 'phase0-dialog',
+    });
+    expect((result.content[0] as { text: string }).text).toContain('"tabId":789');
+  });
+
   it('surfaces an error after exhausting dialog retries', async () => {
     vi.useFakeTimers();
 

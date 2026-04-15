@@ -4,6 +4,7 @@ import { TOOL_NAMES } from '@tabrix/shared';
 import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import { TIMEOUTS, ERROR_MESSAGES } from '@/common/constants';
 import { handleDownloadTool, markNextDownloadAsInteractive } from './download';
+import { prearmDialogHandling } from './dialog-prearm';
 
 interface Coordinates {
   x: number;
@@ -248,6 +249,7 @@ class ClickTool extends BaseBrowserToolExecutor {
       }
 
       await this.injectContentScript(tab.id, ['inject-scripts/click-helper.js']);
+      await prearmDialogHandling(tab.id);
       if (args.allowDownloadClick === true) {
         markNextDownloadAsInteractive(tab.id);
       }
