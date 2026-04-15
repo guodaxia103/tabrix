@@ -8,7 +8,10 @@ describe('clickTool download interception', () => {
   });
 
   it('routes download links to handleDownloadTool instead of direct click path', async () => {
-    vi.spyOn(clickTool as any, 'tryGetTab').mockResolvedValue({ id: 1001 });
+    vi.spyOn(clickTool as any, 'tryGetTab').mockResolvedValue({
+      id: 1001,
+      url: 'https://example.com/downloads',
+    });
     vi.spyOn(clickTool as any, 'injectContentScript').mockResolvedValue(undefined);
     vi.spyOn(clickTool as any, 'sendMessageToTab').mockResolvedValue({
       success: true,
@@ -49,4 +52,3 @@ describe('clickTool download interception', () => {
     );
   });
 });
-

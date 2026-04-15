@@ -19,6 +19,79 @@ interface ReadPageParams {
   windowId?: number; // when no tabId, pick active tab from this window
 }
 
+type PageType =
+  | 'web_page'
+  | 'extension_page'
+  | 'browser_internal_page'
+  | 'devtools_page'
+  | 'unsupported_page';
+
+interface SchemeGuardSummary {
+  scheme: string;
+  pageType: PageType;
+  supportedForContentScript: boolean;
+  unsupportedPageType: string | null;
+  recommendedAction: string | null;
+}
+
+function inferSchemeGuard(url: string): SchemeGuardSummary {
+  const raw = String(url || '');
+  const lower = raw.toLowerCase();
+
+  if (lower.startsWith('http://') || lower.startsWith('https://')) {
+    return {
+      scheme: lower.startsWith('https://') ? 'https' : 'http',
+      pageType: 'web_page',
+      supportedForContentScript: true,
+      unsupportedPageType: null,
+      recommendedAction: null,
+    };
+  }
+
+  if (lower.startsWith('chrome-extension://')) {
+    return {
+      scheme: 'chrome-extension',
+      pageType: 'extension_page',
+      supportedForContentScript: false,
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
+  if (lower.startsWith('chrome://') || lower.startsWith('edge://') || lower.startsWith('about:')) {
+    return {
+      scheme: lower.startsWith('edge://')
+        ? 'edge'
+        : lower.startsWith('about:')
+          ? 'about'
+          : 'chrome',
+      pageType: 'browser_internal_page',
+      supportedForContentScript: false,
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
+  if (lower.startsWith('devtools://')) {
+    return {
+      scheme: 'devtools',
+      pageType: 'devtools_page',
+      supportedForContentScript: false,
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
+  const scheme = raw.includes(':') ? raw.slice(0, raw.indexOf(':')).toLowerCase() : 'unknown';
+  return {
+    scheme,
+    pageType: 'unsupported_page',
+    supportedForContentScript: false,
+    unsupportedPageType: 'non_web_tab',
+    recommendedAction: 'switch_to_http_tab',
+  };
+}
+
 function summarizePageContent(pageContent: string) {
   const normalized = (pageContent || '').replace(/\s+/g, ' ').trim();
   const lineCount = (pageContent || '')
@@ -72,7 +145,54 @@ class ReadPageTool extends BaseBrowserToolExecutor {
 
       // Load any user-marked elements for this URL (priority hints)
       const currentUrl = String(tab.url || '');
+      const currentTitle = String(tab.title || '');
       const userMarkers = currentUrl ? await listMarkersForUrl(currentUrl) : [];
+      const schemeGuard = inferSchemeGuard(currentUrl);
+
+      if (!schemeGuard.supportedForContentScript) {
+        const guardPageContent = [
+          '- generic "Current tab is not a regular web page"',
+          currentTitle ? `- generic "title: ${currentTitle.replace(/\s+/g, ' ').trim()}"` : '',
+          currentUrl ? `- generic "url: ${currentUrl}"` : '',
+          `- generic "pageType: ${schemeGuard.pageType}"`,
+          `- generic "unsupportedPageType: ${schemeGuard.unsupportedPageType || 'none'}"`,
+          `- generic "recommendedAction: ${schemeGuard.recommendedAction || 'none'}"`,
+        ]
+          .filter(Boolean)
+          .join('\n');
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: false,
+                filter: filter || 'all',
+                pageContent: guardPageContent,
+                contentSummary: summarizePageContent(guardPageContent),
+                tips: standardTips,
+                viewport: { width: null, height: null, dpr: null },
+                stats: { processed: 0, included: 0, durationMs: 0 },
+                refMapCount: 0,
+                sparse: true,
+                depth: requestedDepth ?? null,
+                focus: focusRefId ? { refId: focusRefId, found: false } : null,
+                markedElements: [],
+                elements: [],
+                count: 0,
+                fallbackUsed: false,
+                fallbackSource: null,
+                reason: 'unsupported_page_type',
+                pageType: schemeGuard.pageType,
+                scheme: schemeGuard.scheme,
+                unsupportedPageType: schemeGuard.unsupportedPageType,
+                recommendedAction: schemeGuard.recommendedAction,
+              }),
+            },
+          ],
+          isError: false,
+        };
+      }
 
       // Inject helper in ISOLATED world to enable chrome.runtime messaging
       // Inject into all frames to support same-origin iframe operations

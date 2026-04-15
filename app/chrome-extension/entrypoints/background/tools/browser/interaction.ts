@@ -29,6 +29,105 @@ interface ClickToolParams {
   windowId?: number; // when no tabId, pick active tab from this window
 }
 
+interface InteractionSchemeGuard {
+  allowed: boolean;
+  scheme: string;
+  pageType:
+    | 'web_page'
+    | 'extension_page'
+    | 'browser_internal_page'
+    | 'devtools_page'
+    | 'unsupported_page';
+  unsupportedPageType: string | null;
+  recommendedAction: string | null;
+}
+
+function inferInteractionSchemeGuard(url: string): InteractionSchemeGuard {
+  const raw = String(url || '');
+  const lower = raw.toLowerCase();
+
+  if (lower.startsWith('http://') || lower.startsWith('https://')) {
+    return {
+      allowed: true,
+      scheme: lower.startsWith('https://') ? 'https' : 'http',
+      pageType: 'web_page',
+      unsupportedPageType: null,
+      recommendedAction: null,
+    };
+  }
+
+  if (lower.startsWith('chrome-extension://')) {
+    return {
+      allowed: false,
+      scheme: 'chrome-extension',
+      pageType: 'extension_page',
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
+  if (lower.startsWith('chrome://') || lower.startsWith('edge://') || lower.startsWith('about:')) {
+    return {
+      allowed: false,
+      scheme: lower.startsWith('edge://')
+        ? 'edge'
+        : lower.startsWith('about:')
+          ? 'about'
+          : 'chrome',
+      pageType: 'browser_internal_page',
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
+  if (lower.startsWith('devtools://')) {
+    return {
+      allowed: false,
+      scheme: 'devtools',
+      pageType: 'devtools_page',
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
+  const scheme = raw.includes(':') ? raw.slice(0, raw.indexOf(':')).toLowerCase() : 'unknown';
+  return {
+    allowed: false,
+    scheme,
+    pageType: 'unsupported_page',
+    unsupportedPageType: 'non_web_tab',
+    recommendedAction: 'switch_to_http_tab',
+  };
+}
+
+function createUnsupportedTabResponse(
+  action: string,
+  tab: chrome.tabs.Tab,
+  guard: InteractionSchemeGuard,
+): ToolResult {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          success: false,
+          action,
+          reason: 'unsupported_page_type',
+          pageType: guard.pageType,
+          scheme: guard.scheme,
+          unsupportedPageType: guard.unsupportedPageType,
+          recommendedAction: guard.recommendedAction,
+          message: `Current tab is not a regular web page for ${action}`,
+          tabId: tab.id ?? null,
+          title: String(tab.title || ''),
+          url: String(tab.url || ''),
+        }),
+      },
+    ],
+    isError: false,
+  };
+}
+
 /**
  * Tool for clicking elements on web pages
  */
@@ -165,6 +264,10 @@ class ClickTool extends BaseBrowserToolExecutor {
       const tab = explicit || (await this.getActiveTabOrThrowInWindow(args.windowId));
       if (!tab.id) {
         return createErrorResponse(ERROR_MESSAGES.TAB_NOT_FOUND + ': Active tab has no ID');
+      }
+      const schemeGuard = inferInteractionSchemeGuard(String(tab.url || ''));
+      if (!schemeGuard.allowed) {
+        return createUnsupportedTabResponse('click', tab, schemeGuard);
       }
 
       let finalRef = args.ref;
@@ -392,6 +495,10 @@ class FillTool extends BaseBrowserToolExecutor {
       const tab = explicit || (await this.getActiveTabOrThrowInWindow(args.windowId));
       if (!tab.id) {
         return createErrorResponse(ERROR_MESSAGES.TAB_NOT_FOUND + ': Active tab has no ID');
+      }
+      const schemeGuard = inferInteractionSchemeGuard(String(tab.url || ''));
+      if (!schemeGuard.allowed) {
+        return createUnsupportedTabResponse('fill', tab, schemeGuard);
       }
 
       let finalRef = ref;
