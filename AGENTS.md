@@ -11,7 +11,7 @@ All code changes in this repository must follow the `karpathy-guidelines` skill:
 
 Before changing code, every AI assistant working in this repository must read:
 
-- [docs/AI_ONBOARDING_QUICKSTART_zh.md](./docs/AI_ONBOARDING_QUICKSTART_zh.md)
+- [docs/AI_CONTRIBUTOR_QUICKSTART_zh.md](./docs/AI_CONTRIBUTOR_QUICKSTART_zh.md)
 - [docs/AI_DEV_RULES_zh.md](./docs/AI_DEV_RULES_zh.md)
 
 Default expectations:

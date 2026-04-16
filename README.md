@@ -66,6 +66,11 @@ tabrix register
 Download from [Releases](https://github.com/guodaxia103/tabrix/releases), then load the `tabrix-extension-vX.Y.Z.zip` unpacked folder at `chrome://extensions`.
 After loading, open the extension popup and click `Connect` once.
 
+The popup now only exposes two formal MCP connection modes:
+
+- `Remote (Streamable HTTP)` as the default primary path
+- `stdio` as the fallback path for clients that only support stdin/stdout
+
 ### 3) Verify Environment
 
 Check runtime status:
@@ -128,6 +133,8 @@ Turn on `Remote Access` in extension popup and expose:
 1. Open extension popup -> switch to `Remote` -> enable `Remote Access`
 2. Open `Token Management` and copy current token (or click refresh)
 3. Paste LAN config to your MCP client and start remote automation
+
+Once the local service is running, the popup defaults to the `Remote` tab and automatically ensures remote access plus a ready bearer token before exposing the remote config.
 
 ### Security Default
 
@@ -285,22 +292,17 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 
 - [CLI Commands](docs/CLI.md)
 - [Stable Quickstart](docs/STABLE_QUICKSTART.md)
-- [Platform Self-Check (ZH)](docs/PLATFORM_SELF_CHECK_2026-04-15_zh.md)
-- [Ubuntu Docker Self-Check (ZH)](docs/UBUNTU_DOCKER_SELF_CHECK_zh.md)
-- [Ubuntu Xvfb Self-Check (ZH)](docs/UBUNTU_XVFB_SELF_CHECK_zh.md)
-- [macOS Static Self-Check (ZH)](docs/MACOS_STATIC_SELF_CHECK_zh.md)
 - [Transport Modes (HTTP / SSE / stdio)](docs/TRANSPORT.md)
 - [Popup Troubleshooting](docs/POPUP_TROUBLESHOOTING.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Release Notes v2.0.5](docs/RELEASE_NOTES_v2.0.5.md)
 - [Release Notes v2.0.4](docs/RELEASE_NOTES_v2.0.4.md)
 - [Release Notes v2.0.3](docs/RELEASE_NOTES_v2.0.3.md)
-- [Project Review 2026 Q2](docs/PROJECT_REVIEW_2026Q2.md)
+- [Documentation Visibility Policy (ZH)](docs/DOCUMENTATION_VISIBILITY_POLICY_zh.md)
 
 ### For Developers
 
 - [Architecture](docs/ARCHITECTURE.md)
-- [Current Acceptance Matrix (ZH)](docs/ACCEPTANCE_MATRIX_2026-04-15_zh.md)
 - [Project Structure Guide](docs/PROJECT_STRUCTURE.md)
 - [Product Positioning and Technical Principles (ZH)](docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md)
 - [Tool Layering and Risk Classification (ZH)](docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md)

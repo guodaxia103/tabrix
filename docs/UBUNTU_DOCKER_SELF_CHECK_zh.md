@@ -82,9 +82,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run-ubuntu-docker-self-check.
 
 ## 4. 相关文件
 
-- [docker/ubuntu-self-check/Dockerfile](E:\projects\AI\copaw\mcp-chrome\docker\ubuntu-self-check\Dockerfile)
-- [docker/ubuntu-self-check/run-self-check.sh](E:\projects\AI\copaw\mcp-chrome\docker\ubuntu-self-check\run-self-check.sh)
-- [scripts/run-ubuntu-docker-self-check.ps1](E:\projects\AI\copaw\mcp-chrome\scripts\run-ubuntu-docker-self-check.ps1)
+- [docker/ubuntu-self-check/Dockerfile](../docker/ubuntu-self-check/Dockerfile)
+- [docker/ubuntu-self-check/run-self-check.sh](../docker/ubuntu-self-check/run-self-check.sh)
+- [scripts/run-ubuntu-docker-self-check.ps1](../scripts/run-ubuntu-docker-self-check.ps1)
 
 ---
 
