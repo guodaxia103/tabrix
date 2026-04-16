@@ -32,7 +32,6 @@ function readUserExtensionId() {
 function resolveExtensionId() {
   return process.env.TABRIX_EXTENSION_ID?.trim() || readUserExtensionId() || DEFAULT_EXTENSION_ID;
 }
-
 function readPersistedBrowserPath() {
   try {
     if (!fs.existsSync(BROWSER_CONFIG_PATH)) return null;

@@ -62,6 +62,10 @@ let bridgeSocket: WebSocket | null = null;
 let bridgeSocketConnectionId: string | null = null;
 let bridgeSocketReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let bridgeSocketReconnectAttempt = 0;
+let pendingBridgeRecovery: {
+  action: string;
+  startReported: boolean;
+} | null = null;
 
 type PendingExtensionReloadCallback = {
   callbackUrl: string;
@@ -762,6 +766,69 @@ function pulseBridgeHeartbeat(reason: string): void {
   void postBridgeHeartbeat(reason);
 }
 
+function shouldTrackBridgeRecovery(trigger: string): boolean {
+  return !['sw_startup', 'onStartup', 'onInstalled', 'ui_refresh_status'].includes(trigger);
+}
+
+async function postBridgeRecoveryEvent(
+  path: 'start' | 'finish',
+  payload: Record<string, unknown>,
+  portOverride?: number | null,
+): Promise<boolean> {
+  const port = normalizePort(portOverride) ?? (await getPreferredPort());
+  if (!port) return false;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/bridge/recovery/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      console.debug(`${LOG_PREFIX} Recovery ${path} not accepted: HTTP ${response.status}`);
+      return false;
+    }
+    return true;
+  } catch {
+    // Best-effort only: the daemon or local HTTP server may not be ready yet.
+    return false;
+  }
+}
+
+async function beginBridgeRecovery(action: string, portOverride?: number | null): Promise<void> {
+  pendingBridgeRecovery = {
+    action,
+    startReported: await postBridgeRecoveryEvent('start', { action }, portOverride),
+  };
+}
+
+async function finishBridgeRecovery(
+  success: boolean,
+  options: {
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    portOverride?: number | null;
+  } = {},
+): Promise<void> {
+  if (!pendingBridgeRecovery) return;
+
+  const payload: Record<string, unknown> = { success };
+  if (options.errorCode) payload.errorCode = options.errorCode;
+  if (options.errorMessage) payload.errorMessage = options.errorMessage;
+  const portOverride = options.portOverride;
+  if (!pendingBridgeRecovery.startReported) {
+    pendingBridgeRecovery.startReported = await postBridgeRecoveryEvent(
+      'start',
+      { action: pendingBridgeRecovery.action },
+      portOverride,
+    );
+  }
+  pendingBridgeRecovery = null;
+  await postBridgeRecoveryEvent('finish', payload, portOverride);
+}
+
 async function tryRecoverAddressInUseStatus(nativeError: string): Promise<boolean> {
   if (!isAddressInUseError(nativeError)) return false;
 
@@ -865,10 +932,19 @@ async function ensureNativeConnected(trigger: string, portOverride?: unknown): P
     const port = await getPreferredPort(portOverride);
     console.debug(`${LOG_PREFIX} Attempting connection on port ${port} (trigger=${trigger})`);
 
+    if (shouldTrackBridgeRecovery(trigger)) {
+      await beginBridgeRecovery(trigger, port);
+    }
+
     // Attempt connection
     const ok = connectNativeHost(port);
     if (!ok) {
       console.warn(`${LOG_PREFIX} Connection failed (trigger=${trigger})`);
+      await finishBridgeRecovery(false, {
+        errorCode: 'TABRIX_NATIVE_CONNECT_FAILED',
+        errorMessage: `Failed to connect native host (${trigger})`,
+        portOverride: port,
+      });
       scheduleReconnect(`connect_failed:${trigger}`);
       return false;
     }
@@ -986,6 +1062,7 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         broadcastServerStatusChange(currentServerStatus);
         pulseBridgeHeartbeat('server_started');
         void connectBridgeSocket('server_started').catch(() => {});
+        await finishBridgeRecovery(true, { portOverride: normalizePort(port) });
         // Server is confirmed running - now we can reset reconnect state
         resetReconnectState();
         console.log(`${SUCCESS_MESSAGES.SERVER_STARTED} on port ${port}`);
@@ -1020,6 +1097,10 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
         const recovered = await tryRecoverAddressInUseStatus(nativeError);
         if (!recovered) {
           console.error('Error from native host:', nativeError);
+          await finishBridgeRecovery(false, {
+            errorCode: 'TABRIX_NATIVE_HOST_ERROR',
+            errorMessage: nativeError,
+          });
           void setLastNativeError(nativeError);
         }
       } else if (message.type === 'file_operation_response') {
@@ -1081,6 +1162,10 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
 
       // Mark server as stopped since native host disconnection means server is down
       void markServerStopped('native_port_disconnected', connectionId);
+      void finishBridgeRecovery(false, {
+        errorCode: 'TABRIX_NATIVE_PORT_DISCONNECTED',
+        errorMessage: lastError || 'Native connection disconnected during recovery',
+      });
 
       // Handle reconnection based on disconnect reason
       if (!autoConnectEnabled) return;

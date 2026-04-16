@@ -85,6 +85,16 @@ interface BridgeFileOperationPayload {
   payload?: unknown;
 }
 
+interface BridgeRecoveryStartPayload {
+  action?: unknown;
+}
+
+interface BridgeRecoveryFinishPayload {
+  success?: unknown;
+  errorCode?: unknown;
+  errorMessage?: unknown;
+}
+
 interface ServerStatusSnapshot {
   isRunning: boolean;
   host: string;
@@ -510,6 +520,65 @@ export class Server {
             message: error instanceof Error ? error.message : String(error),
           });
         }
+      },
+    );
+
+    this.fastify.post(
+      '/bridge/recovery/start',
+      async (
+        request: FastifyRequest<{ Body: BridgeRecoveryStartPayload }>,
+        reply: FastifyReply,
+      ) => {
+        if (!LOCALHOST_IPS.has(request.ip)) {
+          return reply.status(403).send({
+            status: 'error',
+            message: 'Forbidden – bridge recovery is only available from localhost.',
+          });
+        }
+
+        const body = (request.body || {}) as BridgeRecoveryStartPayload;
+        const action =
+          typeof body.action === 'string' && body.action.trim().length > 0
+            ? body.action.trim()
+            : 'unknown';
+        this.markBridgeRecoveryStarted(action);
+        return reply.status(HTTP_STATUS.OK).send({
+          status: 'ok',
+          data: {
+            bridgeState: this.getStatusSnapshot().bridge.bridgeState,
+            action,
+            recordedAt: Date.now(),
+          },
+        });
+      },
+    );
+
+    this.fastify.post(
+      '/bridge/recovery/finish',
+      async (
+        request: FastifyRequest<{ Body: BridgeRecoveryFinishPayload }>,
+        reply: FastifyReply,
+      ) => {
+        if (!LOCALHOST_IPS.has(request.ip)) {
+          return reply.status(403).send({
+            status: 'error',
+            message: 'Forbidden – bridge recovery is only available from localhost.',
+          });
+        }
+
+        const body = (request.body || {}) as BridgeRecoveryFinishPayload;
+        const success = body.success === true;
+        const errorCode = typeof body.errorCode === 'string' ? body.errorCode : null;
+        const errorMessage = typeof body.errorMessage === 'string' ? body.errorMessage : null;
+        this.markBridgeRecoveryFinished(success, errorCode, errorMessage);
+        return reply.status(HTTP_STATUS.OK).send({
+          status: 'ok',
+          data: {
+            bridgeState: this.getStatusSnapshot().bridge.bridgeState,
+            success,
+            recordedAt: Date.now(),
+          },
+        });
       },
     );
   }
