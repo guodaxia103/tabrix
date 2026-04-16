@@ -1,6 +1,11 @@
 # Tabrix Architecture 🏗️
 
-This document provides a detailed technical overview of the Tabrix architecture, design decisions, and implementation details.
+This document provides a technical overview of the Tabrix codebase architecture and major runtime paths.
+
+Scope note:
+
+- The stable public product surface is centered on the Chrome extension browser runtime plus MCP access through `Streamable HTTP` and `stdio`.
+- The repository also contains semantic-indexing, agent, and workflow-related subsystems. They are part of the codebase architecture, but they should not be read as the default public product surface.
 
 ## 📋 Table of Contents
 
@@ -14,7 +19,7 @@ This document provides a detailed technical overview of the Tabrix architecture,
 
 ## 🎯 Overview
 
-Tabrix is a sophisticated browser automation platform that bridges AI assistants with Chrome browser capabilities through the Model Context Protocol (MCP). The architecture is designed for:
+Tabrix is a browser automation platform that bridges AI assistants with Chrome browser capabilities through the Model Context Protocol (MCP). The architecture is designed for:
 
 - **High Performance**: SIMD-optimized AI operations and efficient native messaging
 - **Extensibility**: Modular tool system for easy feature additions
@@ -32,7 +37,7 @@ graph TB
     end
 
     subgraph "MCP Protocol Layer"
-        D[HTTP/SSE Transport]
+        D[Streamable HTTP / stdio]
         E[MCP Server Instance]
         F[Tool Registry]
     end
@@ -56,7 +61,7 @@ graph TB
         P[Native Messaging]
     end
 
-    subgraph "AI Processing Layer"
+    subgraph "Optional Extension Subsystems"
         Q[Semantic Engine]
         R[Vector Database]
         S[SIMD Math Engine]
@@ -87,11 +92,11 @@ graph TB
 
 ### 1. Native Server (`app/native-server/`)
 
-**Purpose**: MCP protocol implementation and native messaging bridge
+**Purpose**: MCP transport implementation and native messaging bridge
 
 **Key Components**:
 
-- **Fastify HTTP Server**: Handles MCP protocol over HTTP/SSE
+- **Fastify HTTP Server**: Handles MCP over `Streamable HTTP` and the local bridge used by `stdio`
 - **Native Messaging Host**: Communicates with Chrome extension
 - **Session Management**: Manages multiple MCP client sessions
 - **Tool Registry**: Routes tool calls to Chrome extension
@@ -104,7 +109,7 @@ graph TB
 
 ### 2. Chrome Extension (`app/chrome-extension/`)
 
-**Purpose**: Browser automation and AI-powered content analysis
+**Purpose**: Browser automation runtime and extension-side execution
 
 **Key Components**:
 

@@ -124,7 +124,7 @@ Token 管理端点（仅本机可用）：
 
 连接后可在扩展 Popup「已连接的客户端」列表中查看远程 IP 并踢出不认识的会话。
 
-详见 [CLIENT_CONFIG_QUICKREF.md → 远程连接](./CLIENT_CONFIG_QUICKREF.md#远程连接跨机器--docker)。
+详见 [CLIENT_CONFIG_QUICKREF.md → 远程连接](./CLIENT_CONFIG_QUICKREF.md)。
 
 ## 推荐
 

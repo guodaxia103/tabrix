@@ -41,7 +41,7 @@ pnpm run audit
 
 如果本次版本包含新的第三方复用，还必须完成人工合规检查：
 
-- 复用项目已经进入 [`docs/THIRD_PARTY_REUSE_MATRIX_zh.md`](./THIRD_PARTY_REUSE_MATRIX_zh.md)
+- 复用项目应已有复用矩阵登记，并完成来源记录闭环
 - `代码复用` 已补来源记录，且需要时已更新根目录 `NOTICE`
 - `设计借鉴` 已补设计参考记录
 - `AGPL`、商业许可、混合许可或目录级例外边界已完成人工复核

@@ -66,11 +66,6 @@ tabrix register
 从 [Releases](https://github.com/guodaxia103/tabrix/releases) 下载版本资产，优先使用 `tabrix-extension-vX.Y.Z.zip`，在 `chrome://extensions` 中以“加载已解压扩展程序”方式安装。
 安装后请打开扩展弹窗并点击一次 `连接` 完成连接。
 
-扩展弹窗现在只保留两种正式 MCP 连接方式：
-
-- `远程（Streamable HTTP）`：默认主路径
-- `stdio`：仅供只支持 stdin/stdout 的客户端兜底
-
 ### 3) 本地校验
 
 检查当前运行状态：
@@ -133,8 +128,6 @@ tabrix doctor --fix
 1. 打开扩展弹窗 -> 切换到 `远程` -> 打开 `远程访问`
 2. 进入 `Token 管理`，复制当前 Token（或手动刷新）
 3. 将上方远程配置粘贴到 MCP 客户端，开始远程自动化
-
-当本地服务进入可用状态后，Popup 会默认停留在 `远程` Tab，并自动确保远程访问已开启且 Bearer Token 已就绪，再对外暴露远程配置。
 
 ### 认证与有效期
 
@@ -291,13 +284,12 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 
 - [CLI 命令参考](docs/CLI_zh.md)
 - [快速入门](docs/STABLE_QUICKSTART.md)
-- [传输模式 (HTTP / SSE / stdio)](docs/TRANSPORT.md)
+- [传输模式（Streamable HTTP / stdio）](docs/TRANSPORT.md)
 - [Popup 排障](docs/POPUP_TROUBLESHOOTING.md)
 - [故障排除](docs/TROUBLESHOOTING_zh.md)
 - [Release Notes v2.0.5](docs/RELEASE_NOTES_v2.0.5.md)
 - [Release Notes v2.0.4](docs/RELEASE_NOTES_v2.0.4.md)
 - [Release Notes v2.0.3](docs/RELEASE_NOTES_v2.0.3.md)
-- [文档公开与内部边界说明](docs/DOCUMENTATION_VISIBILITY_POLICY_zh.md)
 
 ### 开发者文档
 
