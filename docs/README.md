@@ -26,6 +26,10 @@ Implementation design notes, audits, acceptance evidence, release-gate maintenan
 
 - `AI_CONTRIBUTOR_QUICKSTART_zh.md`: first-stop onboarding for AI contributors working in the public repo
 - `AI_DEV_RULES_zh.md`: public development rules for AI-assisted changes
+- `PRODUCT_SURFACE_MATRIX.md` / `PRODUCT_SURFACE_MATRIX_zh.md`: public capability boundaries and tier definitions
+- `TESTING.md` / `TESTING_zh.md`: contributor verification standards
+- `PLATFORM_SUPPORT.md` / `PLATFORM_SUPPORT_zh.md`: current public platform support posture
+- `CODE_ENTRYPOINTS_AND_OWNERSHIP_zh.md`: contributor execution map for common change types
 - `STABLE_QUICKSTART.md`: user-facing first-success path
 - `ARCHITECTURE.md` / `ARCHITECTURE_zh.md`: public architecture overview
 - `PROJECT_STRUCTURE.md` / `PROJECT_STRUCTURE_zh.md`: codebase map and module responsibilities

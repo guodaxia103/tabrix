@@ -17,9 +17,10 @@ Before changing code or docs, every AI assistant should read the public reposito
 2. [docs/README.md](./docs/README.md)
 3. [docs/AI_CONTRIBUTOR_QUICKSTART_zh.md](./docs/AI_CONTRIBUTOR_QUICKSTART_zh.md)
 4. [docs/AI_DEV_RULES_zh.md](./docs/AI_DEV_RULES_zh.md)
-5. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) or [docs/ARCHITECTURE_zh.md](./docs/ARCHITECTURE_zh.md)
-6. [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md) or [docs/PROJECT_STRUCTURE_zh.md](./docs/PROJECT_STRUCTURE_zh.md)
-7. [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) or [docs/CONTRIBUTING_zh.md](./docs/CONTRIBUTING_zh.md)
+5. [docs/PRODUCT_SURFACE_MATRIX.md](./docs/PRODUCT_SURFACE_MATRIX.md) or [docs/PRODUCT_SURFACE_MATRIX_zh.md](./docs/PRODUCT_SURFACE_MATRIX_zh.md)
+6. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) or [docs/ARCHITECTURE_zh.md](./docs/ARCHITECTURE_zh.md)
+7. [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md) or [docs/PROJECT_STRUCTURE_zh.md](./docs/PROJECT_STRUCTURE_zh.md)
+8. [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) or [docs/CONTRIBUTING_zh.md](./docs/CONTRIBUTING_zh.md)
 
 Then continue with the smallest relevant task-specific reading set below.
 
@@ -32,6 +33,7 @@ Read:
 - [docs/README.md](./docs/README.md)
 - [docs/AI_CONTRIBUTOR_QUICKSTART_zh.md](./docs/AI_CONTRIBUTOR_QUICKSTART_zh.md)
 - [docs/AI_DEV_RULES_zh.md](./docs/AI_DEV_RULES_zh.md)
+- [docs/PRODUCT_SURFACE_MATRIX_zh.md](./docs/PRODUCT_SURFACE_MATRIX_zh.md)
 - [docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md](./docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md)
 - [docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md](./docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md)
 - [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) or [docs/CONTRIBUTING_zh.md](./docs/CONTRIBUTING_zh.md)
@@ -60,6 +62,8 @@ Read:
 Read:
 
 - [docs/RELEASE_PROCESS.md](./docs/RELEASE_PROCESS.md) or [docs/RELEASE_PROCESS_zh.md](./docs/RELEASE_PROCESS_zh.md)
+- [docs/TESTING.md](./docs/TESTING.md) or [docs/TESTING_zh.md](./docs/TESTING_zh.md)
+- [docs/PLATFORM_SUPPORT.md](./docs/PLATFORM_SUPPORT.md) or [docs/PLATFORM_SUPPORT_zh.md](./docs/PLATFORM_SUPPORT_zh.md)
 - [docs/SECURITY.md](./docs/SECURITY.md)
 - [docs/THIRD_PARTY_REUSE_MATRIX.md](./docs/THIRD_PARTY_REUSE_MATRIX.md) or [docs/THIRD_PARTY_REUSE_MATRIX_zh.md](./docs/THIRD_PARTY_REUSE_MATRIX_zh.md)
 - [docs/THIRD_PARTY_REUSE_WORKFLOW.md](./docs/THIRD_PARTY_REUSE_WORKFLOW.md) or [docs/THIRD_PARTY_REUSE_WORKFLOW_zh.md](./docs/THIRD_PARTY_REUSE_WORKFLOW_zh.md)

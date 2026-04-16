@@ -174,11 +174,13 @@
 1. `AGENTS.md`
 2. `README.md`
 3. `docs/README.md`
-4. `docs/PROJECT_STRUCTURE.md` / `docs/PROJECT_STRUCTURE_zh.md`
-5. `docs/ARCHITECTURE.md` / `docs/ARCHITECTURE_zh.md`
-6. `docs/TRANSPORT.md`
-7. `docs/TOOLS.md` / `docs/TOOLS_zh.md`
-8. `docs/TROUBLESHOOTING.md` / `docs/TROUBLESHOOTING_zh.md`
+4. `docs/PRODUCT_SURFACE_MATRIX.md` / `docs/PRODUCT_SURFACE_MATRIX_zh.md`
+5. `docs/PROJECT_STRUCTURE.md` / `docs/PROJECT_STRUCTURE_zh.md`
+6. `docs/CODE_ENTRYPOINTS_AND_OWNERSHIP_zh.md`
+7. `docs/ARCHITECTURE.md` / `docs/ARCHITECTURE_zh.md`
+8. `docs/TRANSPORT.md`
+9. `docs/TOOLS.md` / `docs/TOOLS_zh.md`
+10. `docs/TROUBLESHOOTING.md` / `docs/TROUBLESHOOTING_zh.md`
 
 ### 5.2 不把内部治理文档重新塞回公开树
 
@@ -210,6 +212,11 @@
 3. 在真实浏览器里验证行为
 
 如果没有 reload unpacked extension，就不要声称“浏览器侧已验证”。
+
+如需更完整的公开验证标准，请读：
+
+- `TESTING.md`
+- `TESTING_zh.md`
 
 ## 7. 内部补充说明
 

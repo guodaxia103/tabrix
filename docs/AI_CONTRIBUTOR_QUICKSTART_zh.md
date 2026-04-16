@@ -26,6 +26,7 @@
 - `README.md`
 - `docs/WHY_MCP_CHROME.md`
 - `docs/ARCHITECTURE_zh.md`
+- `docs/PRODUCT_SURFACE_MATRIX_zh.md`
 
 ## 2. 当前主线
 
@@ -36,6 +37,16 @@
 - 真实 Chrome 工具调用
 - 状态诊断、排障与发布流程
 
+当前默认不应扩张成公开主产品面的内容包括：
+
+- 扩展内 agent / sidepanel 助手能力
+- 工作流 UI 作为默认产品面
+- 本地语义索引 / 向量重能力
+
+如需看完整公开能力边界，请读：
+
+- `docs/PRODUCT_SURFACE_MATRIX_zh.md`
+
 请优先围绕这些主线理解和改动代码。
 
 ## 3. 先读这几份文档
@@ -45,16 +56,20 @@
 1. `AGENTS.md`
 2. `docs/AI_DEV_RULES_zh.md`
 3. `README.md`
-4. `docs/PROJECT_STRUCTURE_zh.md`
-5. `docs/ARCHITECTURE_zh.md`
-6. `docs/TRANSPORT.md`
-7. `docs/TOOLS_zh.md`
-8. `docs/TROUBLESHOOTING_zh.md`
+4. `docs/PRODUCT_SURFACE_MATRIX_zh.md`
+5. `docs/PROJECT_STRUCTURE_zh.md`
+6. `docs/ARCHITECTURE_zh.md`
+7. `docs/CODE_ENTRYPOINTS_AND_OWNERSHIP_zh.md`
+8. `docs/TRANSPORT.md`
+9. `docs/TOOLS_zh.md`
+10. `docs/TROUBLESHOOTING_zh.md`
 
 如果任务涉及发布或安全，再补读：
 
 - `docs/RELEASE_PROCESS_zh.md`
 - `docs/SECURITY.md`
+- `docs/TESTING_zh.md`
+- `docs/PLATFORM_SUPPORT_zh.md`
 - `docs/THIRD_PARTY_REUSE_MATRIX_zh.md`
 - `docs/THIRD_PARTY_REUSE_WORKFLOW_zh.md`
 
