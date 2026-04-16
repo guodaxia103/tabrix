@@ -2,6 +2,11 @@
 
 This guide explains where the code lives and how the main runtime paths fit together, so contributors can find the right entry point quickly.
 
+Scope note:
+
+- The stable public product surface is centered on browser execution through the Chrome extension plus MCP access through `Streamable HTTP` and `stdio`.
+- The repository also contains agent, workflow, replay, and semantic-indexing subsystems. They are important for code navigation, but they should not be read as the default public product surface.
+
 Related docs:
 
 - Architecture: `docs/ARCHITECTURE.md`
@@ -19,7 +24,7 @@ tabrix/
 │  ├─ chrome-extension/    # Browser extension that executes Chrome capabilities
 │  └─ native-server/       # Local Node service for CLI / MCP / Native Messaging
 ├─ packages/
-│  ├─ shared/              # Shared types, tool schemas, workflow graph models
+│  ├─ shared/              # Shared types, tool schemas, and cross-process contracts
 │  └─ wasm-simd/           # Rust/WebAssembly SIMD math helpers
 ├─ docs/                   # User and developer documentation
 ├─ scripts/                # Repo-level maintenance scripts
@@ -32,23 +37,23 @@ tabrix/
 
 ### `app/chrome-extension/`
 
-The browser-side application. This is where Chrome APIs, DOM interaction, content scripts, workflow replay, semantic search, and most user-facing extension UI live.
+The browser-side application. This is where Chrome APIs, DOM interaction, content scripts, and most browser execution logic live. The codebase also includes experimental or internal subsystems such as workflow replay, agent chat, and semantic indexing.
 
 Key directories:
 
 - `entrypoints/background/`
   - Main background runtime and bootstrap layer.
-  - `index.ts` initializes the native host bridge, tool listeners, workflow runtime, semantic engine, Quick Panel, and Web Editor hooks.
+  - `index.ts` initializes the native host bridge, tool listeners, and other extension subsystems, including some experimental modules.
 - `entrypoints/background/tools/`
   - Browser tool implementations.
   - `browser/*.ts` contains navigation, click, keyboard, screenshot, network, JS execution, bookmarks, history, upload, and related tooling.
 - `entrypoints/background/record-replay-v3/`
-  - New workflow runtime.
+  - Workflow and replay runtime used by internal or experimental flows.
   - `domain/` holds core models, `engine/` holds scheduling and execution, `storage/` persists flows, runs, triggers, and imports.
 - `entrypoints/popup/`
   - Extension popup UI for connection, remote access, and host status.
 - `entrypoints/sidepanel/`
-  - Side panel UI for agent chat, workflows, and RR-V3 debugging.
+  - Side panel UI for agent chat, workflow surfaces, and RR-V3 debugging. This is not the main public onboarding surface.
 - `entrypoints/web-editor-v2/`
   - Visual page editor logic.
 - `inject-scripts/`
@@ -56,7 +61,7 @@ Key directories:
 - `shared/`
   - Reusable extension-side logic such as selector generation, element picker, and quick panel support.
 - `utils/`
-  - Shared browser-side utilities including semantic similarity, vector search, IndexedDB helpers, offscreen management, and screenshot context.
+  - Shared browser-side utilities including selector helpers, screenshot context, IndexedDB helpers, offscreen management, and some experimental semantic/vector utilities.
 - `workers/`
   - ONNX/WASM worker assets and generated runtime artifacts.
 - `tests/`
@@ -85,7 +90,7 @@ Key directories:
 - `src/execution/`
   - Tool execution tracking and result normalization.
 - `src/agent/`
-  - Agent backend services including projects, sessions, messages, attachments, streams, and Codex/Claude engine adapters.
+  - Agent backend services including projects, sessions, messages, attachments, streams, and Codex/Claude engine adapters. These routes exist in the codebase but are not the primary public product surface.
 
 ### `packages/shared/`
 
@@ -142,7 +147,7 @@ Use this path when debugging:
 - why Connect does not attach
 - why remote access, token state, or port status looks inconsistent
 
-### Workflow / Record-Replay V3
+### Experimental Workflow / Record-Replay V3
 
 ```text
 sidepanel workflows / background bootstrap
@@ -152,7 +157,7 @@ sidepanel workflows / background bootstrap
   -> background/tools/record-replay.ts or dynamic flow tools
 ```
 
-Use this path when debugging:
+Use this path when debugging internal or experimental subsystems:
 
 - publishing and triggering flows
 - scheduling and recovery behavior
@@ -218,11 +223,12 @@ To ramp up quickly, read in this order:
 
 ## 6. Current Codebase Notes
 
-- The repo has evolved beyond a simple browser toolset into three product layers:
+- The repo contains three major code layers:
   - MCP service layer
   - browser execution layer
-  - agent/workflow layer
-- `record-replay-v3` and `sidepanel/agent-chat` are currently the two most complex areas and are worth understanding early.
+  - agent/workflow and replay subsystems
+- The stable public product story should still be read primarily through the MCP service layer and browser execution layer.
+- `record-replay-v3` and `sidepanel/agent-chat` are still worth understanding when you work in those areas, but they are not the default public capability surface.
 - `packages/shared/` is the key stability boundary. Any change to tool schemas, workflow nodes, or cross-process types should usually start there.
 
 ## 7. Maintenance Suggestions

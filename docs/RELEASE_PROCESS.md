@@ -40,7 +40,7 @@ Audit gate note:
 
 If the release includes new third-party reuse, complete these manual checks as well:
 
-- the upstream project is covered by [`docs/THIRD_PARTY_REUSE_MATRIX.md`](./THIRD_PARTY_REUSE_MATRIX.md);
+- the upstream project appears in the documented third-party reuse matrix and has a source record;
 - code reuse has a source record and an updated root `NOTICE` when required;
 - design-only inspiration has a design reference record;
 - AGPL, commercial, mixed-license, or directory-scoped exceptions were manually reviewed.

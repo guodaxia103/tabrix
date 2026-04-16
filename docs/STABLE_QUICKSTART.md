@@ -238,4 +238,4 @@ Do not keep switching between multiple unpacked build folders.
 
 For the current Phase 0 validation checklist, see:
 
-- [Phase 0 Test Matrix](PHASE0_TEST_MATRIX.md)
+- [Release Readiness Checklist](./RELEASE_READINESS_CHECKLIST_zh.md)

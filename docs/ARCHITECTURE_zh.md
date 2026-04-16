@@ -1,6 +1,11 @@
 # Tabrix 架构设计 🏗️
 
-本文档提供 Tabrix 架构、设计决策和实现细节的详细技术概述。
+本文档用于说明 Tabrix 代码库的主要架构和关键运行路径。
+
+阅读范围说明：
+
+- 当前稳定对外能力，主要是 Chrome 扩展浏览器执行主链路，以及通过 `Streamable HTTP` 和 `stdio` 提供的 MCP 接入。
+- 仓库中也包含语义索引、agent、workflow 等子系统；它们属于代码架构的一部分，但不应直接理解为默认公开产品面。
 
 ## 📋 目录
 
@@ -14,7 +19,7 @@
 
 ## 🎯 概述
 
-Tabrix 是一个复杂的浏览器自动化平台，通过模型上下文协议 (MCP) 将 AI 助手与 Chrome 浏览器功能连接起来。架构设计目标：
+Tabrix 是一个浏览器自动化平台，通过模型上下文协议 (MCP) 将 AI 助手与 Chrome 浏览器功能连接起来。架构设计目标：
 
 - **高性能**：SIMD 优化的 AI 操作和高效的原生消息传递
 - **可扩展性**：模块化工具系统，便于添加新功能
@@ -32,7 +37,7 @@ graph TB
     end
 
     subgraph "MCP 协议层"
-        D[HTTP/SSE 传输]
+        D[Streamable HTTP / stdio]
         E[MCP 服务器实例]
         F[工具注册表]
     end
@@ -56,7 +61,7 @@ graph TB
         P[原生消息]
     end
 
-    subgraph "AI 处理层"
+    subgraph "可选扩展子系统"
         Q[语义引擎]
         R[向量数据库]
         S[SIMD 数学引擎]
@@ -87,11 +92,11 @@ graph TB
 
 ### 1. 原生服务器 (`app/native-server/`)
 
-**目的**：MCP 协议实现和原生消息桥接
+**目的**：MCP 传输实现和原生消息桥接
 
 **核心组件**：
 
-- **Fastify HTTP 服务器**：处理基于 HTTP/SSE 的 MCP 协议
+- **Fastify HTTP 服务器**：处理 `Streamable HTTP` MCP 请求，以及 `stdio` 依赖的本机桥接
 - **原生消息主机**：与 Chrome 扩展通信
 - **会话管理**：管理多个 MCP 客户端会话
 - **工具注册表**：将工具调用路由到 Chrome 扩展
@@ -104,7 +109,7 @@ graph TB
 
 ### 2. Chrome 扩展 (`app/chrome-extension/`)
 
-**目的**：浏览器自动化和 AI 驱动的内容分析
+**目的**：浏览器自动化运行时和扩展侧执行主链路
 
 **核心组件**：
 

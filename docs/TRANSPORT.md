@@ -152,7 +152,7 @@ Token 管理端点（仅本机可用）：
 - `stale`：超过阈值未再活动的旧会话，会被自动移出主列表并记录到最近终态列表
 - `disconnected`：手动断开或客户端正常关闭的会话，不继续停留在主列表
 
-详见 [CLIENT_CONFIG_QUICKREF.md → 远程连接](./CLIENT_CONFIG_QUICKREF.md#远程连接跨机器--docker)。
+详见 [CLIENT_CONFIG_QUICKREF.md → 远程连接](./CLIENT_CONFIG_QUICKREF.md)。
 
 ## 推荐
 
