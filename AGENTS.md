@@ -64,16 +64,12 @@ Read:
 - [docs/THIRD_PARTY_REUSE_MATRIX.md](./docs/THIRD_PARTY_REUSE_MATRIX.md) or [docs/THIRD_PARTY_REUSE_MATRIX_zh.md](./docs/THIRD_PARTY_REUSE_MATRIX_zh.md)
 - [docs/THIRD_PARTY_REUSE_WORKFLOW.md](./docs/THIRD_PARTY_REUSE_WORKFLOW.md) or [docs/THIRD_PARTY_REUSE_WORKFLOW_zh.md](./docs/THIRD_PARTY_REUSE_WORKFLOW_zh.md)
 
-## Public vs Internal
+## Public Source Of Truth
 
-If you are working in the maintainer's local/internal workspace rather than the public GitHub clone, you may also read the maintainer supplements below:
+For this public repository, the default onboarding and collaboration rules are:
 
-- `E:\projects\AI\codex\internal-docs\tabrix\AI_CONTRIBUTOR_QUICKSTART_zh.md`
-  - title: `Tabrix AI 贡献者快速上手`
-- `E:\projects\AI\codex\internal-docs\tabrix\AI_DEV_RULES_zh.md`
-  - title: `Tabrix AI 助手开发通用规则`
-
-Those internal materials are maintainer supplements. The public default rules and onboarding entrypoints are `docs/AI_CONTRIBUTOR_QUICKSTART_zh.md` and `docs/AI_DEV_RULES_zh.md`.
+- `docs/AI_CONTRIBUTOR_QUICKSTART_zh.md`
+- `docs/AI_DEV_RULES_zh.md`
 
 For this public repository, treat `docs/` as the public source of truth. Do not recreate internal PM systems, private review docs, nightly reports, or acceptance evidence inside the public tree.
 
