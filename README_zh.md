@@ -294,6 +294,9 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 
 ### 开发者文档
 
+- [文档索引](docs/README.md)
+- [AI 贡献者快速上手](docs/AI_CONTRIBUTOR_QUICKSTART_zh.md)
+- [AI 助手开发通用规则](docs/AI_DEV_RULES_zh.md)
 - [架构设计](docs/ARCHITECTURE_zh.md)
 - [项目结构指南](docs/PROJECT_STRUCTURE_zh.md)
 - [产品定位与技术原则](docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md)

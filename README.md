@@ -295,6 +295,9 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 
 ### For Developers
 
+- [Docs Index](docs/README.md)
+- [AI Contributor Quickstart (ZH)](docs/AI_CONTRIBUTOR_QUICKSTART_zh.md)
+- [AI Development Rules (ZH)](docs/AI_DEV_RULES_zh.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Project Structure Guide](docs/PROJECT_STRUCTURE.md)
 - [Product Positioning and Technical Principles (ZH)](docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md)

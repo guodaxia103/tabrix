@@ -9,19 +9,73 @@ All code changes in this repository must follow the `karpathy-guidelines` skill:
 - define a verifiable success condition
 - prefer a real fix over a temporary suppression
 
-Before changing code, every AI assistant should read the public repository docs below first:
+## Mandatory Read Path
 
-- `README.md`
-- `docs/ARCHITECTURE.md`
-- `docs/PROJECT_STRUCTURE.md`
-- `docs/CONTRIBUTING.md`
+Before changing code or docs, every AI assistant should read the public repository docs below first:
 
-If you are working in the maintainer's local/internal workspace rather than the public GitHub clone, also read:
+1. [README.md](./README.md)
+2. [docs/README.md](./docs/README.md)
+3. [docs/AI_CONTRIBUTOR_QUICKSTART_zh.md](./docs/AI_CONTRIBUTOR_QUICKSTART_zh.md)
+4. [docs/AI_DEV_RULES_zh.md](./docs/AI_DEV_RULES_zh.md)
+5. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) or [docs/ARCHITECTURE_zh.md](./docs/ARCHITECTURE_zh.md)
+6. [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md) or [docs/PROJECT_STRUCTURE_zh.md](./docs/PROJECT_STRUCTURE_zh.md)
+7. [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) or [docs/CONTRIBUTING_zh.md](./docs/CONTRIBUTING_zh.md)
 
-- the internal contributor quickstart
-- the internal AI development rules
+Then continue with the smallest relevant task-specific reading set below.
 
-Those internal materials live in the sibling local `internal-docs` workspace and are intentionally not linked from this public GitHub repository page.
+## Task-Specific Reading
+
+### Product positioning, public docs, and boundary-governance tasks
+
+Read:
+
+- [docs/README.md](./docs/README.md)
+- [docs/AI_CONTRIBUTOR_QUICKSTART_zh.md](./docs/AI_CONTRIBUTOR_QUICKSTART_zh.md)
+- [docs/AI_DEV_RULES_zh.md](./docs/AI_DEV_RULES_zh.md)
+- [docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md](./docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md)
+- [docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md](./docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md)
+- [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) or [docs/CONTRIBUTING_zh.md](./docs/CONTRIBUTING_zh.md)
+
+### Transport, CLI, MCP, native-server, and diagnostics tasks
+
+Read:
+
+- [docs/TRANSPORT.md](./docs/TRANSPORT.md)
+- [docs/CLI.md](./docs/CLI.md) or [docs/CLI_zh.md](./docs/CLI_zh.md)
+- [docs/TOOLS.md](./docs/TOOLS.md) or [docs/TOOLS_zh.md](./docs/TOOLS_zh.md)
+- [docs/CLIENT_CONFIG_QUICKREF.md](./docs/CLIENT_CONFIG_QUICKREF.md)
+
+### Extension, popup, onboarding, and troubleshooting tasks
+
+Read:
+
+- [docs/STABLE_QUICKSTART.md](./docs/STABLE_QUICKSTART.md)
+- [docs/FIRST_SUCCESS_GUIDE.md](./docs/FIRST_SUCCESS_GUIDE.md)
+- [docs/POPUP_TROUBLESHOOTING.md](./docs/POPUP_TROUBLESHOOTING.md)
+- [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) or [docs/TROUBLESHOOTING_zh.md](./docs/TROUBLESHOOTING_zh.md)
+- [docs/WINDOWS_FAQ.md](./docs/WINDOWS_FAQ.md) and [docs/WINDOWS_INSTALL_zh.md](./docs/WINDOWS_INSTALL_zh.md) when Windows setup is involved
+
+### Release, security, and third-party reuse tasks
+
+Read:
+
+- [docs/RELEASE_PROCESS.md](./docs/RELEASE_PROCESS.md) or [docs/RELEASE_PROCESS_zh.md](./docs/RELEASE_PROCESS_zh.md)
+- [docs/SECURITY.md](./docs/SECURITY.md)
+- [docs/THIRD_PARTY_REUSE_MATRIX.md](./docs/THIRD_PARTY_REUSE_MATRIX.md) or [docs/THIRD_PARTY_REUSE_MATRIX_zh.md](./docs/THIRD_PARTY_REUSE_MATRIX_zh.md)
+- [docs/THIRD_PARTY_REUSE_WORKFLOW.md](./docs/THIRD_PARTY_REUSE_WORKFLOW.md) or [docs/THIRD_PARTY_REUSE_WORKFLOW_zh.md](./docs/THIRD_PARTY_REUSE_WORKFLOW_zh.md)
+
+## Public vs Internal
+
+If you are working in the maintainer's local/internal workspace rather than the public GitHub clone, you may also read the maintainer supplements below:
+
+- `E:\projects\AI\codex\internal-docs\tabrix\AI_CONTRIBUTOR_QUICKSTART_zh.md`
+  - title: `Tabrix AI 贡献者快速上手`
+- `E:\projects\AI\codex\internal-docs\tabrix\AI_DEV_RULES_zh.md`
+  - title: `Tabrix AI 助手开发通用规则`
+
+Those internal materials are maintainer supplements. The public default rules and onboarding entrypoints are `docs/AI_CONTRIBUTOR_QUICKSTART_zh.md` and `docs/AI_DEV_RULES_zh.md`.
+
+For this public repository, treat `docs/` as the public source of truth. Do not recreate internal PM systems, private review docs, nightly reports, or acceptance evidence inside the public tree.
 
 Default expectations:
 

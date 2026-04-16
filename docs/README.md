@@ -17,9 +17,18 @@ Implementation design notes, audits, acceptance evidence, release-gate maintenan
 ## What Belongs Here
 
 - README, install, quickstart, and troubleshooting guides
+- AI contributor onboarding and public AI collaboration rules
 - CLI, tools, transport, and architecture references
 - project structure, release, security, and changelog documents
 - public-facing compliance and contribution guidance
+
+## High-Value Entry Points
+
+- `AI_CONTRIBUTOR_QUICKSTART_zh.md`: first-stop onboarding for AI contributors working in the public repo
+- `AI_DEV_RULES_zh.md`: public development rules for AI-assisted changes
+- `STABLE_QUICKSTART.md`: user-facing first-success path
+- `ARCHITECTURE.md` / `ARCHITECTURE_zh.md`: public architecture overview
+- `PROJECT_STRUCTURE.md` / `PROJECT_STRUCTURE_zh.md`: codebase map and module responsibilities
 
 ## Naming Rules
 
