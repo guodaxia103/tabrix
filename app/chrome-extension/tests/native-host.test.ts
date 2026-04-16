@@ -298,6 +298,15 @@ describe('native host reconnect behavior', () => {
       type: NativeMessageType.START,
       payload: { port: 12306 },
     });
+    const fetchCalls = vi.mocked(globalThis.fetch).mock.calls;
+    expect(
+      fetchCalls.some(
+        ([url, init]) =>
+          url === 'http://127.0.0.1:12306/bridge/recovery/start' &&
+          (init as RequestInit)?.body ===
+            JSON.stringify({ action: 'reconnect:native_port_disconnected' }),
+      ),
+    ).toBe(true);
   });
 
   it('does not schedule reconnect after an explicit manual disconnect', async () => {
@@ -559,6 +568,43 @@ describe('native host reconnect behavior', () => {
         headers: { 'Content-Type': 'application/json' },
       }),
     );
+  });
+
+  it('reports recovery failure when the native host cannot be connected', async () => {
+    const harness = createChromeHarness([]);
+    (globalThis as any).chrome = harness.chromeMock;
+
+    const nativeHostModule = await import('@/entrypoints/background/native-host');
+    nativeHostModule.initNativeHostListener();
+    await flushMicrotasks();
+
+    const connectResponse = await harness.sendRuntimeMessage({
+      type: NativeMessageType.CONNECT_NATIVE,
+      port: 12306,
+    });
+    await flushMicrotasks();
+    expect(connectResponse).toMatchObject({ success: true, connected: false });
+
+    const fetchCalls = vi.mocked(globalThis.fetch).mock.calls;
+    expect(
+      fetchCalls.some(
+        ([url, init]) =>
+          url === 'http://127.0.0.1:12306/bridge/recovery/start' &&
+          (init as RequestInit)?.body === JSON.stringify({ action: 'ui_connect' }),
+      ),
+    ).toBe(true);
+    expect(
+      fetchCalls.some(
+        ([url, init]) =>
+          url === 'http://127.0.0.1:12306/bridge/recovery/finish' &&
+          (init as RequestInit)?.body ===
+            JSON.stringify({
+              success: false,
+              errorCode: 'TABRIX_NATIVE_CONNECT_FAILED',
+              errorMessage: 'Failed to connect native host (ui_connect)',
+            }),
+      ),
+    ).toBe(true);
   });
 
   it('registers the reload callback before reloading the runtime', async () => {
