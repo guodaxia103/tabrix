@@ -79,6 +79,7 @@ const forbiddenPatterns = [
 ];
 
 const codeSearchRoots = ['app', 'packages', 'scripts'];
+const allowedCodeDocLinkFiles = new Set(['app/chrome-extension/common/constants.ts']);
 const githubDocsBlobPattern =
   /https:\/\/github\.com\/guodaxia103\/tabrix\/blob\/main\/(docs\/[A-Za-z0-9_./-]+\.md)/g;
 
@@ -161,11 +162,19 @@ for (const absoluteFile of codeFiles) {
   const content = fs.readFileSync(absoluteFile, 'utf8');
   const matches = content.matchAll(githubDocsBlobPattern);
   for (const match of matches) {
+    const relativeCodePath = path.relative(repoRoot, absoluteFile).replaceAll('\\', '/');
     const relativeDocPath = match[1];
     const absoluteDocPath = path.join(repoRoot, relativeDocPath);
     if (!fs.existsSync(absoluteDocPath)) {
       console.error(
-        `[docs:check] code references missing public doc: ${relativeDocPath} (from ${path.relative(repoRoot, absoluteFile)})`,
+        `[docs:check] code references missing public doc: ${relativeDocPath} (from ${relativeCodePath})`,
+      );
+      failed = true;
+    }
+
+    if (!allowedCodeDocLinkFiles.has(relativeCodePath)) {
+      console.error(
+        `[docs:check] hardcoded public doc links must route through ${Array.from(allowedCodeDocLinkFiles).join(', ')} (found in ${relativeCodePath})`,
       );
       failed = true;
     }
