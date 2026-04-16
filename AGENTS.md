@@ -9,12 +9,12 @@ All code changes in this repository must follow the `karpathy-guidelines` skill:
 - define a verifiable success condition
 - prefer a real fix over a temporary suppression
 
-Before changing code, every AI assistant working in this repository must read the local internal docs below:
+Before changing code in a local/internal workspace, every AI assistant must read:
 
-- `../internal-docs/tabrix/AI_CONTRIBUTOR_QUICKSTART_zh.md`
-- `../internal-docs/tabrix/AI_DEV_RULES_zh.md`
+- the internal contributor quickstart
+- the internal AI development rules
 
-These files are local-only internal materials and are not published inside the GitHub repository tree.
+They live in the sibling local internal-docs workspace and are intentionally not linked from this public GitHub repository page.
 
 Default expectations:
 
