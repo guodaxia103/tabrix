@@ -23,8 +23,7 @@ pnpm build
 补充说明：
 
 - `pnpm run audit` 现在会走仓库内置的 OSV 生产依赖审计，不再依赖已退役的 npm 旧审计端点。
-- 若审计门禁异常，先查看：
-  [`docs/OSV_AUDIT_GATE_zh.md`](./OSV_AUDIT_GATE_zh.md)
+- 若审计门禁异常，优先查看 `scripts/audit-prod.mjs` 与 `pnpm run release:check` 输出定位失败原因。
 
 通过标准：
 

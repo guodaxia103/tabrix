@@ -234,6 +234,8 @@ Full tool list: [TOOLS API (EN)](docs/TOOLS.md) | [TOOLS API (ZH)](docs/TOOLS_zh
 
 ## Roadmap (Open Source + Product)
 
+These are open collaboration directions rather than dated delivery commitments.
+
 - [ ] Smart DOM Understanding and dehydration pipeline
 - [ ] Workflow recording and deterministic replay
 - [ ] Policy-based safety and permission model
@@ -299,7 +301,7 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 - [Product Positioning and Technical Principles (ZH)](docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md)
 - [Tool Layering and Risk Classification (ZH)](docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md)
 - [Contributing](docs/CONTRIBUTING.md)
-- [Visual Editor](docs/VisualEditor.md)
+- [Visual Editor](docs/VISUAL_EDITOR.md)
 - [Release Process](docs/RELEASE_PROCESS.md)
 
 ## License

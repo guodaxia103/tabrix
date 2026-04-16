@@ -234,6 +234,8 @@ tabrix daemon stop
 
 ## 路线图（开源 + 产品）
 
+以下内容属于公开协作方向，不代表带日期承诺的交付清单。
+
 - [ ] 智能 DOM 理解与高强度脱水管线
 - [ ] 工作流录制与可复现回放
 - [ ] 策略化安全与权限模型
@@ -299,7 +301,7 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 - [工具分层与风险分级清单](docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md)
 - [贡献指南](docs/CONTRIBUTING_zh.md)
 - [发布流程](docs/RELEASE_PROCESS_zh.md)
-- [可视化编辑器](docs/VisualEditor_zh.md)
+- [可视化编辑器](docs/VISUAL_EDITOR_zh.md)
 
 ## 许可证
 

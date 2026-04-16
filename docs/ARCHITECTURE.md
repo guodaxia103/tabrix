@@ -21,7 +21,7 @@ Scope note:
 
 Tabrix is a browser automation platform that bridges AI assistants with Chrome browser capabilities through the Model Context Protocol (MCP). The architecture is designed for:
 
-- **High Performance**: SIMD-optimized AI operations and efficient native messaging
+- **High Performance**: efficient browser execution, native messaging, and low-overhead transport handling
 - **Extensibility**: Modular tool system for easy feature additions
 - **Reliability**: Robust error handling and graceful degradation
 - **Security**: Sandboxed execution and permission-based access control
@@ -188,6 +188,8 @@ graph TB
 ```
 
 ## 🧠 AI Integration
+
+This section covers optional extension-side subsystems that exist in the repository for contributors. They are implementation details, not required parts of the default public Tabrix product surface.
 
 ### Semantic Similarity Engine
 
