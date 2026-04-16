@@ -78,7 +78,40 @@ const forbiddenPatterns = [
   /E:\\projects\\AI\\codex\\internal-docs/i,
 ];
 
+const codeSearchRoots = ['app', 'packages', 'scripts'];
+const githubDocsBlobPattern =
+  /https:\/\/github\.com\/guodaxia103\/tabrix\/blob\/main\/(docs\/[A-Za-z0-9_./-]+\.md)/g;
+
 let failed = false;
+
+function collectFiles(rootDir) {
+  if (!fs.existsSync(rootDir)) return [];
+
+  const result = [];
+  const stack = [rootDir];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const nextPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (['node_modules', 'dist', 'coverage', 'releases', '.git'].includes(entry.name)) {
+          continue;
+        }
+        stack.push(nextPath);
+        continue;
+      }
+
+      if (entry.isFile()) {
+        result.push(nextPath);
+      }
+    }
+  }
+
+  return result;
+}
 
 for (const relativeFile of requiredFiles) {
   const absoluteFile = path.join(repoRoot, relativeFile);
@@ -118,6 +151,22 @@ for (const relativeFile of publicDocsFiles) {
   for (const pattern of forbiddenPatterns) {
     if (pattern.test(content)) {
       console.error(`[docs:check] forbidden internal reference found in ${relativeFile}: ${pattern}`);
+      failed = true;
+    }
+  }
+}
+
+const codeFiles = codeSearchRoots.flatMap((root) => collectFiles(path.join(repoRoot, root)));
+for (const absoluteFile of codeFiles) {
+  const content = fs.readFileSync(absoluteFile, 'utf8');
+  const matches = content.matchAll(githubDocsBlobPattern);
+  for (const match of matches) {
+    const relativeDocPath = match[1];
+    const absoluteDocPath = path.join(repoRoot, relativeDocPath);
+    if (!fs.existsSync(absoluteDocPath)) {
+      console.error(
+        `[docs:check] code references missing public doc: ${relativeDocPath} (from ${path.relative(repoRoot, absoluteFile)})`,
+      );
       failed = true;
     }
   }
