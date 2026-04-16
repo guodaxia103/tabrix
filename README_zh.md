@@ -20,8 +20,8 @@ Tabrix 不是“再开一个新浏览器”，而是把你正在使用的 Chrome
 
 - 真实会话，开箱即用：沿用现有登录态、Cookie、扩展与标签页，无需从零重建环境
 - 链路更稳更安全：基于扩展 + Native Messaging，无需长期暴露 `--remote-debugging-port`
-- 远程控制默认可用：内置 Bearer Token 鉴权、Token 管理与有效期机制（TTL）
-- 客户端广泛兼容：Claude Desktop、Cursor、Cline、Cherry Studio、Dify 等 MCP 客户端均可接入
+- 远程接入已就绪：提供局域网暴露所需的 Bearer Token 鉴权、Token 管理与有效期机制（TTL）
+- 客户端广泛兼容：Claude Desktop、Cursor、Claude Code CLI、Codex CLI、Cherry Studio、Windsurf、Dify 等 MCP 客户端均可接入
 - 本地优先架构：浏览器状态与数据默认留在本机，隐私与合规更可控
 - 面向生产运维：提供 `tabrix status` / `doctor --fix` / `smoke` / `report` 闭环能力
 
@@ -99,7 +99,7 @@ tabrix doctor --fix
 }
 ```
 
-主流 AI 助手与 MCP 客户端配置（[OpenClaw](https://github.com/openclaw/openclaw)、[CoPaw](https://github.com/guodaxia103/copaw)、Claude Desktop、Cursor、Cline、Cherry Studio、Dify 等）见：
+主流 MCP 客户端配置（Claude Desktop、Cursor、Claude Code CLI、Codex CLI、Cherry Studio、Windsurf、Dify 等）见：
 [客户端配置速查](docs/CLIENT_CONFIG_QUICKREF.md)
 
 ## 🌐 远程控制

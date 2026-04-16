@@ -20,8 +20,8 @@ Tabrix does not spin up "yet another browser." It upgrades your current Chrome i
 
 - Real session, ready instantly: keep your existing logins, cookies, extensions, and tabs without rebuilding environments
 - More stable and safer runtime path: extension + Native Messaging, without keeping `--remote-debugging-port` exposed
-- Remote control by default: built-in Bearer auth, token management, and token TTL controls
-- Broad client compatibility: works with Claude Desktop, Cursor, Cline, Cherry Studio, Dify, and other MCP clients
+- Remote-ready access: built-in Bearer auth, token management, and token TTL controls for LAN exposure
+- Broad client compatibility: works with Claude Desktop, Cursor, Claude Code CLI, Codex CLI, Cherry Studio, Windsurf, Dify, and similar MCP clients
 - Local-first architecture: browser state and data stay on your machine by default for stronger privacy and compliance control
 - Production operations built in: `tabrix status` / `doctor --fix` / `smoke` / `report`
 
@@ -99,7 +99,7 @@ What to look for:
 }
 ```
 
-Configs for popular AI assistants and MCP clients ([OpenClaw](https://github.com/openclaw/openclaw), [CoPaw](https://github.com/guodaxia103/copaw), Claude Desktop, Cursor, Cline, Cherry Studio, Dify, etc.):
+Configs for popular MCP clients (Claude Desktop, Cursor, Claude Code CLI, Codex CLI, Cherry Studio, Windsurf, Dify, etc.):
 [Client Config Quick Reference](docs/CLIENT_CONFIG_QUICKREF.md)
 
 ## 🌐 Remote Control

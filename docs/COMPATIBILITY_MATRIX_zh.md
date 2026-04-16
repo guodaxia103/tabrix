@@ -19,6 +19,7 @@
 | Claude Code CLI | HTTP 配置路径 | `Primary` | 命令式接入路径清晰 |
 | Codex CLI | HTTP 配置路径 | `Supported` | 已有公开配置说明 |
 | Cherry Studio | Streamable HTTP | `Supported` | 已有公开配置说明 |
+| Windsurf | Streamable HTTP | `Supported` | 已有公开配置说明 |
 | Dify | Streamable HTTP | `Supported` | 需要根据部署环境注意 host 地址 |
 | 其他支持 Streamable HTTP 的 MCP 客户端 | Streamable HTTP | `Supported` | 只要遵循标准 MCP URL 配置，通常都可接入 |
 | 仅 stdio 或强定制客户端环境 | `stdio` | `Cautious` | 公开上很重要，但不同客户端接入差异更大 |

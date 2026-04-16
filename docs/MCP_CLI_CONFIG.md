@@ -4,7 +4,7 @@ This guide explains how to configure Codex CLI and Claude Code to connect to Tab
 
 ## Overview
 
-Tabrix exposes its MCP interface at `http://127.0.0.1:12306/mcp` (default port).
+Tabrix exposes its MCP interface at `http://127.0.0.1:12306/mcp` by default.
 Both Codex CLI and Claude Code can connect to this endpoint to use Chrome browser control tools.
 
 ## Codex CLI Configuration
@@ -25,17 +25,25 @@ Add the following to your `~/.codex/config.json`:
 
 ### Option 2: Via Environment Variable
 
-Set the MCP URL via environment variable before running codex:
+Set the preferred MCP port environment variable before running Codex CLI:
 
 ```bash
-export MCP_HTTP_PORT=12306
+export CHROME_MCP_PORT=12306
 ```
+
+`MCP_HTTP_PORT` is still accepted as a backward-compatible alias, but `CHROME_MCP_PORT` is the current preferred variable.
 
 ## Claude Code Configuration
 
 ### Option 1: HTTP MCP Server
 
-Add the following to your `~/.claude/claude_desktop_config.json`:
+Run:
+
+```bash
+claude mcp add tabrix --transport http http://127.0.0.1:12306/mcp
+```
+
+Or add the following to your `~/.claude.json`:
 
 ```json
 {
@@ -66,10 +74,10 @@ If you prefer stdio-based MCP communication:
 
 After configuration, the CLI tools should be able to see and use Tabrix tools such as:
 
-- `chrome_get_windows_and_tabs` - Get browser window and tab information
+- `get_windows_and_tabs` - Get browser window and tab information
 - `chrome_navigate` - Navigate to a URL
 - `chrome_click_element` - Click on page elements
-- `chrome_get_page_content` - Get page content
+- `chrome_get_web_content` - Get page content
 - And more...
 
 ## Troubleshooting
@@ -81,7 +89,7 @@ If you get "connection refused" errors:
 1. Ensure the Chrome extension is installed and the native server is running
 2. Check that the port matches (default: 12306)
 3. Verify no firewall is blocking localhost connections
-4. Run `tabrix doctor` to diagnose issues
+4. Run `tabrix doctor --fix` to diagnose and auto-fix common issues
 
 ### Tools Not Appearing
 
@@ -103,6 +111,7 @@ If port 12306 is already in use:
 
 | Variable                     | Description                            | Default |
 | ---------------------------- | -------------------------------------- | ------- |
-| `MCP_HTTP_PORT`              | HTTP port for MCP server               | 12306   |
+| `CHROME_MCP_PORT`           | Preferred HTTP port variable for MCP server | 12306   |
+| `MCP_HTTP_PORT`             | Backward-compatible HTTP port alias    | 12306   |
 | `MCP_ALLOWED_WORKSPACE_BASE` | Additional allowed workspace directory | (none)  |
 | `CHROME_MCP_NODE_PATH`       | Override Node.js executable path       | (auto)  |
