@@ -236,6 +236,7 @@ Do not keep switching between multiple unpacked build folders.
 - On Windows, rebuilding while the native host is active may log a non-fatal `EBUSY` warning during `dist` cleanup. The build continues and overwrites artifacts.
 - If you rebuild local source, restart the native host once so the running process picks up the latest `dist` output.
 
-For the current Phase 0 validation checklist, see:
+For current release validation and publication expectations, see:
 
-- [Release Readiness Checklist](./RELEASE_READINESS_CHECKLIST_zh.md)
+- [Release Process](./RELEASE_PROCESS.md)
+- [发布流程](./RELEASE_PROCESS_zh.md)
