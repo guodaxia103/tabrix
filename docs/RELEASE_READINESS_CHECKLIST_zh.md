@@ -215,7 +215,7 @@ npm list -g @tabrix/tabrix
 
 如果本次版本触及外部复用，请额外确认：
 
-- 已检查 [`docs/THIRD_PARTY_REUSE_MATRIX_zh.md`](./THIRD_PARTY_REUSE_MATRIX_zh.md)
+- 已检查复用矩阵与第三方来源记录
 - 重点外部项目分类完整
 - `代码复用` 已补来源记录
 - `设计借鉴` 已补设计参考记录

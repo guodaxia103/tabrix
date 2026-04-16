@@ -2,6 +2,11 @@
 
 本文档从“代码放在哪里、功能是怎么串起来的”两个角度，快速说明 Tabrix 当前仓库结构，方便后续开发时定位入口文件。
 
+阅读范围说明：
+
+- 当前稳定对外能力，主要应理解为“Chrome 扩展执行浏览器能力”以及通过 `Streamable HTTP` 和 `stdio` 对外提供 MCP 接入。
+- 仓库里也保留了 agent、workflow、record-replay、语义索引等子系统；这些内容对代码定位有帮助，但不应直接理解为默认公开产品面。
+
 配套文档：
 
 - 架构设计：`docs/ARCHITECTURE_zh.md`
@@ -19,7 +24,7 @@ tabrix/
 │  ├─ chrome-extension/    # 浏览器扩展，真正执行浏览器能力
 │  └─ native-server/       # 本地 Node 服务，提供 CLI / MCP / Native Messaging
 ├─ packages/
-│  ├─ shared/              # 共享类型、工具 schema、流程图定义
+│  ├─ shared/              # 共享类型、工具 schema、跨进程协议边界
 │  └─ wasm-simd/           # Rust/WebAssembly SIMD 数学加速
 ├─ docs/                   # 用户与开发者文档
 ├─ scripts/                # 仓库级脚本，例如 i18n / release / 清理 / wasm 复制
@@ -32,23 +37,23 @@ tabrix/
 
 ### `app/chrome-extension/`
 
-浏览器侧主程序。真正和 Chrome API、页面 DOM、内容脚本、录制回放、语义检索打交道的代码都在这里。
+浏览器侧主程序。真正和 Chrome API、页面 DOM、内容脚本以及浏览器执行主链路打交道的代码都在这里。仓库中也保留了工作流回放、Agent Chat、语义索引等实验性或内部子系统。
 
 关键目录：
 
 - `entrypoints/background/`
-  - 扩展后台主入口，统一初始化 Native Host、工具执行器、录制回放、语义引擎、Quick Panel、Web Editor 等能力。
+  - 扩展后台主入口，统一初始化 Native Host、工具执行器，以及若干扩展侧子系统，其中包含一部分实验性模块。
   - `index.ts` 是最重要的后台入口。
 - `entrypoints/background/tools/`
   - 浏览器工具实现目录。
   - `browser/*.ts` 里包含导航、点击、键盘、截图、网络、JS 执行、书签、历史、上传等工具。
 - `entrypoints/background/record-replay-v3/`
-  - 新版流程编排和回放引擎。
+  - 面向内部或实验性流程的编排与回放引擎。
   - `domain/` 放领域模型，`engine/` 放运行时、调度、触发器、恢复机制，`storage/` 放持久化。
 - `entrypoints/popup/`
   - 扩展弹窗 UI，主要负责连接状态、远程访问、端口与 Native Host 状态展示。
 - `entrypoints/sidepanel/`
-  - 侧边栏 UI，承载 Agent Chat、工作流列表、RR-V3 调试界面等。
+  - 侧边栏 UI，承载 Agent Chat、工作流列表、RR-V3 调试界面等；它不是当前默认公开产品入口。
 - `entrypoints/web-editor-v2/`
   - 页面可视化编辑器相关逻辑。
 - `inject-scripts/`
@@ -56,7 +61,7 @@ tabrix/
 - `shared/`
   - 扩展内复用逻辑，目前包含 selector、element picker、quick panel 等。
 - `utils/`
-  - 语义相似度、向量检索、截图上下文、offscreen 管理、IndexedDB 封装等通用能力。
+  - selector、截图上下文、offscreen 管理、IndexedDB 封装，以及部分实验性的语义相似度 / 向量检索能力。
 - `workers/`
   - ONNX / WASM / 向量计算相关 worker 与产物。
 - `tests/`
@@ -86,7 +91,7 @@ tabrix/
   - 工具调用和流程执行状态管理、结果归一化。
 - `src/agent/`
   - Agent 相关后端能力。
-  - 包含项目管理、消息/会话管理、流式输出、附件处理，以及 `codex` / `claude` 引擎适配。
+  - 包含项目管理、消息/会话管理、流式输出、附件处理，以及 `codex` / `claude` 引擎适配；这些能力存在于代码中，但不是当前默认对外能力面。
 
 ### `packages/shared/`
 
@@ -145,7 +150,7 @@ popup / sidepanel
 - 点击 Connect 后为什么没有连上
 - 远程访问、Token、端口状态为什么不一致
 
-### 工作流 / Record-Replay V3 链
+### 实验性工作流 / Record-Replay V3 链
 
 ```text
 sidepanel workflows / background bootstrap
@@ -155,7 +160,7 @@ sidepanel workflows / background bootstrap
   -> background/tools/record-replay.ts 或动态 flow 工具
 ```
 
-适合排查：
+适合排查内部或实验性子系统：
 
 - 流程发布、触发、调度、恢复
 - v2 到 v3 的兼容转换
@@ -220,11 +225,12 @@ sidepanel workflows / background bootstrap
 
 ## 6. 当前仓库的一些观察
 
-- 代码主体已经从“单纯浏览器工具集”扩展到了“三层系统”：
+- 当前仓库可以理解为三层代码系统：
   - MCP 服务层
   - 浏览器执行层
-  - Agent / Workflow 产品层
-- `record-replay-v3` 和 `sidepanel/agent-chat` 是当前最复杂、最值得提前建立上下文的两个区域。
+  - Agent / Workflow / Replay 子系统
+- 但稳定对外主线，仍应优先理解为 MCP 服务层和浏览器执行层。
+- `record-replay-v3` 和 `sidepanel/agent-chat` 只在你实际修改这些区域时才需要优先深入，不应默认视为公开产品主能力。
 - `packages/shared/` 是跨端稳定边界。只要涉及工具 schema、流程节点定义或共享类型，优先先看这里，能显著减少两端不一致的问题。
 
 ## 7. 后续维护建议
