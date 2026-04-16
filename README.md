@@ -291,7 +291,7 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 - [Popup Troubleshooting](docs/POPUP_TROUBLESHOOTING.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Changelog](docs/CHANGELOG.md)
-- [Latest Release Notes (v2.0.8)](docs/RELEASE_NOTES_v2.0.8.md)
+- [GitHub Releases](https://github.com/guodaxia103/tabrix/releases)
 
 ### For Developers
 

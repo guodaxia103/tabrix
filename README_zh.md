@@ -290,7 +290,7 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 - [Popup 排障](docs/POPUP_TROUBLESHOOTING.md)
 - [故障排除](docs/TROUBLESHOOTING_zh.md)
 - [变更日志](docs/CHANGELOG.md)
-- [最新版本说明（v2.0.8）](docs/RELEASE_NOTES_v2.0.8.md)
+- [GitHub Releases](https://github.com/guodaxia103/tabrix/releases)
 
 ### 开发者文档
 
