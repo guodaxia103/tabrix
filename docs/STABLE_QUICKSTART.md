@@ -58,6 +58,8 @@ The fastest checks are now:
 ```powershell
 tabrix status
 tabrix doctor
+tabrix config
+tabrix clients
 tabrix smoke
 ```
 
@@ -71,6 +73,12 @@ Expected healthy output:
   - `Runtime status`
   - `MCP initialize`
 - `smoke` can open a temporary test page and run a live browser sanity check
+
+Notes:
+
+- `tabrix config` prints ready-to-copy local `Streamable HTTP`, remote `Streamable HTTP`, and `stdio` connection config.
+- `tabrix clients` shows current active client groups plus recent inactive sessions for troubleshooting.
+- `tabrix smoke` now defaults to a temporary tab in the current browser window; use `tabrix smoke --separate-window` only when you need stronger isolation.
 
 You can also verify raw endpoints:
 

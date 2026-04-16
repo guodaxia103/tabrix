@@ -9,6 +9,18 @@
 2. `tabrix` 已全局安装（`npm i -g @tabrix/tabrix@latest`）
 3. 运行 `tabrix doctor` 确认一切正常
 
+想直接查看当前机器的本地 / 远程 / `stdio` 配置，可先运行：
+
+```bash
+tabrix config
+```
+
+想查看当前有哪些 MCP 客户端已连接，可运行：
+
+```bash
+tabrix clients
+```
+
 ---
 
 ## Streamable HTTP（推荐）

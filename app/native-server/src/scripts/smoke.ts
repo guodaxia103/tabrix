@@ -10,6 +10,7 @@ import { getChromeMcpUrl } from '../constant';
 export interface SmokeOptions {
   json?: boolean;
   keepTab?: boolean;
+  separateWindow?: boolean;
   url?: string;
   authToken?: string;
   protocolOnly?: boolean;
@@ -823,6 +824,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
   const mcp = new StreamableHttpMcpClient(mcpUrl, buildAuthHeaders(options.authToken));
   let tempTabId: number | null = null;
   let originalTabId: number | null = null;
+  let originalWindowId: number | null = null;
   const mode: SmokeResult['mode'] = options.allTools
     ? 'all-tools'
     : protocolOnly
@@ -922,9 +924,16 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     );
 
     const windows = parseToolText(await mcp.callTool('get_windows_and_tabs'));
-    originalTabId =
-      windows?.windows?.flatMap((window: any) => window.tabs || []).find((tab: any) => tab.active)
-        ?.tabId || null;
+    const originalActiveTab = windows?.windows
+      ?.flatMap((window: any) =>
+        (window.tabs || []).map((tab: any) => ({
+          windowId: window.windowId,
+          ...tab,
+        })),
+      )
+      .find((tab: any) => tab.active);
+    originalTabId = originalActiveTab?.tabId || null;
+    originalWindowId = originalActiveTab?.windowId || null;
     record(
       'get_windows_and_tabs',
       Array.isArray(windows?.windows),
@@ -936,9 +945,8 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     const navigateResult = parseToolText(
       await mcp.callTool('chrome_navigate', {
         url: smokeServer!.baseUrl,
-        newWindow: true,
-        width: 1280,
-        height: 900,
+        newWindow: options.separateWindow === true,
+        windowId: options.separateWindow === true ? undefined : (originalWindowId ?? undefined),
       }),
     );
     tempTabId =

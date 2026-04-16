@@ -242,6 +242,12 @@ Check current runtime status:
 tabrix status
 ```
 
+Show current MCP client config:
+
+```bash
+tabrix config
+```
+
 Diagnose issues (`--fix` applies common auto-fixes):
 
 ```bash
@@ -252,10 +258,22 @@ tabrix doctor
 tabrix doctor --fix
 ```
 
+Inspect active MCP clients and recent sessions:
+
+```bash
+tabrix clients
+```
+
 Run browser-path smoke test:
 
 ```bash
 tabrix smoke
+```
+
+Need an isolated browser window for smoke:
+
+```bash
+tabrix smoke --separate-window
 ```
 
 Run stdio-only smoke test:

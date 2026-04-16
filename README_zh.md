@@ -241,6 +241,12 @@ tabrix update-port <port>
 tabrix status
 ```
 
+查看当前 MCP 客户端连接配置：
+
+```bash
+tabrix config
+```
+
 诊断问题（自动修复用 `--fix`）：
 
 ```bash
@@ -251,10 +257,22 @@ tabrix doctor
 tabrix doctor --fix
 ```
 
+查看当前 MCP 客户端与最近会话：
+
+```bash
+tabrix clients
+```
+
 浏览器链路冒烟测试：
 
 ```bash
 tabrix smoke
+```
+
+如果你需要在独立浏览器窗口里跑 smoke：
+
+```bash
+tabrix smoke --separate-window
 ```
 
 仅 stdio 链路测试：

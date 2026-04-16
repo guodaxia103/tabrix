@@ -15,6 +15,8 @@ import { BrowserType, parseBrowserType, detectInstalledBrowsers } from './script
 import { runDoctor } from './scripts/doctor';
 import { runReport } from './scripts/report';
 import { runStatus } from './scripts/status';
+import { runConfig } from './scripts/config';
+import { runClients } from './scripts/clients';
 import { runSmoke } from './scripts/smoke';
 import { runStdioSmoke } from './scripts/stdio-smoke';
 import { runSetup } from './scripts/setup';
@@ -53,15 +55,19 @@ program.addHelpText(
 Quick Start
   tabrix setup
   tabrix status
-  tabrix doctor
+  tabrix doctor --fix
+  tabrix config
+  tabrix clients
   tabrix smoke
 
 Common Workflows
   First install
     tabrix setup
 
-  Diagnose and auto-fix
+  Diagnose, inspect, and auto-fix
     tabrix doctor --fix
+    tabrix config
+    tabrix clients
     tabrix report --copy
 
   Daemon mode
@@ -299,12 +305,48 @@ program
   });
 
 program
+  .command('config')
+  .description('Show current MCP client connection config (local, remote, stdio, token)')
+  .option('--json', 'Output config as JSON')
+  .action(async (options) => {
+    try {
+      const exitCode = await runConfig({
+        json: Boolean(options.json),
+      });
+      process.exit(exitCode);
+    } catch (error: any) {
+      console.error(colorText(`Config failed: ${error.message}`, 'red'));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('clients')
+  .description('Show active MCP client groups and recent transport sessions')
+  .option('--json', 'Output clients snapshot as JSON')
+  .action(async (options) => {
+    try {
+      const exitCode = await runClients({
+        json: Boolean(options.json),
+      });
+      process.exit(exitCode);
+    } catch (error: any) {
+      console.error(colorText(`Clients failed: ${error.message}`, 'red'));
+      process.exit(1);
+    }
+  });
+
+program
   .command('smoke')
   .description(
     'Run smoke tests against local browser control or a remote Streamable HTTP MCP endpoint',
   )
   .option('--json', 'Output smoke test results as JSON')
   .option('--keep-tab', 'Keep the temporary smoke-test tab open for inspection')
+  .option(
+    '--separate-window',
+    'Open the smoke page in a separate browser window instead of the default temporary tab',
+  )
   .option('--all-tools', 'Run extended full-tool validation (local mode only)')
   .option(
     '--include-interactive-tools',
@@ -327,6 +369,7 @@ program
       const exitCode = await runSmoke({
         json: Boolean(options.json),
         keepTab: Boolean(options.keepTab),
+        separateWindow: Boolean(options.separateWindow),
         allTools: Boolean(options.allTools),
         includeInteractiveTools: options.includeInteractiveTools === true,
         url: options.url,

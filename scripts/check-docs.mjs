@@ -98,7 +98,11 @@ function collectFiles(rootDir) {
     for (const entry of entries) {
       const nextPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (['node_modules', 'dist', 'coverage', 'releases', '.git'].includes(entry.name)) {
+        if (
+          ['node_modules', 'dist', 'coverage', 'releases', '.git', '.output', '.wxt'].includes(
+            entry.name,
+          )
+        ) {
           continue;
         }
         stack.push(nextPath);
