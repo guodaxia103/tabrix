@@ -9,12 +9,19 @@ All code changes in this repository must follow the `karpathy-guidelines` skill:
 - define a verifiable success condition
 - prefer a real fix over a temporary suppression
 
-Before changing code in a local/internal workspace, every AI assistant must read:
+Before changing code, every AI assistant should read the public repository docs below first:
+
+- `README.md`
+- `docs/ARCHITECTURE.md`
+- `docs/PROJECT_STRUCTURE.md`
+- `docs/CONTRIBUTING.md`
+
+If you are working in the maintainer's local/internal workspace rather than the public GitHub clone, also read:
 
 - the internal contributor quickstart
 - the internal AI development rules
 
-They live in the sibling local internal-docs workspace and are intentionally not linked from this public GitHub repository page.
+Those internal materials live in the sibling local `internal-docs` workspace and are intentionally not linked from this public GitHub repository page.
 
 Default expectations:
 
