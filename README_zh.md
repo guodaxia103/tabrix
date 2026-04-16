@@ -289,9 +289,8 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 - [传输模式（Streamable HTTP / stdio）](docs/TRANSPORT.md)
 - [Popup 排障](docs/POPUP_TROUBLESHOOTING.md)
 - [故障排除](docs/TROUBLESHOOTING_zh.md)
-- [Release Notes v2.0.5](docs/RELEASE_NOTES_v2.0.5.md)
-- [Release Notes v2.0.4](docs/RELEASE_NOTES_v2.0.4.md)
-- [Release Notes v2.0.3](docs/RELEASE_NOTES_v2.0.3.md)
+- [变更日志](docs/CHANGELOG.md)
+- [最新版本说明（v2.0.8）](docs/RELEASE_NOTES_v2.0.8.md)
 
 ### 开发者文档
 
