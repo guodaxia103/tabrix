@@ -91,6 +91,11 @@ describe('服务器测试', () => {
     expect(response.body.data.transports).toMatchObject({
       total: 0,
       streamableHttp: 0,
+      sessionStates: {
+        active: 0,
+        stale: 0,
+        disconnected: 0,
+      },
     });
     expect(response.body.data.execution).toMatchObject({
       tasks: {
@@ -112,6 +117,8 @@ describe('服务器测试', () => {
       lastSessionId: null,
     });
     expect(Array.isArray(response.body.data.transports.sessionIds)).toBe(true);
+    expect(Array.isArray(response.body.data.transports.clients)).toBe(true);
+    expect(Array.isArray(response.body.data.transports.sessions)).toBe(true);
   });
 
   test('POST /bridge/heartbeat 应记录扩展心跳并更新 bridge 快照', async () => {
@@ -347,6 +354,15 @@ describe('服务器测试', () => {
     expect(status.body.data.transports.total).toBeGreaterThanOrEqual(2);
     expect(status.body.data.transports.streamableHttp).toBeGreaterThanOrEqual(2);
     expect(status.body.data.transports.sessionIds).toEqual(expect.arrayContaining([id1, id2]));
+    expect(status.body.data.transports.clients).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          clientName: 'parallel-http-test',
+          sessionCount: 2,
+          state: 'active',
+        }),
+      ]),
+    );
 
     const del1 = await supertest(Server.getInstance().server)
       .delete('/mcp')
@@ -356,6 +372,56 @@ describe('服务器测试', () => {
       .set('mcp-session-id', id2);
     expect([200, 204]).toContain(del1.status);
     expect([200, 204]).toContain(del2.status);
+  });
+
+  test('DELETE /status/clients/:clientId 会按归并客户端断开全部活跃会话', async () => {
+    const initializeRequest = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'group-disconnect-test', version: '1.0.0' },
+      },
+    };
+
+    await supertest(Server.getInstance().server)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Content-Type', 'application/json')
+      .send(initializeRequest)
+      .expect(200);
+    await supertest(Server.getInstance().server)
+      .post('/mcp')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Content-Type', 'application/json')
+      .send({ ...initializeRequest, id: 2 })
+      .expect(200);
+
+    const before = await supertest(Server.getInstance().server).get('/status').expect(200);
+    const clientId = before.body.data.transports.clients.find(
+      (client: { clientName?: string }) => client.clientName === 'group-disconnect-test',
+    )?.clientId;
+
+    expect(typeof clientId).toBe('string');
+
+    const disconnect = await supertest(Server.getInstance().server)
+      .delete(`/status/clients/${clientId}`)
+      .expect(200);
+
+    expect(disconnect.body).toMatchObject({
+      status: 'ok',
+      data: { disconnectedSessions: 2 },
+    });
+
+    const after = await supertest(Server.getInstance().server).get('/status').expect(200);
+    expect(
+      after.body.data.transports.clients.some(
+        (client: { clientName?: string }) => client.clientName === 'group-disconnect-test',
+      ),
+    ).toBe(false);
+    expect(after.body.data.transports.sessionStates.disconnected).toBeGreaterThanOrEqual(2);
   });
 
   test('POST /mcp initialize 后可立即调用 tools/list', async () => {

@@ -112,6 +112,14 @@ class YourNewTool extends BaseBrowserToolExecutor {
 - **注释**：为公共 API 添加 JSDoc 注释
 - **错误处理**：始终优雅地处理错误
 
+### 第三方复用规则
+
+- 任何外部来源都先分成 `direct`、`rewrite`、`design-only` 三类，再决定是否使用。
+- 仓库级规则以 [THIRD_PARTY_REUSE_MATRIX_zh.md](./THIRD_PARTY_REUSE_MATRIX_zh.md) 和 [THIRD_PARTY_REUSE_WORKFLOW_zh.md](./THIRD_PARTY_REUSE_WORKFLOW_zh.md) 为准。
+- 如果 PR 会引入第三方代码或直接依赖，必须更新 [`NOTICE`](../NOTICE) 并在 [docs/third-party/](./third-party/README.md) 增加来源记录。
+- 如果只是参考实现后自行重写，必须补来源记录，但不更新 `NOTICE`。
+- `AGPL`、商业限制或许可证边界不清的来源，默认按 `design-only` 处理，不得把代码复制进 Tabrix。
+
 ## 📝 Pull Request 流程
 
 1. **创建功能分支**
@@ -124,6 +132,7 @@ git checkout -b feature/your-feature-name
    - 遵循代码风格指南
    - 为新功能添加测试
    - 如需要，更新文档
+   - 如果改动受第三方项目影响，先完成分类和来源记录，再发起 PR
 
 3. **测试您的更改**
    - 确保所有现有测试通过
@@ -208,6 +217,8 @@ pnpm build
 - [Chrome 扩展开发](https://developer.chrome.com/docs/extensions/)
 - [WXT 框架文档](https://wxt.dev/)
 - [TypeScript 手册](https://www.typescriptlang.org/docs/)
+- [第三方复用矩阵](./THIRD_PARTY_REUSE_MATRIX_zh.md)
+- [第三方复用工作流](./THIRD_PARTY_REUSE_WORKFLOW_zh.md)
 
 ## 🤝 社区
 
@@ -218,6 +229,8 @@ pnpm build
 ## 📄 许可证
 
 通过为 Tabrix 做贡献，您同意您的贡献将在 MIT 许可证下获得许可。
+
+同时，您需要保证贡献内容不会在没有明确仓库级决策和归因记录的前提下，把 `AGPL`、商业限制或其他受限第三方代码引入 Tabrix。
 
 ## 🎯 贡献者指南
 

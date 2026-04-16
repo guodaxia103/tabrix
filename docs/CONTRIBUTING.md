@@ -112,6 +112,14 @@ class YourNewTool extends BaseBrowserToolExecutor {
 - **Comments**: Add JSDoc comments for public APIs
 - **Error Handling**: Always handle errors gracefully
 
+### Third-Party Reuse Rules
+
+- Classify any external source as `direct`, `rewrite`, or `design-only` before using it.
+- Follow the repository rules in [THIRD_PARTY_REUSE_MATRIX.md](./THIRD_PARTY_REUSE_MATRIX.md) and [THIRD_PARTY_REUSE_WORKFLOW.md](./THIRD_PARTY_REUSE_WORKFLOW.md).
+- If a PR ships third-party code or a direct dependency, update [`NOTICE`](../NOTICE) and add a source record under [docs/third-party/](./third-party/README.md).
+- If a PR only rewrites an idea after reading upstream code, add a source record but do not update `NOTICE`.
+- `AGPL`, commercial, or unclear licensing defaults to `design-only`; do not copy that code into Tabrix.
+
 ## 📝 Pull Request Process
 
 1. **Create a feature branch**
@@ -124,6 +132,7 @@ git checkout -b feature/your-feature-name
    - Follow the code style guidelines
    - Add tests for new functionality
    - Update documentation if needed
+   - If third-party material influenced the change, classify it and record it before opening the PR
 
 3. **Test your changes**
    - Ensure all existing tests pass
@@ -208,6 +217,8 @@ pnpm build
 - [Chrome Extension Development](https://developer.chrome.com/docs/extensions/)
 - [WXT Framework Documentation](https://wxt.dev/)
 - [TypeScript Handbook](https://www.typescriptlang.org/docs/)
+- [Third-Party Reuse Matrix](./THIRD_PARTY_REUSE_MATRIX.md)
+- [Third-Party Reuse Workflow](./THIRD_PARTY_REUSE_WORKFLOW.md)
 
 ## 🤝 Community
 
@@ -218,6 +229,8 @@ pnpm build
 ## 📄 License
 
 By contributing to Tabrix, you agree that your contributions will be licensed under the MIT License.
+
+You must also ensure that contributed changes do not import `AGPL`, commercial, or otherwise restricted third-party code into Tabrix without an explicit repository-level decision and matching attribution records.
 
 ## 🎯 Contributor Guidelines
 

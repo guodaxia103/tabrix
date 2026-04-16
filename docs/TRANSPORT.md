@@ -11,6 +11,8 @@
 | **Streamable HTTP** | `POST /mcp`           | Cursor、Claude Desktop、CoPaw 等远程/本地 HTTP MCP | 当前主线；`http://127.0.0.1:<port>/mcp` 或 `http://LAN_IP:<port>/mcp` |
 | **stdio**           | stdin/stdout JSON-RPC | Claude Code CLI 等不经网络的本地客户端             | 当前主线；子进程代理到本机 HTTP                                       |
 
+> Popup 顶层产品模式也只允许这两种：`Remote (Streamable HTTP)` 与 `stdio`。`localhost HTTP` 仍然存在，但只作为 `Streamable HTTP` 的本机实现细节，不再作为第三种对外模式。
+
 ## 当前支持的连接方式详解
 
 ### 1. Streamable HTTP（推荐）
@@ -59,6 +61,12 @@ AI 客户端 ↔ stdin/stdout ↔ tabrix-stdio ↔ HTTP 127.0.0.1:12306/mcp
 **方式一（推荐）：扩展 Popup 开关**
 
 打开扩展弹窗 → **远程** 选项卡 → 打开**远程访问开关**。服务立即重启在 `0.0.0.0`，无需重启浏览器。偏好持久化到 `~/.tabrix/config.json`，断开重连或重启浏览器后保持不变。
+
+当前 Popup 行为：
+
+- 默认选中 `Remote (Streamable HTTP)` 选项卡
+- 本地服务进入 `running` 后，会自动确保远程访问已开启
+- 若缺少 Token，会在远程配置对外可复制前自动创建默认 Bearer Token
 
 **方式二（高级 / 守护进程）：环境变量覆盖**
 
@@ -122,7 +130,27 @@ Token 管理端点（仅本机可用）：
 }
 ```
 
-连接后可在扩展 Popup「已连接的客户端」列表中查看远程 IP 并踢出不认识的会话。
+连接后可在扩展 Popup「有效活跃客户端」列表中查看远程 IP 并踢出不认识的客户端组。
+
+## `/status` 与客户端列表语义
+
+`/status` 的 `data.transports` 现在分两层表达：
+
+- `clients`：主列表语义。只返回 `active` 的客户端组，按 `clientIp + clientName + clientVersion` 归并，不再把原始 Streamable HTTP session dump 直接当成客户端列表。
+- `sessions`：排障语义。返回最近的 `active / stale / disconnected` 会话快照。
+
+新增最小治理字段：
+
+- `lastSeenAt`：最近一次请求命中该会话的时间
+- `state`：`active` / `stale` / `disconnected`
+- `sessionStates`：三种状态的当前计数
+- `cleanup`：当前 stale 判定阈值、终态保留时间、最近一次 sweep 信息
+
+最小规则：
+
+- `active`：仍在活跃窗口内的 MCP 会话，会出现在 Popup 主列表
+- `stale`：超过阈值未再活动的旧会话，会被自动移出主列表并记录到最近终态列表
+- `disconnected`：手动断开或客户端正常关闭的会话，不继续停留在主列表
 
 详见 [CLIENT_CONFIG_QUICKREF.md → 远程连接](./CLIENT_CONFIG_QUICKREF.md#远程连接跨机器--docker)。
 

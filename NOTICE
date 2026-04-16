@@ -1,0 +1,20 @@
+Tabrix Third-Party Notices
+Last updated: 2026-04-15 Asia/Shanghai
+
+Tabrix itself is distributed under the MIT License. This file is reserved for
+third-party notices that must be carried when Tabrix ships external source code,
+bundled assets, or direct dependencies with attribution requirements.
+
+Current status:
+- No new third-party source files or bundled runtime dependencies were added by
+  the 2026-04-15 third-party reuse workflow baseline itself.
+- Future direct reuse must update this file together with the matching record
+  under docs/third-party/.
+
+Required entry template:
+- Project:
+- Upstream repository or package:
+- Version / tag / commit:
+- License:
+- Shipped Tabrix path or package:
+- Required attribution text or NOTICE reference:
