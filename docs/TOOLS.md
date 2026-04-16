@@ -890,13 +890,13 @@ Recommended tool combinations by task goal.
 
 Some tools support a `background` parameter that avoids stealing window focus or activating the target tab. This is useful for automated workflows that should not interrupt the user.
 
-| Tool                 | `background` | How it works                                                                                                                                                                          |
-| -------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chrome_navigate`    | Yes          | Opens / navigates tabs without activating or focusing the window.                                                                                                                     |
-| `chrome_computer`    | Yes          | CDP-based actions (click, scroll, type, key, hover, drag) operate via the debugger protocol — no tab focus needed. `screenshot` uses CDP `Page.captureScreenshot` in background mode. |
-| `chrome_screenshot`  | Yes          | Viewport capture via CDP instead of `captureVisibleTab`; full-page and selector captures still need the tab visible.                                                                  |
-| `chrome_console`     | Yes          | CDP console capture without activating the tab.                                                                                                                                       |
-| `chrome_web_fetcher` | Yes          | Fetches page content without focusing.                                                                                                                                                |
+| Tool                     | `background` | How it works                                                                                                                                                                          |
+| ------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chrome_navigate`        | Yes          | Opens / navigates tabs without activating or focusing the window.                                                                                                                     |
+| `chrome_computer`        | Yes          | CDP-based actions (click, scroll, type, key, hover, drag) operate via the debugger protocol — no tab focus needed. `screenshot` uses CDP `Page.captureScreenshot` in background mode. |
+| `chrome_screenshot`      | Yes          | Viewport capture via CDP instead of `captureVisibleTab`; full-page and selector captures still need the tab visible.                                                                  |
+| `chrome_console`         | Yes          | CDP console capture without activating the tab.                                                                                                                                       |
+| `chrome_get_web_content` | Yes          | Fetches page content without focusing.                                                                                                                                                |
 
 Tools **not** listed above (e.g. `chrome_switch_tab`, `chrome_network_capture`, `chrome_gif_recorder`) always operate in the foreground.
 

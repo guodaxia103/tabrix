@@ -13,7 +13,8 @@
 
 ## Streamable HTTP（推荐）
 
-适用于支持 HTTP 传输的客户端。只需提供一个 URL 即可。
+Tabrix 当前正式支持 `Streamable HTTP` 和 `stdio` 两种 MCP 传输。
+对于大多数桌面客户端，优先使用 `Streamable HTTP`。
 
 ### Claude Desktop
 
@@ -182,7 +183,7 @@ pnpm list -g @tabrix/tabrix
 
 | 变量名                        | 说明                                                                                             | 默认值       |
 | ----------------------------- | ------------------------------------------------------------------------------------------------ | ------------ |
-| `CHROME_MCP_PORT`            | 当前推荐的 MCP HTTP 端口环境变量（优先级最高）                                                   | `12306`      |
+| `CHROME_MCP_PORT`             | 当前推荐的 MCP HTTP 端口环境变量（优先级最高）                                                   | `12306`      |
 | `MCP_HTTP_PORT`               | 旧兼容别名；仍可用，但新配置优先使用 `CHROME_MCP_PORT`                                           | `12306`      |
 | `MCP_HTTP_HOST`               | 监听地址覆盖（优先级高于 `~/.tabrix/config.json`；推荐用扩展开关代替）                           | `127.0.0.1`  |
 | `MCP_AUTH_TOKEN`              | 远程访问 Bearer Token（可选，设置后优先使用该值）                                                | （未设置）   |
@@ -291,7 +292,7 @@ netsh advfirewall firewall add rule name="Tabrix MCP Bridge" dir=in action=allow
 
 **第五步：确认连接**
 
-在扩展 Popup 的「已连接的客户端」列表中，应能看到远程 IP 和客户端名称。不认识的 IP 可以直接踢出。
+在扩展 Popup 的「有效活跃客户端」列表中，应能看到远程 IP 和客户端名称。不认识的 IP 可以直接踢出。
 
 **第六步（Docker 场景）**
 

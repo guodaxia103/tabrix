@@ -81,6 +81,8 @@ curl http://127.0.0.1:12306/status
 
 ## 4. Recommended MCP client config
 
+Tabrix officially supports both `Streamable HTTP` and `stdio`.
+
 For Streamable HTTP clients:
 
 ```json
@@ -89,6 +91,18 @@ For Streamable HTTP clients:
     "tabrix": {
       "type": "streamableHttp",
       "url": "http://127.0.0.1:12306/mcp"
+    }
+  }
+}
+```
+
+For stdio-only clients:
+
+```json
+{
+  "mcpServers": {
+    "tabrix": {
+      "command": "tabrix-stdio"
     }
   }
 }

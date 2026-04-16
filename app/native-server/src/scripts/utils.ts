@@ -365,8 +365,8 @@ function getSecurePreferencesPath(browser: BrowserType): string | null {
   return path.join(baseDir, 'Default', 'Secure Preferences');
 }
 
-function looksLikeChromeMcpExtensionPath(candidatePath: string): boolean {
-  return /(tabrix|mcp-chrome)/i.test(candidatePath);
+export function looksLikeTabrixExtensionPath(candidatePath: string): boolean {
+  return /tabrix/i.test(candidatePath);
 }
 
 export function discoverLoadedExtensionOrigins(targetBrowsers?: BrowserType[]): {
@@ -402,7 +402,7 @@ export function discoverLoadedExtensionOrigins(targetBrowsers?: BrowserType[]): 
       for (const [id, entry] of Object.entries(settings)) {
         const extensionEntry = entry as Record<string, unknown>;
         const extensionPath = typeof extensionEntry.path === 'string' ? extensionEntry.path : '';
-        if (!extensionPath || !looksLikeChromeMcpExtensionPath(extensionPath)) {
+        if (!extensionPath || !looksLikeTabrixExtensionPath(extensionPath)) {
           continue;
         }
 

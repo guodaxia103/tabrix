@@ -10,6 +10,12 @@ Turn real Chrome into an MCP-native AI execution layer.
 
 Tabrix is a Chrome extension + local native server that lets any MCP client operate your daily browser session safely and efficiently, with your existing logins, cookies, and browsing context.
 
+Built for the new generation of AI assistants that need to work in the browser users already trust every day.
+
+- Reuse the real logged-in Chrome session instead of rebuilding a fresh browser runtime
+- Connect through both `Streamable HTTP` and `stdio`, depending on the MCP host
+- Stay local-first, while still supporting token-protected remote access over LAN
+
 **Documentation**: [English](README.md) | [Chinese](README_zh.md)
 
 ---
@@ -25,6 +31,25 @@ Tabrix does not spin up "yet another browser." It upgrades your current Chrome i
 - Local-first architecture: browser state and data stay on your machine by default for stronger privacy and compliance control
 - Production operations built in: `tabrix status` / `doctor --fix` / `smoke` / `report`
 
+### Why Real Session Matters
+
+Many browser automation tools start from a fresh runtime. Tabrix starts from the browser your team already uses.
+
+- No login rebuild loop: keep the authenticated tabs, cookies, and extensions you already rely on
+- Better fit for real back-office work: operate CMS, ticketing, CRM, support, and ops systems inside the actual browser profile
+- Better fit for AI assistants: let Codex, Claude Desktop, Cursor, Cline, and similar clients call into a browser that already has useful context
+
+### Why Not Another Browser
+
+If your workflow depends on a real logged-in browser, the difference is immediate:
+
+| Fresh browser runtime                             | Tabrix                                                                |
+| ------------------------------------------------- | --------------------------------------------------------------------- |
+| Rebuild login and cookies again                   | Reuse the browser session you already have                            |
+| Start from blank tabs and blank context           | Start from real tabs, extensions, and live operator context           |
+| Often optimized for isolated automation runs      | Optimized for AI assistants working with a user's daily browser       |
+| Browser control alone is not enough for ops trust | Add `status`, `doctor`, `smoke`, and recovery around the control path |
+
 ### Scenario Value
 
 - More reliable compliant collection: real-session reuse reduces failures from fresh environments and blank fingerprints
@@ -38,6 +63,18 @@ Tabrix does not spin up "yet another browser." It upgrades your current Chrome i
 - Cross-tab task automation with semantic context
 - Safe web workflows with human-in-the-loop checkpoints
 - MCP toolchains that combine browser, filesystem, and APIs
+
+## First 5 Minutes
+
+One realistic first-success path:
+
+1. Keep your normal Chrome profile open with the pages you already use
+2. Install `@tabrix/tabrix`, load the extension, and click `Connect`
+3. Add Tabrix to Codex, Claude Desktop, Cursor, or another MCP client
+4. Ask the assistant to inspect the current page, list interactive elements, or navigate the next step
+5. Reuse the same browser session for follow-up clicks, fills, screenshots, and checks
+
+The first win should feel like "my assistant can finally use my real browser," not "I set up another automation sandbox."
 
 ## Quick Start (3 Minutes)
 
@@ -86,7 +123,14 @@ What to look for:
 - If Chrome/Chromium is ready, Tabrix persists the resolved path for later browser auto-launch
 - If no supported browser is detected, Tabrix stays installed but reports browser automation as not ready
 
-### 4) Connect from MCP Client (Streamable HTTP)
+### 4) Connect from MCP Client
+
+Tabrix currently supports both MCP mainline transports:
+
+- `Streamable HTTP`: default local and remote path
+- `stdio`: for CLI hosts or clients that only support stdio
+
+#### Streamable HTTP
 
 ```json
 {
@@ -94,6 +138,18 @@ What to look for:
     "tabrix": {
       "type": "streamableHttp",
       "url": "http://127.0.0.1:12306/mcp"
+    }
+  }
+}
+```
+
+#### stdio
+
+```json
+{
+  "mcpServers": {
+    "tabrix": {
+      "command": "tabrix-stdio"
     }
   }
 }
@@ -232,17 +288,16 @@ Full command reference: [CLI.md](docs/CLI.md)
 
 Full tool list: [TOOLS API (EN)](docs/TOOLS.md) | [TOOLS API (ZH)](docs/TOOLS_zh.md)
 
-## Roadmap (Open Source + Product)
+## Public Roadmap
 
-These are open collaboration directions rather than dated delivery commitments.
+Tabrix is aiming to become a top-tier browser automation execution layer for AI assistants.
+The roadmap stays public, but we keep it grounded in what the current codebase can realistically absorb next.
 
-- [ ] Smart DOM Understanding and dehydration pipeline
-- [ ] Workflow recording and deterministic replay
-- [ ] Policy-based safety and permission model
-- [ ] Team workspace and multi-operator collaboration
-- [ ] Firefox extension support
+- Now: make real-Chrome MCP access more reliable across `Streamable HTTP`, `stdio`, reconnects, and diagnostics
+- Next: ship structured page snapshots, browser auto-recovery, and stronger real-browser E2E coverage
+- Later: add URL Experience Memory, replay artifacts, and richer team collaboration workflows
 
-If you want to co-build any roadmap item, open an issue with label proposal and architecture notes.
+Read the full public roadmap: [ROADMAP.md](docs/ROADMAP.md)
 
 ## Contributing
 
@@ -298,6 +353,7 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 - [Docs Index](docs/README.md)
 - [AI Contributor Quickstart (ZH)](docs/AI_CONTRIBUTOR_QUICKSTART_zh.md)
 - [AI Development Rules (ZH)](docs/AI_DEV_RULES_zh.md)
+- [Public Roadmap](docs/ROADMAP.md)
 - [Use Cases](docs/USE_CASES.md)
 - [Product Surface Matrix](docs/PRODUCT_SURFACE_MATRIX.md)
 - [Compatibility Matrix](docs/COMPATIBILITY_MATRIX.md)

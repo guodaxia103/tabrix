@@ -10,6 +10,12 @@
 
 Tabrix 由 Chrome 扩展 + 本地原生服务组成，让任意 MCP 客户端都能安全高效地操作你日常使用的浏览器会话（保留登录态、Cookie、上下文）。
 
+面向新一代 AI 助手而设计，让模型直接工作在用户每天都在使用的浏览器里。
+
+- 复用真实登录 Chrome 会话，而不是反复重建全新浏览器运行时
+- 同时支持 `Streamable HTTP` 和 `stdio` 两条 MCP 主接入路径
+- 以本地优先为默认前提，并支持基于 Token 的局域网远程接入
+
 **文档**: [English](README.md) | [中文](README_zh.md)
 
 ---
@@ -25,6 +31,25 @@ Tabrix 不是“再开一个新浏览器”，而是把你正在使用的 Chrome
 - 本地优先架构：浏览器状态与数据默认留在本机，隐私与合规更可控
 - 面向生产运维：提供 `tabrix status` / `doctor --fix` / `smoke` / `report` 闭环能力
 
+### 为什么真实会话更重要
+
+很多浏览器自动化工具从“全新浏览器运行时”开始，而 Tabrix 从团队已经在用的浏览器开始。
+
+- 不必反复重建登录环境：直接沿用已有认证标签页、Cookie 和浏览器扩展
+- 更适合真实后台工作：在实际使用的 CMS、工单、CRM、客服和运营系统里完成操作
+- 更适合 AI 助手：让 Codex、Claude Desktop、Cursor、Cline 等客户端接入已经带上下文的浏览器
+
+### 为什么不是再开一个浏览器
+
+如果你的工作流依赖真实登录浏览器，这个差别会非常直接：
+
+| 全新浏览器运行时             | Tabrix                                          |
+| ---------------------------- | ----------------------------------------------- |
+| 重新登录、重新准备 Cookie    | 直接复用已经在用的浏览器会话                    |
+| 从空白标签页和空白上下文开始 | 从真实标签页、扩展和当前操作上下文开始          |
+| 更偏向隔离式自动化运行       | 更适合 AI 助手接入用户日常浏览器                |
+| 只有浏览器控制，不等于可运维 | 额外提供 `status`、`doctor`、`smoke` 和恢复链路 |
+
 ### 场景价值
 
 - 合规采集更稳定：复用真实会话，降低新环境与空白指纹带来的失败率
@@ -38,6 +63,18 @@ Tabrix 不是“再开一个新浏览器”，而是把你正在使用的 Chrome
 - 带语义上下文的跨标签页自动化
 - 带人工确认节点的安全网页工作流
 - 浏览器能力与文件/API 的 MCP 工具链组合
+
+## 前 5 分钟你会得到什么
+
+一个很典型的首次成功路径是：
+
+1. 保持你平时就在用的 Chrome 配置和业务页面处于打开状态
+2. 安装 `@tabrix/tabrix`，加载扩展，并点击一次 `连接`
+3. 在 Codex、Claude Desktop、Cursor 或其他 MCP 客户端中接入 Tabrix
+4. 让 AI 助手检查当前页面、列出可交互元素，或继续执行下一步导航
+5. 在同一个真实浏览器会话里继续完成点击、填写、截图和校验
+
+第一次成功的感受，应该是“AI 终于能直接用我的真实浏览器了”，而不是“我又搭了一个新的自动化沙盒”。
 
 ## 3 分钟快速开始
 
@@ -86,7 +123,14 @@ tabrix doctor --fix
 - 如果已检测到 Chrome/Chromium，Tabrix 会保存真实浏览器路径，后续自动启动优先使用它
 - 如果未检测到受支持浏览器，Tabrix 仍算安装成功，但会明确提示“浏览器自动化未就绪”
 
-### 4) MCP 客户端连接（Streamable HTTP）
+### 4) MCP 客户端连接
+
+Tabrix 当前正式支持两条 MCP 主链路：
+
+- `Streamable HTTP`：默认的本机与远程接入方式
+- `stdio`：适用于只支持 stdio 的 CLI 或 MCP 宿主
+
+#### Streamable HTTP
 
 ```json
 {
@@ -94,6 +138,18 @@ tabrix doctor --fix
     "tabrix": {
       "type": "streamableHttp",
       "url": "http://127.0.0.1:12306/mcp"
+    }
+  }
+}
+```
+
+#### stdio
+
+```json
+{
+  "mcpServers": {
+    "tabrix": {
+      "command": "tabrix-stdio"
     }
   }
 }
@@ -232,17 +288,16 @@ tabrix daemon stop
 完整工具清单：
 [工具 API (中文)](docs/TOOLS_zh.md) | [TOOLS API (EN)](docs/TOOLS.md)
 
-## 路线图（开源 + 产品）
+## 公开路线图
 
-以下内容属于公开协作方向，不代表带日期承诺的交付清单。
+Tabrix 的目标不是只做一个“能跑”的浏览器工具，而是做成面向 AI 助手的顶级真实浏览器执行层。
+路线图会保持公开，但只会写那些当前代码基线能真实承接的方向。
 
-- [ ] 智能 DOM 理解与高强度脱水管线
-- [ ] 工作流录制与可复现回放
-- [ ] 策略化安全与权限模型
-- [ ] 团队工作区与多操作者协同
-- [ ] Firefox 扩展支持
+- Now：把 `Streamable HTTP`、`stdio`、重连和诊断能力做得更稳
+- Next：补齐结构化页面快照、自动恢复、真实浏览器 E2E 回归
+- Later：演进 URL Experience Memory、replay artifact 和更强协作工作流
 
-如果你想共建路线图条目，欢迎提 issue（带 proposal 和架构思路）。
+完整公开路线图见：[ROADMAP_zh.md](docs/ROADMAP_zh.md)
 
 ## 贡献
 
@@ -297,6 +352,7 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 - [文档索引](docs/README.md)
 - [AI 贡献者快速上手](docs/AI_CONTRIBUTOR_QUICKSTART_zh.md)
 - [AI 助手开发通用规则](docs/AI_DEV_RULES_zh.md)
+- [公开路线图](docs/ROADMAP_zh.md)
 - [典型使用场景](docs/USE_CASES_zh.md)
 - [产品能力分层矩阵](docs/PRODUCT_SURFACE_MATRIX_zh.md)
 - [兼容性矩阵](docs/COMPATIBILITY_MATRIX_zh.md)

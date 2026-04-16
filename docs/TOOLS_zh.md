@@ -886,13 +886,13 @@ await callTool('chrome_bookmark_add', {
 
 部分工具支持 `background` 参数，避免抢占窗口焦点或激活目标标签页。适用于不打扰用户的自动化场景。
 
-| 工具                 | 支持 | 说明                                                                                                                 |
-| -------------------- | ---- | -------------------------------------------------------------------------------------------------------------------- |
-| `chrome_navigate`    | 是   | 打开/导航标签时不激活标签、不聚焦窗口。                                                                              |
-| `chrome_computer`    | 是   | CDP 操作（click/scroll/type/key/hover/drag）通过调试协议执行，无需 tab focus。`screenshot` 在后台模式使用 CDP 截图。 |
-| `chrome_screenshot`  | 是   | 视口截图走 CDP `Page.captureScreenshot`；全页面和选择器截图仍需标签可见。                                            |
-| `chrome_console`     | 是   | CDP 控制台采集，不激活标签。                                                                                         |
-| `chrome_web_fetcher` | 是   | 抓取页面内容时不聚焦。                                                                                               |
+| 工具                     | 支持 | 说明                                                                                                                 |
+| ------------------------ | ---- | -------------------------------------------------------------------------------------------------------------------- |
+| `chrome_navigate`        | 是   | 打开/导航标签时不激活标签、不聚焦窗口。                                                                              |
+| `chrome_computer`        | 是   | CDP 操作（click/scroll/type/key/hover/drag）通过调试协议执行，无需 tab focus。`screenshot` 在后台模式使用 CDP 截图。 |
+| `chrome_screenshot`      | 是   | 视口截图走 CDP `Page.captureScreenshot`；全页面和选择器截图仍需标签可见。                                            |
+| `chrome_console`         | 是   | CDP 控制台采集，不激活标签。                                                                                         |
+| `chrome_get_web_content` | 是   | 抓取页面内容时不聚焦。                                                                                               |
 
 **未列出的工具**（如 `chrome_switch_tab`、`chrome_network_capture`、`chrome_gif_recorder`）始终在前台操作。
 

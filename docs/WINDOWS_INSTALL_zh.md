@@ -29,9 +29,11 @@ npm install -g @tabrix/tabrix@latest
    - 点击插件图标打开插件，点击连接即可看到mcp的配置
      <img width="475" alt="截屏2025-06-09 15 52 06" src="https://github.com/user-attachments/assets/241e57b8-c55f-41a4-9188-0367293dc5bc" />
 
-4. **在 CherryStudio 中使用**
+4. **在 MCP 客户端中使用**
 
-类型选streamableHttp，url填http://127.0.0.1:12306/mcp
+Tabrix 当前正式支持 `Streamable HTTP` 和 `stdio` 两种接入方式。
+
+以 CherryStudio 的 `Streamable HTTP` 为例，类型选 `streamableHttp`，URL 填 `http://127.0.0.1:12306/mcp`
 
 <img width="675" alt="截屏2025-06-11 15 00 29" src="https://github.com/user-attachments/assets/6631e9e4-57f9-477e-b708-6a285cc0d881" />
 
@@ -43,8 +45,20 @@ npm install -g @tabrix/tabrix@latest
 {
   "mcpServers": {
     "tabrix": {
-      "type": "streamable-http",
+      "type": "streamableHttp",
       "url": "http://127.0.0.1:12306/mcp"
+    }
+  }
+}
+```
+
+如果客户端只支持 stdio，也可以直接使用：
+
+```json
+{
+  "mcpServers": {
+    "tabrix": {
+      "command": "tabrix-stdio"
     }
   }
 }

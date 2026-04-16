@@ -5,11 +5,11 @@ This guide explains how to configure Codex CLI and Claude Code to connect to Tab
 ## Overview
 
 Tabrix exposes its MCP interface at `http://127.0.0.1:12306/mcp` by default.
-Both Codex CLI and Claude Code can connect to this endpoint to use Chrome browser control tools.
+Both Codex CLI and Claude Code can connect through `Streamable HTTP`, and stdio-only hosts can use `tabrix-stdio`.
 
 ## Codex CLI Configuration
 
-### Option 1: HTTP MCP Server (Recommended)
+### Option 1: Streamable HTTP MCP Server (Recommended)
 
 Add the following to your `~/.codex/config.json`:
 
@@ -35,7 +35,7 @@ export CHROME_MCP_PORT=12306
 
 ## Claude Code Configuration
 
-### Option 1: HTTP MCP Server
+### Option 1: Streamable HTTP MCP Server
 
 Run:
 
@@ -63,8 +63,20 @@ If you prefer stdio-based MCP communication:
 {
   "mcpServers": {
     "tabrix": {
+      "command": "tabrix-stdio"
+    }
+  }
+}
+```
+
+If `tabrix-stdio` is not on `PATH`, use the script entry directly:
+
+```json
+{
+  "mcpServers": {
+    "tabrix": {
       "command": "node",
-      "args": ["/path/to/tabrix/dist/mcp/mcp-server-stdio.js"]
+      "args": ["/path/to/node_modules/@tabrix/tabrix/dist/mcp/mcp-server-stdio.js"]
     }
   }
 }
@@ -109,9 +121,9 @@ If port 12306 is already in use:
 
 ## Environment Variables
 
-| Variable                     | Description                            | Default |
-| ---------------------------- | -------------------------------------- | ------- |
-| `CHROME_MCP_PORT`           | Preferred HTTP port variable for MCP server | 12306   |
-| `MCP_HTTP_PORT`             | Backward-compatible HTTP port alias    | 12306   |
-| `MCP_ALLOWED_WORKSPACE_BASE` | Additional allowed workspace directory | (none)  |
-| `CHROME_MCP_NODE_PATH`       | Override Node.js executable path       | (auto)  |
+| Variable                     | Description                                 | Default |
+| ---------------------------- | ------------------------------------------- | ------- |
+| `CHROME_MCP_PORT`            | Preferred HTTP port variable for MCP server | 12306   |
+| `MCP_HTTP_PORT`              | Backward-compatible HTTP port alias         | 12306   |
+| `MCP_ALLOWED_WORKSPACE_BASE` | Additional allowed workspace directory      | (none)  |
+| `CHROME_MCP_NODE_PATH`       | Override Node.js executable path            | (auto)  |

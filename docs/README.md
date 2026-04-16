@@ -32,6 +32,7 @@ Implementation design notes, audits, acceptance evidence, release-gate maintenan
 - `COMPATIBILITY_MATRIX.md` / `COMPATIBILITY_MATRIX_zh.md`: current MCP client and environment compatibility posture
 - `CODE_ENTRYPOINTS_AND_OWNERSHIP_zh.md`: contributor execution map for common change types
 - `STABLE_QUICKSTART.md`: user-facing first-success path
+- `ROADMAP.md` / `ROADMAP_zh.md`: public product direction and contributor-facing future priorities
 - `USE_CASES.md` / `USE_CASES_zh.md`: realistic early-stage scenarios for new users
 - `ARCHITECTURE.md` / `ARCHITECTURE_zh.md`: public architecture overview
 - `PROJECT_STRUCTURE.md` / `PROJECT_STRUCTURE_zh.md`: codebase map and module responsibilities

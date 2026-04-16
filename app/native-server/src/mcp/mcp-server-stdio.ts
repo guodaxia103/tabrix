@@ -15,6 +15,16 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import * as fs from 'fs';
 import * as path from 'path';
 
+export const STDIO_MCP_SERVER_INFO = {
+  name: 'TabrixStdioMcpServer',
+  version: '1.0.0',
+} as const;
+
+export const STDIO_PROXY_CLIENT_INFO = {
+  name: 'Tabrix Stdio Proxy',
+  version: '1.0.0',
+} as const;
+
 let stdioMcpServer: Server | null = null;
 let mcpClient: Client | null = null;
 
@@ -34,19 +44,13 @@ export const getStdioMcpServer = () => {
   if (stdioMcpServer) {
     return stdioMcpServer;
   }
-  stdioMcpServer = new Server(
-    {
-      name: 'StdioChromeMcpServer',
-      version: '1.0.0',
+  stdioMcpServer = new Server(STDIO_MCP_SERVER_INFO, {
+    capabilities: {
+      tools: {},
+      resources: {},
+      prompts: {},
     },
-    {
-      capabilities: {
-        tools: {},
-        resources: {},
-        prompts: {},
-      },
-    },
-  );
+  });
 
   setupTools(stdioMcpServer);
   return stdioMcpServer;
@@ -62,7 +66,7 @@ export const ensureMcpClient = async () => {
     }
 
     const config = loadConfig();
-    mcpClient = new Client({ name: 'Mcp Chrome Proxy', version: '1.0.0' }, { capabilities: {} });
+    mcpClient = new Client(STDIO_PROXY_CLIENT_INFO, { capabilities: {} });
     const transport = new StreamableHTTPClientTransport(new URL(config.url), {});
     await mcpClient.connect(transport);
     return mcpClient;
@@ -155,7 +159,13 @@ async function main() {
   await getStdioMcpServer().connect(transport);
 }
 
-main().catch((error) => {
-  console.error('Fatal error Chrome MCP Server main():', error);
-  process.exit(1);
-});
+function isDirectExecution(): boolean {
+  return require.main === module;
+}
+
+if (isDirectExecution()) {
+  main().catch((error) => {
+    console.error('Fatal error Tabrix stdio MCP server main():', error);
+    process.exit(1);
+  });
+}
