@@ -40,6 +40,9 @@ jobs:
       - name: i18n check
         run: pnpm run i18n:check
 
+      - name: Docs check
+        run: pnpm run docs:check
+
       - name: Typecheck
         run: pnpm run typecheck
 
