@@ -1,9 +1,9 @@
 # Tabrix 执行看板与任务回写模板
 
-最后更新：`2026-04-15 Asia/Shanghai`
+最后更新：`2026-04-16 Asia/Shanghai`
 适用项目：`Tabrix`
 文档编号：`TPM-2026-002`
-文档版本：`v2026.04.15.6`
+文档版本：`v2026.04.16.1`
 文档状态：`active`
 飞书留档：`https://www.feishu.cn/docx/Tx7Ed9rHsocadWxmWOdckPounrd`
 
@@ -72,7 +72,7 @@
 
 | 任务 | 标题 | 级别 | 建议版本 | 当前状态 | 下一动作 |
 |------|------|------|----------|----------|----------|
-| T1 | 主线连接方式与客户端会话模型收口 | Blocker | v2.0.9 | in_progress | 收口两种连接方式、默认远程与活跃客户端治理 |
+| T1 | 主线连接方式与客户端会话模型收口 | Blocker | v2.0.9 | done | 切换到 T2 助手命令恢复链路 |
 | T2 | 助手命令恢复链路 | Blocker | v2.0.9 | todo | 收口状态机、readiness gate、按需恢复 |
 | T3 | 核心 browser tool 统一保护协议 | Blocker | v2.0.9 | todo | 统一非 web / 未稳定 / 未命中语义 |
 | T4 | 真实验收门禁化 | Blocker | v2.0.9 | todo | 固化 fast/full 与第二客户端验收 |
@@ -292,7 +292,7 @@
 
 - 启动时间：`2026-04-15`
 - 执行者：`产品线程 + Codex CLI`
-- 当前状态：`in_progress`
+- 当前状态：`done`
 - 启动原因：
   - 当前 Popup 仍暴露 `本机 / stdio / 远程` 三种模式，和项目已确认的两条主线 transport 不一致
   - 客户端列表直接展示原始 `Streamable HTTP` session 快照，导致同一客户端重连后堆积出大量无效条目
@@ -312,9 +312,37 @@
   - 包含真实助手链路验证
 - 下一次同步点：`Codex CLI 完成首轮实现与验证后`
 - 当前进展：
-  - 已完成首轮代码实现：Popup 顶层两模式收口、默认远程准备、客户端列表 active/stale/disconnected 治理
+  - 已完成 Popup 顶层两模式收口、默认远程准备、客户端列表 active/stale/disconnected 治理
+  - 已完成 `pnpm run typecheck`、`pnpm -C packages/shared build`、`pnpm run test:core`
+  - 已完成 `pnpm -C app/chrome-extension exec vitest run tests/popup-connected-clients.test.ts`
+  - 已完成 `pnpm -C app/chrome-extension build`
+  - 已完成 `stdio-smoke`
+  - 已完成带 Token 的 `Streamable HTTP smoke`
+  - 已完成真实 Popup 验证：默认 `远程`、两模式收口、客户端行文案收口、时间文案收短
+  - 已完成真实 Popup 打开前后状态对照：`active/client` 不增长
+
+### T1 主线连接方式与客户端会话模型收口
+
+- 完成时间：`2026-04-16`
+- 执行者：`产品线程 + Codex CLI`
+- 当前状态：`done`
+- 主要改动：
+  - Popup 顶层正式收口为 `远程（Streamable HTTP）` 与 `stdio`
+  - 默认配置区落在 `远程`，并默认提供带 Bearer 的可复制远程配置
+  - 客户端来源从原始 `127.0.0.1 · HTTP` 收口为语义化表达：`本机 · HTTP（免 Token）`
+  - 单会话客户端不再重复显示 `1 个会话`
+  - 顶部主标签默认只保留 `有效活跃客户端`
+- 验收结果：
   - 已完成验证：`pnpm run typecheck`、`pnpm -C packages/shared build`、`pnpm run test:core`
-  - 待补验证：真实 Chrome 扩展挂载态 Popup 验证、真实客户端接入验证、真实助手链路验证
+  - 已完成验证：`pnpm -C app/chrome-extension exec vitest run tests/popup-connected-clients.test.ts`
+  - 已完成验证：`pnpm -C app/chrome-extension build`
+  - 已完成验证：`stdio-smoke`
+  - 已完成验证：带 Token 的 `Streamable HTTP smoke`
+  - 已完成真实 Popup 验证：默认 `远程`、两模式收口、客户端行文案收口、时间文案收短
+  - 已完成真实 Popup 打开前后状态对照：`active/client` 不增长
+- 风险与遗留：
+  - 浏览器内部页 / 扩展页上的内容脚本注入报错仍需在 `T3` 统一收口为结构化失败
+- 下一任务建议：`T2 助手命令恢复链路`
 
 ### T6 第三方复用矩阵与 NOTICE 流程
 
@@ -339,6 +367,12 @@
 ---
 
 ## 11. 版本记录
+
+### v2026.04.16.1
+
+- 将 `T1` 状态收口为 `done`
+- 回写 `T1` 最终验收结果
+- 保持 `T2` 为 `todo`，不在本轮 `T1` 收口提交中提前切换状态
 
 ### v2026.04.15.6
 
