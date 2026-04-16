@@ -35,9 +35,8 @@ pnpm run audit
 
 审计门禁说明：
 
-- `pnpm run audit` 现在不再依赖已退役的 npm 旧审计端点，而是使用仓库内置的 OSV 生产依赖安全门禁。
-- 设计、范围与维护规则见：
-  [`docs/OSV_AUDIT_GATE_zh.md`](./OSV_AUDIT_GATE_zh.md)
+- `pnpm run audit` 现在不再依赖已退役的 npm 旧审计端点，而是使用仓库内置、由 `scripts/audit-prod.mjs` 实现的 OSV 生产依赖安全门禁。
+- `pnpm run release:check` 继续负责发布元数据和发布说明文件的阻断校验。
 
 如果本次版本包含新的第三方复用，还必须完成人工合规检查：
 

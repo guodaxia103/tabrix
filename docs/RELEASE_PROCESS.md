@@ -35,8 +35,8 @@ pnpm run audit
 
 Audit gate note:
 
-- `pnpm run audit` now uses the in-repo OSV production dependency gate instead of the retired npm audit endpoint.
-- See [`docs/OSV_AUDIT_GATE_zh.md`](./OSV_AUDIT_GATE_zh.md) for the current design, scope, and maintenance rules.
+- `pnpm run audit` now uses the in-repo OSV production dependency gate implemented in `scripts/audit-prod.mjs` instead of the retired npm audit endpoint.
+- `pnpm run release:check` remains the release metadata and notes gate that runs before publication.
 
 If the release includes new third-party reuse, complete these manual checks as well:
 

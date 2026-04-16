@@ -12,6 +12,7 @@ It is intended for:
 This directory does not keep internal product-management or review materials.
 
 Those materials are maintained separately as internal governance documents and should be rewritten before any public release.
+Implementation design notes, audits, acceptance evidence, release-gate maintenance notes, and governance records belong in internal docs rather than this public tree.
 
 ## What Belongs Here
 
@@ -22,9 +23,11 @@ Those materials are maintained separately as internal governance documents and s
 
 ## Naming Rules
 
-- Prefer stable filenames that do not change for minor wording updates
+- Use stable public filenames in `UPPER_SNAKE_CASE.md` form when possible
+- Chinese public variants should use the `_zh.md` suffix
 - Avoid temporary status words such as `draft`, `latest`, or `temp`
 - Do not publish internal review or planning docs under date-stamped filenames unless the document is intentionally public-facing
+- `README.md`, `README_zh.md`, `CHANGELOG.md`, and versioned release notes are maintained as explicit legacy exceptions
 
 ## Public Source Of Truth
 
