@@ -116,7 +116,7 @@ class YourNewTool extends BaseBrowserToolExecutor {
 
 - 任何外部来源都先分成 `direct`、`rewrite`、`design-only` 三类，再决定是否使用。
 - 仓库级规则以 [THIRD_PARTY_REUSE_MATRIX_zh.md](./THIRD_PARTY_REUSE_MATRIX_zh.md) 和 [THIRD_PARTY_REUSE_WORKFLOW_zh.md](./THIRD_PARTY_REUSE_WORKFLOW_zh.md) 为准。
-- 如果 PR 会引入第三方代码或直接依赖，必须更新 [`NOTICE`](../NOTICE) 并在 [docs/third-party/](./third-party/README.md) 增加来源记录。
+- 如果 PR 会引入第三方代码或直接依赖，必须更新 [`NOTICE`](../NOTICE)，并新增来源记录，例如 `docs/third-party/<project>.md`；具体规则见 [第三方复用工作流](./THIRD_PARTY_REUSE_WORKFLOW_zh.md)。
 - 如果只是参考实现后自行重写，必须补来源记录，但不更新 `NOTICE`。
 - `AGPL`、商业限制或许可证边界不清的来源，默认按 `design-only` 处理，不得把代码复制进 Tabrix。
 

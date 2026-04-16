@@ -9,7 +9,7 @@ Current status:
 - No new third-party source files or bundled runtime dependencies were added by
   the 2026-04-15 third-party reuse workflow baseline itself.
 - Future direct reuse must update this file together with the matching record
-  under docs/third-party/.
+  under `docs/third-party/<project>.md`.
 
 Required entry template:
 - Project:

@@ -9,7 +9,6 @@ Related documents:
 
 - [Third-Party Reuse Workflow](./THIRD_PARTY_REUSE_WORKFLOW.md)
 - [第三方复用工作流](./THIRD_PARTY_REUSE_WORKFLOW_zh.md)
-- [third-party source records](./third-party/README.md)
 - [`NOTICE`](../NOTICE)
 
 ## Quick Rules
@@ -52,7 +51,7 @@ Related documents:
 
 - If repository and published package licenses differ, re-evaluate based on the exact shipped package or target path before merging anything.
 - If the repo is permissive but a target subdirectory or subpackage has different terms, the target path wins.
-- Pure product/design inspiration does not update `NOTICE`, but it still requires a source record under `docs/third-party/`.
+- Pure product/design inspiration does not update `NOTICE`, but it still requires a source record such as `docs/third-party/<project>.md`.
 
 ## License Sources
 

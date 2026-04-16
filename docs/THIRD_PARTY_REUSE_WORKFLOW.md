@@ -7,7 +7,6 @@ Related documents:
 
 - [Third-Party Reuse Matrix](./THIRD_PARTY_REUSE_MATRIX.md)
 - [第三方复用矩阵](./THIRD_PARTY_REUSE_MATRIX_zh.md)
-- [third-party source records](./third-party/README.md)
 - [`NOTICE`](../NOTICE)
 
 ## 1. Classify First
@@ -33,26 +32,26 @@ Related documents:
 ### For `direct`
 
 - Update `NOTICE`
-- Add or update a source record under `docs/third-party/`
+- Add or update a source record such as `docs/third-party/<project>.md`
 - Mention project, version/commit, target path, and license in the PR
 
 ### For `rewrite`
 
 - Do not update `NOTICE`
-- Add or update a source record under `docs/third-party/`
+- Add or update a source record such as `docs/third-party/<project>.md`
 - State clearly in the PR that the implementation was rewritten locally
 
 ### For `design-only`
 
 - Do not update `NOTICE`
-- Add or update a source record under `docs/third-party/`
+- Add or update a source record such as `docs/third-party/<project>.md`
 - Mark the record as `design-only`
 
 ## 4. Source Record Convention
 
-- Store records in `docs/third-party/`
+- Store records under `docs/third-party/` when they actually exist
 - Use one file per upstream project, for example `docs/third-party/rrweb.md`
-- Reuse the template in [docs/third-party/README.md](./third-party/README.md)
+- Reuse the template below
 
 Each record should include:
 
@@ -63,6 +62,27 @@ Each record should include:
 - affected Tabrix task, PR, and file paths
 - whether `NOTICE` changed
 - what was copied, or an explicit note that no code was copied
+
+### Minimal template
+
+```md
+# <project>
+
+- Repository:
+- Reviewed version / tag / commit / package:
+- Repository license:
+- Exact package or path license used:
+- Classification: direct | rewrite | design-only
+- Tabrix task / PR:
+- Affected Tabrix paths:
+- NOTICE updated: yes | no
+
+## Notes
+
+- What was copied or depended on:
+- If rewrite/design-only, explicitly state that restricted code was not copied:
+- Follow-up checks:
+```
 
 ## 5. Fixed Rule for AGPL / Commercial Sources
 
@@ -85,7 +105,7 @@ Each record should include:
 - Did this PR use third-party code, a dependency, or a design reference?
 - Is it `direct`, `rewrite`, or `design-only`?
 - Does `NOTICE` need an update?
-- Where is the source record under `docs/third-party/`?
+- Where is the source record, for example `docs/third-party/<project>.md`?
 
 ### Release must confirm
 

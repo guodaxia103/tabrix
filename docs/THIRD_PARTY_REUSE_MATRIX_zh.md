@@ -9,7 +9,6 @@
 
 - [第三方复用工作流](./THIRD_PARTY_REUSE_WORKFLOW_zh.md)
 - [Third-Party Reuse Workflow](./THIRD_PARTY_REUSE_WORKFLOW.md)
-- [third-party 来源记录目录](./third-party/README.md)
 - [`NOTICE`](../NOTICE)
 
 ## 快速规则
@@ -67,7 +66,7 @@
 
 - 仓库许可证和 npm 包许可证不一致时，以“实际引入的包或路径”重新判断，未核清前一律不得合入。
 - 仓库主体为 MIT/Apache-2.0，但目标子目录或子包另有许可证时，以目标子目录或子包为准。
-- 只有产品思路参考、没有代码引用时，不更新 `NOTICE`，但仍应在 `docs/third-party/` 留下来源记录。
+- 只有产品思路参考、没有代码引用时，不更新 `NOTICE`，但仍应留下来源记录，例如 `docs/third-party/<project>.md`。
 
 ## 许可证核对来源
 

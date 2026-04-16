@@ -7,7 +7,6 @@
 
 - [第三方复用矩阵](./THIRD_PARTY_REUSE_MATRIX_zh.md)
 - [Third-Party Reuse Matrix](./THIRD_PARTY_REUSE_MATRIX.md)
-- [third-party 来源记录目录](./third-party/README.md)
 - [`NOTICE`](../NOTICE)
 
 ## 1. 三步判断
@@ -34,15 +33,15 @@
 
 - `直接依赖 / 直接引代码`
   - 更新 `NOTICE`
-  - 在 `docs/third-party/` 新增或更新来源记录
+  - 新增或更新来源记录，例如 `docs/third-party/<project>.md`
   - 在 PR 描述中写清项目、版本/commit、目标路径、许可证
 - `参考实现后自行重写`
   - 不更新 `NOTICE`
-  - 在 `docs/third-party/` 新增或更新来源记录
+  - 新增或更新来源记录，例如 `docs/third-party/<project>.md`
   - 在 PR 描述中写清参考仓库、参考范围、明确“未复制受限代码”
 - `仅设计参考`
   - 不更新 `NOTICE`
-  - 在 `docs/third-party/` 新增或更新来源记录
+  - 新增或更新来源记录，例如 `docs/third-party/<project>.md`
   - 在记录中标记为 `design-only`
 
 ## 2. `NOTICE` 何时更新
@@ -61,11 +60,11 @@
 
 ## 3. 来源记录规则
 
-来源记录统一放在 `docs/third-party/`，规则保持简单：
+来源记录统一按 `docs/third-party/<project>.md` 组织，规则保持简单：
 
 - 一个上游项目一个文件，例如 `docs/third-party/rrweb.md`
 - 同一项目多次使用时，在同一文件中追加新日期或新任务节
-- 文件模板见 [docs/third-party/README.md](./third-party/README.md)
+- 文件模板见下方
 
 每条来源记录至少写清：
 
@@ -76,6 +75,27 @@
 - 影响的 Tabrix 任务、PR、文件路径
 - 是否更新 `NOTICE`
 - 明确写出“复制了什么”或“没有复制代码，只参考设计/实现思路”
+
+### 最小模板
+
+```md
+# <project>
+
+- Repository:
+- Reviewed version / tag / commit / package:
+- Repository license:
+- Exact package or path license used:
+- Classification: direct | rewrite | design-only
+- Tabrix task / PR:
+- Affected Tabrix paths:
+- NOTICE updated: yes | no
+
+## Notes
+
+- What was copied or depended on:
+- If rewrite/design-only, explicitly state that restricted code was not copied:
+- Follow-up checks:
+```
 
 ## 4. AGPL / 商业限制项目的固定规则
 
@@ -98,7 +118,7 @@
 - 本 PR 是否用了第三方代码、依赖或设计参考？
 - 属于 `direct`、`rewrite` 还是 `design-only`？
 - `NOTICE` 是否需要更新？
-- `docs/third-party/` 的来源记录在哪里？
+- 来源记录在哪里，例如 `docs/third-party/<project>.md`？
 
 ### Release 必须确认
 

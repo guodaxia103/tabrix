@@ -20,7 +20,7 @@ Describe what this PR changes and why.
 
 - [ ] No third-party code, dependency, or design reference influenced this PR
 - [ ] If third-party material influenced this PR, I followed `docs/THIRD_PARTY_REUSE_MATRIX*.md` and `docs/THIRD_PARTY_REUSE_WORKFLOW*.md`
-- [ ] If required, I updated `docs/third-party/` and `NOTICE`
+- [ ] If required, I updated `docs/third-party/<project>.md` and `NOTICE`
 
 If applicable, list the upstream project, version/commit, classification (`direct` / `rewrite` / `design-only`), and source-record path:
 
