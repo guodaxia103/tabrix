@@ -31,6 +31,39 @@ tabrix report --copy
 
 By default, usernames, paths, and tokens are redacted. Use `--no-redact` if you're comfortable sharing full paths.
 
+## Browser-First GitHub Triage
+
+For visible GitHub failures, prefer a browser-first path before script-only diagnosis:
+
+1. `tabrix status`
+2. `tabrix doctor --fix`
+3. `tabrix mcp tools`
+4. Open target page in a new tab to avoid extension-page context conflict:
+
+```bash
+tabrix mcp call chrome_navigate --arg url="https://github.com/<owner>/<repo>/actions"
+tabrix mcp call chrome_read_page --arg filter=interactive --arg depth=2
+```
+
+For complex pages:
+
+1. `chrome_get_web_content` with a narrow selector
+2. `chrome_get_interactive_elements`
+3. `chrome_screenshot` for visual confirmation
+4. `chrome_javascript` fallback only when the above is insufficient
+
+If any tool call returns a structured failure with one `nextAction`, execute that action and retry immediately. This keeps triage fast and explicit.
+
+## GitHub Failure Verification
+
+You can run one quick recovery check during maintenance windows:
+
+```bash
+tabrix smoke --bridge-recovery --json
+tabrix smoke --command-channel-recovery fail-next-send --json
+tabrix smoke --command-channel-recovery fail-all-sends --json
+```
+
 ## If Connection Fails After Clicking the Connect Button on the Extension
 
 1. **Run the diagnostic tool first**

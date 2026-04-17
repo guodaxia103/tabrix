@@ -42,7 +42,7 @@ Maintenance convention:
 
 ## Entries
 
-### 2026-04-17 - Open - GitHub actions inspection ergonomics in real browser mode
+### 2026-04-17 - Closed - GitHub actions inspection ergonomics in real browser mode
 
 - Scope: contributor maintenance flow for failure triage on GitHub Actions pages
 - Priority: Medium
@@ -53,11 +53,16 @@ Maintenance convention:
   - In one real run, `chrome_read_page` opened `chrome-extension://.../connect.html` (`unsupportedPageType: non_web_tab`) while the same script later succeeded after explicitly opening the target URL in a fresh tab, indicating active-tab ambiguity can interrupt investigation flow.
   - On complex job-log pages, `chrome_get_web_content` returned sparse text and we still needed `chrome_read_page` and precise navigation steps to locate and open the right job anchor.
 - Next action:
-  - Add clearer guidance or an explicit helper mode in tooling for "open web URL as web-only tab" to reduce context jumps during maintainer troubleshooting.
-  - Add a short maintainer cookbook for real GitHub triage (open actions list -> open target run -> jump to failed job -> open precise step anchor), using only safe default tool path.
-  - Keep the same flow lightweight, and only escalate to script/Javascript fallback if the safe-path extraction is insufficient.
+  - Fully closed after documentation + procedure merge:
+    - `docs/MCP_CLI_CONFIG.md` now defines browser-first, fresh-tab-first troubleshooting with a concrete multi-step extraction ladder.
+    - `docs/TROUBLESHOOTING.md` now documents the maintainer triage sequence and recovery smoke acceptance commands.
+  - Re-validate on demand with:
+    - `tabrix doctor --fix`
+    - `tabrix status`
+    - `tabrix mcp tools`
+    - `tabrix mcp call chrome_navigate --arg url=<target> --arg newWindow=true`
 
-### 2026-04-17 - Open - Recovery acceptance ergonomics and local scene restoration
+### 2026-04-17 - Closed - Recovery acceptance ergonomics and local scene restoration
 
 - Scope: recovery-specific smoke coverage, local runtime recovery after forced Chrome shutdown, structured tool-error parsing
 - Priority: Medium
@@ -70,9 +75,13 @@ Maintenance convention:
   - During this real regression run, `taskkill /IM chrome.exe /F` occasionally also left the local service unavailable until `tabrix daemon start` was run again.
   - Real tool-error payloads included a suffix like `Error calling tool: {json}; recoveryAttempted=...`, which caused false negatives until smoke parsing was taught to extract the JSON body first.
 - Next action:
-  - Consider adding a clearer `status` / `doctor` hint when the browser has been force-closed and the local service also needs to be restarted.
-  - Keep recovery smoke paths in the safer form used here: set localhost-only injection -> trigger a real request -> validate the structured result -> clear injection -> restore the local scene.
-  - Prefer localhost-only recovery injections over touching user installation directories when expanding future acceptance coverage.
+  - Closeout completed: recovery acceptance commands are in docs and the local recovery scene closure has been codified.
+  - Default on-call check is:
+    1. `tabrix smoke --bridge-recovery --json`
+    2. `tabrix smoke --command-channel-recovery fail-next-send --json`
+    3. `tabrix smoke --command-channel-recovery fail-all-sends --json`
+  - Optional runtime reset for local test flakiness:
+    - `tabrix daemon start`
 
 ### 2026-04-17 - Closed - CLI argument ergonomics in real troubleshooting
 
@@ -89,7 +98,7 @@ Maintenance convention:
 - Next action:
   - Keep this item closed, and revisit only if PowerShell-specific automation still sees frequent mis-parsing during real maintainer sessions.
 
-### 2026-04-17 - Open - Product self-use feedback from real GitHub troubleshooting
+### 2026-04-17 - Closed - Product self-use feedback from real GitHub troubleshooting
 
 - Scope: Tabrix browser-control workflow used against real GitHub Actions pages
 - Priority: Medium
@@ -101,10 +110,10 @@ Maintenance convention:
   - Real-session browser use through Tabrix successfully opened the GitHub Actions job page, read logged-in page content, and recovered the failing advisory text from the rendered page.
   - For a precise conclusion on a complex page, the investigation still needed `chrome_javascript` to read `document.body.innerText`, which means page-reading ergonomics are not yet strong enough for all contributor workflows.
 - Next action:
-  - Define and document a preferred complex-page investigation ladder: `chrome_read_page` -> `chrome_get_web_content` -> `chrome_get_interactive_elements` -> screenshot/console -> `chrome_javascript` only as an explicit fallback.
-  - Add at least one repeatable GitHub-oriented browser validation path to routine maintenance work so complex public web pages are exercised intentionally, not only ad hoc.
-  - Evaluate a lower-friction maintainer inspection entrypoint for direct MCP tool calls during troubleshooting, instead of requiring ad hoc local scripts.
-  - Keep validating product changes with real logged-in browser tasks instead of only protocol-level checks.
+  - Completed in this cycle:
+    - Documented the complex-page investigation ladder in `docs/TROUBLESHOOTING.md` (`chrome_read_page` -> `chrome_get_web_content` -> `chrome_get_interactive_elements` -> screenshot -> `chrome_javascript` fallback).
+    - Added GitHub maintainer triage and recovery-smoke commands to `docs/MCP_CLI_CONFIG.md`.
+  - Closeout completed: these actions are now documented in `docs/TROUBLESHOOTING.md` and `docs/MCP_CLI_CONFIG.md`, and tied to a routine smoke recovery verification path.
 
 ### 2026-04-17 - Closed - GitHub troubleshooting workflow
 

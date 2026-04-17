@@ -31,6 +31,37 @@ tabrix report --copy
 
 默认情况下，用户名、路径和令牌会被脱敏。如果你需要提供完整路径，可以使用 `--no-redact`。
 
+### GitHub 排障流程（浏览器优先）
+
+对于 GitHub 页面可见失败，推荐先按“浏览器优先”流程执行，再补充日志链路：
+
+1. `tabrix status`
+2. `tabrix doctor --fix`
+3. `tabrix mcp tools`
+4. 用新标签打开目标页面，避免扩展页上下文干扰：
+
+```bash
+tabrix mcp call chrome_navigate --arg url="https://github.com/<owner>/<repo>/actions" --arg newWindow=true
+tabrix mcp call chrome_read_page --arg filter=interactive --arg depth=2
+```
+
+复杂页面按以下顺序退化：
+
+1. `chrome_get_web_content`（带窄选择器）
+2. `chrome_get_interactive_elements`
+3. `chrome_screenshot`（确认页面状态）
+4. 仅在必要时使用 `chrome_javascript`（DOM 文本回读兜底）
+
+若某一步返回结构化错误且包含单一 `nextAction`，按该动作执行后立即重试原请求，通常能最快确认恢复链路是否生效。
+
+日常维护建议跑一条恢复验收：
+
+```bash
+tabrix smoke --bridge-recovery --json
+tabrix smoke --command-channel-recovery fail-next-send --json
+tabrix smoke --command-channel-recovery fail-all-sends --json
+```
+
 ### 常见问题
 
 #### 连接成功，但是服务启动失败

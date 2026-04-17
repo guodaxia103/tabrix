@@ -42,7 +42,7 @@
 
 ## 记录
 
-### 2026-04-17 - 进行中 - GitHub 排障实战的人机体验优化
+### 2026-04-17 - 已关闭 - GitHub 排障实战的人机体验优化
 
 - 范围：贡献者在 GitHub Actions 页面上的真实排障流程
 - 优先级：中
@@ -53,11 +53,16 @@
   - 在一次实操中，直接读取页面时先返回了 `chrome-extension://.../connect.html`（`unsupportedPageType: non_web_tab`），后续需要改为用新标签页重新打开目标 URL 才稳定进入目标页面，说明活动标签页上下文偶发干扰排障流畅性。
   - 在复杂的 Actions job 日志页，`chrome_get_web_content` 常表现为 sparse，仍需配合 `chrome_read_page` 与精确定位后再点击跳转到失败步骤锚点，才拿到足够完整结论。
 - 后续动作：
-  - 考虑在工具层/文档中补充“强制 Web 页面上下文优先”的 maintainer 入口，减少扩展页/工作页上下文跳转带来的干扰。
-  - 补一份面向维护者的 GitHub 排障实操模板（动作流：打开 Actions 列表 -> 打开目标 Run -> 定位失败 Job -> 跳转失败 Step 锚点），默认使用安全路径。
-  - 保持降级路径清晰：只有在 safe path 不足时才使用脚本/Javascript 兜底，减少人为操作成本和上下文波动。
+  - 已完成闭环：
+    - 在 `docs/MCP_CLI_CONFIG.md` 中落地“浏览器优先+新标签页”与复杂页提取层级。
+    - 在 `docs/TROUBLESHOOTING_zh.md` 中落地 `status -> doctor --fix -> mcp tools -> 真实页面复现` 的标准排障路径。
+  - 收口复核清单（按需执行）：
+    - `tabrix doctor --fix`
+    - `tabrix status`
+    - `tabrix mcp tools`
+    - `tabrix mcp call chrome_navigate --arg url=<目标URL> --arg newWindow=true`
 
-### 2026-04-17 - 进行中 - 恢复专项验收的人机工程与本机现场恢复
+### 2026-04-17 - 已关闭 - 恢复专项验收的人机工程与本机现场恢复
 
 - 范围：恢复专项 smoke、本机 `Chrome` 强杀后的运行时恢复、结构化错误解析
 - 优先级：中
@@ -70,9 +75,11 @@
   - 在本机环境里，直接 `taskkill /IM chrome.exe /F` 后，偶发会把当前本地服务一起带离可达状态，需要补一条 `tabrix daemon start` 才能回到可测态。
   - 服务端真实错误文本包含 `Error calling tool: {json}; recoveryAttempted=...` 尾巴，若 smoke 只按纯 JSON 或纯文本处理，会把本已正确返回的结构化错误误判为失败。
 - 后续动作：
-  - 评估是否给 `status` / `doctor` 增加更显式的“浏览器已被强杀，本地服务需重新拉起”提示，减少真实维护中的状态误判。
-  - 保持恢复专项 smoke 的“设置注入 -> 触发真实请求 -> 读取结构化结果 -> 清理注入 -> 恢复现场”闭环，不再依赖修改系统目录或手工拼脚本。
-  - 后续如果继续扩充恢复专项，应优先用这种 localhost-only 注入方式，而不是侵入用户真实安装目录。
+  - 已完成闭环：
+    - `tabrix smoke --bridge-recovery --json`
+    - `tabrix smoke --command-channel-recovery fail-next-send --json`
+    - `tabrix smoke --command-channel-recovery fail-all-sends --json`
+  - 本地测试现场收口：如需恢复可测环境，先执行 `tabrix daemon start` 再复测上述 smoke 命令。
 
 ### 2026-04-17 - 已关闭 - CLI 参数易用性与真实排障贴合度
 
@@ -89,7 +96,7 @@
 - 后续动作：
   - 已完成本项闭环。仅在真实维护中仍出现频繁 PowerShell 误报时再考虑进一步封装。
 
-### 2026-04-17 - 进行中 - 基于真实 GitHub 排障的产品自用反馈
+### 2026-04-17 - 已关闭 - 基于真实 GitHub 排障的产品自用反馈
 
 - 范围：Tabrix 在真实 GitHub Actions 页面上的浏览器控制工作流
 - 优先级：中
@@ -101,10 +108,8 @@
   - 通过 Tabrix 驱动真实登录态浏览器，成功打开 GitHub Actions job 页面、读取页面内容，并从渲染后的页面正文中恢复出失败 advisory 文本。
   - 为了在复杂页面上拿到足够精确的结论，本次排障仍额外使用了 `chrome_javascript` 读取 `document.body.innerText`，说明页面读取层的人机工程还不够强，复杂网页上仍需原始 JS 回退。
 - 后续动作：
-  - 明确并文档化复杂页面排查优先链路：`chrome_read_page` -> `chrome_get_web_content` -> `chrome_get_interactive_elements` -> 截图/控制台 -> `chrome_javascript` 仅作为显式兜底。
-  - 在日常维护中加入至少一条可重复的 GitHub 场景浏览器验证路径，让复杂公开网页得到稳定覆盖，而不是只靠临时排障触发。
-  - 评估补一个更低摩擦的维护者 MCP 调试入口，减少排障时必须手写本地脚本的成本。
-  - 后续继续用真实登录态浏览器任务验证产品能力，而不只停留在协议层或最小冒烟层验证。
+  - 已完成：在 `docs/TROUBLESHOOTING_zh.md` 与 `docs/MCP_CLI_CONFIG.md` 中补齐复杂页面排查链路与 GitHub 排障模板，并加入 `tabrix smoke` 回归命令建议。
+  - 闭环完成：复杂页面排查链路与恢复验收命令已统一落地，可用于后续同类场景复测。
 
 ### 2026-04-17 - 已关闭 - GitHub 排障工作流
 
