@@ -17,6 +17,7 @@ import { runReport } from './scripts/report';
 import { runStatus } from './scripts/status';
 import { runConfig } from './scripts/config';
 import { runClients } from './scripts/clients';
+import { runMcpCall, runMcpTools } from './scripts/mcp-inspect';
 import { runSmoke } from './scripts/smoke';
 import { runStdioSmoke } from './scripts/stdio-smoke';
 import { runSetup } from './scripts/setup';
@@ -58,6 +59,8 @@ Quick Start
   tabrix doctor --fix
   tabrix config
   tabrix clients
+  tabrix mcp tools
+  tabrix mcp call get_windows_and_tabs
   tabrix smoke
 
 Common Workflows
@@ -68,6 +71,7 @@ Common Workflows
     tabrix doctor --fix
     tabrix config
     tabrix clients
+    tabrix mcp tools
     tabrix report --copy
 
   Daemon mode
@@ -332,6 +336,69 @@ program
       process.exit(exitCode);
     } catch (error: any) {
       console.error(colorText(`Clients failed: ${error.message}`, 'red'));
+      process.exit(1);
+    }
+  });
+
+const mcpCommand = program.command('mcp').description('Inspect the local or remote MCP endpoint');
+
+mcpCommand.addHelpText(
+  'after',
+  `
+Examples
+  List tools from the local Tabrix MCP runtime
+    tabrix mcp tools
+
+  Inspect a GitHub repo page in the current browser session
+    tabrix mcp call chrome_read_page --args '{"tabId":1850319377,"filter":"interactive","depth":2}'
+
+  Triage a remote Tabrix MCP endpoint over LAN
+    tabrix mcp tools --url http://192.168.1.50:12306/mcp --auth-token <token>
+`,
+);
+
+mcpCommand
+  .command('tools')
+  .description('List tools exposed by the target Streamable HTTP MCP endpoint')
+  .option('--json', 'Output tools as JSON')
+  .option('--url <mcp-url>', 'Target MCP endpoint URL (default: current local Tabrix MCP URL)')
+  .option('--auth-token <token>', 'Bearer token for remote MCP endpoints')
+  .option('--timeout <ms>', 'Request timeout in milliseconds', '15000')
+  .action(async (options) => {
+    try {
+      const exitCode = await runMcpTools({
+        json: Boolean(options.json),
+        url: options.url,
+        authToken: options.authToken,
+        timeoutMs: options.timeout ? parseInt(options.timeout, 10) : undefined,
+      });
+      process.exit(exitCode);
+    } catch (error: any) {
+      console.error(colorText(`MCP tools failed: ${error.message}`, 'red'));
+      process.exit(1);
+    }
+  });
+
+mcpCommand
+  .command('call <toolName>')
+  .description('Call a tool on the target Streamable HTTP MCP endpoint')
+  .option('--args <json>', 'Tool arguments as a JSON object string', '{}')
+  .option('--json', 'Output result as JSON')
+  .option('--url <mcp-url>', 'Target MCP endpoint URL (default: current local Tabrix MCP URL)')
+  .option('--auth-token <token>', 'Bearer token for remote MCP endpoints')
+  .option('--timeout <ms>', 'Request timeout in milliseconds', '30000')
+  .action(async (toolName: string, options) => {
+    try {
+      const exitCode = await runMcpCall(toolName, {
+        args: options.args,
+        json: Boolean(options.json),
+        url: options.url,
+        authToken: options.authToken,
+        timeoutMs: options.timeout ? parseInt(options.timeout, 10) : undefined,
+      });
+      process.exit(exitCode);
+    } catch (error: any) {
+      console.error(colorText(`MCP call failed: ${error.message}`, 'red'));
       process.exit(1);
     }
   });
