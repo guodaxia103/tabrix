@@ -1,4 +1,5 @@
 import { describeBridgeStatusForDoctor } from './doctor';
+import { COMMAND_NAME } from './constant';
 
 describe('describeBridgeStatusForDoctor', () => {
   it('describes browser-not-running state with non-invasive guidance', () => {
@@ -9,8 +10,8 @@ describe('describeBridgeStatusForDoctor', () => {
     });
 
     expect(guidance.summary).toBe('浏览器未运行');
-    expect(guidance.hint).toContain('不会在普通状态检查时私自启动浏览器');
-    expect(guidance.fix).toContain('手动打开 Chrome 后重试');
+    expect(guidance.hint).toContain('普通状态检查中自启动');
+    expect(guidance.fix).toContain('等待自动启动完成后重试一次');
   });
 
   it('describes extension-unavailable state with extension-specific fixes', () => {
@@ -21,9 +22,9 @@ describe('describeBridgeStatusForDoctor', () => {
       },
     });
 
-    expect(guidance.summary).toBe('浏览器已运行，但扩展不可用');
-    expect(guidance.hint).toContain('检查扩展是否安装');
-    expect(guidance.fix).toContain('在 chrome://extensions 中刷新 Tabrix 扩展');
+    expect(guidance.summary).toBe('浏览器已运行但扩展不可用');
+    expect(guidance.hint).toContain('扩展连接路径');
+    expect(guidance.fix).toContain('在 chrome://extensions 中确认 Tabrix 扩展已安装并启用');
   });
 
   it('describes ready state without extra recovery steps', () => {
@@ -33,9 +34,23 @@ describe('describeBridgeStatusForDoctor', () => {
       },
     });
 
-    expect(guidance.summary).toBe('桥接已就绪');
+    expect(guidance.summary).toBe('桥接可用');
     expect(guidance.fix).toHaveLength(0);
     expect(guidance.nextSteps).toHaveLength(0);
+  });
+
+  it('describes ready state with recoverable failure hint as single recovery action', () => {
+    const guidance = describeBridgeStatusForDoctor({
+      bridge: {
+        bridgeState: 'READY',
+        lastBridgeErrorCode: 'TABRIX_BRIDGE_RECOVERY_FAILED',
+      },
+    });
+
+    expect(guidance.summary).toBe('桥接可用');
+    expect(guidance.fix).toEqual([`${COMMAND_NAME} doctor --fix 后重试`]);
+    expect(guidance.nextSteps).toEqual([`${COMMAND_NAME} doctor --fix 后重试`]);
+    expect(guidance.nextAction).toBe(`${COMMAND_NAME} doctor --fix 后重试`);
   });
 
   it('describes degraded state as command-channel issue when heartbeat exists but channel is missing', () => {
@@ -46,9 +61,9 @@ describe('describeBridgeStatusForDoctor', () => {
       },
     });
 
-    expect(guidance.summary).toBe('桥接暂时降级');
-    expect(guidance.hint).toContain('执行桥尚未 ready');
-    expect(guidance.fix).toContain('在 chrome://extensions 中刷新 Tabrix 扩展');
+    expect(guidance.summary).toBe('桥接降级');
+    expect(guidance.hint).toContain('桥接仍可恢复');
+    expect(guidance.fix).toContain('等待执行通道恢复后重试一次');
   });
 
   it('describes degraded state as transient when command channel is still connected', () => {
@@ -60,8 +75,8 @@ describe('describeBridgeStatusForDoctor', () => {
       },
     });
 
-    expect(guidance.summary).toBe('桥接暂时降级');
-    expect(guidance.hint).toContain('websocket');
-    expect(guidance.nextSteps).toContain('tabrix smoke');
+    expect(guidance.summary).toBe('桥接降级');
+    expect(guidance.hint).toContain('桥接仍可恢复');
+    expect(guidance.nextSteps).toContain('等待桥接稳定后重试一次');
   });
 });

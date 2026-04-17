@@ -3,7 +3,7 @@
   "description": "Tabrix browser extension to expose Chrome capabilities as an MCP service",
   "author": "guodaxia103",
   "private": true,
-  "version": "2.0.8",
+  "version": "2.0.9",
   "type": "module",
   "scripts": {
     "ensure:key": "node ./scripts/ensure-extension-key.cjs",

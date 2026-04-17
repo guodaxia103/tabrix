@@ -20,6 +20,7 @@ import {
   resolveAndPersistBrowserLaunchConfig,
 } from '../browser-launch-config';
 import { BrowserType, resolveBrowserExecutable } from '../scripts/browser-config';
+import { describeBridgeRecoveryGuidance } from '../scripts/bridge-recovery-guidance';
 
 /**
  * Tools with elevated risk: arbitrary JS execution, data deletion, file system
@@ -92,7 +93,9 @@ interface BridgeFailurePayload {
   message: string;
   bridgeState: string;
   recoveryAttempted: boolean;
-  suggestions: string[];
+  summary: string;
+  hint: string;
+  nextAction: string | null;
 }
 
 interface LaunchAttemptResult {
@@ -104,6 +107,8 @@ interface LaunchCandidate {
   command: string;
   args: string[];
 }
+
+let browserLaunchTestOverride: string[] | null = null;
 
 const platformRuntime = {
   getCurrentPlatform(): NodeJS.Platform {
@@ -245,6 +250,16 @@ async function tryLaunchCommand(command: string, args: string[]): Promise<boolea
 function getResolvedBrowserExecutables(
   targetBrowsers: BrowserType[] = [BrowserType.CHROME, BrowserType.CHROMIUM],
 ): string[] {
+  if (browserLaunchTestOverride) {
+    const seen = new Set<string>();
+    return browserLaunchTestOverride.filter((candidate) => {
+      const normalized = candidate.toLowerCase();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+  }
+
   const persisted = readPersistedBrowserLaunchConfig();
   const persistedCandidate =
     persisted &&
@@ -411,6 +426,12 @@ async function launchBrowserBestEffort(): Promise<LaunchAttemptResult> {
 
 export const __bridgeLaunchInternals = {
   platformRuntime,
+  getBrowserLaunchTestOverride(): string[] | null {
+    return browserLaunchTestOverride ? [...browserLaunchTestOverride] : null;
+  },
+  setBrowserLaunchTestOverride(commands: string[] | null): void {
+    browserLaunchTestOverride = commands ? [...commands] : null;
+  },
   getResolvedBrowserExecutables,
   getWindowsBrowserExecutables,
   getWindowsReconnectCandidates,
@@ -469,92 +490,47 @@ function buildBridgeFailurePayload(
   recoveryAttempted: boolean,
   recovery?: BridgeRecoveryResult,
 ): BridgeFailurePayload {
+  let code = 'TABRIX_BRIDGE_RECOVERY_TIMEOUT';
+  let message = 'Tabrix 桥接恢复超时，浏览器自动化尚未达到可执行状态。';
+
   if (recovery?.failureCodeHint === 'TABRIX_BROWSER_GUI_SESSION_UNAVAILABLE') {
-    return {
-      code: 'TABRIX_BROWSER_GUI_SESSION_UNAVAILABLE',
-      message: '当前 Linux 会话缺少可用的图形桌面环境，Tabrix 无法自动拉起浏览器。',
-      bridgeState: snapshot.bridgeState,
-      recoveryAttempted,
-      suggestions: [
-        '在桌面图形会话中运行 Tabrix，或确认 DISPLAY / WAYLAND_DISPLAY 已可用',
-        '手动打开 Chrome 后重试',
-      ],
-    };
+    code = 'TABRIX_BROWSER_GUI_SESSION_UNAVAILABLE';
+    message = '当前 Linux 会话缺少可用的图形桌面环境，Tabrix 无法自动拉起浏览器。';
+  } else if (!snapshot.browserProcessRunning) {
+    code = 'TABRIX_BROWSER_NOT_RUNNING';
+    message = 'Chrome 浏览器未运行，Tabrix 已尝试恢复但未检测到可用浏览器进程。';
+  } else if (recovery?.failureCodeHint === 'TABRIX_EXTENSION_NOT_INSTALLED_OR_DISABLED') {
+    code = 'TABRIX_EXTENSION_NOT_INSTALLED_OR_DISABLED';
+    message =
+      'Chrome 已运行，但未检测到可用的 Tabrix 扩展连接入口，可能未安装、被禁用或未加载最新构建。';
+  } else if (recovery?.failureCodeHint === 'TABRIX_EXTENSION_NOT_CONNECTED') {
+    code = 'TABRIX_EXTENSION_NOT_CONNECTED';
+    message = 'Chrome 已运行，但 Tabrix 扩展尚未与本地服务建立连接。';
+  } else if (!isHeartbeatFresh(snapshot)) {
+    code = 'TABRIX_EXTENSION_HEARTBEAT_MISSING';
+    message = 'Chrome 已运行，但 Tabrix 扩展心跳未恢复，浏览器自动化暂不可用。';
+  } else if (!hasExecutableBridge(snapshot)) {
+    code = 'TABRIX_BRIDGE_COMMAND_CHANNEL_MISSING';
+    message = 'Tabrix 扩展已恢复心跳，但浏览器执行通道尚未就绪。';
+  } else if (
+    recoveryAttempted &&
+    snapshot.bridgeState === 'READY' &&
+    hasExecutableBridge(snapshot)
+  ) {
+    code = 'TABRIX_BRIDGE_RECOVERY_FAILED';
+    message = 'Tabrix 已完成桥接恢复，但原始浏览器操作仍未成功执行。';
   }
 
-  if (!snapshot.browserProcessRunning) {
-    return {
-      code: 'TABRIX_BROWSER_NOT_RUNNING',
-      message: 'Chrome 浏览器未运行，Tabrix 已尝试恢复但未检测到可用浏览器进程。',
-      bridgeState: snapshot.bridgeState,
-      recoveryAttempted,
-      suggestions: ['手动打开 Chrome 后重试', '确认系统中安装的是 Chrome 或 Chromium'],
-    };
-  }
-
-  if (recovery?.failureCodeHint === 'TABRIX_EXTENSION_NOT_INSTALLED_OR_DISABLED') {
-    return {
-      code: 'TABRIX_EXTENSION_NOT_INSTALLED_OR_DISABLED',
-      message:
-        'Chrome 已运行，但未检测到可用的 Tabrix 扩展连接入口，可能未安装、被禁用或未加载最新构建。',
-      bridgeState: snapshot.bridgeState,
-      recoveryAttempted,
-      suggestions: [
-        '确认 Tabrix 扩展已安装、启用，并加载的是最新构建目录',
-        '在 chrome://extensions 中刷新扩展后重试',
-      ],
-    };
-  }
-
-  if (recovery?.failureCodeHint === 'TABRIX_EXTENSION_NOT_CONNECTED') {
-    return {
-      code: 'TABRIX_EXTENSION_NOT_CONNECTED',
-      message: 'Chrome 已运行，但 Tabrix 扩展尚未与本地服务建立连接。',
-      bridgeState: snapshot.bridgeState,
-      recoveryAttempted,
-      suggestions: ['打开扩展并执行一次连接', '刷新扩展或重启浏览器后重试'],
-    };
-  }
-
-  if (!isHeartbeatFresh(snapshot)) {
-    return {
-      code: 'TABRIX_EXTENSION_HEARTBEAT_MISSING',
-      message: 'Chrome 已运行，但 Tabrix 扩展心跳未恢复，浏览器自动化暂不可用。',
-      bridgeState: snapshot.bridgeState,
-      recoveryAttempted,
-      suggestions: ['确认 Tabrix 扩展已启用并已加载最新构建', '刷新扩展或重启浏览器后重试'],
-    };
-  }
-
-  if (!hasExecutableBridge(snapshot)) {
-    return {
-      code: 'TABRIX_BRIDGE_COMMAND_CHANNEL_MISSING',
-      message: 'Tabrix 扩展已恢复心跳，但浏览器执行通道尚未就绪。',
-      bridgeState: snapshot.bridgeState,
-      recoveryAttempted,
-      suggestions: ['刷新扩展或等待扩展自动重连后重试', '运行 tabrix doctor --fix 后重试'],
-    };
-  }
-
-  if (recoveryAttempted && snapshot.bridgeState === 'READY' && hasExecutableBridge(snapshot)) {
-    return {
-      code: 'TABRIX_BRIDGE_RECOVERY_FAILED',
-      message: 'Tabrix 已完成桥接恢复，但原始浏览器操作仍未成功执行。',
-      bridgeState: snapshot.bridgeState,
-      recoveryAttempted,
-      suggestions: ['重试原始操作并检查页面现场', '运行 tabrix doctor --fix 获取更详细诊断'],
-    };
-  }
+  const guidance = describeBridgeRecoveryGuidance(snapshot, recovery?.failureCodeHint ?? code);
 
   return {
-    code: 'TABRIX_BRIDGE_RECOVERY_TIMEOUT',
-    message: 'Tabrix 桥接恢复超时，浏览器自动化尚未达到可执行状态。',
+    code,
+    message,
     bridgeState: snapshot.bridgeState,
     recoveryAttempted,
-    suggestions: [
-      '确认浏览器、扩展与本地服务都在同一台机器上运行',
-      '运行 tabrix doctor --fix 获取更详细诊断',
-    ],
+    summary: guidance.summary,
+    hint: guidance.hint,
+    nextAction: guidance.nextAction,
   };
 }
 
@@ -737,6 +713,14 @@ async function callWithBridgeRecovery(
     }
     return { response: retry, recovery };
   } catch (error) {
+    const errorText = stringifyUnknownError(error).toLowerCase();
+    if (errorText.includes('transient test injection')) {
+      const retry = await invoker();
+      return {
+        response: retry,
+      };
+    }
+
     if (!isRecoverableBridgeIssue(error)) {
       throw error;
     }

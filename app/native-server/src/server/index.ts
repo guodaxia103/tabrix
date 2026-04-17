@@ -25,6 +25,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { randomUUID } from 'node:crypto';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { createMcpServer } from '../mcp/mcp-server';
+import { __bridgeLaunchInternals } from '../mcp/register-tools';
 import { AgentStreamManager } from '../agent/stream-manager';
 import { AgentChatService } from '../agent/chat-service';
 import { CodexEngine } from '../agent/engines/codex';
@@ -34,8 +35,16 @@ import { registerAgentRoutes } from './routes';
 import { sessionManager } from '../execution/session-manager';
 import { SessionRegistry, type ConnectedClient, type TransportsSnapshot } from './session-registry';
 import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from './bridge-state';
-import { bridgeCommandChannel } from './bridge-command-channel';
+import {
+  bridgeCommandChannel,
+  __bridgeCommandChannelInternals,
+  type BridgeCommandChannelTestMode,
+} from './bridge-command-channel';
 import fileHandler from '../file-handler';
+import {
+  describeBridgeRecoveryGuidance,
+  type BridgeRecoveryGuidance,
+} from '../scripts/bridge-recovery-guidance';
 
 // Compatibility guard:
 // @hono/node-server may call socket.destroySoon() while draining incoming requests.
@@ -95,6 +104,14 @@ interface BridgeRecoveryFinishPayload {
   errorMessage?: unknown;
 }
 
+interface BridgeTestingBrowserLaunchOverridePayload {
+  commands?: unknown;
+}
+
+interface BridgeTestingCommandChannelPayload {
+  mode?: unknown;
+}
+
 interface ServerStatusSnapshot {
   isRunning: boolean;
   host: string;
@@ -103,7 +120,9 @@ interface ServerStatusSnapshot {
   authEnabled: boolean;
   securityWarning?: string;
   nativeHostAttached: boolean;
-  bridge: BridgeRuntimeSnapshot;
+  bridge: BridgeRuntimeSnapshot & {
+    guidance: BridgeRecoveryGuidance;
+  };
   transports: TransportsSnapshot;
   execution: {
     tasks: {
@@ -581,6 +600,82 @@ export class Server {
         });
       },
     );
+
+    this.fastify.post(
+      '/bridge/testing/browser-launch-override',
+      async (
+        request: FastifyRequest<{ Body: BridgeTestingBrowserLaunchOverridePayload }>,
+        reply: FastifyReply,
+      ) => {
+        if (!LOCALHOST_IPS.has(request.ip)) {
+          return reply.status(403).send({
+            status: 'error',
+            message: 'Forbidden – bridge testing overrides are only available from localhost.',
+          });
+        }
+
+        const body = (request.body || {}) as BridgeTestingBrowserLaunchOverridePayload;
+        const commands = Array.isArray(body.commands)
+          ? body.commands
+              .filter((command): command is string => typeof command === 'string')
+              .map((command) => command.trim())
+              .filter(Boolean)
+          : null;
+
+        __bridgeLaunchInternals.setBrowserLaunchTestOverride(
+          commands && commands.length > 0 ? commands : null,
+        );
+
+        return reply.status(HTTP_STATUS.OK).send({
+          status: 'ok',
+          data: {
+            commands: __bridgeLaunchInternals.getBrowserLaunchTestOverride(),
+            recordedAt: Date.now(),
+          },
+        });
+      },
+    );
+
+    this.fastify.post(
+      '/bridge/testing/command-channel',
+      async (
+        request: FastifyRequest<{ Body: BridgeTestingCommandChannelPayload }>,
+        reply: FastifyReply,
+      ) => {
+        if (!LOCALHOST_IPS.has(request.ip)) {
+          return reply.status(403).send({
+            status: 'error',
+            message: 'Forbidden – command channel testing is only available from localhost.',
+          });
+        }
+
+        const body = (request.body || {}) as BridgeTestingCommandChannelPayload;
+        const rawMode = typeof body.mode === 'string' ? body.mode.trim() : '';
+        const resolvedMode =
+          rawMode === 'normal' ||
+          rawMode === 'fail-next-send' ||
+          rawMode === 'fail-all-sends' ||
+          rawMode === 'unavailable'
+            ? (rawMode as BridgeCommandChannelTestMode)
+            : undefined;
+
+        if (!resolvedMode) {
+          return reply.status(HTTP_STATUS.BAD_REQUEST).send({
+            status: 'error',
+            message: 'Invalid mode for command channel testing',
+          });
+        }
+
+        __bridgeCommandChannelInternals.setTestMode(resolvedMode);
+        return reply.status(HTTP_STATUS.OK).send({
+          status: 'ok',
+          data: {
+            mode: resolvedMode,
+            recordedAt: Date.now(),
+          },
+        });
+      },
+    );
   }
 
   // ============================================================
@@ -842,7 +937,10 @@ export class Server {
       authEnabled,
       ...(securityWarning && { securityWarning }),
       nativeHostAttached: this.nativeHost !== null,
-      bridge,
+      bridge: {
+        ...bridge,
+        guidance: describeBridgeRecoveryGuidance(bridge, bridge.lastBridgeErrorCode),
+      },
       transports: this.sessions.snapshot(),
       execution: {
         tasks: {

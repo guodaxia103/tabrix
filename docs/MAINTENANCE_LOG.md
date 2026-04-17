@@ -42,6 +42,23 @@ Maintenance convention:
 
 ## Entries
 
+### 2026-04-17 - Open - Recovery acceptance ergonomics and local scene restoration
+
+- Scope: recovery-specific smoke coverage, local runtime recovery after forced Chrome shutdown, structured tool-error parsing
+- Priority: Medium
+- Owner: Maintainers / contributors
+- Related: `tabrix smoke --bridge-recovery`, `tabrix smoke --browser-path-unavailable`, `tabrix daemon start`
+- Summary: The recovery loop now covers real auto-launch, unavailable-browser-path, and partial-recovery failure cases, but real maintainer use still surfaced two operational facts worth preserving: forcing Chrome closed can require an explicit local daemon restart on this machine, and real tool failures may arrive wrapped as `Error calling tool: {json}; ...`, so acceptance tooling must strip that wrapper to read the structured result reliably.
+- Evidence:
+  - The real path `Chrome not running -> real browser request -> auto-launch -> original request succeeds` passed, and the local browser scene was restored to a closed state afterward.
+  - The new `tabrix smoke --browser-path-unavailable` path now reproduces `TABRIX_BROWSER_NOT_RUNNING` with one single `nextAction` without mutating the system `chrome.exe`.
+  - During this real regression run, `taskkill /IM chrome.exe /F` occasionally also left the local service unavailable until `tabrix daemon start` was run again.
+  - Real tool-error payloads included a suffix like `Error calling tool: {json}; recoveryAttempted=...`, which caused false negatives until smoke parsing was taught to extract the JSON body first.
+- Next action:
+  - Consider adding a clearer `status` / `doctor` hint when the browser has been force-closed and the local service also needs to be restarted.
+  - Keep recovery smoke paths in the safer form used here: set localhost-only injection -> trigger a real request -> validate the structured result -> clear injection -> restore the local scene.
+  - Prefer localhost-only recovery injections over touching user installation directories when expanding future acceptance coverage.
+
 ### 2026-04-17 - Open - CLI argument ergonomics in real troubleshooting
 
 - Scope: real maintainer use of `tabrix mcp call --args` from PowerShell

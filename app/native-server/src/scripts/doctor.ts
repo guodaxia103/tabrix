@@ -34,6 +34,10 @@ import {
 import { daemonStart, daemonStatus, daemonStop } from './daemon';
 import { collectRuntimeConsistencySnapshot } from './runtime-consistency';
 import {
+  describeBridgeRecoveryGuidance,
+  type BridgeRecoveryGuidance,
+} from './bridge-recovery-guidance';
+import {
   HTTP_STATUS,
   NATIVE_SERVER_PORT,
   SERVER_CONFIG,
@@ -130,12 +134,7 @@ interface SqliteBindingProbeResult {
   error?: string;
 }
 
-interface DoctorBridgeGuidance {
-  summary: string;
-  hint: string;
-  fix: string[];
-  nextSteps: string[];
-}
+type DoctorBridgeGuidance = BridgeRecoveryGuidance;
 
 // ============================================================================
 // Utility Functions
@@ -328,91 +327,18 @@ export function describeBridgeStatusForDoctor(
     snapshot && typeof snapshot.bridge === 'object' && snapshot.bridge !== null
       ? (snapshot.bridge as Record<string, unknown>)
       : undefined;
-  const bridgeState = typeof bridge?.bridgeState === 'string' ? bridge.bridgeState : undefined;
-  const lastErrorCode =
-    typeof bridge?.lastBridgeErrorCode === 'string' ? bridge.lastBridgeErrorCode : undefined;
-  const commandChannelConnected =
-    typeof bridge?.commandChannelConnected === 'boolean' ? bridge.commandChannelConnected : false;
-  const commandChannelType =
-    typeof bridge?.commandChannelType === 'string' ? bridge.commandChannelType : undefined;
-
-  switch (bridgeState) {
-    case 'READY':
-      return {
-        summary: '桥接已就绪',
-        hint: '浏览器、扩展与本地服务的主链路已连通。',
-        fix: [],
-        nextSteps: [],
-      };
-    case 'BROWSER_NOT_RUNNING':
-      return {
-        summary: '浏览器未运行',
-        hint: 'Tabrix 不会在普通状态检查时私自启动浏览器；收到浏览器任务时才会按需拉起。',
-        fix: ['手动打开 Chrome 后重试', `${COMMAND_NAME} status`, `${COMMAND_NAME} smoke`],
-        nextSteps: ['手动打开 Chrome 后重试', `${COMMAND_NAME} status`],
-      };
-    case 'BROWSER_RUNNING_EXTENSION_UNAVAILABLE':
-      return {
-        summary:
-          lastErrorCode === 'TABRIX_EXTENSION_NOT_INSTALLED_OR_DISABLED'
-            ? '浏览器已运行，但扩展不可用'
-            : '浏览器已运行，但扩展尚未连接',
-        hint:
-          lastErrorCode === 'TABRIX_EXTENSION_NOT_INSTALLED_OR_DISABLED'
-            ? '检查扩展是否安装、启用，并确认加载的是最新构建目录。'
-            : '浏览器进程已存在，但扩展心跳尚未恢复，通常需要刷新扩展或重连。',
-        fix: [
-          '在 chrome://extensions 中刷新 Tabrix 扩展',
-          '打开扩展并执行一次连接',
-          `${COMMAND_NAME} status`,
-        ],
-        nextSteps: ['在 chrome://extensions 中刷新 Tabrix 扩展', '打开扩展并执行一次连接'],
-      };
-    case 'BRIDGE_CONNECTING':
-      return {
-        summary: '桥接正在恢复',
-        hint: '服务已开始执行自动恢复，请稍后再试一次。',
-        fix: [`${COMMAND_NAME} status`],
-        nextSteps: [`${COMMAND_NAME} status`],
-      };
-    case 'BRIDGE_DEGRADED':
-      return {
-        summary: '桥接暂时降级',
-        hint: commandChannelConnected
-          ? `扩展最近仍在通过${commandChannelType || '执行桥'}回连，但心跳或执行链路正在波动。`
-          : '浏览器与扩展最近有活动，但当前执行桥尚未 ready；通常需要等待重连或刷新扩展。',
-        fix: commandChannelConnected
-          ? [`${COMMAND_NAME} status`, `${COMMAND_NAME} smoke`, `${COMMAND_NAME} doctor --fix`]
-          : [
-              '在 chrome://extensions 中刷新 Tabrix 扩展',
-              `${COMMAND_NAME} status`,
-              `${COMMAND_NAME} doctor --fix`,
-            ],
-        nextSteps: commandChannelConnected
-          ? [`${COMMAND_NAME} status`, `${COMMAND_NAME} smoke`]
-          : ['在 chrome://extensions 中刷新 Tabrix 扩展', `${COMMAND_NAME} doctor --fix`],
-      };
-    case 'BRIDGE_BROKEN':
-      return {
-        summary: '桥接恢复失败',
-        hint: commandChannelConnected
-          ? '自动恢复已尝试，但执行桥仍无法稳定执行浏览器命令。'
-          : '自动恢复已尝试，但浏览器自动化仍未回到可执行状态。',
-        fix: [
-          `${COMMAND_NAME} doctor --fix`,
-          `${COMMAND_NAME} report --copy`,
-          `${COMMAND_NAME} status`,
-        ],
-        nextSteps: [`${COMMAND_NAME} doctor --fix`, `${COMMAND_NAME} report --copy`],
-      };
-    default:
-      return {
-        summary: '桥接状态未知',
-        hint: '运行 tabrix status 查看服务端桥接快照。',
-        fix: [`${COMMAND_NAME} status`],
-        nextSteps: [`${COMMAND_NAME} status`],
-      };
-  }
+  return describeBridgeRecoveryGuidance(
+    {
+      bridgeState: typeof bridge?.bridgeState === 'string' ? bridge.bridgeState : undefined,
+      lastBridgeErrorCode:
+        typeof bridge?.lastBridgeErrorCode === 'string' ? bridge.lastBridgeErrorCode : null,
+      commandChannelConnected:
+        typeof bridge?.commandChannelConnected === 'boolean'
+          ? bridge.commandChannelConnected
+          : false,
+    },
+    typeof bridge?.lastBridgeErrorCode === 'string' ? bridge.lastBridgeErrorCode : null,
+  );
 }
 
 function pickLatestVersionDir(parentDir: string): string | null {

@@ -19,7 +19,9 @@ jest.mock('../scripts/runtime-consistency', () => ({
 import { spawn, spawnSync } from 'node:child_process';
 import * as browserLaunchConfig from '../browser-launch-config';
 import nativeMessagingHostInstance from '../native-messaging-host';
+import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { bridgeRuntimeState } from '../server/bridge-state';
+import { COMMAND_NAME } from '../scripts/constant';
 import { sessionManager } from '../execution/session-manager';
 import { __bridgeLaunchInternals, handleToolCall } from './register-tools';
 
@@ -69,6 +71,7 @@ describe('bridge recovery orchestration', () => {
     jest.useRealTimers();
     jest.clearAllMocks();
     jest.restoreAllMocks();
+    __bridgeLaunchInternals.setBrowserLaunchTestOverride(null);
     bridgeRuntimeState.reset();
     sessionManager.reset();
   });
@@ -140,6 +143,7 @@ describe('bridge recovery orchestration', () => {
       code: 'TABRIX_EXTENSION_HEARTBEAT_MISSING',
       bridgeState: 'BROWSER_RUNNING_EXTENSION_UNAVAILABLE',
       recoveryAttempted: true,
+      nextAction: '等待扩展心跳恢复后重试一次',
     });
   });
 
@@ -275,6 +279,7 @@ describe('bridge recovery orchestration', () => {
       const payload = JSON.parse(String(result.content[0].text));
       expect(payload).toMatchObject({
         code: 'TABRIX_BROWSER_GUI_SESSION_UNAVAILABLE',
+        nextAction: expect.stringContaining('图形会话'),
       });
     } finally {
       if (previousDisplay === undefined) delete process.env.DISPLAY;
@@ -282,5 +287,85 @@ describe('bridge recovery orchestration', () => {
       if (previousWayland === undefined) delete process.env.WAYLAND_DISPLAY;
       else process.env.WAYLAND_DISPLAY = previousWayland;
     }
+  });
+
+  it('returns a browser-not-running error when launch candidates are overridden to an unavailable path', async () => {
+    jest.useFakeTimers();
+    mockCurrentPlatform('win32');
+    mockTasklist(false);
+    bridgeRuntimeState.syncBrowserProcessNow();
+    __bridgeLaunchInternals.setBrowserLaunchTestOverride([
+      'C:\\__tabrix_missing_browser__\\chrome.exe',
+    ]);
+
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      items: [],
+    } as never);
+
+    const resultPromise = handleToolCall('chrome_read_page', { tabId: 5 });
+    await jest.advanceTimersByTimeAsync(31_000);
+    const result = await resultPromise;
+
+    expect(result.isError).toBe(true);
+    expect(spawn).toHaveBeenCalled();
+    const payload = JSON.parse(String(result.content[0].text));
+    expect(payload).toMatchObject({
+      code: 'TABRIX_BROWSER_NOT_RUNNING',
+      bridgeState: 'BROWSER_NOT_RUNNING',
+      recoveryAttempted: true,
+      nextAction: '等待自动启动完成后重试一次',
+    });
+  });
+
+  it('returns recover-failed when command channel is restored but retry still fails', async () => {
+    mockCurrentPlatform('win32');
+    mockTasklist(true);
+    bridgeRuntimeState.syncBrowserProcessNow();
+    bridgeRuntimeState.setNativeHostAttached(true);
+
+    (spawn as jest.Mock).mockImplementation(() =>
+      createLaunchProcess(() => {
+        bridgeRuntimeState.recordHeartbeat({
+          sentAt: Date.now(),
+          nativeConnected: true,
+          extensionId: 'njlidkjgkcccdoffkfcbgiefdpaipfdn',
+          connectionId: 'conn-recovery-channel',
+        });
+        bridgeRuntimeState.setCommandChannelConnected(true, {
+          type: 'websocket',
+          connectionId: 'conn-recovery-channel',
+        });
+      }),
+    );
+
+    jest.spyOn(bridgeCommandChannel, 'isConnected').mockReturnValue(true);
+    const commandSendMock = jest.spyOn(bridgeCommandChannel, 'sendCommand').mockResolvedValue({
+      status: 'error',
+      error: 'bridge is unavailable',
+    } as never);
+
+    jest
+      .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+      .mockResolvedValueOnce({
+        status: 'error',
+        error: 'request timed out',
+      } as never)
+      .mockResolvedValue({
+        status: 'error',
+        error: 'tool call not available',
+      } as never);
+
+    const result = await handleToolCall('chrome_read_page', { tabId: 1 });
+
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(String(result.content[0].text));
+    expect(payload).toMatchObject({
+      code: 'TABRIX_BRIDGE_RECOVERY_FAILED',
+      bridgeState: 'READY',
+      recoveryAttempted: true,
+      nextAction: `${COMMAND_NAME} doctor --fix 后重试`,
+    });
+    expect(commandSendMock).toHaveBeenCalled();
   });
 });
