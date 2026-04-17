@@ -51,6 +51,41 @@ describe('handleToolCall execution wrapper', () => {
     expect(sessionManager.listTasks()[0].status).toBe('completed');
   });
 
+  it('returns structured error payload when extension returns a non-recoverable error', async () => {
+    markBridgeReady();
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'error',
+      error: 'tool execution failed',
+    } as never);
+
+    const result = await handleToolCall('chrome_read_page', { tabId: 1 });
+    const payload = JSON.parse(String(result.content[0].text));
+
+    expect(result.isError).toBe(true);
+    expect(payload).toMatchObject({
+      code: 'TABRIX_TOOL_CALL_FAILED',
+      message: 'tool execution failed',
+      recoveryAttempted: false,
+    });
+  });
+
+  it('returns structured error payload when tool invocation throws', async () => {
+    markBridgeReady();
+    jest
+      .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+      .mockRejectedValueOnce(new Error('unhandled tool transport failure'));
+
+    const result = await handleToolCall('chrome_read_page', { tabId: 1 });
+    const payload = JSON.parse(String(result.content[0].text));
+
+    expect(result.isError).toBe(true);
+    expect(payload).toMatchObject({
+      code: 'TABRIX_TOOL_CALL_EXCEPTION',
+      message: 'unhandled tool transport failure',
+      recoveryAttempted: false,
+    });
+  });
+
   it('tracks a rejected tool call as a failed execution session', async () => {
     markBridgeReady();
     process.env.ENABLE_MCP_TOOLS = 'chrome_read_page';

@@ -77,6 +77,26 @@ function createErrorResult(text: string): CallToolResult {
   };
 }
 
+function buildGenericFailurePayload(
+  code: string,
+  message: string,
+  recoveryAttempted: boolean,
+): GenericFailurePayload {
+  const snapshot = getBridgeSnapshot();
+  return {
+    code,
+    message,
+    bridgeState: snapshot.bridgeState,
+    recoveryAttempted,
+    summary: code === 'TABRIX_TOOL_CALL_EXCEPTION' ? '工具调用发生异常。' : '工具调用失败。',
+    hint:
+      code === 'TABRIX_TOOL_CALL_EXCEPTION'
+        ? '请记录当前错误信息后重试，若持续失败可重新执行一次请求。'
+        : '请根据提示内容进行一次重试，必要时联系支持核实环境。',
+    nextAction: null,
+  };
+}
+
 interface BridgeRecoveryResult {
   attempted: boolean;
   launched: boolean;
@@ -89,6 +109,16 @@ interface BridgeRecoveryResult {
 }
 
 interface BridgeFailurePayload {
+  code: string;
+  message: string;
+  bridgeState: string;
+  recoveryAttempted: boolean;
+  summary: string;
+  hint: string;
+  nextAction: string | null;
+}
+
+interface GenericFailurePayload {
   code: string;
   message: string;
   bridgeState: string;
@@ -954,9 +984,14 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         Boolean(bridgeFailure) ||
         responseError.includes('TABRIX_BRIDGE_') ||
         isRecoverableBridgeIssue(responseError);
-      const result = createErrorResult(
-        bridgeFailure ? JSON.stringify(bridgeFailure) : `Error calling tool: ${responseError}`,
-      );
+      const failurePayload = bridgeFailure
+        ? bridgeFailure
+        : buildGenericFailurePayload(
+            isBridgeError ? 'TABRIX_BRIDGE_OPERATION_ERROR' : 'TABRIX_TOOL_CALL_FAILED',
+            responseError,
+            false,
+          );
+      const result = createErrorResult(JSON.stringify(failurePayload));
       sessionManager.completeStep(session.sessionId, step.stepId, {
         status: 'failed',
         errorCode: bridgeFailure
@@ -974,7 +1009,15 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       return result;
     }
   } catch (error: any) {
-    const result = createErrorResult(`Error calling tool: ${error.message}`);
+    const result = createErrorResult(
+      JSON.stringify(
+        buildGenericFailurePayload(
+          'TABRIX_TOOL_CALL_EXCEPTION',
+          error?.message || String(error),
+          false,
+        ),
+      ),
+    );
     sessionManager.completeStep(session.sessionId, step.stepId, {
       status: 'failed',
       errorCode: 'tool_call_exception',
