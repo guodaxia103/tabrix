@@ -119,6 +119,40 @@ If port 12306 is already in use:
 2. Update the CLI configuration to match the new port
 3. Run `tabrix update-port <new-port>` to update the stdio config
 
+## Real-World Maintenance Cookbook
+
+When a GitHub Actions failure needs quick investigation, keep the flow simple and browser-first:
+
+1. Validate runtime
+   - `tabrix status`
+   - `tabrix doctor --fix`
+2. Check available tools
+   - `tabrix mcp tools`
+3. Open and read the target page (low-friction arg style)
+
+```powershell
+# PowerShell example
+tabrix mcp call chrome_navigate --arg url="https://github.com/<owner>/<repo>/actions"
+tabrix mcp call chrome_read_page --arg filter=interactive --arg depth=2
+tabrix mcp call chrome_get_web_content --arg textContent=true --arg selector=".js-issue-row"
+```
+
+For longer payloads, use file-based args:
+
+```powershell
+@'
+{
+  "tabId": 12345678,
+  "filter": "interactive",
+  "depth": 2
+}
+'@ | Set-Content .\\github-web-args.json
+
+tabrix mcp call chrome_read_page --args-file .\\github-web-args.json
+```
+
+If any step reports a single `nextAction` in a structured tool error, execute that action and retry the original request.
+
 ## Environment Variables
 
 | Variable                     | Description                                 | Default |
