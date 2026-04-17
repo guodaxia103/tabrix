@@ -214,6 +214,12 @@ export const TOOL_SCHEMAS: Tool[] = [
           description:
             'Filter elements: "interactive" for such as  buttons/links/inputs only (default: all visible elements)',
         },
+        mode: {
+          type: 'string',
+          enum: ['compact', 'normal', 'full'],
+          description:
+            'Output mode for read_page snapshot. compact (default): execution-oriented summary; normal: richer debugging view; full: include complete snapshot details.',
+        },
         depth: {
           type: 'number',
           description:

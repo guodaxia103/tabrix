@@ -13,6 +13,7 @@ interface ReadPageStats {
 
 interface ReadPageParams {
   filter?: 'interactive'; // when omitted, return all visible elements
+  mode?: 'compact' | 'normal' | 'full'; // output verbosity mode, default compact
   depth?: number; // maximum DOM depth to traverse (0 = root only)
   refId?: string; // focus on subtree rooted at this refId
   tabId?: number; // target existing tab id
@@ -248,7 +249,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
 
   // Execute read page
   async execute(args: ReadPageParams): Promise<ToolResult> {
-    const { filter, depth, refId } = args || {};
+    const { filter, depth, refId, mode } = args || {};
 
     // Validate refId parameter
     const focusRefId = typeof refId === 'string' ? refId.trim() : '';
@@ -263,6 +264,13 @@ class ReadPageTool extends BaseBrowserToolExecutor {
     if (requestedDepth !== undefined && (!Number.isInteger(requestedDepth) || requestedDepth < 0)) {
       return createErrorResponse(
         `${ERROR_MESSAGES.INVALID_PARAMETERS}: depth must be a non-negative integer`,
+      );
+    }
+
+    const selectedMode = mode || 'compact';
+    if (!['compact', 'normal', 'full'].includes(selectedMode)) {
+      return createErrorResponse(
+        `${ERROR_MESSAGES.INVALID_PARAMETERS}: mode must be one of compact | normal | full`,
       );
     }
 
@@ -303,6 +311,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
               type: 'text',
               text: JSON.stringify({
                 success: false,
+                mode: selectedMode,
                 filter: filter || 'all',
                 pageContent: guardPageContent,
                 contentSummary: summarizePageContent(guardPageContent),
@@ -408,6 +417,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       // Unified base payload structure - consistent keys for stable contract
       const basePayload: Record<string, any> = {
         success: true,
+        mode: selectedMode,
         filter: filter || 'all',
         pageContent,
         contentSummary,
