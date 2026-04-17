@@ -292,8 +292,10 @@ describe('bridge recovery orchestration', () => {
   it('returns a browser-not-running error when launch candidates are overridden to an unavailable path', async () => {
     jest.useFakeTimers();
     mockCurrentPlatform('win32');
-    mockTasklist(false);
-    bridgeRuntimeState.syncBrowserProcessNow();
+    mockBridgeBrowserProcess(() => false);
+    bridgeRuntimeState.setCommandChannelConnected(false);
+    bridgeRuntimeState.setNativeHostAttached(false);
+    expect(bridgeRuntimeState.getSnapshot().bridgeState).toBe('BROWSER_NOT_RUNNING');
     __bridgeLaunchInternals.setBrowserLaunchTestOverride([
       'C:\\__tabrix_missing_browser__\\chrome.exe',
     ]);
