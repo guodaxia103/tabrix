@@ -36,6 +36,7 @@
 - `RELEASE_READINESS_CHECKLIST_zh.md`：发布前 Phase 0 验收清单
 - `BROWSER_BRIDGE_STATE_DESIGN_zh.md`：浏览器桥接状态机与自动恢复设计
 - `OSV_AUDIT_GATE_zh.md`：生产依赖安全门禁与 OSV 方案说明
+- `MAINTENANCE_LOG.md` / `MAINTENANCE_LOG_zh.md`：已核实维护结论与贡献者可见跟进项的轻量公开记录
 - `ROADMAP.md` / `ROADMAP_zh.md`：公开产品方向与贡献者可见的优先级
 - `USE_CASES.md` / `USE_CASES_zh.md`：面向新用户的真实使用场景
 - `ARCHITECTURE.md` / `ARCHITECTURE_zh.md`：公开架构总览
