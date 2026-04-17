@@ -36,6 +36,10 @@ import { SessionRegistry, type ConnectedClient, type TransportsSnapshot } from '
 import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from './bridge-state';
 import { bridgeCommandChannel } from './bridge-command-channel';
 import fileHandler from '../file-handler';
+import {
+  describeBridgeRecoveryGuidance,
+  type BridgeRecoveryGuidance,
+} from '../scripts/bridge-recovery-guidance';
 
 // Compatibility guard:
 // @hono/node-server may call socket.destroySoon() while draining incoming requests.
@@ -103,7 +107,9 @@ interface ServerStatusSnapshot {
   authEnabled: boolean;
   securityWarning?: string;
   nativeHostAttached: boolean;
-  bridge: BridgeRuntimeSnapshot;
+  bridge: BridgeRuntimeSnapshot & {
+    guidance: BridgeRecoveryGuidance;
+  };
   transports: TransportsSnapshot;
   execution: {
     tasks: {
@@ -842,7 +848,10 @@ export class Server {
       authEnabled,
       ...(securityWarning && { securityWarning }),
       nativeHostAttached: this.nativeHost !== null,
-      bridge,
+      bridge: {
+        ...bridge,
+        guidance: describeBridgeRecoveryGuidance(bridge, bridge.lastBridgeErrorCode),
+      },
       transports: this.sessions.snapshot(),
       execution: {
         tasks: {

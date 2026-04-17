@@ -140,6 +140,7 @@ describe('bridge recovery orchestration', () => {
       code: 'TABRIX_EXTENSION_HEARTBEAT_MISSING',
       bridgeState: 'BROWSER_RUNNING_EXTENSION_UNAVAILABLE',
       recoveryAttempted: true,
+      nextAction: '等待扩展心跳恢复后重试一次',
     });
   });
 
@@ -275,6 +276,7 @@ describe('bridge recovery orchestration', () => {
       const payload = JSON.parse(String(result.content[0].text));
       expect(payload).toMatchObject({
         code: 'TABRIX_BROWSER_GUI_SESSION_UNAVAILABLE',
+        nextAction: expect.stringContaining('图形会话'),
       });
     } finally {
       if (previousDisplay === undefined) delete process.env.DISPLAY;

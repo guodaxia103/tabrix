@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.0.9] - 2026-04-17
+
+### Added
+
+- Formal bridge-recovery guidance source shared by `status`, `doctor`, `report`, and MCP tool failures.
+- Recovery-special smoke coverage via `tabrix smoke --bridge-recovery`.
+- Public product docs now state that real browser requests can auto-recover and continue when the bridge is not ready.
+
+### Changed
+
+- Lockstep package versions moved to `2.0.9`:
+  - `tabrix-monorepo`
+  - `@tabrix/tabrix`
+  - `@tabrix/extension`
+  - `@tabrix/shared`
+  - `@tabrix/wasm-simd`
+- `@tabrix/tabrix` dependency updated to `@tabrix/shared@^2.0.9`.
+- Browser automation tool failures now return a single `nextAction` instead of multi-step manual suggestions.
+- `/status` bridge snapshot now includes unified recovery guidance for downstream diagnostics and reporting.
+
+### Fixed
+
+- Completed the formal recovery loop for browser automation requests:
+  - bridge-degraded / broken recovery now attempts recovery and continues the original request when possible.
+  - command-channel-not-ready cases now wait for recovery and reuse the same request path instead of stopping at advisory text.
+- Unified `status / doctor / report` recovery semantics so the same fault now produces one consistent action recommendation.
+- Verified real recovery acceptance on the formal path:
+  - injected bridge failure -> real browser tool request -> automatic recovery -> original request success.
+
 ## [v2.0.8] - 2026-04-15
 
 ### Added

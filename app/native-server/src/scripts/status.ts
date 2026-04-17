@@ -3,6 +3,10 @@
 import { COMMAND_NAME } from './constant';
 import { SERVER_CONFIG, getChromeMcpPort } from '../constant';
 import { collectRuntimeConsistencySnapshot } from './runtime-consistency';
+import {
+  describeBridgeRecoveryGuidance,
+  type BridgeRecoveryGuidance,
+} from './bridge-recovery-guidance';
 
 export interface StatusOptions {
   json?: boolean;
@@ -27,6 +31,7 @@ interface StatusPayload {
       lastCommandChannelAt?: number | null;
       lastBridgeErrorCode?: string | null;
       lastBridgeErrorMessage?: string | null;
+      guidance?: BridgeRecoveryGuidance;
     };
     transports: {
       total: number;
@@ -165,9 +170,20 @@ function formatBridgeStateLabel(state?: string): string {
 
 function describeBridge(payload: StatusPayload['data']['bridge']): string[] {
   if (!payload) return [];
+  const guidance =
+    payload.guidance ||
+    describeBridgeRecoveryGuidance(
+      {
+        bridgeState: payload.bridgeState,
+        lastBridgeErrorCode: payload.lastBridgeErrorCode ?? null,
+        commandChannelConnected: payload.commandChannelConnected ?? false,
+      },
+      payload.lastBridgeErrorCode ?? null,
+    );
 
   const lines = [
     `Bridge state: ${formatBridgeStateLabel(payload.bridgeState)}`,
+    `Bridge summary: ${guidance.summary}`,
     `Browser process: ${payload.browserProcessRunning ? 'running' : 'not-running'}`,
   ];
 
@@ -195,6 +211,11 @@ function describeBridge(payload: StatusPayload['data']['bridge']): string[] {
     lines.push(
       `Bridge last error: ${payload.lastBridgeErrorCode || 'unknown'}${payload.lastBridgeErrorMessage ? ` - ${payload.lastBridgeErrorMessage}` : ''}`,
     );
+  }
+
+  lines.push(`Bridge hint: ${guidance.hint}`);
+  if (guidance.nextAction) {
+    lines.push(`Next action: ${guidance.nextAction}`);
   }
 
   return lines;

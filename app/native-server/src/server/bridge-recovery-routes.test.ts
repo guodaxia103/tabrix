@@ -42,6 +42,9 @@ describe('bridge recovery routes', () => {
       recoveryInFlight: true,
       recoveryAttempts: 1,
       lastRecoveryAction: 'ui_connect',
+      guidance: {
+        summary: '桥接恢复中',
+      },
     });
 
     const finished = await supertest(Server.getInstance().server)
@@ -70,6 +73,9 @@ describe('bridge recovery routes', () => {
       lastRecoveryAction: 'ui_connect',
       lastBridgeErrorCode: 'TABRIX_NATIVE_CONNECT_FAILED',
       lastBridgeErrorMessage: 'connect failed',
+      guidance: {
+        nextAction: '无法自动恢复该链路，请先运行 tabrix doctor --fix 后重试',
+      },
     });
   });
 });

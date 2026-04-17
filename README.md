@@ -15,6 +15,7 @@ Built for the new generation of AI assistants that need to work in the browser u
 - Reuse the real logged-in Chrome session instead of rebuilding a fresh browser runtime
 - Connect through both `Streamable HTTP` and `stdio`, depending on the MCP host
 - Stay local-first, while still supporting token-protected remote access over LAN
+- Recover on demand: when a real browser request arrives and Chrome/bridge is not ready, Tabrix attempts auto-launch/reconnect and continues the original request when possible
 
 **Documentation**: [English](README.md) | [Chinese](README_zh.md)
 

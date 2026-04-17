@@ -75,6 +75,7 @@ describe('status script', () => {
     const output = stdoutSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
     expect(output).toContain('Active sessions: 1 (streamable-http: 1, sse: 0)');
     expect(output).toContain('Bridge state: ready');
+    expect(output).toContain('Bridge summary: 桥接可用');
     expect(output).toContain('Command channel: websocket (conn-1)');
     expect(output).not.toContain('undefined');
   });
@@ -203,7 +204,9 @@ describe('status script', () => {
     expect(code).toBe(0);
     const output = stdoutSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
     expect(output).toContain('Bridge state: extension-unavailable');
+    expect(output).toContain('Bridge summary: 浏览器已运行但扩展不可用');
     expect(output).toContain('Extension heartbeat: missing');
     expect(output).toContain('Bridge last error: TABRIX_EXTENSION_NOT_CONNECTED');
+    expect(output).toContain('Next action: 打开 Tabrix 扩展并触发一次连接后重试');
   });
 });

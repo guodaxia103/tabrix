@@ -415,6 +415,7 @@ program
     'Open the smoke page in a separate browser window instead of the default temporary tab',
   )
   .option('--all-tools', 'Run extended full-tool validation (local mode only)')
+  .option('--bridge-recovery', 'Inject a bridge recovery fault and validate recovery semantics')
   .option(
     '--include-interactive-tools',
     'Include modal/download checks that may require browser-level auto-save settings',
@@ -438,6 +439,7 @@ program
         keepTab: Boolean(options.keepTab),
         separateWindow: Boolean(options.separateWindow),
         allTools: Boolean(options.allTools),
+        bridgeRecovery: Boolean(options.bridgeRecovery),
         includeInteractiveTools: options.includeInteractiveTools === true,
         url: options.url,
         authToken: options.authToken,

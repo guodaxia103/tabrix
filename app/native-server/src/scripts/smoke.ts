@@ -16,6 +16,7 @@ export interface SmokeOptions {
   protocolOnly?: boolean;
   allTools?: boolean;
   includeInteractiveTools?: boolean;
+  bridgeRecovery?: boolean;
   repeat?: number;
   concurrency?: number;
 }
@@ -476,6 +477,44 @@ async function probeStatus(
   }
 }
 
+function hasSingleRecoveryAction(result: any): boolean {
+  if (!result || typeof result !== 'object') return false;
+  if (typeof result.nextAction !== 'string' || result.nextAction.trim().length === 0) {
+    return false;
+  }
+  if (Array.isArray(result.suggestions) && result.suggestions.length > 1) {
+    return false;
+  }
+  return true;
+}
+
+async function postJson(
+  url: string,
+  body: Record<string, unknown>,
+  headers: Record<string, string> = {},
+): Promise<HttpProbeResult> {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    });
+    return {
+      ok: response.ok,
+      status: response.status,
+      detail: `${response.status} ${response.statusText}`.trim(),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: stringifyError(error),
+    };
+  }
+}
+
 async function runProtocolSequence(
   mcpUrl: string,
   authToken?: string,
@@ -845,6 +884,9 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
         '--all-tools requires local smoke mode. Remove --url/--auth-token/--protocol-only and retry.',
       );
     }
+    if (options.bridgeRecovery && protocolOnly) {
+      throw new Error('--bridge-recovery requires local smoke mode.');
+    }
 
     if (repeat > 1 || concurrency > 1) {
       const stability = await runProtocolStability(mcpUrl, options.authToken, repeat, concurrency);
@@ -973,6 +1015,68 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
 
     await mcp.callTool('chrome_switch_tab', { tabId: tempTabId });
     record('chrome_switch_tab', true, `Switched to tab ${tempTabId}`);
+
+    if (options.bridgeRecovery) {
+      const recoveryStart = await postJson(`${new URL('/bridge/recovery/start', mcpUrl)}`, {
+        action: 'smoke_injected_bridge_failure',
+      });
+      record(
+        'bridge_recovery.inject_start',
+        recoveryStart.ok,
+        recoveryStart.ok ? 'Injected recovery start state' : recoveryStart.detail,
+      );
+      if (!recoveryStart.ok) {
+        throw new Error(`Failed to inject bridge recovery start: ${recoveryStart.detail}`);
+      }
+
+      const recoveryFinish = await postJson(`${new URL('/bridge/recovery/finish', mcpUrl)}`, {
+        success: false,
+        errorCode: 'TABRIX_SMOKE_INJECTED_RECOVERY',
+        errorMessage: 'smoke injected bridge failure',
+      });
+      record(
+        'bridge_recovery.inject_finish',
+        recoveryFinish.ok,
+        recoveryFinish.ok ? 'Injected broken bridge state' : recoveryFinish.detail,
+      );
+      if (!recoveryFinish.ok) {
+        throw new Error(`Failed to inject bridge recovery finish: ${recoveryFinish.detail}`);
+      }
+
+      const recoveryStatus = await probeStatus(buildCompanionUrl(mcpUrl, 'status'), defaultHeaders);
+      const recoveryBridge =
+        recoveryStatus.snapshot &&
+        typeof recoveryStatus.snapshot.bridge === 'object' &&
+        recoveryStatus.snapshot.bridge !== null
+          ? (recoveryStatus.snapshot.bridge as Record<string, unknown>)
+          : undefined;
+      const injectedState =
+        typeof recoveryBridge?.bridgeState === 'string' ? recoveryBridge.bridgeState : 'unknown';
+      record(
+        'bridge_recovery.inject_status',
+        recoveryStatus.ok && (injectedState === 'BRIDGE_BROKEN' || injectedState === 'READY'),
+        recoveryStatus.ok
+          ? `Injected bridge state observed as ${injectedState}`
+          : `Status probe failed: ${recoveryStatus.detail}`,
+      );
+
+      const recoveryRead = await mcp.callTool('chrome_read_page', { tabId: tempTabId });
+      const recoveryParsed = parseToolText(recoveryRead);
+      const recoverySucceeded =
+        recoveryRead?.isError !== true &&
+        String(recoveryParsed?.pageContent || recoveryParsed).includes('Chrome MCP Smoke Test');
+      const recoveryReturnedAction =
+        recoveryRead?.isError === true && hasSingleRecoveryAction(recoveryParsed);
+      record(
+        'bridge_recovery.tool_call',
+        recoverySucceeded || recoveryReturnedAction,
+        recoverySucceeded
+          ? 'Injected bridge fault auto-recovered and original browser request succeeded'
+          : recoveryReturnedAction
+            ? `Recovery returned a single next action: ${recoveryParsed.nextAction}`
+            : `Unexpected recovery result: ${JSON.stringify(recoveryParsed).slice(0, 160)}`,
+      );
+    }
 
     const page = parseToolText(await mcp.callTool('chrome_read_page', { tabId: tempTabId }));
     record(
