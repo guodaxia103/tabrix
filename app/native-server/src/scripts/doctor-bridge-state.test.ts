@@ -1,4 +1,5 @@
 import { describeBridgeStatusForDoctor } from './doctor';
+import { COMMAND_NAME } from './constant';
 
 describe('describeBridgeStatusForDoctor', () => {
   it('describes browser-not-running state with non-invasive guidance', () => {
@@ -36,6 +37,20 @@ describe('describeBridgeStatusForDoctor', () => {
     expect(guidance.summary).toBe('桥接可用');
     expect(guidance.fix).toHaveLength(0);
     expect(guidance.nextSteps).toHaveLength(0);
+  });
+
+  it('describes ready state with recoverable failure hint as single recovery action', () => {
+    const guidance = describeBridgeStatusForDoctor({
+      bridge: {
+        bridgeState: 'READY',
+        lastBridgeErrorCode: 'TABRIX_BRIDGE_RECOVERY_FAILED',
+      },
+    });
+
+    expect(guidance.summary).toBe('桥接可用');
+    expect(guidance.fix).toEqual([`${COMMAND_NAME} doctor --fix 后重试`]);
+    expect(guidance.nextSteps).toEqual([`${COMMAND_NAME} doctor --fix 后重试`]);
+    expect(guidance.nextAction).toBe(`${COMMAND_NAME} doctor --fix 后重试`);
   });
 
   it('describes degraded state as command-channel issue when heartbeat exists but channel is missing', () => {

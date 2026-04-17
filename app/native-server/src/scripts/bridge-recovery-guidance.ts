@@ -128,12 +128,13 @@ export function describeBridgeRecoveryGuidance(
               ? '桥接仍可恢复，优先建议重试请求触发恢复。'
               : '无法确认自动恢复是否会恢复，建议先采集 report 进行核查。';
 
+  const nextActionByFailureHint = describeByFailureHint(failureCodeHint, null);
   const nextAction =
-    describeByFailureHint(lastErrorCode, null) ||
-    describeByFailureHint(failureCodeHint, null) ||
+    describeByFailureHint(lastErrorCode ?? undefined, null) ||
+    nextActionByFailureHint ||
     describeFromState(bridgeState, commandChannelConnected);
   if (bridgeState === 'READY') {
-    return buildAdvice(stateSummary, hint, undefined);
+    return buildAdvice(stateSummary, hint, nextActionByFailureHint ?? undefined);
   }
   const fallback = `${COMMAND_NAME} doctor --fix 后重试`;
   return buildAdvice(stateSummary, hint, nextAction || fallback);

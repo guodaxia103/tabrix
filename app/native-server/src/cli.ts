@@ -29,6 +29,23 @@ import {
   removeDaemonAutostart,
 } from './scripts/daemon';
 
+const VALID_COMMAND_CHANNEL_RECOVERY_MODES = [
+  'fail-next-send',
+  'fail-all-sends',
+  'unavailable',
+] as const;
+type CommandChannelRecoveryMode = (typeof VALID_COMMAND_CHANNEL_RECOVERY_MODES)[number];
+
+function parseCommandChannelRecoveryMode(rawMode: unknown): CommandChannelRecoveryMode | undefined {
+  if (typeof rawMode !== 'string') return undefined;
+  const normalized = rawMode.trim();
+  return (
+    VALID_COMMAND_CHANNEL_RECOVERY_MODES.includes(normalized as CommandChannelRecoveryMode)
+      ? normalized
+      : undefined
+  ) as CommandChannelRecoveryMode | undefined;
+}
+
 function hasWindowsAdminRights(): boolean {
   if (process.platform !== 'win32') {
     return false;
@@ -417,6 +434,10 @@ program
   .option('--all-tools', 'Run extended full-tool validation (local mode only)')
   .option('--bridge-recovery', 'Inject a bridge recovery fault and validate recovery semantics')
   .option(
+    '--command-channel-recovery <mode>',
+    'Inject a command-channel fault mode: fail-next-send | fail-all-sends | unavailable',
+  )
+  .option(
     '--browser-path-unavailable',
     'Inject an unavailable browser launch candidate and validate recovery failure semantics',
   )
@@ -438,6 +459,16 @@ program
   .option('--concurrency <n>', 'Run protocol smoke with N concurrent attempts', '1')
   .action(async (options) => {
     try {
+      const commandChannelRecovery = parseCommandChannelRecoveryMode(
+        options.commandChannelRecovery,
+      );
+      if (options.commandChannelRecovery && !commandChannelRecovery) {
+        throw new Error(
+          `Unsupported value for --command-channel-recovery: ${options.commandChannelRecovery}.` +
+            ` Supported values: ${VALID_COMMAND_CHANNEL_RECOVERY_MODES.join(' | ')}`,
+        );
+      }
+
       const exitCode = await runSmoke({
         json: Boolean(options.json),
         keepTab: Boolean(options.keepTab),
@@ -449,6 +480,7 @@ program
         url: options.url,
         authToken: options.authToken,
         protocolOnly: Boolean(options.protocolOnly),
+        commandChannelRecovery,
         repeat: options.repeat ? parseInt(options.repeat, 10) : undefined,
         concurrency: options.concurrency ? parseInt(options.concurrency, 10) : undefined,
       });

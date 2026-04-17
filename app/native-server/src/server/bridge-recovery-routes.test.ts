@@ -3,6 +3,7 @@ import supertest from 'supertest';
 import Server from './index';
 import { bridgeRuntimeState } from './bridge-state';
 import { __bridgeLaunchInternals } from '../mcp/register-tools';
+import { __bridgeCommandChannelInternals } from './bridge-command-channel';
 
 describe('bridge recovery routes', () => {
   beforeAll(async () => {
@@ -12,6 +13,7 @@ describe('bridge recovery routes', () => {
   afterEach(() => {
     bridgeRuntimeState.reset();
     __bridgeLaunchInternals.setBrowserLaunchTestOverride(null);
+    __bridgeCommandChannelInternals.setTestMode('normal');
     jest.restoreAllMocks();
   });
 
@@ -111,5 +113,52 @@ describe('bridge recovery routes', () => {
       },
     });
     expect(__bridgeLaunchInternals.getBrowserLaunchTestOverride()).toBeNull();
+  });
+
+  test('POST /bridge/testing/command-channel 应设置并恢复命令通道测试模式', async () => {
+    const setResponse = await supertest(Server.getInstance().server)
+      .post('/bridge/testing/command-channel')
+      .send({ mode: 'fail-next-send' })
+      .expect(200)
+      .expect('Content-Type', /json/)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          status: 'ok',
+          data: {
+            mode: 'fail-next-send',
+          },
+        });
+      });
+
+    expect(setResponse.body.data.mode).toBe('fail-next-send');
+    expect(__bridgeCommandChannelInternals.getTestMode()).toBe('fail-next-send');
+
+    const clearResponse = await supertest(Server.getInstance().server)
+      .post('/bridge/testing/command-channel')
+      .send({ mode: 'normal' })
+      .expect(200)
+      .expect('Content-Type', /json/)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          status: 'ok',
+          data: {
+            mode: 'normal',
+          },
+        });
+      });
+
+    expect(clearResponse.body.data.mode).toBe('normal');
+    expect(__bridgeCommandChannelInternals.getTestMode()).toBe('normal');
+
+    const invalidResponse = await supertest(Server.getInstance().server)
+      .post('/bridge/testing/command-channel')
+      .send({ mode: 'invalid-mode' })
+      .expect(400)
+      .expect('Content-Type', /json/);
+
+    expect(invalidResponse.body).toMatchObject({
+      status: 'error',
+      message: 'Invalid mode for command channel testing',
+    });
   });
 });

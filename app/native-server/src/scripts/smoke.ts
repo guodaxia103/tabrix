@@ -4,8 +4,19 @@ import http from 'http';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'crypto';
 import { getChromeMcpUrl } from '../constant';
+
+const COMMAND_CHANNEL_RECOVERY_MODES = ['fail-next-send', 'fail-all-sends', 'unavailable'] as const;
+type CommandChannelRecoveryMode = (typeof COMMAND_CHANNEL_RECOVERY_MODES)[number];
+
+function isCommandChannelRecoveryMode(value: unknown): value is CommandChannelRecoveryMode {
+  return (
+    typeof value === 'string' &&
+    COMMAND_CHANNEL_RECOVERY_MODES.includes(value as CommandChannelRecoveryMode)
+  );
+}
 
 export interface SmokeOptions {
   json?: boolean;
@@ -18,6 +29,7 @@ export interface SmokeOptions {
   includeInteractiveTools?: boolean;
   bridgeRecovery?: boolean;
   browserPathUnavailable?: boolean;
+  commandChannelRecovery?: CommandChannelRecoveryMode;
   repeat?: number;
   concurrency?: number;
 }
@@ -142,32 +154,71 @@ function parseToolText(result: any): any {
   const text = result?.content?.find((item: any) => item?.type === 'text')?.text;
   if (!text) return result;
   const extractStructuredToolError = (value: string): any | null => {
-    const prefixedJson = value.match(
-      /^Error calling tool:\s*(\{.*?\})(?:;\s*recoveryAttempted=.*)?$/s,
-    );
-    if (!prefixedJson?.[1]) return null;
+    const marker = 'Error calling tool:';
+    const markerIndex = value.indexOf(marker);
+    if (markerIndex < 0) return null;
+
+    const start = value.indexOf('{', markerIndex);
+    if (start < 0) return null;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = start; i < value.length; i++) {
+      const ch = value[i];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (ch === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (ch === '{') {
+        depth++;
+      } else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          const jsonText = value.slice(start, i + 1);
+          try {
+            return JSON.parse(jsonText);
+          } catch {
+            return null;
+          }
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const parseFallbackJson = (value: string): any | null => {
     try {
-      return JSON.parse(prefixedJson[1]);
+      const parsed = JSON.parse(value);
+      return parsed;
     } catch {
       return null;
     }
   };
-  try {
-    const parsed = JSON.parse(text);
-    if (typeof parsed === 'string') {
-      const structuredError = extractStructuredToolError(parsed);
-      if (structuredError) {
-        return structuredError;
-      }
-    }
-    return parsed;
-  } catch {
-    const structuredError = extractStructuredToolError(text);
-    if (structuredError) {
-      return structuredError;
-    }
-    return text;
+  const parsed = parseFallbackJson(text);
+  if (parsed === null) return extractStructuredToolError(text) || text;
+  if (typeof parsed === 'string') {
+    return extractStructuredToolError(parsed) || parsed;
   }
+  return parsed;
 }
 
 function createSmokeServer(): Promise<{
@@ -526,6 +577,55 @@ function hasSingleRecoveryAction(result: any): boolean {
   return true;
 }
 
+function terminateLocalBrowserProcesses(): { ok: boolean; detail: string } {
+  const currentPlatform = platform();
+  const attempts: Array<{ command: string; args: string[] }> =
+    currentPlatform === 'win32'
+      ? [
+          { command: 'taskkill', args: ['/F', '/T', '/IM', 'chrome.exe'] },
+          { command: 'taskkill', args: ['/F', '/T', '/IM', 'chromium.exe'] },
+          { command: 'taskkill', args: ['/F', '/T', '/IM', 'msedge.exe'] },
+        ]
+      : currentPlatform === 'darwin'
+        ? [
+            { command: 'pkill', args: ['-x', 'Google Chrome'] },
+            { command: 'pkill', args: ['-x', 'Chromium'] },
+          ]
+        : [
+            { command: 'pkill', args: ['-x', 'chrome'] },
+            { command: 'pkill', args: ['-x', 'google-chrome'] },
+            { command: 'pkill', args: ['-x', 'google-chrome-stable'] },
+            { command: 'pkill', args: ['-x', 'chromium'] },
+            { command: 'pkill', args: ['-x', 'chromium-browser'] },
+          ];
+
+  const details = [];
+  let hadAttempt = false;
+  for (const attempt of attempts) {
+    try {
+      const result = spawnSync(attempt.command, attempt.args, {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      hadAttempt = true;
+      if (result.status === 0) {
+        details.push(`${attempt.command} stopped`);
+      } else if (result.error) {
+        details.push(`${attempt.command} failed: ${result.error.message}`);
+      } else {
+        details.push(`${attempt.command} skipped`);
+      }
+    } catch (error) {
+      details.push(`${attempt.command} error: ${String(error)}`);
+    }
+  }
+
+  if (!hadAttempt) {
+    return { ok: false, detail: 'No browser termination command is configured for this platform.' };
+  }
+  return { ok: true, detail: details.join('; ') };
+}
+
 async function postJson(
   url: string,
   body: Record<string, unknown>,
@@ -551,6 +651,13 @@ async function postJson(
       detail: stringifyError(error),
     };
   }
+}
+
+async function setCommandChannelTestingMode(
+  mcpUrl: string,
+  mode: 'normal' | 'fail-next-send' | 'fail-all-sends' | 'unavailable',
+): Promise<HttpProbeResult> {
+  return await postJson(`${new URL('/bridge/testing/command-channel', mcpUrl)}`, { mode });
 }
 
 async function setBrowserLaunchOverride(
@@ -937,6 +1044,18 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     if (options.browserPathUnavailable && protocolOnly) {
       throw new Error('--browser-path-unavailable requires local smoke mode.');
     }
+    if (options.commandChannelRecovery && protocolOnly) {
+      throw new Error('--command-channel-recovery requires local smoke mode.');
+    }
+    if (
+      options.commandChannelRecovery &&
+      !isCommandChannelRecoveryMode(options.commandChannelRecovery)
+    ) {
+      throw new Error(
+        `Unsupported value for --command-channel-recovery: ${options.commandChannelRecovery}.` +
+          ` Supported values: ${COMMAND_CHANNEL_RECOVERY_MODES.join(' | ')}`,
+      );
+    }
 
     if (repeat > 1 || concurrency > 1) {
       const stability = await runProtocolStability(mcpUrl, options.authToken, repeat, concurrency);
@@ -1020,6 +1139,12 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
         platform() === 'win32'
           ? 'C:\\__tabrix_missing_browser__\\chrome.exe'
           : '/__tabrix_missing_browser__/chrome';
+      const browserStopped = terminateLocalBrowserProcesses();
+      record(
+        'browser_path_unavailable.stop_browser',
+        browserStopped.ok,
+        browserStopped.ok ? browserStopped.detail : browserStopped.detail,
+      );
       const overrideSet = await setBrowserLaunchOverride(mcpUrl, [unavailableCommand]);
       record(
         'browser_path_unavailable.override_set',
@@ -1032,7 +1157,9 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
         throw new Error(`Failed to inject browser launch override: ${overrideSet.detail}`);
       }
 
-      const unavailableResult = await mcp.callTool('get_windows_and_tabs');
+      const unavailableResult = await mcp.callTool('chrome_navigate', {
+        url: smokeServer!.baseUrl,
+      });
       const unavailableParsed = parseToolText(unavailableResult);
       const returnedSingleAction =
         unavailableResult?.isError === true && hasSingleRecoveryAction(unavailableParsed);
@@ -1117,6 +1244,69 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
 
     await mcp.callTool('chrome_switch_tab', { tabId: tempTabId });
     record('chrome_switch_tab', true, `Switched to tab ${tempTabId}`);
+
+    if (options.commandChannelRecovery) {
+      const commandModeSet = await setCommandChannelTestingMode(
+        mcpUrl,
+        options.commandChannelRecovery,
+      );
+      record(
+        'command_channel_recovery.inject_mode',
+        commandModeSet.ok,
+        commandModeSet.ok
+          ? `Set command channel recovery mode to ${options.commandChannelRecovery}`
+          : commandModeSet.detail,
+      );
+      if (!commandModeSet.ok) {
+        throw new Error(`Failed to inject command-channel recovery mode: ${commandModeSet.detail}`);
+      }
+
+      const commandRecoveryRead = await mcp.callTool('chrome_read_page', { tabId: tempTabId });
+      const commandRecoveryParsed = parseToolText(commandRecoveryRead);
+      const commandRecoverySucceeded =
+        commandRecoveryRead?.isError !== true &&
+        String(commandRecoveryParsed?.pageContent || commandRecoveryParsed).includes(
+          'Chrome MCP Smoke Test',
+        );
+      const commandRecoveryReturnedAction =
+        commandRecoveryRead?.isError === true && hasSingleRecoveryAction(commandRecoveryParsed);
+      const expectRecoverySuccess = options.commandChannelRecovery === 'fail-next-send';
+      record(
+        'command_channel_recovery.tool_call',
+        expectRecoverySuccess ? commandRecoverySucceeded : commandRecoveryReturnedAction,
+        expectRecoverySuccess
+          ? commandRecoverySucceeded
+            ? 'Command channel recovered transiently and original request succeeded'
+            : `Unexpected command-channel recovery result: ${JSON.stringify(commandRecoveryParsed).slice(0, 160)}`
+          : commandRecoveryReturnedAction
+            ? `Recovery returned a single next action: ${commandRecoveryParsed.nextAction}`
+            : `Unexpected command-channel recovery result: ${JSON.stringify(commandRecoveryParsed).slice(0, 160)}`,
+      );
+
+      if (!options.keepTab) {
+        traceStep('chrome_close_tabs(command-channel):start');
+        await mcp.callTool('chrome_close_tabs', {
+          tabIds: [tempTabId],
+        });
+        record('chrome_close_tabs', true, `Closed smoke tab ${tempTabId}`);
+        tempTabId = null;
+      }
+
+      if (originalTabId) {
+        traceStep('chrome_switch_tab(original-command-channel):start');
+        await mcp.callTool('chrome_switch_tab', { tabId: originalTabId });
+      }
+
+      const result: SmokeResult = {
+        ok: steps.every((step) => step.ok),
+        baseUrl: smokeServer?.baseUrl || mcpUrl,
+        mcpUrl,
+        mode,
+        steps,
+      };
+      emitSmokeResult(result, options.json);
+      return result.ok ? 0 : 1;
+    }
 
     if (options.bridgeRecovery) {
       const recoveryStart = await postJson(`${new URL('/bridge/recovery/start', mcpUrl)}`, {
@@ -1506,6 +1696,13 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     if (options.browserPathUnavailable) {
       try {
         await setBrowserLaunchOverride(mcpUrl, null);
+      } catch {
+        // Ignore cleanup failures.
+      }
+    }
+    if (options.commandChannelRecovery) {
+      try {
+        await setCommandChannelTestingMode(mcpUrl, 'normal');
       } catch {
         // Ignore cleanup failures.
       }

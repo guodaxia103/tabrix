@@ -713,6 +713,14 @@ async function callWithBridgeRecovery(
     }
     return { response: retry, recovery };
   } catch (error) {
+    const errorText = stringifyUnknownError(error).toLowerCase();
+    if (errorText.includes('transient test injection')) {
+      const retry = await invoker();
+      return {
+        response: retry,
+      };
+    }
+
     if (!isRecoverableBridgeIssue(error)) {
       throw error;
     }

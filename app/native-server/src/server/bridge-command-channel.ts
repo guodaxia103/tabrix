@@ -25,6 +25,16 @@ interface ActiveConnection {
   extensionId: string;
 }
 
+export type BridgeCommandChannelTestMode =
+  | 'normal'
+  | 'unavailable'
+  | 'fail-next-send'
+  | 'fail-all-sends';
+
+interface BridgeCommandChannelTestingState {
+  mode: BridgeCommandChannelTestMode;
+}
+
 function isLocalhostAddress(address: string | undefined): boolean {
   if (!address) return false;
   return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
@@ -50,6 +60,9 @@ export class BridgeCommandChannelManager {
   private attachedServer: HttpServer | null = null;
   private activeConnection: ActiveConnection | null = null;
   private readonly pendingCommands = new Map<string, PendingCommand>();
+  private testingState: BridgeCommandChannelTestingState = {
+    mode: 'normal',
+  };
 
   private readonly handleUpgrade = (
     request: IncomingMessage,
@@ -103,6 +116,17 @@ export class BridgeCommandChannelManager {
     }
     this.activeConnection = null;
     bridgeRuntimeState.setCommandChannelConnected(false);
+    this.testingState = {
+      mode: 'normal',
+    };
+  }
+
+  setTestMode(mode: BridgeCommandChannelTestMode): void {
+    this.testingState.mode = mode;
+  }
+
+  getTestMode(): BridgeCommandChannelTestMode {
+    return this.testingState.mode;
   }
 
   getActiveConnectionId(): string | null {
@@ -115,6 +139,19 @@ export class BridgeCommandChannelManager {
 
   async sendCommand(action: BridgeCommandAction, payload: any, timeoutMs: number): Promise<any> {
     const connection = this.activeConnection;
+    const testMode = this.testingState.mode;
+    if (testMode === 'unavailable') {
+      throw new Error('Bridge is unavailable due to test injection');
+    }
+
+    if (testMode === 'fail-next-send' || testMode === 'fail-all-sends') {
+      if (testMode === 'fail-next-send') {
+        this.testingState.mode = 'normal';
+        throw new Error('Bridge is unavailable (transient test injection)');
+      }
+      throw new Error('Bridge is unavailable due to test injection');
+    }
+
     if (!connection || connection.socket.readyState !== WebSocket.OPEN) {
       throw new Error('Bridge command channel unavailable');
     }
@@ -278,3 +315,15 @@ export class BridgeCommandChannelManager {
 }
 
 export const bridgeCommandChannel = new BridgeCommandChannelManager();
+
+export const __bridgeCommandChannelInternals = {
+  setTestMode(mode: BridgeCommandChannelTestMode): void {
+    bridgeCommandChannel.setTestMode(mode);
+  },
+  getTestMode(): BridgeCommandChannelTestMode {
+    return bridgeCommandChannel.getTestMode();
+  },
+  resetTestMode(): void {
+    bridgeCommandChannel.setTestMode('normal');
+  },
+};

@@ -35,7 +35,11 @@ import { registerAgentRoutes } from './routes';
 import { sessionManager } from '../execution/session-manager';
 import { SessionRegistry, type ConnectedClient, type TransportsSnapshot } from './session-registry';
 import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from './bridge-state';
-import { bridgeCommandChannel } from './bridge-command-channel';
+import {
+  bridgeCommandChannel,
+  __bridgeCommandChannelInternals,
+  type BridgeCommandChannelTestMode,
+} from './bridge-command-channel';
 import fileHandler from '../file-handler';
 import {
   describeBridgeRecoveryGuidance,
@@ -102,6 +106,10 @@ interface BridgeRecoveryFinishPayload {
 
 interface BridgeTestingBrowserLaunchOverridePayload {
   commands?: unknown;
+}
+
+interface BridgeTestingCommandChannelPayload {
+  mode?: unknown;
 }
 
 interface ServerStatusSnapshot {
@@ -622,6 +630,47 @@ export class Server {
           status: 'ok',
           data: {
             commands: __bridgeLaunchInternals.getBrowserLaunchTestOverride(),
+            recordedAt: Date.now(),
+          },
+        });
+      },
+    );
+
+    this.fastify.post(
+      '/bridge/testing/command-channel',
+      async (
+        request: FastifyRequest<{ Body: BridgeTestingCommandChannelPayload }>,
+        reply: FastifyReply,
+      ) => {
+        if (!LOCALHOST_IPS.has(request.ip)) {
+          return reply.status(403).send({
+            status: 'error',
+            message: 'Forbidden – command channel testing is only available from localhost.',
+          });
+        }
+
+        const body = (request.body || {}) as BridgeTestingCommandChannelPayload;
+        const rawMode = typeof body.mode === 'string' ? body.mode.trim() : '';
+        const resolvedMode =
+          rawMode === 'normal' ||
+          rawMode === 'fail-next-send' ||
+          rawMode === 'fail-all-sends' ||
+          rawMode === 'unavailable'
+            ? (rawMode as BridgeCommandChannelTestMode)
+            : undefined;
+
+        if (!resolvedMode) {
+          return reply.status(HTTP_STATUS.BAD_REQUEST).send({
+            status: 'error',
+            message: 'Invalid mode for command channel testing',
+          });
+        }
+
+        __bridgeCommandChannelInternals.setTestMode(resolvedMode);
+        return reply.status(HTTP_STATUS.OK).send({
+          status: 'ok',
+          data: {
+            mode: resolvedMode,
             recordedAt: Date.now(),
           },
         });
