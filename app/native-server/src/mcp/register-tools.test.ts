@@ -2,11 +2,20 @@ import nativeMessagingHostInstance from '../native-messaging-host';
 import { handleToolCall } from './register-tools';
 import { sessionManager } from '../execution/session-manager';
 import { bridgeRuntimeState } from '../server/bridge-state';
+import { bridgeCommandChannel } from '../server/bridge-command-channel';
 
 describe('handleToolCall execution wrapper', () => {
   const markBridgeReady = () => {
-    jest.spyOn(bridgeRuntimeState, 'syncBrowserProcessNow').mockImplementation(() => true);
+    jest.spyOn(bridgeRuntimeState, 'syncBrowserProcessNow').mockImplementation(() => {
+      bridgeRuntimeState.setBrowserProcessRunning(true);
+      return true;
+    });
+    jest.spyOn(bridgeCommandChannel, 'isConnected').mockReturnValue(false);
     bridgeRuntimeState.setBrowserProcessRunning(true);
+    bridgeRuntimeState.setCommandChannelConnected(true, {
+      type: 'websocket',
+      connectionId: 'test-connection',
+    });
     bridgeRuntimeState.recordHeartbeat({
       sentAt: Date.now(),
       nativeConnected: true,
@@ -54,6 +63,10 @@ describe('handleToolCall execution wrapper', () => {
   it('returns structured error payload when extension returns a non-recoverable error', async () => {
     markBridgeReady();
     jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      items: [],
+    } as never);
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
       status: 'error',
       error: 'tool execution failed',
     } as never);
@@ -71,6 +84,10 @@ describe('handleToolCall execution wrapper', () => {
 
   it('returns structured error payload when tool invocation throws', async () => {
     markBridgeReady();
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      items: [],
+    } as never);
     jest
       .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
       .mockRejectedValueOnce(new Error('unhandled tool transport failure'));
