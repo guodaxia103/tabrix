@@ -108,6 +108,8 @@ interface LaunchCandidate {
   args: string[];
 }
 
+let browserLaunchTestOverride: string[] | null = null;
+
 const platformRuntime = {
   getCurrentPlatform(): NodeJS.Platform {
     return process.platform;
@@ -248,6 +250,16 @@ async function tryLaunchCommand(command: string, args: string[]): Promise<boolea
 function getResolvedBrowserExecutables(
   targetBrowsers: BrowserType[] = [BrowserType.CHROME, BrowserType.CHROMIUM],
 ): string[] {
+  if (browserLaunchTestOverride) {
+    const seen = new Set<string>();
+    return browserLaunchTestOverride.filter((candidate) => {
+      const normalized = candidate.toLowerCase();
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+  }
+
   const persisted = readPersistedBrowserLaunchConfig();
   const persistedCandidate =
     persisted &&
@@ -414,6 +426,12 @@ async function launchBrowserBestEffort(): Promise<LaunchAttemptResult> {
 
 export const __bridgeLaunchInternals = {
   platformRuntime,
+  getBrowserLaunchTestOverride(): string[] | null {
+    return browserLaunchTestOverride ? [...browserLaunchTestOverride] : null;
+  },
+  setBrowserLaunchTestOverride(commands: string[] | null): void {
+    browserLaunchTestOverride = commands ? [...commands] : null;
+  },
   getResolvedBrowserExecutables,
   getWindowsBrowserExecutables,
   getWindowsReconnectCandidates,

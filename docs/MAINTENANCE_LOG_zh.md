@@ -42,6 +42,23 @@
 
 ## 记录
 
+### 2026-04-17 - 进行中 - 恢复专项验收的人机工程与本机现场恢复
+
+- 范围：恢复专项 smoke、本机 `Chrome` 强杀后的运行时恢复、结构化错误解析
+- 优先级：中
+- 责任归属：维护者 / 贡献者
+- 相关项：`tabrix smoke --bridge-recovery`、`tabrix smoke --browser-path-unavailable`、`tabrix daemon start`
+- 摘要：恢复链路本身已经能覆盖真实自动拉起、路径不可用和部分恢复后失败等场景，但真实维护里仍暴露出两个需要长期记住的操作事实：强杀 `Chrome` 后，本机服务有时需要显式重启；同时，真实工具失败文本可能带有 `Error calling tool: {json}; ...` 这类包装，专项验收脚本需要主动剥离才能稳定读取结构化结论。
+- 证据：
+  - 本次真实回归中，`Chrome` 完全未启动 -> 发真实浏览器请求 -> 自动拉起 -> 原请求成功 已通过，随后把浏览器现场恢复到了关闭状态。
+  - 新增 `tabrix smoke --browser-path-unavailable` 后，真实回归已可在不修改系统目录下 `chrome.exe` 的前提下，稳定得到 `TABRIX_BROWSER_NOT_RUNNING` 与单一 `nextAction`。
+  - 在本机环境里，直接 `taskkill /IM chrome.exe /F` 后，偶发会把当前本地服务一起带离可达状态，需要补一条 `tabrix daemon start` 才能回到可测态。
+  - 服务端真实错误文本包含 `Error calling tool: {json}; recoveryAttempted=...` 尾巴，若 smoke 只按纯 JSON 或纯文本处理，会把本已正确返回的结构化错误误判为失败。
+- 后续动作：
+  - 评估是否给 `status` / `doctor` 增加更显式的“浏览器已被强杀，本地服务需重新拉起”提示，减少真实维护中的状态误判。
+  - 保持恢复专项 smoke 的“设置注入 -> 触发真实请求 -> 读取结构化结果 -> 清理注入 -> 恢复现场”闭环，不再依赖修改系统目录或手工拼脚本。
+  - 后续如果继续扩充恢复专项，应优先用这种 localhost-only 注入方式，而不是侵入用户真实安装目录。
+
 ### 2026-04-17 - 进行中 - CLI 参数易用性与真实排障贴合度
 
 - 范围：`tabrix mcp call --args` 在 PowerShell 下的真实维护使用体验

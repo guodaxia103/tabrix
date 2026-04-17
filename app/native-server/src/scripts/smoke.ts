@@ -17,6 +17,7 @@ export interface SmokeOptions {
   allTools?: boolean;
   includeInteractiveTools?: boolean;
   bridgeRecovery?: boolean;
+  browserPathUnavailable?: boolean;
   repeat?: number;
   concurrency?: number;
 }
@@ -140,9 +141,31 @@ function parseStreamableJson(text: string): any {
 function parseToolText(result: any): any {
   const text = result?.content?.find((item: any) => item?.type === 'text')?.text;
   if (!text) return result;
+  const extractStructuredToolError = (value: string): any | null => {
+    const prefixedJson = value.match(
+      /^Error calling tool:\s*(\{.*?\})(?:;\s*recoveryAttempted=.*)?$/s,
+    );
+    if (!prefixedJson?.[1]) return null;
+    try {
+      return JSON.parse(prefixedJson[1]);
+    } catch {
+      return null;
+    }
+  };
   try {
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    if (typeof parsed === 'string') {
+      const structuredError = extractStructuredToolError(parsed);
+      if (structuredError) {
+        return structuredError;
+      }
+    }
+    return parsed;
   } catch {
+    const structuredError = extractStructuredToolError(text);
+    if (structuredError) {
+      return structuredError;
+    }
     return text;
   }
 }
@@ -530,6 +553,15 @@ async function postJson(
   }
 }
 
+async function setBrowserLaunchOverride(
+  mcpUrl: string,
+  commands: string[] | null,
+): Promise<HttpProbeResult> {
+  return await postJson(`${new URL('/bridge/testing/browser-launch-override', mcpUrl)}`, {
+    commands,
+  });
+}
+
 async function runProtocolSequence(
   mcpUrl: string,
   authToken?: string,
@@ -902,6 +934,9 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     if (options.bridgeRecovery && protocolOnly) {
       throw new Error('--bridge-recovery requires local smoke mode.');
     }
+    if (options.browserPathUnavailable && protocolOnly) {
+      throw new Error('--browser-path-unavailable requires local smoke mode.');
+    }
 
     if (repeat > 1 || concurrency > 1) {
       const stability = await runProtocolStability(mcpUrl, options.authToken, repeat, concurrency);
@@ -979,6 +1014,58 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       listedTools.length > 0 && listedTools.includes('get_windows_and_tabs'),
       `${listedTools.length} tools available`,
     );
+
+    if (options.browserPathUnavailable) {
+      const unavailableCommand =
+        platform() === 'win32'
+          ? 'C:\\__tabrix_missing_browser__\\chrome.exe'
+          : '/__tabrix_missing_browser__/chrome';
+      const overrideSet = await setBrowserLaunchOverride(mcpUrl, [unavailableCommand]);
+      record(
+        'browser_path_unavailable.override_set',
+        overrideSet.ok,
+        overrideSet.ok
+          ? `Injected unavailable browser launch candidate ${unavailableCommand}`
+          : overrideSet.detail,
+      );
+      if (!overrideSet.ok) {
+        throw new Error(`Failed to inject browser launch override: ${overrideSet.detail}`);
+      }
+
+      const unavailableResult = await mcp.callTool('get_windows_and_tabs');
+      const unavailableParsed = parseToolText(unavailableResult);
+      const returnedSingleAction =
+        unavailableResult?.isError === true && hasSingleRecoveryAction(unavailableParsed);
+      record(
+        'browser_path_unavailable.tool_call',
+        returnedSingleAction &&
+          unavailableParsed?.code === 'TABRIX_BROWSER_NOT_RUNNING' &&
+          unavailableParsed?.recoveryAttempted === true,
+        returnedSingleAction
+          ? `Returned ${unavailableParsed.code} with next action: ${unavailableParsed.nextAction}`
+          : `Unexpected result: ${JSON.stringify(unavailableParsed).slice(0, 160)}`,
+      );
+
+      const overrideCleared = await setBrowserLaunchOverride(mcpUrl, null);
+      record(
+        'browser_path_unavailable.override_clear',
+        overrideCleared.ok,
+        overrideCleared.ok ? 'Cleared unavailable browser launch override' : overrideCleared.detail,
+      );
+      if (!overrideCleared.ok) {
+        throw new Error(`Failed to clear browser launch override: ${overrideCleared.detail}`);
+      }
+
+      const result: SmokeResult = {
+        ok: steps.every((step) => step.ok),
+        baseUrl: smokeServer?.baseUrl || mcpUrl,
+        mcpUrl,
+        mode,
+        steps,
+      };
+      emitSmokeResult(result, options.json);
+      return result.ok ? 0 : 1;
+    }
 
     const windows = parseToolText(await mcp.callTool('get_windows_and_tabs'));
     const originalActiveTab = windows?.windows
@@ -1416,6 +1503,13 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     );
   } finally {
     traceStep('cleanup:start');
+    if (options.browserPathUnavailable) {
+      try {
+        await setBrowserLaunchOverride(mcpUrl, null);
+      } catch {
+        // Ignore cleanup failures.
+      }
+    }
     if (!options.keepTab && tempTabId) {
       try {
         await mcp.callTool('chrome_close_tabs', { tabIds: [tempTabId] });
@@ -1447,4 +1541,8 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
   emitSmokeResult(result, options.json);
 
   return result.ok ? 0 : 1;
+}
+
+function platform(): NodeJS.Platform {
+  return process.platform;
 }

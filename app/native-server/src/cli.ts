@@ -417,6 +417,10 @@ program
   .option('--all-tools', 'Run extended full-tool validation (local mode only)')
   .option('--bridge-recovery', 'Inject a bridge recovery fault and validate recovery semantics')
   .option(
+    '--browser-path-unavailable',
+    'Inject an unavailable browser launch candidate and validate recovery failure semantics',
+  )
+  .option(
     '--include-interactive-tools',
     'Include modal/download checks that may require browser-level auto-save settings',
   )
@@ -440,6 +444,7 @@ program
         separateWindow: Boolean(options.separateWindow),
         allTools: Boolean(options.allTools),
         bridgeRecovery: Boolean(options.bridgeRecovery),
+        browserPathUnavailable: Boolean(options.browserPathUnavailable),
         includeInteractiveTools: options.includeInteractiveTools === true,
         url: options.url,
         authToken: options.authToken,

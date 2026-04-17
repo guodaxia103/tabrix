@@ -69,6 +69,7 @@ describe('bridge recovery orchestration', () => {
     jest.useRealTimers();
     jest.clearAllMocks();
     jest.restoreAllMocks();
+    __bridgeLaunchInternals.setBrowserLaunchTestOverride(null);
     bridgeRuntimeState.reset();
     sessionManager.reset();
   });
@@ -284,5 +285,34 @@ describe('bridge recovery orchestration', () => {
       if (previousWayland === undefined) delete process.env.WAYLAND_DISPLAY;
       else process.env.WAYLAND_DISPLAY = previousWayland;
     }
+  });
+
+  it('returns a browser-not-running error when launch candidates are overridden to an unavailable path', async () => {
+    jest.useFakeTimers();
+    mockCurrentPlatform('win32');
+    mockTasklist(false);
+    bridgeRuntimeState.syncBrowserProcessNow();
+    __bridgeLaunchInternals.setBrowserLaunchTestOverride([
+      'C:\\__tabrix_missing_browser__\\chrome.exe',
+    ]);
+
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      items: [],
+    } as never);
+
+    const resultPromise = handleToolCall('chrome_read_page', { tabId: 5 });
+    await jest.advanceTimersByTimeAsync(31_000);
+    const result = await resultPromise;
+
+    expect(result.isError).toBe(true);
+    expect(spawn).toHaveBeenCalled();
+    const payload = JSON.parse(String(result.content[0].text));
+    expect(payload).toMatchObject({
+      code: 'TABRIX_BROWSER_NOT_RUNNING',
+      bridgeState: 'BROWSER_NOT_RUNNING',
+      recoveryAttempted: true,
+      nextAction: '等待自动启动完成后重试一次',
+    });
   });
 });

@@ -25,6 +25,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { randomUUID } from 'node:crypto';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { createMcpServer } from '../mcp/mcp-server';
+import { __bridgeLaunchInternals } from '../mcp/register-tools';
 import { AgentStreamManager } from '../agent/stream-manager';
 import { AgentChatService } from '../agent/chat-service';
 import { CodexEngine } from '../agent/engines/codex';
@@ -97,6 +98,10 @@ interface BridgeRecoveryFinishPayload {
   success?: unknown;
   errorCode?: unknown;
   errorMessage?: unknown;
+}
+
+interface BridgeTestingBrowserLaunchOverridePayload {
+  commands?: unknown;
 }
 
 interface ServerStatusSnapshot {
@@ -582,6 +587,41 @@ export class Server {
           data: {
             bridgeState: this.getStatusSnapshot().bridge.bridgeState,
             success,
+            recordedAt: Date.now(),
+          },
+        });
+      },
+    );
+
+    this.fastify.post(
+      '/bridge/testing/browser-launch-override',
+      async (
+        request: FastifyRequest<{ Body: BridgeTestingBrowserLaunchOverridePayload }>,
+        reply: FastifyReply,
+      ) => {
+        if (!LOCALHOST_IPS.has(request.ip)) {
+          return reply.status(403).send({
+            status: 'error',
+            message: 'Forbidden – bridge testing overrides are only available from localhost.',
+          });
+        }
+
+        const body = (request.body || {}) as BridgeTestingBrowserLaunchOverridePayload;
+        const commands = Array.isArray(body.commands)
+          ? body.commands
+              .filter((command): command is string => typeof command === 'string')
+              .map((command) => command.trim())
+              .filter(Boolean)
+          : null;
+
+        __bridgeLaunchInternals.setBrowserLaunchTestOverride(
+          commands && commands.length > 0 ? commands : null,
+        );
+
+        return reply.status(HTTP_STATUS.OK).send({
+          status: 'ok',
+          data: {
+            commands: __bridgeLaunchInternals.getBrowserLaunchTestOverride(),
             recordedAt: Date.now(),
           },
         });

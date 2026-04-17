@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, jest, test } from '@jest/global
 import supertest from 'supertest';
 import Server from './index';
 import { bridgeRuntimeState } from './bridge-state';
+import { __bridgeLaunchInternals } from '../mcp/register-tools';
 
 describe('bridge recovery routes', () => {
   beforeAll(async () => {
@@ -10,6 +11,7 @@ describe('bridge recovery routes', () => {
 
   afterEach(() => {
     bridgeRuntimeState.reset();
+    __bridgeLaunchInternals.setBrowserLaunchTestOverride(null);
     jest.restoreAllMocks();
   });
 
@@ -77,5 +79,37 @@ describe('bridge recovery routes', () => {
         nextAction: '无法自动恢复该链路，请先运行 tabrix doctor --fix 后重试',
       },
     });
+  });
+
+  test('POST /bridge/testing/browser-launch-override 应设置并清理浏览器拉起测试注入', async () => {
+    const setResponse = await supertest(Server.getInstance().server)
+      .post('/bridge/testing/browser-launch-override')
+      .send({ commands: ['C:\\__tabrix_missing_browser__\\chrome.exe'] })
+      .expect(200)
+      .expect('Content-Type', /json/);
+
+    expect(setResponse.body).toMatchObject({
+      status: 'ok',
+      data: {
+        commands: ['C:\\__tabrix_missing_browser__\\chrome.exe'],
+      },
+    });
+    expect(__bridgeLaunchInternals.getBrowserLaunchTestOverride()).toEqual([
+      'C:\\__tabrix_missing_browser__\\chrome.exe',
+    ]);
+
+    const clearResponse = await supertest(Server.getInstance().server)
+      .post('/bridge/testing/browser-launch-override')
+      .send({ commands: null })
+      .expect(200)
+      .expect('Content-Type', /json/);
+
+    expect(clearResponse.body).toMatchObject({
+      status: 'ok',
+      data: {
+        commands: null,
+      },
+    });
+    expect(__bridgeLaunchInternals.getBrowserLaunchTestOverride()).toBeNull();
   });
 });
