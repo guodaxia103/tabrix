@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import * as fs from 'fs';
 import { getChromeMcpUrl } from '../constant';
 import { COMMAND_NAME } from './constant';
 
@@ -12,6 +13,8 @@ export interface McpInspectOptions {
 
 export interface McpCallOptions extends McpInspectOptions {
   args?: string;
+  arg?: string[];
+  argsFile?: string;
 }
 
 type FetchFn = typeof globalThis.fetch;
@@ -72,16 +75,63 @@ function parseToolResult(result: any): any {
   }
 }
 
-function parseArguments(args?: string): Record<string, unknown> {
-  if (!args || args.trim() === '') {
-    return {};
-  }
-
-  const parsed = JSON.parse(args);
+function parseJsonObject(raw: string, source: string): Record<string, unknown> {
+  const parsed = JSON.parse(raw);
   if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-    throw new Error('Tool arguments must be a JSON object');
+    throw new Error(`Tool arguments from ${source} must be a JSON object`);
   }
   return parsed as Record<string, unknown>;
+}
+
+function parseArgPair(raw: string): { key: string; value: unknown } {
+  const eqPos = raw.indexOf('=');
+  if (eqPos <= 0) {
+    throw new Error(`Tool arguments from --arg must use key=value format, got: ${raw}`);
+  }
+
+  const key = raw.slice(0, eqPos).trim();
+  const valueText = raw.slice(eqPos + 1);
+  if (!key || valueText.length === 0) {
+    throw new Error(`Tool arguments from --arg must use key=value format, got: ${raw}`);
+  }
+
+  try {
+    return { key, value: JSON.parse(valueText) };
+  } catch {
+    return { key, value: valueText };
+  }
+}
+
+function parseArguments(
+  options: {
+    args?: string;
+    arg?: string[];
+    argsFile?: string;
+  } = {},
+): Record<string, unknown> {
+  let merged: Record<string, unknown> = {};
+
+  if (options.argsFile) {
+    const fileContent = fs.readFileSync(options.argsFile, 'utf8').trim();
+    if (!fileContent) {
+      throw new Error(`Tool arguments file is empty: ${options.argsFile}`);
+    }
+    merged = parseJsonObject(fileContent, `--args-file ${options.argsFile}`);
+  }
+
+  if (options.args && options.args.trim() !== '') {
+    merged = {
+      ...merged,
+      ...parseJsonObject(options.args, '--args'),
+    };
+  }
+
+  for (const rawArg of options.arg ?? []) {
+    const parsed = parseArgPair(rawArg);
+    merged[parsed.key] = parsed.value;
+  }
+
+  return merged;
 }
 
 class StreamableHttpMcpClient {
@@ -265,7 +315,7 @@ export async function runMcpCall(toolName: string, options: McpCallOptions = {})
 
   let args: Record<string, unknown>;
   try {
-    args = parseArguments(options.args);
+    args = parseArguments(options);
   } catch (error) {
     process.stderr.write(`MCP call failed: ${stringifyError(error)}\n`);
     return 1;

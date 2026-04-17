@@ -367,7 +367,13 @@ Examples
     tabrix mcp tools
 
   Inspect a GitHub repo page in the current browser session
+    tabrix mcp call chrome_read_page --arg tabId=1850319377 --arg filter=interactive --arg depth=2
+
+  Or provide the full object as JSON
     tabrix mcp call chrome_read_page --args '{"tabId":1850319377,"filter":"interactive","depth":2}'
+
+  Or load arguments from a file for long payloads
+    tabrix mcp call chrome_get_web_content --args-file ./repo-page-args.json
 
   Triage a remote Tabrix MCP endpoint over LAN
     tabrix mcp tools --url http://192.168.1.50:12306/mcp --auth-token <token>
@@ -400,6 +406,13 @@ mcpCommand
   .command('call <toolName>')
   .description('Call a tool on the target Streamable HTTP MCP endpoint')
   .option('--args <json>', 'Tool arguments as a JSON object string', '{}')
+  .option(
+    '--arg <pair>',
+    'Single tool argument in key=value format (repeatable). Parsed as JSON when possible',
+    (value, previous: string[] = []) => previous.concat(value),
+    [],
+  )
+  .option('--args-file <path>', 'Read tool arguments from a JSON file')
   .option('--json', 'Output result as JSON')
   .option('--url <mcp-url>', 'Target MCP endpoint URL (default: current local Tabrix MCP URL)')
   .option('--auth-token <token>', 'Bearer token for remote MCP endpoints')
@@ -408,6 +421,8 @@ mcpCommand
     try {
       const exitCode = await runMcpCall(toolName, {
         args: options.args,
+        arg: options.arg,
+        argsFile: options.argsFile,
         json: Boolean(options.json),
         url: options.url,
         authToken: options.authToken,

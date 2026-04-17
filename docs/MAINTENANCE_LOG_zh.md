@@ -42,6 +42,21 @@
 
 ## 记录
 
+### 2026-04-17 - 进行中 - GitHub 排障实战的人机体验优化
+
+- 范围：贡献者在 GitHub Actions 页面上的真实排障流程
+- 优先级：中
+- 责任归属：维护者 / 贡献者
+- 相关项：`tabrix mcp call`、`chrome_navigate`、`chrome_read_page`、`chrome_get_web_content`、`chrome_click_element`
+- 摘要：本次真实排障中，核心控制链路可用，但多 tab 场景下维护体验仍有可提升空间，尤其是上下文切换与复杂页内检索。
+- 证据：
+  - 在一次实操中，直接读取页面时先返回了 `chrome-extension://.../connect.html`（`unsupportedPageType: non_web_tab`），后续需要改为用新标签页重新打开目标 URL 才稳定进入目标页面，说明活动标签页上下文偶发干扰排障流畅性。
+  - 在复杂的 Actions job 日志页，`chrome_get_web_content` 常表现为 sparse，仍需配合 `chrome_read_page` 与精确定位后再点击跳转到失败步骤锚点，才拿到足够完整结论。
+- 后续动作：
+  - 考虑在工具层/文档中补充“强制 Web 页面上下文优先”的 maintainer 入口，减少扩展页/工作页上下文跳转带来的干扰。
+  - 补一份面向维护者的 GitHub 排障实操模板（动作流：打开 Actions 列表 -> 打开目标 Run -> 定位失败 Job -> 跳转失败 Step 锚点），默认使用安全路径。
+  - 保持降级路径清晰：只有在 safe path 不足时才使用脚本/Javascript 兜底，减少人为操作成本和上下文波动。
+
 ### 2026-04-17 - 进行中 - 恢复专项验收的人机工程与本机现场恢复
 
 - 范围：恢复专项 smoke、本机 `Chrome` 强杀后的运行时恢复、结构化错误解析
@@ -59,21 +74,20 @@
   - 保持恢复专项 smoke 的“设置注入 -> 触发真实请求 -> 读取结构化结果 -> 清理注入 -> 恢复现场”闭环，不再依赖修改系统目录或手工拼脚本。
   - 后续如果继续扩充恢复专项，应优先用这种 localhost-only 注入方式，而不是侵入用户真实安装目录。
 
-### 2026-04-17 - 进行中 - CLI 参数易用性与真实排障贴合度
+### 2026-04-17 - 已关闭 - CLI 参数易用性与真实排障贴合度
 
 - 范围：`tabrix mcp call --args` 在 PowerShell 下的真实维护使用体验
 - 优先级：中
 - 责任归属：维护者 / 贡献者
 - 相关项：`tabrix mcp call`、GitHub Actions 页面排查、PowerShell
-- 摘要：浏览器优先排障链路已经可用，但 `--args` 仍要求手写 JSON 字符串，在 PowerShell 下容易因为引号与转义出错，增加真实维护任务中的摩擦。
+- 摘要：浏览器优先排障链路保持可用，并已修复 `tabrix mcp call` 的参数输入摩擦点。
 - 证据：
-  - 本次在真实 GitHub Actions 页面排查过程中，多次因为 PowerShell 下的 JSON 转义问题触发 `MCP call failed: Expected property name or '}' in JSON...` 这类参数解析错误。
-  - 在改用单引号包裹 JSON 或使用 `ConvertTo-Json` 构造参数后，同样的 `chrome_navigate`、`chrome_read_page`、`chrome_get_web_content` 调用可以稳定成功。
-  - 当前已经把 GitHub 场景示例补进 `tabrix mcp --help`，但 shell 级别的参数易用性仍然依赖使用者掌握引号细节。
+  - `tabrix mcp call` 新增了可重复的 `--arg key=value` 输入方式，并在值上支持 JSON 解析（如数字/布尔值/对象）。
+  - 新增了 `--args-file <path>` 入口，支持将复杂参数放到文件里，避免 PowerShell 转义误伤。
+  - 帮助示例同步补充了真实维护场景（`--arg` 与 `--args-file`）。
+  - 在 `app/native-server/src/scripts/mcp-inspect.test.ts` 增加了 `--arg` 与 `--args-file` 的参数验证用例，并验证了无效输入的快速失败行为。
 - 后续动作：
-  - 评估为 `tabrix mcp call` 增加更低摩擦的参数输入方式，例如 `--args-file`、重复 `--arg key=value`，或 shell 友好的对象输入模式。
-  - 在 CLI 文档或帮助示例中补充一条 PowerShell 风格的参数示例，降低 Windows 维护场景中的试错成本。
-  - 后续继续把真实自用中已经核实的摩擦点记入本日志，但仍保持轻量，不把公开文档写成内部任务系统。
+  - 已完成本项闭环。仅在真实维护中仍出现频繁 PowerShell 误报时再考虑进一步封装。
 
 ### 2026-04-17 - 进行中 - 基于真实 GitHub 排障的产品自用反馈
 

@@ -42,6 +42,21 @@ Maintenance convention:
 
 ## Entries
 
+### 2026-04-17 - Open - GitHub actions inspection ergonomics in real browser mode
+
+- Scope: contributor maintenance flow for failure triage on GitHub Actions pages
+- Priority: Medium
+- Owner: Maintainers / contributors
+- Related: `tabrix mcp call`, `chrome_navigate`, `chrome_read_page`, `chrome_get_web_content`, `chrome_click_element`
+- Summary: During real GitHub actions triage, core browser-control path was functional, but the maintainer experience can still be smoother for multi-tab workflows.
+- Evidence:
+  - In one real run, `chrome_read_page` opened `chrome-extension://.../connect.html` (`unsupportedPageType: non_web_tab`) while the same script later succeeded after explicitly opening the target URL in a fresh tab, indicating active-tab ambiguity can interrupt investigation flow.
+  - On complex job-log pages, `chrome_get_web_content` returned sparse text and we still needed `chrome_read_page` and precise navigation steps to locate and open the right job anchor.
+- Next action:
+  - Add clearer guidance or an explicit helper mode in tooling for "open web URL as web-only tab" to reduce context jumps during maintainer troubleshooting.
+  - Add a short maintainer cookbook for real GitHub triage (open actions list -> open target run -> jump to failed job -> open precise step anchor), using only safe default tool path.
+  - Keep the same flow lightweight, and only escalate to script/Javascript fallback if the safe-path extraction is insufficient.
+
 ### 2026-04-17 - Open - Recovery acceptance ergonomics and local scene restoration
 
 - Scope: recovery-specific smoke coverage, local runtime recovery after forced Chrome shutdown, structured tool-error parsing
@@ -59,21 +74,20 @@ Maintenance convention:
   - Keep recovery smoke paths in the safer form used here: set localhost-only injection -> trigger a real request -> validate the structured result -> clear injection -> restore the local scene.
   - Prefer localhost-only recovery injections over touching user installation directories when expanding future acceptance coverage.
 
-### 2026-04-17 - Open - CLI argument ergonomics in real troubleshooting
+### 2026-04-17 - Closed - CLI argument ergonomics in real troubleshooting
 
 - Scope: real maintainer use of `tabrix mcp call --args` from PowerShell
 - Priority: Medium
 - Owner: Maintainers / contributors
 - Related: `tabrix mcp call`, GitHub Actions page troubleshooting, PowerShell
-- Summary: The browser-first troubleshooting flow now works, but `--args` still requires hand-written JSON strings, which is easy to misquote in PowerShell and adds friction in real maintenance work.
+- Summary: The browser-first troubleshooting flow remains valid, and the `tabrix mcp call` friction point has been addressed.
 - Evidence:
-  - During this real GitHub Actions investigation, multiple attempts failed with JSON parsing errors such as `MCP call failed: Expected property name or '}' in JSON...` before the command shape was corrected.
-  - The same `chrome_navigate`, `chrome_read_page`, and `chrome_get_web_content` calls succeeded reliably once arguments were passed via single-quoted JSON or `ConvertTo-Json`.
-  - GitHub-oriented examples are now present in `tabrix mcp --help`, but shell-level argument ergonomics still depend on users understanding quoting details.
+  - `tabrix mcp call` now accepts shell-friendly `--arg key=value` pairs (repeatable), preserving JSON parsing for numbers/booleans/objects when provided.
+  - `tabrix mcp call` now accepts `--args-file <path>` for complex payloads, reducing PowerShell escaping risk.
+  - Help text has been updated with both key/value and file-based examples for real maintainer scenarios.
+  - Single round-trip tests were added (`app/native-server/src/scripts/mcp-inspect.test.ts`) to verify `--arg` and `--args-file` behavior and ensure invalid inputs fail fast.
 - Next action:
-  - Evaluate a lower-friction argument format for `tabrix mcp call`, such as `--args-file`, repeated `--arg key=value`, or another shell-friendly object input mode.
-  - Add at least one PowerShell-specific argument example to CLI docs or help text for Windows maintenance workflows.
-  - Keep recording verified self-use friction points here after real tasks, while keeping the public log lightweight.
+  - Keep this item closed, and revisit only if PowerShell-specific automation still sees frequent mis-parsing during real maintainer sessions.
 
 ### 2026-04-17 - Open - Product self-use feedback from real GitHub troubleshooting
 
