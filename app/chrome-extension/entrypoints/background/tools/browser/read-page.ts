@@ -11,9 +11,11 @@ interface ReadPageStats {
   durationMs: number;
 }
 
+type ReadPageMode = 'compact' | 'normal' | 'full';
+
 interface ReadPageParams {
   filter?: 'interactive'; // when omitted, return all visible elements
-  mode?: 'compact' | 'normal' | 'full'; // output verbosity mode, default compact
+  mode?: ReadPageMode; // output verbosity mode, default compact
   depth?: number; // maximum DOM depth to traverse (0 = root only)
   refId?: string; // focus on subtree rooted at this refId
   tabId?: number; // target existing tab id
@@ -244,6 +246,217 @@ function summarizePageContent(pageContent: string) {
   };
 }
 
+interface SnapshotNode {
+  role: string;
+  name: string;
+  ref: string;
+}
+
+interface SnapshotInteractiveElement {
+  ref: string;
+  role: string;
+  name: string;
+}
+
+interface SnapshotArtifactRef {
+  kind: 'dom_snapshot';
+  ref: string;
+}
+
+const INTERACTIVE_ROLES = new Set([
+  'button',
+  'link',
+  'textbox',
+  'searchbox',
+  'combobox',
+  'checkbox',
+  'radio',
+  'switch',
+  'slider',
+  'option',
+  'menuitem',
+  'tab',
+  'treeitem',
+  'spinbutton',
+]);
+
+function parseSnapshotNodesFromPageContent(pageContent: string): SnapshotNode[] {
+  const lines = String(pageContent || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const nodes: SnapshotNode[] = [];
+  for (const line of lines) {
+    const match = line.match(/^- ([^\s"]+)(?: "([^"]*)")? \[ref=([^\]]+)\]/);
+    if (!match) continue;
+    nodes.push({
+      role: String(match[1] || 'generic')
+        .trim()
+        .toLowerCase(),
+      name: String(match[2] || '')
+        .replace(/\\"/g, '"')
+        .trim(),
+      ref: String(match[3] || '').trim(),
+    });
+    if (nodes.length >= 300) break;
+  }
+  return nodes;
+}
+
+function buildInteractiveElements(
+  pageContent: string,
+  fallbackElements: any[],
+  limit: number,
+): SnapshotInteractiveElement[] {
+  const nodes = parseSnapshotNodesFromPageContent(pageContent);
+  const parsedInteractive = nodes.filter((node) => INTERACTIVE_ROLES.has(node.role));
+  const source = parsedInteractive.length > 0 ? parsedInteractive : nodes;
+  const fromSnapshot = source
+    .filter((node) => node.ref)
+    .slice(0, limit)
+    .map((node) => ({
+      ref: node.ref,
+      role: node.role || 'generic',
+      name: node.name || '',
+    }));
+
+  if (fromSnapshot.length > 0) return fromSnapshot;
+
+  const fromFallback = Array.isArray(fallbackElements) ? fallbackElements : [];
+  return fromFallback.slice(0, limit).map((item: any, index: number) => ({
+    ref: String(item?.ref || item?.selector || `fallback_${index + 1}`),
+    role: String(item?.type || 'generic').toLowerCase(),
+    name: String(item?.text || '').trim(),
+  }));
+}
+
+function buildArtifactRefs(tabId: number): SnapshotArtifactRef[] {
+  const safeTabId = Number.isFinite(tabId) ? tabId : 0;
+  return [
+    { kind: 'dom_snapshot', ref: `artifact://read_page/tab-${safeTabId}/normal` },
+    { kind: 'dom_snapshot', ref: `artifact://read_page/tab-${safeTabId}/full` },
+  ];
+}
+
+function buildModeOutput(params: {
+  mode: ReadPageMode;
+  tabId: number;
+  currentUrl: string;
+  currentTitle: string;
+  pageType: PageType;
+  scheme: string;
+  pageRole: PageRole;
+  primaryRegion: string | null;
+  primaryRegionConfidence: 'low' | 'medium' | 'high' | null;
+  footerOnly: boolean;
+  anchorTexts: string[];
+  pageContent: string;
+  contentSummary: {
+    charCount: number;
+    normalizedLength: number;
+    lineCount: number;
+    quality: string;
+  };
+  stats: ReadPageStats | { processed: number; included: number; durationMs: number };
+  viewport: { width: number | null; height: number | null; dpr: number | null };
+  filter: string;
+  depth: number | null;
+  focus: { refId: string; found: boolean } | null;
+  sparse: boolean;
+  fallbackUsed: boolean;
+  fallbackSource: string | null;
+  refMapCount: number;
+  markedElements: any[];
+  elements: any[];
+  count: number;
+  reason: string | null;
+  tips: string;
+  refMap: any[];
+  candidateActions: any[];
+}) {
+  const interactiveLimit = params.mode === 'compact' ? 24 : 80;
+  const interactiveElements = buildInteractiveElements(
+    params.pageContent,
+    params.elements,
+    interactiveLimit,
+  );
+  const artifactRefs = buildArtifactRefs(params.tabId);
+  const pageContext = {
+    filter: params.filter,
+    depth: params.depth,
+    focus: params.focus,
+    scheme: params.scheme,
+    viewport: params.viewport,
+    sparse: params.sparse,
+    fallbackUsed: params.fallbackUsed,
+    fallbackSource: params.fallbackSource,
+    refMapCount: params.refMapCount,
+    markedElementsCount: params.markedElements.length,
+  };
+
+  const sharedPayload = {
+    mode: params.mode,
+    page: {
+      url: params.currentUrl,
+      title: params.currentTitle,
+      pageType: params.pageType,
+    },
+    summary: {
+      pageRole: params.pageRole,
+      primaryRegion: params.primaryRegion,
+      quality: params.contentSummary.quality,
+    },
+    interactiveElements,
+    candidateActions: params.candidateActions,
+    artifactRefs,
+    pageContext,
+  };
+
+  if (params.mode === 'compact') {
+    return sharedPayload;
+  }
+
+  if (params.mode === 'normal') {
+    return {
+      ...sharedPayload,
+      summary: {
+        ...sharedPayload.summary,
+        primaryRegionConfidence: params.primaryRegionConfidence,
+        footerOnly: params.footerOnly,
+        anchorTexts: params.anchorTexts,
+      },
+      diagnostics: {
+        stats: params.stats,
+        contentSummary: params.contentSummary,
+        tips: params.tips,
+        reason: params.reason,
+      },
+    };
+  }
+
+  return {
+    ...sharedPayload,
+    summary: {
+      ...sharedPayload.summary,
+      primaryRegionConfidence: params.primaryRegionConfidence,
+      footerOnly: params.footerOnly,
+      anchorTexts: params.anchorTexts,
+    },
+    fullSnapshot: {
+      pageContent: params.pageContent,
+      refMap: params.refMap,
+      fallbackElements: params.elements,
+      fallbackCount: params.count,
+      markedElements: params.markedElements,
+      stats: params.stats,
+      contentSummary: params.contentSummary,
+      tips: params.tips,
+      reason: params.reason,
+    },
+  };
+}
+
 class ReadPageTool extends BaseBrowserToolExecutor {
   name = TOOL_NAMES.BROWSER.READ_PAGE;
 
@@ -267,12 +480,13 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       );
     }
 
-    const selectedMode = mode || 'compact';
-    if (!['compact', 'normal', 'full'].includes(selectedMode)) {
+    const selectedModeRaw = mode || 'compact';
+    if (!['compact', 'normal', 'full'].includes(selectedModeRaw)) {
       return createErrorResponse(
         `${ERROR_MESSAGES.INVALID_PARAMETERS}: mode must be one of compact | normal | full`,
       );
     }
+    const selectedMode = selectedModeRaw as ReadPageMode;
 
     // Track if user explicitly controlled the output (skip sparse heuristics)
     const userControlled = requestedDepth !== undefined || !!focusRefId;
@@ -311,22 +525,37 @@ class ReadPageTool extends BaseBrowserToolExecutor {
               type: 'text',
               text: JSON.stringify({
                 success: false,
-                mode: selectedMode,
-                filter: filter || 'all',
-                pageContent: guardPageContent,
-                contentSummary: summarizePageContent(guardPageContent),
-                tips: standardTips,
-                viewport: { width: null, height: null, dpr: null },
-                stats: { processed: 0, included: 0, durationMs: 0 },
-                refMapCount: 0,
-                sparse: true,
-                depth: requestedDepth ?? null,
-                focus: focusRefId ? { refId: focusRefId, found: false } : null,
-                markedElements: [],
-                elements: [],
-                count: 0,
-                fallbackUsed: false,
-                fallbackSource: null,
+                ...buildModeOutput({
+                  mode: selectedMode,
+                  tabId: tab.id,
+                  currentUrl,
+                  currentTitle,
+                  pageType: schemeGuard.pageType,
+                  scheme: schemeGuard.scheme,
+                  pageRole: 'unknown',
+                  primaryRegion: null,
+                  primaryRegionConfidence: null,
+                  footerOnly: false,
+                  anchorTexts: [],
+                  pageContent: guardPageContent,
+                  contentSummary: summarizePageContent(guardPageContent),
+                  stats: { processed: 0, included: 0, durationMs: 0 },
+                  viewport: { width: null, height: null, dpr: null },
+                  filter: filter || 'all',
+                  depth: requestedDepth ?? null,
+                  focus: focusRefId ? { refId: focusRefId, found: false } : null,
+                  sparse: true,
+                  fallbackUsed: false,
+                  fallbackSource: null,
+                  refMapCount: 0,
+                  markedElements: [],
+                  elements: [],
+                  count: 0,
+                  reason: 'unsupported_page_type',
+                  tips: standardTips,
+                  refMap: [],
+                  candidateActions: [],
+                }),
                 reason: 'unsupported_page_type',
                 pageType: schemeGuard.pageType,
                 scheme: schemeGuard.scheme,
@@ -441,12 +670,45 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         fallbackUsed: false,
         fallbackSource: null,
         reason: null,
+        refMap: Array.isArray(resp?.refMap) ? resp.refMap : [],
+        candidateActions: [],
       };
 
       // Normal path: return tree
       if (treeOk && !isSparse) {
+        const modePayload = buildModeOutput({
+          mode: selectedMode,
+          tabId: tab.id,
+          currentUrl,
+          currentTitle,
+          pageType: schemeGuard.pageType,
+          scheme: schemeGuard.scheme,
+          pageRole: basePayload.pageRole,
+          primaryRegion: basePayload.primaryRegion,
+          primaryRegionConfidence: basePayload.primaryRegionConfidence,
+          footerOnly: basePayload.footerOnly,
+          anchorTexts: basePayload.anchorTexts,
+          pageContent: basePayload.pageContent,
+          contentSummary: basePayload.contentSummary,
+          stats: basePayload.stats,
+          viewport: basePayload.viewport,
+          filter: basePayload.filter,
+          depth: basePayload.depth,
+          focus: basePayload.focus,
+          sparse: basePayload.sparse,
+          fallbackUsed: basePayload.fallbackUsed,
+          fallbackSource: basePayload.fallbackSource,
+          refMapCount: basePayload.refMapCount,
+          markedElements: basePayload.markedElements,
+          elements: basePayload.elements,
+          count: basePayload.count,
+          reason: basePayload.reason,
+          tips: basePayload.tips,
+          refMap: basePayload.refMap,
+          candidateActions: basePayload.candidateActions,
+        });
         return {
-          content: [{ type: 'text', text: JSON.stringify(basePayload) }],
+          content: [{ type: 'text', text: JSON.stringify(modePayload) }],
           isError: false,
         };
       }
@@ -502,8 +764,40 @@ class ReadPageTool extends BaseBrowserToolExecutor {
           basePayload.footerOnly = fallbackUnderstanding.footerOnly;
           basePayload.anchorTexts = fallbackUnderstanding.anchorTexts;
 
+          const modePayload = buildModeOutput({
+            mode: selectedMode,
+            tabId: tab.id,
+            currentUrl,
+            currentTitle,
+            pageType: schemeGuard.pageType,
+            scheme: schemeGuard.scheme,
+            pageRole: basePayload.pageRole,
+            primaryRegion: basePayload.primaryRegion,
+            primaryRegionConfidence: basePayload.primaryRegionConfidence,
+            footerOnly: basePayload.footerOnly,
+            anchorTexts: basePayload.anchorTexts,
+            pageContent: basePayload.pageContent,
+            contentSummary: summarizePageContent(String(basePayload.pageContent || '')),
+            stats: basePayload.stats,
+            viewport: basePayload.viewport,
+            filter: basePayload.filter,
+            depth: basePayload.depth,
+            focus: basePayload.focus,
+            sparse: basePayload.sparse,
+            fallbackUsed: basePayload.fallbackUsed,
+            fallbackSource: basePayload.fallbackSource,
+            refMapCount: basePayload.refMapCount,
+            markedElements: basePayload.markedElements,
+            elements: basePayload.elements,
+            count: basePayload.count,
+            reason: basePayload.reason,
+            tips: basePayload.tips,
+            refMap: basePayload.refMap,
+            candidateActions: basePayload.candidateActions,
+          });
+
           return {
-            content: [{ type: 'text', text: JSON.stringify(basePayload) }],
+            content: [{ type: 'text', text: JSON.stringify(modePayload) }],
             isError: false,
           };
         }

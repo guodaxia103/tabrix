@@ -182,7 +182,7 @@ describe('browser settle guidance', () => {
     });
   });
 
-  it('returns safe-first guidance and content summary from read_page', async () => {
+  it('returns compact structured snapshot from read_page', async () => {
     vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
       id: 41,
       windowId: 1,
@@ -209,12 +209,16 @@ describe('browser settle guidance', () => {
 
     expect(result.isError).toBe(false);
     const payload = JSON.parse((result.content[0] as { text: string }).text);
-    expect(payload.contentSummary).toMatchObject({
+    expect(payload.mode).toBe('compact');
+    expect(payload.summary).toMatchObject({
       quality: 'usable',
     });
-    expect(payload.tips).toContain('safe path first');
-    expect(payload.tips).toContain('chrome_screenshot');
-    expect(payload.tips).toContain('chrome_computer');
+    expect(payload.page).toMatchObject({
+      pageType: 'web_page',
+    });
+    expect(Array.isArray(payload.interactiveElements)).toBe(true);
+    expect(Array.isArray(payload.candidateActions)).toBe(true);
+    expect(Array.isArray(payload.artifactRefs)).toBe(true);
   });
 
   it('classifies hotspot topic list pages in read_page metadata', async () => {
@@ -240,19 +244,23 @@ describe('browser settle guidance', () => {
       viewport: { width: 1440, height: 900, dpr: 1 },
     });
 
-    const result = await readPageTool.execute({});
+    const result = await readPageTool.execute({ mode: 'normal' });
 
     expect(result.isError).toBe(false);
     const payload = JSON.parse((result.content[0] as { text: string }).text);
-    expect(payload).toMatchObject({
+    expect(payload.page).toMatchObject({
       pageType: 'web_page',
+    });
+    expect(payload.pageContext).toMatchObject({
       scheme: 'https',
+    });
+    expect(payload.summary).toMatchObject({
       pageRole: 'hotspot_topic_list',
       primaryRegion: 'topic_table',
       primaryRegionConfidence: 'high',
       footerOnly: false,
     });
-    expect(payload.anchorTexts).toEqual(
+    expect(payload.summary.anchorTexts).toEqual(
       expect.arrayContaining(['话题名称', '热度趋势', '热度值', '视频量', '播放量', '稿均播放量']),
     );
   });

@@ -37,6 +37,44 @@ describe('read_page mode', () => {
     const payload = JSON.parse((result.content[0] as { text: string }).text);
     expect(result.isError).toBe(false);
     expect(payload.mode).toBe('compact');
+    expect(payload.page).toMatchObject({
+      url: 'https://example.com/checkout',
+      title: 'Checkout',
+      pageType: 'web_page',
+    });
+    expect(payload.summary).toMatchObject({
+      quality: 'usable',
+    });
+    expect(Array.isArray(payload.interactiveElements)).toBe(true);
+    expect(Array.isArray(payload.artifactRefs)).toBe(true);
+    expect(payload.artifactRefs[0].kind).toBe('dom_snapshot');
+  });
+
+  it('returns normal mode diagnostics block', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5203,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://example.com/list',
+      title: 'List',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent:
+        'Button "Open"\nLink "Details"\nTextbox "Search"\nRow "Item A"\nRow "Item B"\nRow "Item C"\nSection "Results"\nHeading "Inventory"\nStatus "Ready"\nFooter "End"',
+      refMap: ['ref_1', 'ref_2', 'ref_3'],
+      stats: { processed: 10, included: 8, durationMs: 8 },
+      viewport: { width: 1280, height: 720, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'normal' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    expect(result.isError).toBe(false);
+    expect(payload.mode).toBe('normal');
+    expect(payload.diagnostics).toBeDefined();
+    expect(payload.fullSnapshot).toBeUndefined();
   });
 
   it('echoes explicit full mode', async () => {
@@ -62,5 +100,7 @@ describe('read_page mode', () => {
     const payload = JSON.parse((result.content[0] as { text: string }).text);
     expect(result.isError).toBe(false);
     expect(payload.mode).toBe('full');
+    expect(payload.fullSnapshot).toBeDefined();
+    expect(payload.fullSnapshot.pageContent).toContain('Button "Continue"');
   });
 });
