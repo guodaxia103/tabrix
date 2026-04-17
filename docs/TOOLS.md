@@ -133,17 +133,24 @@ Switch to a specific browser tab.
 
 ### `chrome_read_page`
 
-Get an accessibility tree of visible elements in the viewport, with stable `ref_*` identifiers. Optionally focus on interactive nodes or a subtree. Does not work on `chrome://` pages; localhost may return sparse output.
+Read the current page as a structured execution snapshot. The default output is `compact` and is optimized for downstream action tools (`chrome_click_element`, `chrome_fill_or_select`, `chrome_computer`).
+
+The response is mode-based:
+
+- `compact` (default): short, execution-oriented snapshot
+- `normal`: adds richer diagnostics for debugging
+- `full`: includes complete snapshot payload for evidence/debug use
 
 **Parameters**:
 
 - `filter` (string, optional): Use `"interactive"` for buttons, links, inputs, etc.; default includes visible structural/labeled nodes.
+- `mode` (string, optional): `compact` | `normal` | `full`. Default is `compact`.
 - `depth` (number, optional): Maximum DOM depth to traverse (integer ≥ 0); lower values reduce output size.
 - `refId` (string, optional): Subtree root ref (e.g. `"ref_12"`) from a recent `chrome_read_page` in the same tab; refs may expire.
 - `tabId` (number, optional): Target tab (default: active tab).
 - `windowId` (number, optional): Window used when `tabId` is omitted.
 
-**Example**:
+**Example (default compact)**:
 
 ```json
 {
@@ -152,7 +159,69 @@ Get an accessibility tree of visible elements in the viewport, with stable `ref_
 }
 ```
 
-**Response**: Includes `pageContent`, viewport info, and ref summaries. Use refs with `chrome_click_element`, `chrome_fill_or_select`, or `chrome_computer`.
+**Example (explicit full)**:
+
+```json
+{
+  "mode": "full",
+  "filter": "interactive"
+}
+```
+
+**Compact response shape**:
+
+```json
+{
+  "mode": "compact",
+  "page": {
+    "url": "https://example.com/checkout",
+    "title": "Checkout",
+    "pageType": "web_page"
+  },
+  "summary": {
+    "pageRole": "unknown",
+    "primaryRegion": "form_region",
+    "quality": "usable"
+  },
+  "interactiveElements": [{ "ref": "ref_3", "role": "button", "name": "Submit order" }],
+  "candidateActions": [
+    {
+      "id": "ca_click_ref_3",
+      "actionType": "click",
+      "targetRef": "ref_3",
+      "confidence": 0.93,
+      "matchReason": "primary action inferred from interactive label",
+      "locatorChain": [
+        { "type": "aria", "value": "Submit order" },
+        { "type": "css", "value": "button[type=submit]" }
+      ]
+    }
+  ],
+  "artifactRefs": [
+    { "kind": "dom_snapshot", "ref": "artifact://read_page/tab-101/normal" },
+    { "kind": "dom_snapshot", "ref": "artifact://read_page/tab-101/full" }
+  ],
+  "pageContext": {
+    "filter": "interactive",
+    "depth": 12,
+    "focus": null,
+    "scheme": "https",
+    "viewport": { "width": 1280, "height": 720, "dpr": 1 },
+    "sparse": false,
+    "fallbackUsed": false,
+    "fallbackSource": null,
+    "refMapCount": 24,
+    "markedElementsCount": 0
+  }
+}
+```
+
+**Notes**:
+
+- `normal` keeps the compact core and adds `diagnostics`.
+- `full` keeps the compact core and adds `fullSnapshot` (large payload).
+- `artifactRefs` are the stable pointer fields for larger snapshot artifacts and follow-up tooling.
+- On unsupported tabs (for example `chrome://`), the tool still returns a structured payload with `reason: "unsupported_page_type"`.
 
 ### `chrome_get_web_content`
 

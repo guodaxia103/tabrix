@@ -124,19 +124,26 @@
 
 ### `chrome_read_page`
 
-获取页面可见元素的可访问性树。仅返回视口内可见的元素。可选筛选仅交互元素。若返回中仍缺少目标元素，可配合 `chrome_computer` 的 `action="screenshot"` 获取屏幕坐标后按坐标操作。
+将当前页面读取为结构化“执行快照”。默认返回 `compact`，用于给 `chrome_click_element`、`chrome_fill_or_select`、`chrome_computer` 提供更短、更可执行的输入。
+
+输出支持三档：
+
+- `compact`（默认）：执行优先，返回短结构
+- `normal`：在 compact 基础上附加调试诊断
+- `full`：在 compact 基础上附加完整快照（用于证据/调试）
 
 **限制**：不适用于 `chrome://` 或浏览器内部页面；在稀疏的 localhost 页面上可能返回降级结果。
 
 **参数**：
 
 - `filter` (字符串，可选)：`"interactive"` 时仅包含按钮/链接/输入等交互元素（默认：全部可见元素）。
+- `mode` (字符串，可选)：`compact` | `normal` | `full`，默认 `compact`。
 - `depth` (数字，可选)：遍历 DOM 的最大深度（整数 ≥ 0），越小输出越少、性能越好。
 - `refId` (字符串，可选)：从某元素的 `refId`（如 `"ref_12"`）为根的子树；`refId` 须来自同一标签页最近一次 `chrome_read_page` 响应（可能过期）。
 - `tabId` (数字，可选)：目标标签页（默认：活动标签页）。
 - `windowId` (数字，可选)：未指定 `tabId` 时用于选取该窗口的活动标签页。
 
-**示例**：
+**示例（默认 compact）**：
 
 ```json
 {
@@ -145,6 +152,70 @@
   "tabId": 456
 }
 ```
+
+**示例（显式 full）**：
+
+```json
+{
+  "mode": "full",
+  "filter": "interactive"
+}
+```
+
+**compact 响应结构示例**：
+
+```json
+{
+  "mode": "compact",
+  "page": {
+    "url": "https://example.com/checkout",
+    "title": "Checkout",
+    "pageType": "web_page"
+  },
+  "summary": {
+    "pageRole": "unknown",
+    "primaryRegion": "form_region",
+    "quality": "usable"
+  },
+  "interactiveElements": [{ "ref": "ref_3", "role": "button", "name": "Submit order" }],
+  "candidateActions": [
+    {
+      "id": "ca_click_ref_3",
+      "actionType": "click",
+      "targetRef": "ref_3",
+      "confidence": 0.93,
+      "matchReason": "primary action inferred from interactive label",
+      "locatorChain": [
+        { "type": "aria", "value": "Submit order" },
+        { "type": "css", "value": "button[type=submit]" }
+      ]
+    }
+  ],
+  "artifactRefs": [
+    { "kind": "dom_snapshot", "ref": "artifact://read_page/tab-101/normal" },
+    { "kind": "dom_snapshot", "ref": "artifact://read_page/tab-101/full" }
+  ],
+  "pageContext": {
+    "filter": "interactive",
+    "depth": 8,
+    "focus": null,
+    "scheme": "https",
+    "viewport": { "width": 1280, "height": 720, "dpr": 1 },
+    "sparse": false,
+    "fallbackUsed": false,
+    "fallbackSource": null,
+    "refMapCount": 24,
+    "markedElementsCount": 0
+  }
+}
+```
+
+**说明**：
+
+- `normal` 保留 compact 主体并增加 `diagnostics`。
+- `full` 保留 compact 主体并增加 `fullSnapshot`（大体积结构）。
+- `artifactRefs` 是大结构引用锚点，供后续链路消费。
+- 在不支持页面（例如 `chrome://`）上，仍会返回结构化结果并带 `reason: "unsupported_page_type"`。
 
 ### `chrome_computer`
 
