@@ -27,8 +27,12 @@ describe('read_page mode', () => {
     vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
       success: true,
       pageContent:
-        'Button "Continue"\nTextbox "Search"\nLink "Docs"\nStatus "Ready"\nHint "Use refs first"\nBanner "Safe automation starts with structured reads"\nPanel "Use read_page and interactive refs before screenshots or coordinate fallbacks"\nSection "Confirm the page has settled before using visual fallbacks"\nChecklist "Prefer refs, then screenshots, then higher-risk tools"\nFooter "End of stable content"',
-      refMap: ['ref_1', 'ref_2', 'ref_3'],
+        '- form "Checkout" [ref=ref_0] (x=640,y=300)\n  - textbox "Email" [ref=ref_1] (x=600,y=260)\n  - textbox "Card number" [ref=ref_2] (x=600,y=300)\n  - button "Submit order" [ref=ref_3] (x=600,y=340)\n  - link "Back to cart" [ref=ref_4] (x=500,y=340)\n- heading "Checkout" [ref=ref_5] (x=320,y=100)\n- generic "Secure payment" [ref=ref_6] (x=320,y=140)\n- generic "Order summary" [ref=ref_7] (x=900,y=220)\n- generic "Terms" [ref=ref_8] (x=300,y=520)\n- generic "Footer" [ref=ref_9] (x=300,y=560)',
+      refMap: [
+        { ref: 'ref_1', selector: '#email' },
+        { ref: 'ref_2', selector: '#card-number' },
+        { ref: 'ref_3', selector: 'button[type=submit]' },
+      ],
       stats: { processed: 12, included: 8, durationMs: 11 },
       viewport: { width: 1280, height: 720, dpr: 1 },
     });
@@ -48,6 +52,16 @@ describe('read_page mode', () => {
     expect(Array.isArray(payload.interactiveElements)).toBe(true);
     expect(Array.isArray(payload.artifactRefs)).toBe(true);
     expect(payload.artifactRefs[0].kind).toBe('dom_snapshot');
+    expect(Array.isArray(payload.candidateActions)).toBe(true);
+    expect(payload.candidateActions.length).toBeGreaterThan(0);
+    expect(payload.candidateActions[0]).toMatchObject({
+      id: expect.any(String),
+      actionType: expect.any(String),
+      targetRef: expect.any(String),
+      confidence: expect.any(Number),
+      matchReason: expect.any(String),
+      locatorChain: expect.any(Array),
+    });
   });
 
   it('returns normal mode diagnostics block', async () => {
@@ -63,8 +77,12 @@ describe('read_page mode', () => {
     vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
       success: true,
       pageContent:
-        'Button "Open"\nLink "Details"\nTextbox "Search"\nRow "Item A"\nRow "Item B"\nRow "Item C"\nSection "Results"\nHeading "Inventory"\nStatus "Ready"\nFooter "End"',
-      refMap: ['ref_1', 'ref_2', 'ref_3'],
+        '- heading "Inventory" [ref=ref_1] (x=200,y=120)\n- textbox "Search" [ref=ref_2] (x=280,y=180)\n- button "Open item" [ref=ref_3] (x=420,y=180)\n- link "Details" [ref=ref_4] (x=520,y=180)\n- generic "Row Item A" [ref=ref_5] (x=280,y=240)\n- generic "Row Item B" [ref=ref_6] (x=280,y=280)\n- generic "Row Item C" [ref=ref_7] (x=280,y=320)\n- generic "Status Ready" [ref=ref_8] (x=280,y=360)\n- generic "Panel" [ref=ref_9] (x=760,y=220)\n- generic "Footer" [ref=ref_10] (x=760,y=520)',
+      refMap: [
+        { ref: 'ref_2', selector: 'input[name=search]' },
+        { ref: 'ref_3', selector: 'button.open-item' },
+        { ref: 'ref_4', selector: 'a.details-link' },
+      ],
       stats: { processed: 10, included: 8, durationMs: 8 },
       viewport: { width: 1280, height: 720, dpr: 1 },
     });
@@ -90,8 +108,12 @@ describe('read_page mode', () => {
     vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
       success: true,
       pageContent:
-        'Button "Continue"\nTextbox "Search"\nLink "Docs"\nStatus "Ready"\nHint "Use refs first"\nBanner "Safe automation starts with structured reads"\nPanel "Use read_page and interactive refs before screenshots or coordinate fallbacks"\nSection "Confirm the page has settled before using visual fallbacks"\nChecklist "Prefer refs, then screenshots, then higher-risk tools"\nFooter "End of stable content"',
-      refMap: ['ref_1', 'ref_2', 'ref_3'],
+        '- form "Checkout" [ref=ref_0] (x=640,y=300)\n  - textbox "Email" [ref=ref_1] (x=600,y=260)\n  - textbox "Card number" [ref=ref_2] (x=600,y=300)\n  - button "Submit order" [ref=ref_3] (x=600,y=340)\n  - link "Back to cart" [ref=ref_4] (x=500,y=340)\n- heading "Checkout" [ref=ref_5] (x=320,y=100)\n- generic "Secure payment" [ref=ref_6] (x=320,y=140)\n- generic "Order summary" [ref=ref_7] (x=900,y=220)\n- generic "Terms" [ref=ref_8] (x=300,y=520)\n- generic "Footer" [ref=ref_9] (x=300,y=560)',
+      refMap: [
+        { ref: 'ref_1', selector: '#email' },
+        { ref: 'ref_2', selector: '#card-number' },
+        { ref: 'ref_3', selector: 'button[type=submit]' },
+      ],
       stats: { processed: 12, included: 8, durationMs: 11 },
       viewport: { width: 1280, height: 720, dpr: 1 },
     });
@@ -101,6 +123,6 @@ describe('read_page mode', () => {
     expect(result.isError).toBe(false);
     expect(payload.mode).toBe('full');
     expect(payload.fullSnapshot).toBeDefined();
-    expect(payload.fullSnapshot.pageContent).toContain('Button "Continue"');
+    expect(payload.fullSnapshot.pageContent).toContain('button "Submit order"');
   });
 });
