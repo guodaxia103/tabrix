@@ -32,6 +32,10 @@ Implementation design notes, audits, acceptance evidence, release-gate maintenan
 - `COMPATIBILITY_MATRIX.md` / `COMPATIBILITY_MATRIX_zh.md`: current MCP client and environment compatibility posture
 - `CODE_ENTRYPOINTS_AND_OWNERSHIP_zh.md`: contributor execution map for common change types
 - `STABLE_QUICKSTART.md`: user-facing first-success path
+- `BROWSER_TOOL_SETTLE_AUDIT_zh.md`: browser tool settle effectiveness review and optimization policy
+- `RELEASE_READINESS_CHECKLIST_zh.md`: Phase 0 发布前验收清单
+- `BROWSER_BRIDGE_STATE_DESIGN_zh.md`: 浏览器桥接状态机与自动恢复设计
+- `OSV_AUDIT_GATE_zh.md`: 生产依赖安全门禁与 OSV 门禁说明
 - `ROADMAP.md` / `ROADMAP_zh.md`: public product direction and contributor-facing future priorities
 - `USE_CASES.md` / `USE_CASES_zh.md`: realistic early-stage scenarios for new users
 - `ARCHITECTURE.md` / `ARCHITECTURE_zh.md`: public architecture overview
