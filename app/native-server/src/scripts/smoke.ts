@@ -35,6 +35,21 @@ interface SmokeResult {
   steps: SmokeStep[];
 }
 
+function emitSmokeResult(result: SmokeResult, json = false): void {
+  if (json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    return;
+  }
+
+  process.stdout.write(`tabrix smoke\n\n`);
+  process.stdout.write(
+    `${result.mode === 'protocol' ? 'MCP endpoint' : 'Local test page'}: ${result.baseUrl}\n`,
+  );
+  for (const step of result.steps) {
+    process.stdout.write(`${step.ok ? '[OK]' : '[FAIL]'} ${step.name}: ${step.detail}\n`);
+  }
+}
+
 interface HttpProbeResult {
   ok: boolean;
   status?: number;
@@ -1076,6 +1091,30 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
             ? `Recovery returned a single next action: ${recoveryParsed.nextAction}`
             : `Unexpected recovery result: ${JSON.stringify(recoveryParsed).slice(0, 160)}`,
       );
+
+      if (!options.keepTab) {
+        traceStep('chrome_close_tabs(recovery):start');
+        await mcp.callTool('chrome_close_tabs', {
+          tabIds: [tempTabId],
+        });
+        record('chrome_close_tabs', true, `Closed smoke tab ${tempTabId}`);
+        tempTabId = null;
+      }
+
+      if (originalTabId) {
+        traceStep('chrome_switch_tab(original-recovery):start');
+        await mcp.callTool('chrome_switch_tab', { tabId: originalTabId });
+      }
+
+      const result: SmokeResult = {
+        ok: steps.every((step) => step.ok),
+        baseUrl: smokeServer?.baseUrl || mcpUrl,
+        mcpUrl,
+        mode,
+        steps,
+      };
+      emitSmokeResult(result, options.json);
+      return result.ok ? 0 : 1;
     }
 
     const page = parseToolText(await mcp.callTool('chrome_read_page', { tabId: tempTabId }));
@@ -1405,17 +1444,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     steps,
   };
 
-  if (options.json) {
-    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-  } else {
-    process.stdout.write(`tabrix smoke\n\n`);
-    process.stdout.write(
-      `${result.mode === 'protocol' ? 'MCP endpoint' : 'Local test page'}: ${result.baseUrl}\n`,
-    );
-    for (const step of steps) {
-      process.stdout.write(`${step.ok ? '[OK]' : '[FAIL]'} ${step.name}: ${step.detail}\n`);
-    }
-  }
+  emitSmokeResult(result, options.json);
 
   return result.ok ? 0 : 1;
 }
