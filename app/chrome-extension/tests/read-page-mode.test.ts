@@ -1,6 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readPageTool } from '@/entrypoints/background/tools/browser/read-page';
 
+function expectCommonSnapshotShape(payload: any, mode: 'compact' | 'normal' | 'full') {
+  expect(payload.mode).toBe(mode);
+  expect(payload.page).toMatchObject({
+    url: expect.any(String),
+    title: expect.any(String),
+    pageType: expect.any(String),
+  });
+  expect(payload.summary).toEqual(expect.any(Object));
+  expect(Array.isArray(payload.interactiveElements)).toBe(true);
+  expect(Array.isArray(payload.candidateActions)).toBe(true);
+  expect(Array.isArray(payload.artifactRefs)).toBe(true);
+  expect(payload.artifactRefs[0]).toMatchObject({
+    kind: 'dom_snapshot',
+    ref: expect.any(String),
+  });
+  expect(payload.pageContext).toMatchObject({
+    filter: expect.any(String),
+    scheme: expect.any(String),
+    viewport: expect.any(Object),
+    fallbackUsed: expect.any(Boolean),
+    refMapCount: expect.any(Number),
+  });
+}
+
 describe('read_page mode', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -40,7 +64,7 @@ describe('read_page mode', () => {
     const result = await readPageTool.execute({});
     const payload = JSON.parse((result.content[0] as { text: string }).text);
     expect(result.isError).toBe(false);
-    expect(payload.mode).toBe('compact');
+    expectCommonSnapshotShape(payload, 'compact');
     expect(payload.page).toMatchObject({
       url: 'https://example.com/checkout',
       title: 'Checkout',
@@ -62,6 +86,12 @@ describe('read_page mode', () => {
       matchReason: expect.any(String),
       locatorChain: expect.any(Array),
     });
+    expect(payload.candidateActions[0].locatorChain[0]).toMatchObject({
+      type: expect.any(String),
+      value: expect.any(String),
+    });
+    expect(payload.diagnostics).toBeUndefined();
+    expect(payload.fullSnapshot).toBeUndefined();
   });
 
   it('returns normal mode diagnostics block', async () => {
@@ -90,7 +120,7 @@ describe('read_page mode', () => {
     const result = await readPageTool.execute({ mode: 'normal' });
     const payload = JSON.parse((result.content[0] as { text: string }).text);
     expect(result.isError).toBe(false);
-    expect(payload.mode).toBe('normal');
+    expectCommonSnapshotShape(payload, 'normal');
     expect(payload.diagnostics).toBeDefined();
     expect(payload.fullSnapshot).toBeUndefined();
   });
@@ -121,8 +151,28 @@ describe('read_page mode', () => {
     const result = await readPageTool.execute({ mode: 'full' });
     const payload = JSON.parse((result.content[0] as { text: string }).text);
     expect(result.isError).toBe(false);
-    expect(payload.mode).toBe('full');
+    expectCommonSnapshotShape(payload, 'full');
     expect(payload.fullSnapshot).toBeDefined();
     expect(payload.fullSnapshot.pageContent).toContain('button "Submit order"');
+  });
+
+  it('keeps structured skeleton for unsupported page types', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5208,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'chrome://extensions',
+      title: 'Extensions',
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    expect(result.isError).toBe(false);
+    expect(payload.success).toBe(false);
+    expect(payload.reason).toBe('unsupported_page_type');
+    expect(payload.pageType).toBe('browser_internal_page');
+    expectCommonSnapshotShape(payload, 'compact');
+    expect(payload.candidateActions).toEqual([]);
   });
 });
