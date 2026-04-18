@@ -473,6 +473,64 @@ describe('read_page mode', () => {
     );
   });
 
+  it('prioritizes workflow run detail task links over commit metadata when labels are href-only', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5216,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://github.com/example/project/actions/runs/42',
+      title: 'Workflow run detail',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [
+        '- generic [ref=ref_root] (x=854,y=423)',
+        '  - link [ref=ref_summary] (x=168,y=230) href="/example/project/actions/runs/42"',
+        '  - link [ref=ref_jobs] (x=152,y=318) href="/example/project/actions/runs/42/job/1001"',
+        '  - link [ref=ref_artifacts] (x=168,y=396) href="/example/project/actions/runs/42/usage"',
+        '  - link [ref=ref_workflow] (x=168,y=428) href="/example/project/actions/runs/42/workflow"',
+        '  - link [ref=ref_logs] (x=524,y=661) href="/example/project/actions/runs/42/job/1001#step:12:92"',
+        '  - link "guodaxia103" [ref=ref_author] (x=431,y=262) href="/guodaxia103"',
+        '  - link "bbfda4e" [ref=ref_commit] (x=570,y=263) href="/example/project/commit/bbfda4e5d826eeb157e9e92fd6d889a93512357"',
+        '  - link "main" [ref=ref_branch] (x=624,y=262) href="/example/project/tree/refs/heads/main"',
+        '  - link "54s" [ref=ref_duration] (x=840,y=260) href="/example/project/actions/runs/42/usage"',
+        '  - button "Search or jump to…" [ref=ref_search] (x=1301,y=32) type="button"',
+      ].join('\n'),
+      refMap: [
+        { ref: 'ref_summary', selector: 'a[href$="/actions/runs/42"]' },
+        { ref: 'ref_jobs', selector: 'a[href*="/actions/runs/42/job/1001"]' },
+        { ref: 'ref_artifacts', selector: 'a[href$="/actions/runs/42/usage"]' },
+        { ref: 'ref_workflow', selector: 'a[href$="/actions/runs/42/workflow"]' },
+        { ref: 'ref_logs', selector: 'a[href*="#step:12:92"]' },
+        { ref: 'ref_author', selector: 'a[href="/guodaxia103"]' },
+        { ref: 'ref_commit', selector: 'a[href*="/commit/"]' },
+        { ref: 'ref_branch', selector: 'a[href*="/tree/refs/heads/main"]' },
+        { ref: 'ref_duration', selector: 'a[href$="/actions/runs/42/usage"]' },
+        { ref: 'ref_search', selector: 'button[aria-label="Search or jump to…"]' },
+      ],
+      stats: { processed: 22, included: 14, durationMs: 8 },
+      viewport: { width: 1707, height: 846, dpr: 1.5 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    const orderedRefs = payload.interactiveElements.map((element: { ref: string }) => element.ref);
+
+    expect(result.isError).toBe(false);
+    expect(payload.interactiveElements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ref: 'ref_summary', name: 'Summary' }),
+        expect.objectContaining({ ref: 'ref_jobs', name: 'Jobs' }),
+        expect.objectContaining({ ref: 'ref_logs', name: 'Logs' }),
+      ]),
+    );
+    expect(orderedRefs.indexOf('ref_summary')).toBeLessThan(orderedRefs.indexOf('ref_commit'));
+    expect(orderedRefs.indexOf('ref_jobs')).toBeLessThan(orderedRefs.indexOf('ref_branch'));
+    expect(orderedRefs.indexOf('ref_artifacts')).toBeLessThan(orderedRefs.indexOf('ref_duration'));
+  });
+
   it('prioritizes run detail links over workflow catalog links on actions list pages', async () => {
     vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
       id: 5215,

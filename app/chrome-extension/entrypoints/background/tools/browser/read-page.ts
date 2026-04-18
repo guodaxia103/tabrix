@@ -258,6 +258,7 @@ interface SnapshotNode {
   name: string;
   ref: string;
   depth: number;
+  href: string | null;
 }
 type SnapshotInteractiveElement = ReadPageInteractiveElement;
 type SnapshotArtifactRef = ReadPageArtifactRef;
@@ -300,6 +301,81 @@ const COMPACT_STATUS_LABEL_PATTERNS =
   /\b\d+\s+jobs?\b|completed|failed|cancelled|succeeded|in progress|queued/i;
 
 const COMPACT_RUN_DETAIL_PATTERNS = /\brun\s+\d+\s+of\b|workflow run/i;
+const GITHUB_WORKFLOW_RUN_DETAIL_URL_PATTERN =
+  /https:\/\/github\.com\/[^/]+\/[^/]+\/actions\/runs\/\d+/i;
+const WORKFLOW_RUN_DETAIL_HREF_BASE_PATTERN = /\/actions\/runs\/\d+/i;
+const WORKFLOW_RUN_DETAIL_HREF_SUMMARY_PATTERN = /\/actions\/runs\/\d+(?:[/?#]|$)/i;
+const WORKFLOW_RUN_DETAIL_HREF_JOB_PATTERN = /\/actions\/runs\/\d+\/job\/\d+/i;
+const WORKFLOW_RUN_DETAIL_HREF_USAGE_PATTERN = /\/actions\/runs\/\d+\/usage(?:[/?#]|$)/i;
+const WORKFLOW_RUN_DETAIL_HREF_WORKFLOW_PATTERN = /\/actions\/runs\/\d+\/workflow(?:[/?#]|$)/i;
+const WORKFLOW_RUN_DETAIL_HREF_STEP_PATTERN = /#step(?::|=)|\/actions\/runs\/\d+\/job\/\d+.*#step/i;
+
+const WORKFLOW_RUN_DETAIL_NAME_PRIORITY_PATTERN =
+  /(summary|show all jobs|jobs?|artifacts?|annotations?|logs?|steps?)/i;
+
+const WORKFLOW_RUN_DETAIL_METADATA_COMMIT_PATTERN = /^[0-9a-f]{7,40}$/i;
+const WORKFLOW_RUN_DETAIL_METADATA_BRANCH_PATTERN = /^(main|master|develop|dev)$/i;
+const WORKFLOW_RUN_DETAIL_METADATA_DURATION_PATTERN = /^\d+[smhd]$/i;
+
+interface CompactScoringContext {
+  workflowRunDetail: boolean;
+}
+
+const DEFAULT_COMPACT_SCORING_CONTEXT: CompactScoringContext = {
+  workflowRunDetail: false,
+};
+
+function isGithubWorkflowRunDetailUrl(url: string): boolean {
+  return GITHUB_WORKFLOW_RUN_DETAIL_URL_PATTERN.test(String(url || '').trim());
+}
+
+function inferWorkflowRunDetailLabelFromHref(href: string): string {
+  const normalizedHref = String(href || '')
+    .trim()
+    .toLowerCase();
+  if (!normalizedHref) return '';
+
+  if (WORKFLOW_RUN_DETAIL_HREF_STEP_PATTERN.test(normalizedHref)) return 'Logs';
+  if (WORKFLOW_RUN_DETAIL_HREF_JOB_PATTERN.test(normalizedHref)) return 'Jobs';
+  if (WORKFLOW_RUN_DETAIL_HREF_USAGE_PATTERN.test(normalizedHref)) return 'Artifacts';
+  if (
+    WORKFLOW_RUN_DETAIL_HREF_WORKFLOW_PATTERN.test(normalizedHref) ||
+    WORKFLOW_RUN_DETAIL_HREF_SUMMARY_PATTERN.test(normalizedHref)
+  ) {
+    return 'Summary';
+  }
+
+  return '';
+}
+
+function scoreWorkflowRunDetailNode(node: SnapshotNode): number {
+  const name = String(node.name || '').trim();
+  const href = String(node.href || '')
+    .trim()
+    .toLowerCase();
+  let score = 0;
+
+  if (WORKFLOW_RUN_DETAIL_NAME_PRIORITY_PATTERN.test(name)) score += 72;
+
+  if (href) {
+    if (WORKFLOW_RUN_DETAIL_HREF_BASE_PATTERN.test(href)) score += 18;
+    if (WORKFLOW_RUN_DETAIL_HREF_SUMMARY_PATTERN.test(href)) score += 82;
+    if (WORKFLOW_RUN_DETAIL_HREF_JOB_PATTERN.test(href)) score += 94;
+    if (WORKFLOW_RUN_DETAIL_HREF_USAGE_PATTERN.test(href)) score += 76;
+    if (WORKFLOW_RUN_DETAIL_HREF_WORKFLOW_PATTERN.test(href)) score += 78;
+    if (WORKFLOW_RUN_DETAIL_HREF_STEP_PATTERN.test(href)) score += 102;
+
+    if (/\/commit\//i.test(href)) score -= 130;
+    if (/\/tree\/refs\/heads\//i.test(href)) score -= 120;
+    if (/^\/[^/]+$/.test(href) || /github\.com\/[^/]+\/?$/.test(href)) score -= 98;
+  }
+
+  if (WORKFLOW_RUN_DETAIL_METADATA_COMMIT_PATTERN.test(name)) score -= 86;
+  if (WORKFLOW_RUN_DETAIL_METADATA_BRANCH_PATTERN.test(name)) score -= 72;
+  if (WORKFLOW_RUN_DETAIL_METADATA_DURATION_PATTERN.test(name)) score -= 66;
+
+  return score;
+}
 
 function parseSnapshotNodesFromPageContent(pageContent: string): SnapshotNode[] {
   const lines = String(pageContent || '')
@@ -312,6 +388,7 @@ function parseSnapshotNodesFromPageContent(pageContent: string): SnapshotNode[] 
     const match = trimmedLine.match(/^- ([^\s"]+)(?: "([^"]*)")? \[ref=([^\]]+)\]/);
     if (!match) continue;
     const indent = rawLine.length - rawLine.trimStart().length;
+    const hrefMatch = trimmedLine.match(/\shref="([^"]+)"/i);
     nodes.push({
       role: String(match[1] || 'generic')
         .trim()
@@ -321,6 +398,7 @@ function parseSnapshotNodesFromPageContent(pageContent: string): SnapshotNode[] 
         .trim(),
       ref: String(match[3] || '').trim(),
       depth: Math.max(0, Math.floor(indent / 2)),
+      href: hrefMatch ? String(hrefMatch[1] || '').trim() : null,
     });
     if (nodes.length >= 300) break;
   }
@@ -355,7 +433,11 @@ function findDescendantLabel(nodes: SnapshotNode[], index: number): string {
   return bestLabel;
 }
 
-function scoreCompactInteractiveNode(node: SnapshotNode, index: number): number {
+function scoreCompactInteractiveNode(
+  node: SnapshotNode,
+  index: number,
+  context: CompactScoringContext,
+): number {
   const role = String(node.role || '').toLowerCase();
   const name = String(node.name || '').trim();
   const normalizedName = name.toLowerCase();
@@ -372,6 +454,9 @@ function scoreCompactInteractiveNode(node: SnapshotNode, index: number): number 
   if (COMPACT_ACTION_KEYWORDS.test(name)) score += 28;
   if (isRunDetail) score += 56;
   if (COMPACT_SHELL_NAME_PATTERNS.some((pattern) => pattern.test(normalizedName))) score -= 80;
+  if (context.workflowRunDetail) {
+    score += scoreWorkflowRunDetailNode(node);
+  }
 
   // Keep nearby content slightly preferred without letting early chrome dominate compact mode.
   score -= Math.floor(index / 12);
@@ -381,13 +466,14 @@ function scoreCompactInteractiveNode(node: SnapshotNode, index: number): number 
 function prioritizeCompactNodes(
   nodes: SnapshotNode[],
   limit: number,
+  context: CompactScoringContext = DEFAULT_COMPACT_SCORING_CONTEXT,
 ): SnapshotInteractiveElement[] {
   return nodes
     .filter((node) => node.ref)
     .map((node, index) => ({
       node,
       index,
-      score: scoreCompactInteractiveNode(node, index),
+      score: scoreCompactInteractiveNode(node, index, context),
     }))
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .slice(0, limit)
@@ -403,21 +489,29 @@ function buildInteractiveElements(
   fallbackElements: any[],
   limit: number,
   mode: ReadPageMode,
+  currentUrl: string,
 ): SnapshotInteractiveElement[] {
+  const scoringContext: CompactScoringContext = {
+    workflowRunDetail: isGithubWorkflowRunDetailUrl(currentUrl),
+  };
   const nodes = parseSnapshotNodesFromPageContent(pageContent);
   const parsedInteractive = nodes
     .filter((node) => INTERACTIVE_ROLES.has(node.role))
     .map((node, index) => {
       const nodeIndex = nodes.findIndex((candidate) => candidate.ref === node.ref);
+      const descendantLabel = nodeIndex >= 0 ? findDescendantLabel(nodes, nodeIndex) : '';
+      const hrefLabel = scoringContext.workflowRunDetail
+        ? inferWorkflowRunDetailLabelFromHref(node.href || '')
+        : '';
       return {
         ...node,
-        name: node.name || (nodeIndex >= 0 ? findDescendantLabel(nodes, nodeIndex) : ''),
+        name: node.name || descendantLabel || hrefLabel,
       };
     });
   const source = parsedInteractive.length > 0 ? parsedInteractive : nodes;
   const fromSnapshot =
     mode === 'compact'
-      ? prioritizeCompactNodes(source, limit)
+      ? prioritizeCompactNodes(source, limit, scoringContext)
       : source
           .filter((node) => node.ref)
           .slice(0, limit)
@@ -435,9 +529,10 @@ function buildInteractiveElements(
     role: String(item?.type || 'generic').toLowerCase(),
     name: String(item?.text || '').trim(),
     depth: 0,
+    href: null,
   }));
   if (mode === 'compact') {
-    return prioritizeCompactNodes(fallbackNodes, limit);
+    return prioritizeCompactNodes(fallbackNodes, limit, scoringContext);
   }
   return fallbackNodes.slice(0, limit).map((node) => ({
     ref: node.ref,
@@ -601,6 +696,7 @@ function buildModeOutput(params: {
     params.elements,
     interactiveLimit,
     params.mode,
+    params.currentUrl,
   );
   const candidateActions =
     params.candidateActions.length > 0
