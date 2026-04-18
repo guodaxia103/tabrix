@@ -28,7 +28,7 @@ function buildModeResults(overrides = {}) {
     mode: 'normal',
     snapshot: {
       mode: 'normal',
-      page: { url: 'https://example.com', title: 'Example', pageType: 'web_page' },
+      page: { url: 'https://creator.douyin.com/creator-micro/data/hotspot?active_tab=hotspot_topic', title: 'Example', pageType: 'web_page' },
       summary: { pageRole: 'hotspot_topic_list', primaryRegion: 'topic_table', quality: 'usable' },
       interactiveElements: [{ name: '话题名称' }],
       artifactRefs: [],
@@ -40,7 +40,7 @@ function buildModeResults(overrides = {}) {
     mode: 'full',
     snapshot: {
       mode: 'full',
-      page: { url: 'https://example.com', title: 'Example', pageType: 'web_page' },
+      page: { url: 'https://creator.douyin.com/creator-micro/data/hotspot?active_tab=hotspot_topic', title: 'Example', pageType: 'web_page' },
       summary: { pageRole: 'hotspot_topic_list', primaryRegion: 'topic_table', quality: 'usable' },
       interactiveElements: [{ name: '热度趋势' }],
       artifactRefs: [],

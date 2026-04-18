@@ -37,13 +37,23 @@ const HOTSPOT_METRIC_LABELS = [
   '视频量',
   '播放量',
   '稿均播放量',
+  '热度飙升的话题榜',
   '发布视频',
   '查看',
   '视频总榜',
   '话题榜',
 ];
 
-const CREATOR_METRIC_LABELS = ['账号总览', '播放量', '互动指数', '视频完播率', '近30天未发布新作品'];
+const CREATOR_METRIC_LABELS = [
+  '账号总览',
+  '播放量',
+  '互动指数',
+  '视频完播率',
+  '近30天未发布新作品',
+  '数据总览',
+  '近期作品',
+  '直播数据',
+];
 
 function sleepSync(ms) {
   const duration = Number(ms);
@@ -260,6 +270,7 @@ export function evaluateDyScenario(definition, modeResults, toolsUsed) {
   const loginRequired = detectLoginRequired(textCorpus, normalSnapshot);
   const pageRole = String(normalSnapshot?.summary?.pageRole ?? 'unknown');
   const primaryRegion = String(normalSnapshot?.summary?.primaryRegion ?? '');
+  const pageUrl = String(normalSnapshot?.page?.url ?? '');
   const taskEntryHead = interactiveNames
     .filter((name) => /热度|热点|话题|视频|查看|发布|账号|概览|播放量|互动|完播|趋势/.test(name))
     .slice(0, 12);
@@ -274,11 +285,13 @@ export function evaluateDyScenario(definition, modeResults, toolsUsed) {
   if (definition.scenarioId === 'DY-L4-001') {
     const hotspotMetricLabels = pickMatchedLabels(textCorpus, HOTSPOT_METRIC_LABELS);
     const rolePassed = ['hotspot_topic_list', 'hotspot_rank_list', 'hotspot_detail'].includes(pageRole);
+    const hotspotUrlPassed = /hotspot/i.test(pageUrl);
     const regionPassed = Boolean(primaryRegion);
     const metricPassed = hotspotMetricLabels.length >= 2;
-    businessPassed = !loginRequired && rolePassed && regionPassed && metricPassed;
+    businessPassed = !loginRequired && rolePassed && regionPassed && metricPassed && hotspotUrlPassed;
     businessSignals = {
       pageRole,
+      pageUrl: pageUrl || null,
       primaryRegion: primaryRegion || null,
       hotspotMetricLabels,
       taskEntryHead,
@@ -287,6 +300,7 @@ export function evaluateDyScenario(definition, modeResults, toolsUsed) {
     businessFailures = [
       !loginRequired ? null : 'login_required_detected',
       rolePassed ? null : `unexpected_page_role:${pageRole}`,
+      hotspotUrlPassed ? null : `redirected_from_hotspot:${pageUrl}`,
       regionPassed ? null : 'missing_primary_region',
       metricPassed ? null : 'insufficient_hotspot_metrics',
       readOnlyBoundaryPassed ? null : 'high_risk_action_detected',
@@ -299,6 +313,7 @@ export function evaluateDyScenario(definition, modeResults, toolsUsed) {
     businessPassed = !loginRequired && rolePassed && regionPassed && metricPassed;
     businessSignals = {
       pageRole,
+      pageUrl: pageUrl || null,
       primaryRegion: primaryRegion || null,
       creatorMetricLabels,
       taskEntryHead,
