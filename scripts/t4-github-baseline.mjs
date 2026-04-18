@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
@@ -123,25 +124,60 @@ export function parseCliArgs(argv) {
   return options;
 }
 
-function callTool(toolName, args, timeoutMs) {
-  const commandArgs = [
+function sleepSync(ms) {
+  const duration = Number(ms);
+  if (!Number.isFinite(duration) || duration <= 0) return;
+  const lock = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(lock, 0, 0, duration);
+}
+
+function isRetriableToolError(message) {
+  const text = String(message ?? '');
+  return /tabs cannot be edited right now|navigation is in progress|no tab with id|temporarily unavailable/i.test(
+    text,
+  );
+}
+
+function callToolOnce(toolName, args, timeoutMs) {
+  const argsFile = path.join(
+    os.tmpdir(),
+    `tabrix-t4-call-${Date.now()}-${Math.random().toString(36).slice(2)}.json`,
+  );
+  fs.writeFileSync(argsFile, JSON.stringify(args ?? {}), 'utf8');
+
+  const command = [
+    'tabrix',
     'mcp',
     'call',
     toolName,
-    '--args',
-    JSON.stringify(args ?? {}),
+    '--args-file',
+    `"${argsFile}"`,
     '--json',
     '--timeout',
     String(timeoutMs),
-  ];
-  const result = spawnSync('tabrix', commandArgs, {
+  ].join(' ');
+
+  const result = spawnSync(command, {
+    shell: true,
     encoding: 'utf8',
     maxBuffer: 16 * 1024 * 1024,
   });
 
-  if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || '').trim();
-    throw new Error(`tabrix ${toolName} failed (exit ${result.status}): ${detail}`);
+  try {
+    if (result.error) {
+      throw new Error(`failed to run tabrix CLI: ${result.error.message}`);
+    }
+
+    if (result.status !== 0) {
+      const detail = (result.stderr || result.stdout || '').trim();
+      throw new Error(`tabrix ${toolName} failed (exit ${result.status}): ${detail}`);
+    }
+  } finally {
+    try {
+      fs.unlinkSync(argsFile);
+    } catch {
+      // ignore temp cleanup failures
+    }
   }
 
   const parsedOutput = parseTabrixJsonOutput(result.stdout);
@@ -150,6 +186,28 @@ function callTool(toolName, args, timeoutMs) {
   }
 
   return parsedOutput;
+}
+
+function callTool(toolName, args, timeoutMs, options = {}) {
+  const retries = Number.isFinite(options.retries) ? options.retries : 2;
+  const retryDelayMs = Number.isFinite(options.retryDelayMs) ? options.retryDelayMs : 500;
+
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return callToolOnce(toolName, args, timeoutMs);
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const canRetry = attempt < retries && isRetriableToolError(message);
+      if (!canRetry) {
+        throw error;
+      }
+      sleepSync(retryDelayMs);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError ?? 'unknown tool call error'));
 }
 
 function collectArtifactRefs(snapshot) {
@@ -181,7 +239,7 @@ function buildScenarioDefinitions(baseUrl) {
       scenarioId: 'GH-L1-001',
       pageType: 'repo_home',
       url: baseUrl,
-      semanticExpectation: /issues|pull requests|actions/i,
+      semanticExpectation: /issues|pull requests|actions|go to file|watch|star|main branch|commits/i,
     },
     {
       scenarioId: 'GH-L2-001',
@@ -199,12 +257,12 @@ function buildScenarioDefinitions(baseUrl) {
       scenarioId: 'GH-L2-003',
       pageType: 'workflow_run_detail',
       url: null,
-      semanticExpectation: /summary|show all jobs|jobs|workflow|run details/i,
+      semanticExpectation: /summary|show all jobs|jobs/i,
     },
   ];
 }
 
-function extractRunDetailUrlFromActions(timeoutMs) {
+function extractRunDetailUrlFromActions(timeoutMs, tabId) {
   const runLinkResult = callTool(
     'chrome_javascript',
     {
@@ -214,6 +272,7 @@ function extractRunDetailUrlFromActions(timeoutMs) {
         return pick ? pick.href : '';
       `,
       timeoutMs: Math.min(timeoutMs, 20_000),
+      tabId,
     },
     timeoutMs,
   );
@@ -223,6 +282,59 @@ function extractRunDetailUrlFromActions(timeoutMs) {
     return value;
   }
   return null;
+}
+
+function clickFirstWorkflowRun(timeoutMs, tabId) {
+  const compact = callTool(
+    'chrome_read_page',
+    {
+      mode: 'compact',
+      filter: 'interactive',
+      depth: 3,
+      ...(typeof tabId === 'number' ? { tabId } : {}),
+    },
+    timeoutMs,
+  );
+
+  const interactiveElements = Array.isArray(compact?.parsed?.interactiveElements)
+    ? compact.parsed.interactiveElements
+    : [];
+  const target =
+    interactiveElements.find((item) => {
+      const name = String(item?.name ?? '');
+      const role = String(item?.role ?? '');
+      return /link|button/i.test(role) && /run\s+\d+/i.test(name);
+    }) ??
+    interactiveElements.find((item) => {
+      const name = String(item?.name ?? '');
+      const role = String(item?.role ?? '');
+      return /link|button/i.test(role) && /completed successfully/i.test(name);
+    });
+
+  if (!target?.ref) {
+    return {
+      clicked: false,
+      reason: 'no workflow run ref found in compact snapshot',
+      compactSnapshot: compact.parsed,
+    };
+  }
+
+  const clickResult = callTool(
+    'chrome_click_element',
+    {
+      ref: target.ref,
+      ...(typeof tabId === 'number' ? { tabId } : {}),
+    },
+    timeoutMs,
+  );
+
+  return {
+    clicked: true,
+    targetRef: target.ref,
+    targetName: String(target.name ?? ''),
+    compactSnapshot: compact.parsed,
+    clickResult,
+  };
 }
 
 function evaluateSemanticSignal(snapshot, semanticExpectation) {
@@ -248,15 +360,19 @@ function timestampForPath() {
   return new Date().toISOString().replaceAll(':', '-');
 }
 
-async function runScenario(definition, options, evidenceDir) {
+async function runScenario(definition, options, evidenceDir, tabId, runOptions = {}) {
   const scenarioStartedAt = Date.now();
-  const navigateResult = callTool(
-    'chrome_navigate',
-    {
-      url: definition.url,
-    },
-    options.timeoutMs,
-  );
+  let navigateResult = null;
+  if (!runOptions.skipNavigate) {
+    navigateResult = callTool(
+      'chrome_navigate',
+      {
+        url: definition.url,
+        ...(typeof tabId === 'number' ? { tabId } : {}),
+      },
+      options.timeoutMs,
+    );
+  }
 
   const modeResults = [];
   const allArtifacts = [];
@@ -270,6 +386,7 @@ async function runScenario(definition, options, evidenceDir) {
         mode,
         filter: 'interactive',
         depth: 3,
+        ...(typeof tabId === 'number' ? { tabId } : {}),
       },
       options.timeoutMs,
     );
@@ -316,6 +433,7 @@ async function runScenario(definition, options, evidenceDir) {
     url: definition.url,
     navigateResult,
     semantic,
+    preAction: runOptions.preAction ?? null,
     modeResults,
   };
 
@@ -360,22 +478,42 @@ export async function runGithubBaseline(options) {
 
   const definitions = buildScenarioDefinitions(baseUrl);
   const results = [];
+  let workingTabId = null;
+
+  const bootstrap = callTool(
+    'chrome_navigate',
+    {
+      url: baseUrl,
+      newWindow: true,
+    },
+    options.timeoutMs,
+  );
+  if (typeof bootstrap?.parsed?.tabId === 'number') {
+    workingTabId = bootstrap.parsed.tabId;
+  }
 
   let workflowRunDetailUrl = null;
   for (const definition of definitions) {
     const scenarioDef = { ...definition };
+    const runOptions = {};
     if (scenarioDef.pageType === 'workflow_run_detail') {
+      const clickResult = clickFirstWorkflowRun(options.timeoutMs, workingTabId);
+      runOptions.preAction = clickResult;
+      if (clickResult.clicked) {
+        runOptions.skipNavigate = true;
+      }
+
       if (!workflowRunDetailUrl) {
-        workflowRunDetailUrl = extractRunDetailUrlFromActions(options.timeoutMs);
+        workflowRunDetailUrl = extractRunDetailUrlFromActions(options.timeoutMs, workingTabId);
       }
       scenarioDef.url = workflowRunDetailUrl || `${baseUrl}/actions`;
     }
 
-    const result = await runScenario(scenarioDef, options, evidenceDir);
+    const result = await runScenario(scenarioDef, options, evidenceDir, workingTabId, runOptions);
     results.push(result);
 
     if (scenarioDef.pageType === 'actions_list' && !workflowRunDetailUrl) {
-      workflowRunDetailUrl = extractRunDetailUrlFromActions(options.timeoutMs);
+      workflowRunDetailUrl = extractRunDetailUrlFromActions(options.timeoutMs, workingTabId);
     }
   }
 

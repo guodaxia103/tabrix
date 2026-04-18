@@ -59,6 +59,7 @@ export function parseCliArgs(argv) {
     commit: '',
     outFile: '',
     token: process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '',
+    strict: true,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -78,6 +79,8 @@ export function parseCliArgs(argv) {
     } else if (part === '--token') {
       options.token = argv[index + 1] ?? '';
       index += 1;
+    } else if (part === '--non-strict') {
+      options.strict = false;
     }
   }
 
@@ -279,7 +282,7 @@ async function main() {
   const result = await collectPostSubmitTracking(options);
   process.stdout.write(`${JSON.stringify(result.tracking, null, 2)}\n`);
   process.stdout.write(`\ntracking file: ${result.outFile.replaceAll('\\', '/')}\n`);
-  if (result.tracking.summary.blocked) {
+  if (options.strict && result.tracking.summary.blocked) {
     process.exitCode = 1;
   }
 }

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   classifyExceptionCategory,
   isBlockingStatus,
+  parseCliArgs,
   parseRepositoryFromGitRemote,
   parseRunIdFromDetailsUrl,
 } from './t4-post-submit-tracker.mjs';
@@ -39,4 +40,11 @@ test('parseRunIdFromDetailsUrl extracts workflow run id', () => {
     24599433506,
   );
   assert.equal(parseRunIdFromDetailsUrl('https://github.com/guodaxia103/tabrix/pull/1'), null);
+});
+
+test('parseCliArgs supports non-strict mode', () => {
+  const parsed = parseCliArgs(['--owner', 'guodaxia103', '--repo', 'tabrix', '--non-strict']);
+  assert.equal(parsed.owner, 'guodaxia103');
+  assert.equal(parsed.repo, 'tabrix');
+  assert.equal(parsed.strict, false);
 });
