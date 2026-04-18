@@ -95,3 +95,15 @@ pnpm run t4:post-submit -- --owner guodaxia103 --repo tabrix --commit <sha>
 - 引入更稳定的 workflow detail 语义断言（Summary/Show all jobs 前置）
 - 接入 nightly/候选发布流水线
 - 增加跨版本趋势对比（token、耗时、成功率、误点击率）
+
+## 7. 第二阶段入口（登录态黄金场景）
+
+T4 第二阶段已提供抖音登录态黄金场景门禁入口：
+
+```bash
+pnpm run t4:douyin-golden-baseline
+```
+
+详细说明见：
+
+- `docs/T4_DOUYIN_LOGIN_GOLDEN_GATE_zh.md`
