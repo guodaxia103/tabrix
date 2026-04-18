@@ -313,6 +313,8 @@ const COMPACT_SHELL_NAME_PATTERNS = [/^skip to content$/i, /^search or jump to/i
 const COMPACT_STATUS_LABEL_PATTERNS =
   /\b\d+\s+jobs?\b|completed|failed|cancelled|succeeded|in progress|queued/i;
 
+const COMPACT_RUN_DETAIL_PATTERNS = /\brun\s+\d+\s+of\b|workflow run/i;
+
 function parseSnapshotNodesFromPageContent(pageContent: string): SnapshotNode[] {
   const lines = String(pageContent || '')
     .split('\n')
@@ -371,6 +373,7 @@ function scoreCompactInteractiveNode(node: SnapshotNode, index: number): number 
   const role = String(node.role || '').toLowerCase();
   const name = String(node.name || '').trim();
   const normalizedName = name.toLowerCase();
+  const isRunDetail = COMPACT_RUN_DETAIL_PATTERNS.test(name);
   let score = 0;
 
   score += COMPACT_ROLE_PRIORITY.get(role) ?? 24;
@@ -381,6 +384,7 @@ function scoreCompactInteractiveNode(node: SnapshotNode, index: number): number 
   if (name.length >= 48) score -= 28;
   if (name.length >= 80) score -= 44;
   if (COMPACT_ACTION_KEYWORDS.test(name)) score += 28;
+  if (isRunDetail) score += 56;
   if (COMPACT_SHELL_NAME_PATTERNS.some((pattern) => pattern.test(normalizedName))) score -= 80;
 
   // Keep nearby content slightly preferred without letting early chrome dominate compact mode.

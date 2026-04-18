@@ -456,4 +456,72 @@ describe('read_page mode', () => {
       ]),
     );
   });
+
+  it('prioritizes run detail links over workflow catalog links on actions list pages', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5215,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://github.com/example/project/actions',
+      title: 'Workflow runs',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [
+        '- navigation "Repository" [ref=ref_nav] (x=180,y=72)',
+        '  - link [ref=ref_issues] (x=160,y=76)',
+        '    - generic "Issues" [ref=ref_issues_label] (x=148,y=76)',
+        '  - link [ref=ref_pulls] (x=300,y=76)',
+        '    - generic "Pull requests" [ref=ref_pulls_label] (x=292,y=76)',
+        '  - link [ref=ref_actions] (x=440,y=76)',
+        '    - generic "Actions" [ref=ref_actions_label] (x=432,y=76)',
+        '- navigation "Actions Workflows" [ref=ref_workflows] (x=168,y=470)',
+        '  - link [ref=ref_close_issues] (x=168,y=323)',
+        '    - generic "Close issues" [ref=ref_close_issues_label] (x=168,y=323)',
+        '  - link [ref=ref_code_scan] (x=168,y=356)',
+        '    - generic "Code Scanning - Action" [ref=ref_code_scan_label] (x=168,y=356)',
+        '- search [ref=ref_search] (x=1490,y=132)',
+        '  - combobox "Filter workflow runs" [ref=ref_filter] (x=1490,y=132)',
+        '- link "completed successfully: Run 1052 of Close issues." [ref=ref_run_detail] (x=688,y=285)',
+        '  - generic "Close issues" [ref=ref_run_detail_label] (x=689,y=285)',
+      ].join('\n'),
+      refMap: [
+        { ref: 'ref_issues', selector: 'a[href$="/issues"]' },
+        { ref: 'ref_pulls', selector: 'a[href$="/pulls"]' },
+        { ref: 'ref_actions', selector: 'a[href$="/actions"]' },
+        { ref: 'ref_close_issues', selector: 'a[href$="/actions/workflows/close-issues.yml"]' },
+        { ref: 'ref_code_scan', selector: 'a[href$="/actions/workflows/codeql.yml"]' },
+        { ref: 'ref_filter', selector: 'input[placeholder="Filter workflow runs"]' },
+        { ref: 'ref_run_detail', selector: 'a[href*="/actions/runs/24593977415"]' },
+      ],
+      stats: { processed: 30, included: 15, durationMs: 9 },
+      viewport: { width: 1440, height: 900, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    const orderedRefs = payload.interactiveElements.map((element: { ref: string }) => element.ref);
+
+    expect(result.isError).toBe(false);
+    expect(payload.interactiveElements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ref: 'ref_run_detail',
+          name: 'completed successfully: Run 1052 of Close issues.',
+        }),
+        expect.objectContaining({ ref: 'ref_close_issues', name: 'Close issues' }),
+        expect.objectContaining({ ref: 'ref_filter', name: 'Filter workflow runs' }),
+      ]),
+    );
+    expect(orderedRefs.indexOf('ref_run_detail')).toBeLessThan(
+      orderedRefs.indexOf('ref_close_issues'),
+    );
+    expect(payload.candidateActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ targetRef: 'ref_run_detail', actionType: 'click' }),
+      ]),
+    );
+  });
 });
