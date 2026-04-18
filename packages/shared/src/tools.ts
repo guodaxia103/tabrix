@@ -268,6 +268,30 @@ export const TOOL_SCHEMAS: Tool[] = [
           description:
             'Element ref from chrome_read_page. For click/scroll/scroll_to/key/type and drag end when provided; takes precedence over coordinates.',
         },
+        candidateAction: {
+          type: 'object',
+          description:
+            'Optional action seed from chrome_read_page.candidateActions. Resolution order: explicit ref > candidateAction.targetRef > explicit selector > candidateAction.locatorChain(css/ref). aria locators are currently informational only.',
+          properties: {
+            targetRef: {
+              type: 'string',
+              description: 'Preferred element ref from read_page candidateActions[*].targetRef.',
+            },
+            locatorChain: {
+              type: 'array',
+              description:
+                'Fallback locator list from read_page candidateActions[*].locatorChain. Only css/ref are consumed in T3.2.',
+              items: {
+                type: 'object',
+                properties: {
+                  type: { type: 'string' },
+                  value: { type: 'string' },
+                },
+                required: ['type', 'value'],
+              },
+            },
+          },
+        },
         coordinates: {
           type: 'object',
           properties: {
@@ -1116,6 +1140,30 @@ export const TOOL_SCHEMAS: Tool[] = [
           type: 'string',
           description: 'Element ref from chrome_read_page (takes precedence over selector).',
         },
+        candidateAction: {
+          type: 'object',
+          description:
+            'Optional action seed from chrome_read_page.candidateActions. Resolution order: explicit ref > candidateAction.targetRef > explicit selector > candidateAction.locatorChain(css/ref).',
+          properties: {
+            targetRef: {
+              type: 'string',
+              description: 'Preferred element ref from read_page candidateActions[*].targetRef.',
+            },
+            locatorChain: {
+              type: 'array',
+              description:
+                'Fallback locator list from read_page candidateActions[*].locatorChain. css/ref are consumed in T3.2.',
+              items: {
+                type: 'object',
+                properties: {
+                  type: { type: 'string' },
+                  value: { type: 'string' },
+                },
+                required: ['type', 'value'],
+              },
+            },
+          },
+        },
         coordinates: {
           type: 'object',
           description: 'Viewport coordinates to click at.',
@@ -1195,6 +1243,30 @@ export const TOOL_SCHEMAS: Tool[] = [
         ref: {
           type: 'string',
           description: 'Element ref from chrome_read_page (takes precedence over selector).',
+        },
+        candidateAction: {
+          type: 'object',
+          description:
+            'Optional action seed from chrome_read_page.candidateActions. Resolution order: explicit ref > candidateAction.targetRef > explicit selector > candidateAction.locatorChain(css/ref).',
+          properties: {
+            targetRef: {
+              type: 'string',
+              description: 'Preferred element ref from read_page candidateActions[*].targetRef.',
+            },
+            locatorChain: {
+              type: 'array',
+              description:
+                'Fallback locator list from read_page candidateActions[*].locatorChain. css/ref are consumed in T3.2.',
+              items: {
+                type: 'object',
+                properties: {
+                  type: { type: 'string' },
+                  value: { type: 'string' },
+                },
+                required: ['type', 'value'],
+              },
+            },
+          },
         },
         value: {
           type: ['string', 'number', 'boolean'],

@@ -5,6 +5,7 @@ import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import { TIMEOUTS, ERROR_MESSAGES } from '@/common/constants';
 import { handleDownloadTool, markNextDownloadAsInteractive } from './download';
 import { prearmDialogHandling } from './dialog-prearm';
+import { type CandidateActionInput, resolveCandidateActionTarget } from './candidate-action';
 
 interface Coordinates {
   x: number;
@@ -15,6 +16,7 @@ interface ClickToolParams {
   selector?: string; // CSS selector or XPath for the element to click
   selectorType?: 'css' | 'xpath'; // Type of selector (default: 'css')
   ref?: string; // Element ref from accessibility tree (window.__claudeElementMap)
+  candidateAction?: CandidateActionInput; // Optional action seed from read_page
   coordinates?: Coordinates; // Coordinates to click at (x, y relative to viewport)
   waitForNavigation?: boolean; // Whether to wait for navigation to complete after click
   timeout?: number; // Timeout in milliseconds for waiting for the element or navigation
@@ -252,9 +254,10 @@ class ClickTool extends BaseBrowserToolExecutor {
 
     console.log(`Starting click operation with options:`, args);
 
-    if (!selector && !coordinates && !args.ref) {
+    if (!selector && !coordinates && !args.ref && !args.candidateAction) {
       return createErrorResponse(
-        ERROR_MESSAGES.INVALID_PARAMETERS + ': Provide ref or selector or coordinates',
+        ERROR_MESSAGES.INVALID_PARAMETERS +
+          ': Provide ref or selector or coordinates (or candidateAction)',
       );
     }
 
@@ -270,18 +273,33 @@ class ClickTool extends BaseBrowserToolExecutor {
         return createUnsupportedTabResponse('click', tab, schemeGuard);
       }
 
-      let finalRef = args.ref;
-      let finalSelector = selector;
+      const resolvedTarget = resolveCandidateActionTarget({
+        explicitRef: args.ref,
+        explicitSelector: selector,
+        explicitSelectorType: selectorType,
+        candidateAction: args.candidateAction,
+      });
+
+      let finalRef = resolvedTarget.ref;
+      let finalSelector = resolvedTarget.selector;
+      const finalSelectorType = resolvedTarget.selectorType || selectorType;
+
+      if (!coordinates && !finalRef && !finalSelector) {
+        return createErrorResponse(
+          ERROR_MESSAGES.INVALID_PARAMETERS +
+            ': Provide ref or selector or coordinates (candidateAction did not resolve target)',
+        );
+      }
 
       // If selector is XPath, convert to ref first
-      if (selector && selectorType === 'xpath') {
+      if (finalSelector && finalSelectorType === 'xpath') {
         await this.injectContentScript(tab.id, ['inject-scripts/accessibility-tree-helper.js']);
         try {
           const resolved = await this.sendMessageToTab(
             tab.id,
             {
               action: TOOL_MESSAGE_TYPES.ENSURE_REF_FOR_SELECTOR,
-              selector,
+              selector: finalSelector,
               isXPath: true,
             },
             frameId,
@@ -461,6 +479,7 @@ interface FillToolParams {
   selector?: string;
   selectorType?: 'css' | 'xpath'; // Type of selector (default: 'css')
   ref?: string; // Element ref from accessibility tree
+  candidateAction?: CandidateActionInput; // Optional action seed from read_page
   // Accept string | number | boolean for broader form input coverage
   value: string | number | boolean;
   frameId?: number;
@@ -482,8 +501,10 @@ class FillTool extends BaseBrowserToolExecutor {
 
     console.log(`Starting fill operation with options:`, args);
 
-    if (!selector && !ref) {
-      return createErrorResponse(ERROR_MESSAGES.INVALID_PARAMETERS + ': Provide ref or selector');
+    if (!selector && !ref && !args.candidateAction) {
+      return createErrorResponse(
+        ERROR_MESSAGES.INVALID_PARAMETERS + ': Provide ref or selector (or candidateAction)',
+      );
     }
 
     if (value === undefined || value === null) {
@@ -501,18 +522,33 @@ class FillTool extends BaseBrowserToolExecutor {
         return createUnsupportedTabResponse('fill', tab, schemeGuard);
       }
 
-      let finalRef = ref;
-      let finalSelector = selector;
+      const resolvedTarget = resolveCandidateActionTarget({
+        explicitRef: ref,
+        explicitSelector: selector,
+        explicitSelectorType: selectorType,
+        candidateAction: args.candidateAction,
+      });
+
+      let finalRef = resolvedTarget.ref;
+      let finalSelector = resolvedTarget.selector;
+      const finalSelectorType = resolvedTarget.selectorType || selectorType;
+
+      if (!finalRef && !finalSelector) {
+        return createErrorResponse(
+          ERROR_MESSAGES.INVALID_PARAMETERS +
+            ': Provide ref or selector (candidateAction did not resolve target)',
+        );
+      }
 
       // If selector is XPath, convert to ref first
-      if (selector && selectorType === 'xpath') {
+      if (finalSelector && finalSelectorType === 'xpath') {
         await this.injectContentScript(tab.id, ['inject-scripts/accessibility-tree-helper.js']);
         try {
           const resolved = await this.sendMessageToTab(
             tab.id,
             {
               action: TOOL_MESSAGE_TYPES.ENSURE_REF_FOR_SELECTOR,
-              selector,
+              selector: finalSelector,
               isXPath: true,
             },
             frameId,
