@@ -284,4 +284,176 @@ describe('read_page mode', () => {
     expect(fullPayload.fullSnapshot.pageContent).toContain('Results table');
     expect(JSON.stringify(compactPayload).length).toBeLessThan(JSON.stringify(fullPayload).length);
   });
+
+  it('prioritizes named task controls over shell noise in compact mode', async () => {
+    const shellLines = Array.from({ length: 26 }, (_, index) => {
+      const ref = `ref_shell_${index + 1}`;
+      const role = index % 3 === 0 ? 'button' : 'link';
+      return `- ${role} "" [ref=${ref}] (x=${120 + index * 12},y=64)`;
+    });
+    const pageSpecificLines = [
+      '- link "Skip to content" [ref=ref_skip] (x=40,y=20)',
+      '- button "Search or jump to…" [ref=ref_search] (x=280,y=20)',
+      '- button "Open Copilot…" [ref=ref_copilot] (x=420,y=20)',
+      '- link "Issues" [ref=ref_issues] (x=180,y=200)',
+      '- link "Pull requests" [ref=ref_pulls] (x=280,y=200)',
+      '- link "Actions" [ref=ref_actions] (x=400,y=200)',
+      '- combobox "Filter workflow runs" [ref=ref_filter] (x=540,y=200)',
+      '- link "Run 1052 of CI" [ref=ref_run] (x=760,y=240)',
+    ];
+
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5212,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://github.com/example/project/actions',
+      title: 'Actions · example/project',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [...shellLines, ...pageSpecificLines].join('\n'),
+      refMap: [
+        { ref: 'ref_issues', selector: 'a[data-tab-item="issues-tab"]' },
+        { ref: 'ref_pulls', selector: 'a[data-tab-item="pull-requests-tab"]' },
+        { ref: 'ref_actions', selector: 'a[data-tab-item="actions-tab"]' },
+        { ref: 'ref_filter', selector: 'select[aria-label="Filter workflow runs"]' },
+        { ref: 'ref_run', selector: 'a[href*="/actions/runs/"]' },
+      ],
+      stats: { processed: 40, included: 34, durationMs: 17 },
+      viewport: { width: 1440, height: 900, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    const orderedRefs = payload.interactiveElements.map((element: { ref: string }) => element.ref);
+
+    expect(result.isError).toBe(false);
+    expectCommonSnapshotShape(payload, 'compact');
+    expect(payload.interactiveElements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ref: 'ref_issues', name: 'Issues' }),
+        expect.objectContaining({ ref: 'ref_pulls', name: 'Pull requests' }),
+        expect.objectContaining({ ref: 'ref_actions', name: 'Actions' }),
+        expect.objectContaining({ ref: 'ref_filter', name: 'Filter workflow runs' }),
+        expect.objectContaining({ ref: 'ref_run', name: 'Run 1052 of CI' }),
+      ]),
+    );
+    expect(orderedRefs.indexOf('ref_filter')).toBeLessThan(orderedRefs.indexOf('ref_skip'));
+    expect(orderedRefs.indexOf('ref_actions')).toBeLessThan(orderedRefs.indexOf('ref_skip'));
+    expect(orderedRefs.indexOf('ref_run')).toBeLessThan(orderedRefs.indexOf('ref_skip'));
+    expect(payload.candidateActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ targetRef: 'ref_actions', actionType: 'click' }),
+        expect.objectContaining({ targetRef: 'ref_filter', actionType: 'fill' }),
+        expect.objectContaining({ targetRef: 'ref_run', actionType: 'click' }),
+      ]),
+    );
+  });
+
+  it('hydrates nested generic labels onto interactive wrappers in compact mode', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5213,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://github.com/example/project',
+      title: 'example/project',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [
+        '- navigation "Repository" [ref=ref_nav] (x=180,y=72)',
+        '  - link [ref=ref_issues_link] (x=160,y=76)',
+        '    - generic "Issues" [ref=ref_issues_label] (x=148,y=76)',
+        '  - link [ref=ref_pulls_link] (x=300,y=76)',
+        '    - generic "Pull requests" [ref=ref_pulls_label] (x=292,y=76)',
+        '  - link [ref=ref_actions_link] (x=440,y=76)',
+        '    - generic "Actions" [ref=ref_actions_label] (x=432,y=76)',
+        '  - button [ref=ref_jobs_button] (x=580,y=76)',
+        '    - generic "Jobs" [ref=ref_jobs_label] (x=568,y=76)',
+      ].join('\n'),
+      refMap: [
+        { ref: 'ref_issues_link', selector: 'a[href$="/issues"]' },
+        { ref: 'ref_pulls_link', selector: 'a[href$="/pulls"]' },
+        { ref: 'ref_actions_link', selector: 'a[href$="/actions"]' },
+        { ref: 'ref_jobs_button', selector: 'button[data-panel="jobs"]' },
+      ],
+      stats: { processed: 18, included: 9, durationMs: 7 },
+      viewport: { width: 1280, height: 720, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(result.isError).toBe(false);
+    expect(payload.interactiveElements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ref: 'ref_issues_link', name: 'Issues' }),
+        expect.objectContaining({ ref: 'ref_pulls_link', name: 'Pull requests' }),
+        expect.objectContaining({ ref: 'ref_actions_link', name: 'Actions' }),
+        expect.objectContaining({ ref: 'ref_jobs_button', name: 'Jobs' }),
+      ]),
+    );
+    expect(payload.candidateActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ targetRef: 'ref_issues_link', actionType: 'click' }),
+        expect.objectContaining({ targetRef: 'ref_actions_link', actionType: 'click' }),
+        expect.objectContaining({ targetRef: 'ref_jobs_button', actionType: 'click' }),
+      ]),
+    );
+  });
+
+  it('prefers action-oriented descendant labels over status text for compact workflow buttons', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5214,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://github.com/example/project/actions/runs/1',
+      title: 'Workflow run',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [
+        '- navigation "Workflow run" [ref=ref_nav] (x=163,y=521)',
+        '  - link [ref=ref_actions_link] (x=120,y=190)',
+        '    - generic "Actions" [ref=ref_actions_label] (x=132,y=190)',
+        '  - link [ref=ref_run_link] (x=160,y=210)',
+        '    - generic "Run" [ref=ref_run_label] (x=172,y=210)',
+        '  - button [ref=ref_jobs_button] (x=484,y=440)',
+        '    - generic "1 job completed" [ref=ref_jobs_status] (x=451,y=432)',
+        '    - generic "Show all jobs" [ref=ref_jobs_label] (x=425,y=451)',
+        '  - link [ref=ref_summary_link] (x=163,y=230)',
+        '    - generic "Summary" [ref=ref_summary_label] (x=175,y=230)',
+      ].join('\n'),
+      refMap: [
+        { ref: 'ref_actions_link', selector: 'a[href$="/actions"]' },
+        { ref: 'ref_run_link', selector: 'a[href*="/actions/runs/"]' },
+        { ref: 'ref_jobs_button', selector: 'button.show-all-jobs' },
+        { ref: 'ref_summary_link', selector: 'a[href$="/actions/runs/1"]' },
+      ],
+      stats: { processed: 18, included: 10, durationMs: 6 },
+      viewport: { width: 1280, height: 720, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(result.isError).toBe(false);
+    expect(payload.interactiveElements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ref: 'ref_jobs_button', name: 'Show all jobs' }),
+        expect.objectContaining({ ref: 'ref_summary_link', name: 'Summary' }),
+      ]),
+    );
+    expect(payload.candidateActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ targetRef: 'ref_jobs_button', actionType: 'click' }),
+      ]),
+    );
+  });
 });

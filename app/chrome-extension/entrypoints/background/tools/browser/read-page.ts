@@ -250,6 +250,7 @@ interface SnapshotNode {
   role: string;
   name: string;
   ref: string;
+  depth: number;
 }
 
 interface SnapshotInteractiveElement {
@@ -294,16 +295,35 @@ const INTERACTIVE_ROLES = new Set([
   'spinbutton',
 ]);
 
+const COMPACT_ROLE_PRIORITY = new Map<string, number>([
+  ['textbox', 70],
+  ['searchbox', 70],
+  ['combobox', 68],
+  ['button', 56],
+  ['tab', 52],
+  ['menuitem', 48],
+  ['link', 34],
+]);
+
+const COMPACT_ACTION_KEYWORDS =
+  /(issues?|pull requests?|actions?|search|filter|label|milestone|assignee|summary|jobs?|run\b|login|sign in|submit|save|continue|next|confirm|apply|checkout|export|archive|details?|settings|手机号|验证码|登录|提交|保存|搜索|筛选|过滤|详情|设置|导出)/i;
+
+const COMPACT_SHELL_NAME_PATTERNS = [/^skip to content$/i, /^search or jump to/i, /^open copilot/i];
+
+const COMPACT_STATUS_LABEL_PATTERNS =
+  /\b\d+\s+jobs?\b|completed|failed|cancelled|succeeded|in progress|queued/i;
+
 function parseSnapshotNodesFromPageContent(pageContent: string): SnapshotNode[] {
   const lines = String(pageContent || '')
     .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .filter((line) => line.trim());
 
   const nodes: SnapshotNode[] = [];
-  for (const line of lines) {
-    const match = line.match(/^- ([^\s"]+)(?: "([^"]*)")? \[ref=([^\]]+)\]/);
+  for (const rawLine of lines) {
+    const trimmedLine = rawLine.trim();
+    const match = trimmedLine.match(/^- ([^\s"]+)(?: "([^"]*)")? \[ref=([^\]]+)\]/);
     if (!match) continue;
+    const indent = rawLine.length - rawLine.trimStart().length;
     nodes.push({
       role: String(match[1] || 'generic')
         .trim()
@@ -312,36 +332,126 @@ function parseSnapshotNodesFromPageContent(pageContent: string): SnapshotNode[] 
         .replace(/\\"/g, '"')
         .trim(),
       ref: String(match[3] || '').trim(),
+      depth: Math.max(0, Math.floor(indent / 2)),
     });
     if (nodes.length >= 300) break;
   }
   return nodes;
 }
 
-function buildInteractiveElements(
-  pageContent: string,
-  fallbackElements: any[],
+function findDescendantLabel(nodes: SnapshotNode[], index: number): string {
+  const node = nodes[index];
+  let bestLabel = '';
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (let cursor = index + 1; cursor < nodes.length; cursor += 1) {
+    const candidate = nodes[cursor];
+    if (candidate.depth <= node.depth) break;
+    if (!candidate.name) continue;
+    if (INTERACTIVE_ROLES.has(candidate.role)) continue;
+    let score = 0;
+    if (COMPACT_ACTION_KEYWORDS.test(candidate.name)) score += 24;
+    if (
+      /show|open|view|go to|filter|search|summary|jobs?|artifacts?|logs?|workflow/i.test(
+        candidate.name,
+      )
+    )
+      score += 18;
+    if (candidate.name.length >= 8) score += 6;
+    if (candidate.name.length >= 40) score -= 12;
+    if (COMPACT_STATUS_LABEL_PATTERNS.test(candidate.name)) score -= 20;
+    if (score > bestScore) {
+      bestScore = score;
+      bestLabel = candidate.name;
+    }
+  }
+  return bestLabel;
+}
+
+function scoreCompactInteractiveNode(node: SnapshotNode, index: number): number {
+  const role = String(node.role || '').toLowerCase();
+  const name = String(node.name || '').trim();
+  const normalizedName = name.toLowerCase();
+  let score = 0;
+
+  score += COMPACT_ROLE_PRIORITY.get(role) ?? 24;
+  score += name ? 90 : -120;
+
+  if (name.length >= 4) score += 8;
+  if (name.length >= 12) score += 6;
+  if (name.length >= 48) score -= 28;
+  if (name.length >= 80) score -= 44;
+  if (COMPACT_ACTION_KEYWORDS.test(name)) score += 28;
+  if (COMPACT_SHELL_NAME_PATTERNS.some((pattern) => pattern.test(normalizedName))) score -= 80;
+
+  // Keep nearby content slightly preferred without letting early chrome dominate compact mode.
+  score -= Math.floor(index / 12);
+  return score;
+}
+
+function prioritizeCompactNodes(
+  nodes: SnapshotNode[],
   limit: number,
 ): SnapshotInteractiveElement[] {
-  const nodes = parseSnapshotNodesFromPageContent(pageContent);
-  const parsedInteractive = nodes.filter((node) => INTERACTIVE_ROLES.has(node.role));
-  const source = parsedInteractive.length > 0 ? parsedInteractive : nodes;
-  const fromSnapshot = source
+  return nodes
     .filter((node) => node.ref)
+    .map((node, index) => ({
+      node,
+      index,
+      score: scoreCompactInteractiveNode(node, index),
+    }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)
     .slice(0, limit)
-    .map((node) => ({
+    .map(({ node }) => ({
       ref: node.ref,
       role: node.role || 'generic',
       name: node.name || '',
     }));
+}
+
+function buildInteractiveElements(
+  pageContent: string,
+  fallbackElements: any[],
+  limit: number,
+  mode: ReadPageMode,
+): SnapshotInteractiveElement[] {
+  const nodes = parseSnapshotNodesFromPageContent(pageContent);
+  const parsedInteractive = nodes
+    .filter((node) => INTERACTIVE_ROLES.has(node.role))
+    .map((node, index) => {
+      const nodeIndex = nodes.findIndex((candidate) => candidate.ref === node.ref);
+      return {
+        ...node,
+        name: node.name || (nodeIndex >= 0 ? findDescendantLabel(nodes, nodeIndex) : ''),
+      };
+    });
+  const source = parsedInteractive.length > 0 ? parsedInteractive : nodes;
+  const fromSnapshot =
+    mode === 'compact'
+      ? prioritizeCompactNodes(source, limit)
+      : source
+          .filter((node) => node.ref)
+          .slice(0, limit)
+          .map((node) => ({
+            ref: node.ref,
+            role: node.role || 'generic',
+            name: node.name || '',
+          }));
 
   if (fromSnapshot.length > 0) return fromSnapshot;
 
   const fromFallback = Array.isArray(fallbackElements) ? fallbackElements : [];
-  return fromFallback.slice(0, limit).map((item: any, index: number) => ({
+  const fallbackNodes = fromFallback.map((item: any, index: number) => ({
     ref: String(item?.ref || item?.selector || `fallback_${index + 1}`),
     role: String(item?.type || 'generic').toLowerCase(),
     name: String(item?.text || '').trim(),
+  }));
+  if (mode === 'compact') {
+    return prioritizeCompactNodes(fallbackNodes, limit);
+  }
+  return fallbackNodes.slice(0, limit).map((node) => ({
+    ref: node.ref,
+    role: node.role,
+    name: node.name,
   }));
 }
 
@@ -457,6 +567,7 @@ function buildModeOutput(params: {
     params.pageContent,
     params.elements,
     interactiveLimit,
+    params.mode,
   );
   const candidateActions =
     params.candidateActions.length > 0
