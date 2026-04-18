@@ -1,6 +1,19 @@
 import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
-import { TOOL_NAMES } from '@tabrix/shared';
+import {
+  TOOL_NAMES,
+  type ReadPageArtifactRef,
+  type ReadPageCandidateAction,
+  type ReadPageCandidateActionLocator,
+  type ReadPageCompactSnapshot,
+  type ReadPageFullSnapshot,
+  type ReadPageInteractiveElement,
+  type ReadPageMode,
+  type ReadPageNormalSnapshot,
+  type ReadPagePageContext,
+  type ReadPagePageType,
+  type ReadPagePrimaryRegionConfidence,
+} from '@tabrix/shared';
 import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import { ERROR_MESSAGES } from '@/common/constants';
 import { listMarkersForUrl } from '@/entrypoints/background/element-marker/element-marker-storage';
@@ -10,8 +23,8 @@ interface ReadPageStats {
   included: number;
   durationMs: number;
 }
-
-type ReadPageMode = 'compact' | 'normal' | 'full';
+type PageType = ReadPagePageType;
+type PrimaryRegionConfidence = ReadPagePrimaryRegionConfidence;
 
 interface ReadPageParams {
   filter?: 'interactive'; // when omitted, return all visible elements
@@ -21,13 +34,6 @@ interface ReadPageParams {
   tabId?: number; // target existing tab id
   windowId?: number; // when no tabId, pick active tab from this window
 }
-
-type PageType =
-  | 'web_page'
-  | 'extension_page'
-  | 'browser_internal_page'
-  | 'devtools_page'
-  | 'unsupported_page';
 
 interface SchemeGuardSummary {
   scheme: string;
@@ -50,7 +56,7 @@ type PageRole =
 interface PageUnderstandingSummary {
   pageRole: PageRole;
   primaryRegion: string | null;
-  primaryRegionConfidence: 'low' | 'medium' | 'high' | null;
+  primaryRegionConfidence: PrimaryRegionConfidence;
   footerOnly: boolean;
   anchorTexts: string[];
 }
@@ -252,31 +258,10 @@ interface SnapshotNode {
   ref: string;
   depth: number;
 }
-
-interface SnapshotInteractiveElement {
-  ref: string;
-  role: string;
-  name: string;
-}
-
-interface SnapshotArtifactRef {
-  kind: 'dom_snapshot';
-  ref: string;
-}
-
-interface CandidateActionLocator {
-  type: 'aria' | 'css';
-  value: string;
-}
-
-interface CandidateActionSeed {
-  id: string;
-  actionType: 'click' | 'fill';
-  targetRef: string;
-  confidence: number;
-  matchReason: string;
-  locatorChain: CandidateActionLocator[];
-}
+type SnapshotInteractiveElement = ReadPageInteractiveElement;
+type SnapshotArtifactRef = ReadPageArtifactRef;
+type CandidateActionLocator = ReadPageCandidateActionLocator;
+type CandidateActionSeed = ReadPageCandidateAction;
 
 const INTERACTIVE_ROLES = new Set([
   'button',
@@ -539,7 +524,7 @@ function buildModeOutput(params: {
   scheme: string;
   pageRole: PageRole;
   primaryRegion: string | null;
-  primaryRegionConfidence: 'low' | 'medium' | 'high' | null;
+  primaryRegionConfidence: PrimaryRegionConfidence;
   footerOnly: boolean;
   anchorTexts: string[];
   pageContent: string;
@@ -565,7 +550,7 @@ function buildModeOutput(params: {
   tips: string;
   refMap: any[];
   candidateActions: CandidateActionSeed[];
-}) {
+}): ReadPageCompactSnapshot | ReadPageNormalSnapshot | ReadPageFullSnapshot {
   const interactiveLimit = params.mode === 'compact' ? 24 : 80;
   const interactiveElements = buildInteractiveElements(
     params.pageContent,
@@ -578,7 +563,7 @@ function buildModeOutput(params: {
       ? params.candidateActions
       : buildCandidateActions(interactiveElements, params.refMap);
   const artifactRefs = buildArtifactRefs(params.tabId);
-  const pageContext = {
+  const pageContext: ReadPagePageContext = {
     filter: params.filter,
     depth: params.depth,
     focus: params.focus,
@@ -591,7 +576,7 @@ function buildModeOutput(params: {
     markedElementsCount: params.markedElements.length,
   };
 
-  const sharedPayload = {
+  const sharedPayload: ReadPageCompactSnapshot = {
     mode: params.mode,
     page: {
       url: params.currentUrl,
