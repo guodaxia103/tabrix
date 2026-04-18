@@ -98,12 +98,8 @@ pnpm run t4:post-submit -- --owner guodaxia103 --repo tabrix --commit <sha>
 
 ## 7. 第二阶段入口（登录态黄金场景）
 
-T4 第二阶段已提供抖音登录态黄金场景门禁入口：
+T4 第二阶段的登录态黄金场景资产已迁移至私有仓库维护。
 
-```bash
-pnpm run t4:douyin-golden-baseline
-```
-
-详细说明见：
+公开仓库仅保留迁移边界说明文档：
 
 - `docs/T4_DOUYIN_LOGIN_GOLDEN_GATE_zh.md`

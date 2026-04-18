@@ -37,7 +37,7 @@ Implementation design notes, audits, acceptance evidence, release-gate maintenan
 - `BROWSER_BRIDGE_STATE_DESIGN_zh.md`: 浏览器桥接状态机与自动恢复设计
 - `OSV_AUDIT_GATE_zh.md`: 生产依赖安全门禁与 OSV 门禁说明
 - `T4_GITHUB_BASELINE_GATE_zh.md`: T4 GitHub 公共基线门禁执行入口与输出规范
-- `T4_DOUYIN_LOGIN_GOLDEN_GATE_zh.md`: T4 登录态黄金场景（抖音热点宝/创作者中心）门禁执行入口与输出规范
+- `T4_DOUYIN_LOGIN_GOLDEN_GATE_zh.md`: T4 登录态黄金场景迁移边界说明（私有仓库维护）
 - `MAINTENANCE_LOG.md` / `MAINTENANCE_LOG_zh.md`: lightweight public log for verified maintenance findings and contributor-visible follow-up items
 - `ROADMAP.md` / `ROADMAP_zh.md`: public product direction and contributor-facing future priorities
 - `USE_CASES.md` / `USE_CASES_zh.md`: realistic early-stage scenarios for new users
