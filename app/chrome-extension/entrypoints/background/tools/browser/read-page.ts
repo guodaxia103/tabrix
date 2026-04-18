@@ -434,6 +434,7 @@ function buildInteractiveElements(
     ref: String(item?.ref || item?.selector || `fallback_${index + 1}`),
     role: String(item?.type || 'generic').toLowerCase(),
     name: String(item?.text || '').trim(),
+    depth: 0,
   }));
   if (mode === 'compact') {
     return prioritizeCompactNodes(fallbackNodes, limit);
