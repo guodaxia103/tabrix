@@ -45,6 +45,7 @@
     "ubuntu:xvfb-self-check": "powershell -ExecutionPolicy Bypass -File ./scripts/run-ubuntu-xvfb-self-check.ps1",
     "extension:reload": "node ./scripts/reload-extension.mjs",
     "t4:github-baseline": "node ./scripts/t4-github-baseline.mjs",
+    "t4:douyin-golden-baseline": "node ./scripts/t4-douyin-golden-baseline.mjs",
     "t4:post-submit": "node ./scripts/t4-post-submit-tracker.mjs",
     "release:check": "node ./scripts/check-release-readiness.mjs",
     "release:check:ci": "node ./scripts/check-release-readiness.mjs --allow-missing-notes",
