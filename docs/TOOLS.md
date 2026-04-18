@@ -212,15 +212,22 @@ The response is mode-based:
     "fallbackSource": null,
     "refMapCount": 24,
     "markedElementsCount": 0
-  }
+  },
+  "frameContext": null,
+  "historyRef": null,
+  "memoryHints": []
 }
 ```
 
 **Notes**:
 
+- Stable contract layer (T3.2): `mode`, `page`, `summary`, `interactiveElements`, `artifactRefs`.
+- Extension layer (evolvable): `candidateActions`, `pageContext`, `frameContext`, `historyRef`, `memoryHints`.
 - `normal` keeps the compact core and adds `diagnostics`.
-- `full` keeps the compact core and adds `fullSnapshot` (large payload).
-- `artifactRefs` are the stable pointer fields for larger snapshot artifacts and follow-up tooling.
+- `full` keeps the compact core and adds inline `fullSnapshot` (large payload) plus `artifactRefs` pointers.
+- `artifactRefs` are the durable pointers for large snapshots/debug payloads and follow-up tool chaining; default callers should still prefer `compact`.
+- Mode boundary rule: `compact` is execution-first; `normal` is execution + diagnostics; `full` is evidence/debug detail.
+- Migration: existing `ref`/`selector`-based calls are unchanged; `candidateAction` is an optional enhancement path.
 - On unsupported tabs (for example `chrome://`), the tool still returns a structured payload with `reason: "unsupported_page_type"`.
 
 ### `chrome_get_web_content`
@@ -310,6 +317,7 @@ Mouse, keyboard, and screenshot automation with CDP-oriented behavior. Prefer `r
 - `tabId` (number, optional): Target tab (default: active tab).
 - `background` (boolean, optional): Best-effort avoid focusing tab/window (default: `false`).
 - `ref` (string, optional): Element ref from `chrome_read_page` (precedence over coordinates for many actions).
+- `candidateAction` (object, optional): Action seed from `chrome_read_page.candidateActions[*]` with `targetRef` and/or `locatorChain`. Resolution order: explicit `ref` > `candidateAction.targetRef` > explicit `selector` > `candidateAction.locatorChain(css/ref)`.
 - `coordinates` (object, optional): `{ "x", "y" }` — viewport or screenshot space if a recent screenshot context exists.
 - `startCoordinates` / `startRef` (optional): Drag start for `left_click_drag`.
 - `scrollDirection` (string, optional): `up` | `down` | `left` | `right`.
@@ -327,7 +335,7 @@ Mouse, keyboard, and screenshot automation with CDP-oriented behavior. Prefer `r
 **Scroll actions**:
 
 - **`scroll`** — Scroll by a given amount at a specific position. Requires `ref` or `coordinates` to indicate where to scroll. Use `scrollDirection` (`up`/`down`/`left`/`right`) and `scrollAmount` (ticks 1–10, default 3).
-- **`scroll_to`** — Scroll an element into view. Requires `ref` (from `chrome_read_page`). No coordinates or direction needed.
+- **`scroll_to`** — Scroll an element into view. Requires `ref` (or `candidateAction.targetRef` that resolves to a ref). No coordinates or direction needed.
 
 **Examples**:
 
@@ -369,6 +377,7 @@ Click via ref, CSS/XPath selector, or coordinates. Supports iframe `frameId`.
 - `selector` (string, optional): CSS or XPath (see `selectorType`).
 - `selectorType` (string, optional): `css` | `xpath` (default: `css`).
 - `ref` (string, optional): Ref from `chrome_read_page` (wins over `selector`).
+- `candidateAction` (object, optional): Optional seed from `chrome_read_page.candidateActions[*]` (`targetRef`, `locatorChain`). Same priority order as `chrome_computer`.
 - `coordinates` (object, optional): `{ "x", "y" }` required when using coordinate targeting.
 - `double` (boolean, optional): Double-click (default: `false`).
 - `button` (string, optional): `left` | `right` | `middle` (default: `left`).
@@ -399,6 +408,7 @@ Fill inputs, textareas, or select options; supports checkboxes and radios.
 - `selector` (string, optional): CSS or XPath.
 - `selectorType` (string, optional): `css` | `xpath` (default: `css`).
 - `ref` (string, optional): Ref from `chrome_read_page`.
+- `candidateAction` (object, optional): Optional seed from `chrome_read_page.candidateActions[*]` (`targetRef`, `locatorChain`). Same priority order as `chrome_computer`.
 - `tabId` (number, optional): Target tab (default: active tab).
 - `windowId` (number, optional): Window when `tabId` is omitted.
 - `frameId` (number, optional): Target frame for iframes.

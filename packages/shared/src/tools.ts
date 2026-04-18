@@ -202,7 +202,7 @@ export const TOOL_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.BROWSER.READ_PAGE,
     description:
-      'Get an accessibility-tree representation of visible page elements. Only returns elements visible in the viewport, and can optionally focus on interactive elements only.\nSafe-first guidance: prefer this tool before screenshots, coordinate clicks, or javascript. If the element you need is still missing, use chrome_screenshot for visual confirmation. Reserve chrome_computer and chrome_javascript for explicit fallback/debug cases.\nLimitation: Does not work on chrome:// or browser-internal pages; may return degraded output on sparse localhost pages.',
+      'Get an accessibility-tree representation of visible page elements. Only returns elements visible in the viewport, and can optionally focus on interactive elements only.\nT3.2 contract: stable fields are mode/page/summary/interactiveElements/artifactRefs; candidateActions/pageContext/frameContext/historyRef/memoryHints are evolvable extensions.\nSafe-first guidance: prefer this tool before screenshots, coordinate clicks, or javascript. If the element you need is still missing, use chrome_screenshot for visual confirmation. Reserve chrome_computer and chrome_javascript for explicit fallback/debug cases.\nLimitation: Does not work on chrome:// or browser-internal pages; may return degraded output on sparse localhost pages.',
     annotations: {
       readOnlyHint: true,
     },

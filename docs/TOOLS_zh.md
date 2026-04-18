@@ -206,15 +206,22 @@
     "fallbackSource": null,
     "refMapCount": 24,
     "markedElementsCount": 0
-  }
+  },
+  "frameContext": null,
+  "historyRef": null,
+  "memoryHints": []
 }
 ```
 
 **说明**：
 
+- T3.2 稳定契约层：`mode`、`page`、`summary`、`interactiveElements`、`artifactRefs`。
+- 可演进扩展层：`candidateActions`、`pageContext`、`frameContext`、`historyRef`、`memoryHints`。
 - `normal` 保留 compact 主体并增加 `diagnostics`。
-- `full` 保留 compact 主体并增加 `fullSnapshot`（大体积结构）。
-- `artifactRefs` 是大结构引用锚点，供后续链路消费。
+- `full` 保留 compact 主体并增加内联 `fullSnapshot`（大体积结构）与 `artifactRefs` 引用。
+- `artifactRefs` 是大结构与调试快照的稳定引用锚点；默认调用仍建议优先 `compact`。
+- 模式边界：`compact` 偏执行输入，`normal` 偏执行+诊断，`full` 偏证据/调试。
+- 迁移说明：既有 `ref`/`selector` 调用不变；`candidateAction` 是可选增强参数。
 - 在不支持页面（例如 `chrome://`）上，仍会返回结构化结果并带 `reason: "unsupported_page_type"`。
 
 ### `chrome_computer`
@@ -227,6 +234,7 @@
 - `background` (布尔值，可选)：部分操作尽量不聚焦标签/窗口（尽力而为），默认 false。
 - `action` (字符串，**必需**)：`left_click` | `right_click` | `double_click` | `triple_click` | `left_click_drag` | `scroll` | `scroll_to` | `type` | `key` | `fill` | `fill_form` | `hover` | `wait` | `resize_page` | `zoom` | `screenshot`。
 - `ref` (字符串，可选)：来自 `chrome_read_page` 的元素引用；点击/滚动/输入等优先于坐标。
+- `candidateAction` (对象，可选)：来自 `chrome_read_page.candidateActions[*]` 的动作种子（`targetRef`/`locatorChain`）。解析优先级：显式 `ref` > `candidateAction.targetRef` > 显式 `selector` > `candidateAction.locatorChain(css/ref)`。
 - `coordinates` (对象，可选)：`{ x, y }`，截图空间或视口坐标。
 - `startCoordinates` (对象，可选)：拖拽起点 `{ x, y }`。
 - `startRef` (字符串，可选)：拖拽起点 ref（替代 `startCoordinates`）。
@@ -248,7 +256,7 @@
 **滚动操作说明**：
 
 - **`scroll`** — 在指定位置按方向滚动。需提供 `ref` 或 `coordinates` 指定滚动位置，配合 `scrollDirection`（`up`/`down`/`left`/`right`）和 `scrollAmount`（刻度 1–10，默认 3）。
-- **`scroll_to`** — 将元素滚动到可视区域。只需 `ref`（来自 `chrome_read_page`），无需坐标或方向。
+- **`scroll_to`** — 将元素滚动到可视区域。只需 `ref`（或可解析到 ref 的 `candidateAction.targetRef`），无需坐标或方向。
 
 **示例**：
 
@@ -367,6 +375,7 @@
 - `selector` (字符串，可选)：CSS 或 XPath（由 `selectorType` 指定）。
 - `selectorType` (字符串，可选)：`css` | `xpath`（默认 `css`）。
 - `ref` (字符串，可选)：来自 `chrome_read_page` 的元素引用，优先于 `selector`。
+- `candidateAction` (对象，可选)：来自 `chrome_read_page.candidateActions[*]` 的动作种子（`targetRef`/`locatorChain`），优先级同 `chrome_computer`。
 - `coordinates` (对象，可选)：`{ x, y }` 视口坐标。
 - `double` (布尔值，可选)：是否双击，默认 false。
 - `button` (字符串，可选)：`left` | `right` | `middle`，默认 left。
@@ -394,6 +403,7 @@
 - `selector` (字符串，可选)：CSS 或 XPath。
 - `selectorType` (字符串，可选)：`css` | `xpath`（默认 `css`）。
 - `ref` (字符串，可选)：来自 `chrome_read_page`，优先于 `selector`。
+- `candidateAction` (对象，可选)：来自 `chrome_read_page.candidateActions[*]` 的动作种子（`targetRef`/`locatorChain`），优先级同 `chrome_computer`。
 - `value` (字符串/数字/布尔，**必需**)：填入值；复选/单选为布尔；下拉为选项值或文本。
 - `tabId` (数字，可选)、`windowId` (数字，可选)、`frameId` (数字，可选)。
 
