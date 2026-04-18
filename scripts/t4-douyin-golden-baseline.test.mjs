@@ -59,15 +59,23 @@ test('parseCliArgs keeps defaults and supports non-strict mode', () => {
   assert.equal(parsed.strict, false);
   assert.ok(parsed.hotspotUrl.includes('hotspot'));
   assert.ok(parsed.creatorUrl.includes('creator'));
+  assert.ok(Array.isArray(parsed.hotspotUrlCandidates));
+  assert.ok(parsed.hotspotUrlCandidates.length >= 1);
 });
 
 test('buildDyScenarioDefinitions returns two fixed L4 scenarios', () => {
   const scenarios = buildDyScenarioDefinitions({
     hotspotUrl: 'https://creator.douyin.com/hotspot',
+    hotspotUrlCandidates: [
+      'https://creator.douyin.com/hotspot',
+      'https://creator.douyin.com/hotspot?active_tab=hotspot_all',
+    ],
     creatorUrl: 'https://creator.douyin.com/creator',
   });
   assert.equal(scenarios.length, 2);
   assert.equal(scenarios[0].scenarioId, 'DY-L4-001');
+  assert.ok(Array.isArray(scenarios[0].entryCandidates));
+  assert.equal(scenarios[0].entryCandidates.length, 2);
   assert.equal(scenarios[1].scenarioId, 'DY-L4-002');
 });
 
@@ -103,6 +111,57 @@ test('evaluateDyScenario fails when login is required', () => {
   );
   assert.equal(result.passed, false);
   assert.equal(result.loginRequired, true);
+  assert.equal(result.failureCategory, 'account_login_required');
+});
+
+test('evaluateDyScenario classifies hotspot permission-denied entry diagnosis', () => {
+  const modeResults = buildModeResults({
+    normal: {
+      snapshot: {
+        mode: 'normal',
+        page: {
+          url: 'https://creator.douyin.com/creator-micro/data/following/following',
+          title: '抖音创作者中心',
+          pageType: 'web_page',
+        },
+        summary: { pageRole: 'creator_home', primaryRegion: 'creator_shell', quality: 'usable' },
+        interactiveElements: [{ name: '取消关注' }, { name: '取消关注' }, { name: '取消关注' }],
+        artifactRefs: [],
+        candidateActions: [],
+      },
+    },
+    full: {
+      snapshot: {
+        mode: 'full',
+        page: {
+          url: 'https://creator.douyin.com/creator-micro/data/following/following',
+          title: '抖音创作者中心',
+          pageType: 'web_page',
+        },
+        summary: { pageRole: 'creator_home', primaryRegion: 'creator_shell', quality: 'usable' },
+        interactiveElements: [{ name: '取消关注' }],
+        artifactRefs: [],
+        candidateActions: [],
+        fullSnapshot: {
+          pageContent: '取消关注 取消关注 取消关注',
+        },
+      },
+    },
+  });
+  const result = evaluateDyScenario(
+    { scenarioId: 'DY-L4-001' },
+    modeResults,
+    ['chrome_navigate', 'chrome_read_page'],
+    {
+      hotspotEntryDiagnosis: {
+        category: 'account_no_hotspot_permission',
+        selectedEntry: 'https://creator.douyin.com/creator-micro/data/hotspot?active_tab=hotspot_topic',
+        attempts: [],
+      },
+    },
+  );
+  assert.equal(result.passed, false);
+  assert.equal(result.failureCategory, 'account_no_hotspot_permission');
 });
 
 test('evaluateDyScenario fails when high-risk actions are used', () => {
@@ -137,4 +196,5 @@ test('evaluateDyScenario fails when high-risk actions are used', () => {
   );
   assert.equal(result.readOnlyBoundaryPassed, false);
   assert.equal(result.passed, false);
+  assert.equal(result.failureCategory, 'read_only_boundary_violation');
 });

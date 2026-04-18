@@ -33,6 +33,7 @@ pnpm run t4:douyin-golden-baseline
 常用参数：
 
 - `--hotspot-url <url>`：覆盖 `DY-L4-001` 起始 URL
+- `--hotspot-url-candidates <url1,url2,...>`：覆盖 `DY-L4-001` 候选热点入口列表
 - `--creator-url <url>`：覆盖 `DY-L4-002` 起始 URL
 - `--out-dir <path>`：输出目录（默认 `.tmp/t4-douyin-golden`）
 - `--timeout-ms <ms>`：单工具调用超时
@@ -41,6 +42,7 @@ pnpm run t4:douyin-golden-baseline
 环境变量（可选）：
 
 - `TABRIX_DY_HOTSPOT_URL`
+- `TABRIX_DY_HOTSPOT_URL_CANDIDATES`（逗号分隔）
 - `TABRIX_DY_CREATOR_URL`
 
 ## 3. 场景输入与允许动作
@@ -87,6 +89,8 @@ pnpm run t4:douyin-golden-baseline
 - `artifactRefs`
 - `readOnlyBoundary`
 - `loginState`
+- `failureCategory`
+- `hotspotEntryDiagnosis`（仅 `DY-L4-001`）
 
 套件输出包含：
 
@@ -103,8 +107,34 @@ pnpm run t4:douyin-golden-baseline
 - 业务信号守卫：
   - 热点宝场景需命中热点相关指标标签
   - 创作者中心场景需命中概览相关指标标签
+- 热点入口校准守卫（仅 `DY-L4-001`）：
+  - 先按候选入口列表逐个导航并探测
+  - 命中热点页信号后再进入正式快照验收
+  - 若候选入口均未命中，则输出明确失败分类
 - 风险守卫：
   - 若出现高风险写操作工具，场景失败
+
+### 5.1 DY-L4-001 失败分类
+
+`DY-L4-001` 当前会明确输出以下分类：
+
+- `account_no_hotspot_permission`
+  - 典型信号：多个热点候选入口都落到 `.../data/following/following` 等关注页回退
+- `entry_unavailable_or_redirected`
+  - 典型信号：候选入口未命中热点页，且不符合“权限回退”特征
+- `page_signal_not_matched`
+  - 典型信号：已进入热点相关页面，但结构化业务信号不足
+- `account_login_required`
+  - 典型信号：命中登录门页
+
+### 5.2 候选入口优先级
+
+`DY-L4-001` 的候选入口按以下顺序去重执行：
+
+1. `--hotspot-url`
+2. `--hotspot-url-candidates`
+3. `TABRIX_DY_HOTSPOT_URL_CANDIDATES`
+4. 脚本内默认候选入口
 
 ## 6. 证据沉淀
 

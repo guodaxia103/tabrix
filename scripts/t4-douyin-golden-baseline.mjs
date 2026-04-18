@@ -15,6 +15,11 @@ import {
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_MODES = ['compact', 'normal', 'full'];
+const HOTSPOT_ENTRY_CANDIDATE_FALLBACKS = [
+  'https://creator.douyin.com/creator-micro/data/hotspot?active_tab=hotspot_topic',
+  'https://creator.douyin.com/creator-micro/data/hotspot?active_tab=hotspot_all',
+  'https://creator.douyin.com/creator-micro/data/hotspot',
+];
 const DEFAULT_HOTSPOT_URL =
   process.env.TABRIX_DY_HOTSPOT_URL ||
   'https://creator.douyin.com/creator-micro/data/hotspot?active_tab=hotspot_topic';
@@ -54,6 +59,25 @@ const CREATOR_METRIC_LABELS = [
   '近期作品',
   '直播数据',
 ];
+
+function splitUrlCandidates(raw) {
+  return String(raw ?? '')
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function dedupeUrls(urls) {
+  const seen = new Set();
+  const deduped = [];
+  for (const item of Array.isArray(urls) ? urls : []) {
+    const normalized = String(item ?? '').trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    deduped.push(normalized);
+  }
+  return deduped;
+}
 
 function sleepSync(ms) {
   const duration = Number(ms);
@@ -172,8 +196,14 @@ function ensureDir(targetDir) {
 }
 
 export function parseCliArgs(argv) {
+  const envCandidates = splitUrlCandidates(process.env.TABRIX_DY_HOTSPOT_URL_CANDIDATES);
   const options = {
     hotspotUrl: DEFAULT_HOTSPOT_URL,
+    hotspotUrlCandidates: dedupeUrls([
+      DEFAULT_HOTSPOT_URL,
+      ...envCandidates,
+      ...HOTSPOT_ENTRY_CANDIDATE_FALLBACKS,
+    ]),
     creatorUrl: DEFAULT_CREATOR_URL,
     outDir: path.join('.tmp', 't4-douyin-golden'),
     strict: true,
@@ -184,6 +214,9 @@ export function parseCliArgs(argv) {
     const part = argv[index];
     if (part === '--hotspot-url') {
       options.hotspotUrl = argv[index + 1] ?? options.hotspotUrl;
+      index += 1;
+    } else if (part === '--hotspot-url-candidates') {
+      options.hotspotUrlCandidates = dedupeUrls(splitUrlCandidates(argv[index + 1]));
       index += 1;
     } else if (part === '--creator-url') {
       options.creatorUrl = argv[index + 1] ?? options.creatorUrl;
@@ -202,6 +235,12 @@ export function parseCliArgs(argv) {
     }
   }
 
+  options.hotspotUrlCandidates = dedupeUrls([
+    options.hotspotUrl,
+    ...(Array.isArray(options.hotspotUrlCandidates) ? options.hotspotUrlCandidates : []),
+    ...HOTSPOT_ENTRY_CANDIDATE_FALLBACKS,
+  ]);
+
   return options;
 }
 
@@ -211,6 +250,9 @@ export function buildDyScenarioDefinitions(options) {
       scenarioId: 'DY-L4-001',
       pageType: 'douyin_hotspot',
       startUrl: options.hotspotUrl,
+      entryCandidates: Array.isArray(options.hotspotUrlCandidates)
+        ? options.hotspotUrlCandidates
+        : [options.hotspotUrl],
       allowedActions: ['chrome_navigate', 'chrome_read_page'],
       outputTargets: ['pageRole', 'primaryRegion', 'hotspotMetricLabels', 'taskEntryHead'],
     },
@@ -263,7 +305,99 @@ function detectLoginRequired(text, normalSnapshot) {
   return /手机号|验证码|登录|登录后继续/.test(String(text || ''));
 }
 
-export function evaluateDyScenario(definition, modeResults, toolsUsed) {
+function isHotspotSnapshot(snapshot) {
+  const pageUrl = String(snapshot?.page?.url ?? '').toLowerCase();
+  const pageRole = String(snapshot?.summary?.pageRole ?? '').toLowerCase();
+  return pageUrl.includes('/hotspot') || pageRole.startsWith('hotspot_');
+}
+
+function isFollowingFallbackSnapshot(snapshot) {
+  const pageUrl = String(snapshot?.page?.url ?? '').toLowerCase();
+  if (pageUrl.includes('/data/following/')) return true;
+  const interactiveHead = summarizeInteractiveElements(snapshot, 12);
+  const followActionCount = interactiveHead.filter((name) => name.includes('取消关注')).length;
+  return followActionCount >= 3;
+}
+
+function summarizeHotspotEntryProbe(attempt) {
+  return {
+    requestedUrl: attempt.requestedUrl,
+    navigateFinalUrl: String(attempt.navigateResult?.parsed?.finalUrl ?? ''),
+    pageUrl: String(attempt.snapshot?.page?.url ?? ''),
+    pageRole: String(attempt.snapshot?.summary?.pageRole ?? ''),
+    primaryRegion: String(attempt.snapshot?.summary?.primaryRegion ?? ''),
+    hotspotSignal: isHotspotSnapshot(attempt.snapshot),
+    followingFallback: isFollowingFallbackSnapshot(attempt.snapshot),
+    interactiveHead: summarizeInteractiveElements(attempt.snapshot, 8),
+  };
+}
+
+function calibrateHotspotEntry(definition, options, incomingTabId, firstScenario, toolsUsed) {
+  const candidates = dedupeUrls([
+    definition.startUrl,
+    ...(Array.isArray(definition.entryCandidates) ? definition.entryCandidates : []),
+  ]);
+  const attempts = [];
+  let workingTabId = incomingTabId;
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const requestedUrl = candidates[index];
+    const navigateArgs = {
+      url: requestedUrl,
+      ...(typeof workingTabId === 'number' ? { tabId: workingTabId } : {}),
+      ...(typeof workingTabId !== 'number' && firstScenario && index === 0 ? { newWindow: true } : {}),
+    };
+    const navigateResult = callTool('chrome_navigate', navigateArgs, options.timeoutMs);
+    toolsUsed.push('chrome_navigate');
+
+    if (typeof navigateResult?.parsed?.tabId === 'number') {
+      workingTabId = navigateResult.parsed.tabId;
+    }
+
+    const readResult = callTool(
+      'chrome_read_page',
+      {
+        mode: 'normal',
+        filter: 'interactive',
+        depth: 3,
+        tabId: workingTabId,
+      },
+      options.timeoutMs,
+    );
+    toolsUsed.push('chrome_read_page');
+
+    const attempt = {
+      requestedUrl,
+      navigateResult,
+      readResult,
+      snapshot: readResult.parsed,
+    };
+    attempts.push(attempt);
+
+    if (isHotspotSnapshot(readResult.parsed)) {
+      return {
+        category: 'reachable',
+        selectedEntry: requestedUrl,
+        selectedTabId: workingTabId,
+        selectedNavigateResult: navigateResult,
+        attempts: attempts.map(summarizeHotspotEntryProbe),
+      };
+    }
+  }
+
+  const allFollowingFallback =
+    attempts.length > 0 && attempts.every((attempt) => isFollowingFallbackSnapshot(attempt.snapshot));
+  const finalAttempt = attempts[attempts.length - 1] || null;
+  return {
+    category: allFollowingFallback ? 'account_no_hotspot_permission' : 'entry_unavailable_or_redirected',
+    selectedEntry: finalAttempt?.requestedUrl || definition.startUrl,
+    selectedTabId: workingTabId,
+    selectedNavigateResult: finalAttempt?.navigateResult || null,
+    attempts: attempts.map(summarizeHotspotEntryProbe),
+  };
+}
+
+export function evaluateDyScenario(definition, modeResults, toolsUsed, scenarioContext = {}) {
   const { compactSnapshot, normalSnapshot, textCorpus, interactiveNames } =
     gatherSnapshotContext(modeResults);
 
@@ -279,26 +413,51 @@ export function evaluateDyScenario(definition, modeResults, toolsUsed) {
   const readOnlyBoundaryPassed = !highRiskActionsUsed;
 
   let businessPassed = false;
+  let failureCategory = null;
   let businessSignals = {};
   let businessFailures = [];
 
   if (definition.scenarioId === 'DY-L4-001') {
+    const entryDiagnosis = scenarioContext.hotspotEntryDiagnosis || null;
+    const entryReachable = entryDiagnosis ? entryDiagnosis.category === 'reachable' : true;
     const hotspotMetricLabels = pickMatchedLabels(textCorpus, HOTSPOT_METRIC_LABELS);
     const rolePassed = ['hotspot_topic_list', 'hotspot_rank_list', 'hotspot_detail'].includes(pageRole);
     const hotspotUrlPassed = /hotspot/i.test(pageUrl);
     const regionPassed = Boolean(primaryRegion);
     const metricPassed = hotspotMetricLabels.length >= 2;
-    businessPassed = !loginRequired && rolePassed && regionPassed && metricPassed && hotspotUrlPassed;
+
+    businessPassed =
+      !loginRequired &&
+      entryReachable &&
+      rolePassed &&
+      hotspotUrlPassed &&
+      regionPassed &&
+      metricPassed;
+
+    if (loginRequired) failureCategory = 'account_login_required';
+    else if (!entryReachable) failureCategory = entryDiagnosis?.category || 'entry_unavailable_or_redirected';
+    else if (!rolePassed || !hotspotUrlPassed || !regionPassed || !metricPassed)
+      failureCategory = 'page_signal_not_matched';
+    else if (!readOnlyBoundaryPassed) failureCategory = 'read_only_boundary_violation';
+
     businessSignals = {
       pageRole,
       pageUrl: pageUrl || null,
       primaryRegion: primaryRegion || null,
+      hotspotEntryDiagnosis: entryDiagnosis
+        ? {
+            category: entryDiagnosis.category,
+            selectedEntry: entryDiagnosis.selectedEntry || null,
+            attempts: Array.isArray(entryDiagnosis.attempts) ? entryDiagnosis.attempts : [],
+          }
+        : null,
       hotspotMetricLabels,
       taskEntryHead,
       compactInteractiveHead: summarizeInteractiveElements(compactSnapshot, 12),
     };
     businessFailures = [
       !loginRequired ? null : 'login_required_detected',
+      entryReachable ? null : `entry_diagnosis:${entryDiagnosis?.category || 'entry_unavailable_or_redirected'}`,
       rolePassed ? null : `unexpected_page_role:${pageRole}`,
       hotspotUrlPassed ? null : `redirected_from_hotspot:${pageUrl}`,
       regionPassed ? null : 'missing_primary_region',
@@ -311,6 +470,11 @@ export function evaluateDyScenario(definition, modeResults, toolsUsed) {
     const regionPassed = Boolean(primaryRegion);
     const metricPassed = creatorMetricLabels.length >= 2;
     businessPassed = !loginRequired && rolePassed && regionPassed && metricPassed;
+
+    if (loginRequired) failureCategory = 'account_login_required';
+    else if (!rolePassed || !regionPassed || !metricPassed) failureCategory = 'page_signal_not_matched';
+    else if (!readOnlyBoundaryPassed) failureCategory = 'read_only_boundary_violation';
+
     businessSignals = {
       pageRole,
       pageUrl: pageUrl || null,
@@ -332,6 +496,7 @@ export function evaluateDyScenario(definition, modeResults, toolsUsed) {
     passed: businessPassed && readOnlyBoundaryPassed,
     loginRequired,
     readOnlyBoundaryPassed,
+    failureCategory,
     businessSignals,
     failures: businessFailures,
   };
@@ -340,17 +505,26 @@ export function evaluateDyScenario(definition, modeResults, toolsUsed) {
 async function runDyScenario(definition, options, evidenceDir, tabId, firstScenario = false) {
   const startedAt = Date.now();
   const toolsUsed = [];
-  const navigateArgs = {
-    url: definition.startUrl,
-    ...(typeof tabId === 'number' ? { tabId } : {}),
-    ...(firstScenario ? { newWindow: true } : {}),
-  };
-  const navigateResult = callTool('chrome_navigate', navigateArgs, options.timeoutMs);
-  toolsUsed.push('chrome_navigate');
 
   let workingTabId = tabId;
-  if (typeof navigateResult?.parsed?.tabId === 'number') {
-    workingTabId = navigateResult.parsed.tabId;
+  let navigateResult = null;
+  let hotspotEntryDiagnosis = null;
+
+  if (definition.scenarioId === 'DY-L4-001') {
+    hotspotEntryDiagnosis = calibrateHotspotEntry(definition, options, tabId, firstScenario, toolsUsed);
+    navigateResult = hotspotEntryDiagnosis.selectedNavigateResult;
+    workingTabId = hotspotEntryDiagnosis.selectedTabId;
+  } else {
+    const navigateArgs = {
+      url: definition.startUrl,
+      ...(typeof tabId === 'number' ? { tabId } : {}),
+      ...(firstScenario ? { newWindow: true } : {}),
+    };
+    navigateResult = callTool('chrome_navigate', navigateArgs, options.timeoutMs);
+    toolsUsed.push('chrome_navigate');
+    if (typeof navigateResult?.parsed?.tabId === 'number') {
+      workingTabId = navigateResult.parsed.tabId;
+    }
   }
 
   const modeResults = [];
@@ -363,7 +537,7 @@ async function runDyScenario(definition, options, evidenceDir, tabId, firstScena
         mode,
         filter: 'interactive',
         depth: 3,
-        ...(typeof workingTabId === 'number' ? { tabId: workingTabId } : {}),
+        tabId: workingTabId,
       },
       options.timeoutMs,
     );
@@ -392,7 +566,9 @@ async function runDyScenario(definition, options, evidenceDir, tabId, firstScena
     });
   }
 
-  const business = evaluateDyScenario(definition, modeResults, toolsUsed);
+  const business = evaluateDyScenario(definition, modeResults, toolsUsed, {
+    hotspotEntryDiagnosis,
+  });
   const passedModeCount = modeResults.filter((item) => item.passed).length;
   const checkTotal = modeResults.length + 1;
   const checkPassed = passedModeCount + (business.passed ? 1 : 0);
@@ -407,11 +583,13 @@ async function runDyScenario(definition, options, evidenceDir, tabId, firstScena
     pageType: definition.pageType,
     input: {
       startUrl: definition.startUrl,
+      entryCandidates: definition.entryCandidates || [],
       allowedActions: definition.allowedActions,
       outputTargets: definition.outputTargets,
     },
     toolsUsed,
     navigateResult,
+    hotspotEntryDiagnosis,
     modeResults,
     business,
   };
@@ -450,6 +628,14 @@ async function runDyScenario(definition, options, evidenceDir, tabId, firstScena
     loginState: {
       loginRequiredDetected: business.loginRequired,
     },
+    failureCategory: business.failureCategory,
+    hotspotEntryDiagnosis: hotspotEntryDiagnosis
+      ? {
+          category: hotspotEntryDiagnosis.category,
+          selectedEntry: hotspotEntryDiagnosis.selectedEntry || null,
+          attempts: hotspotEntryDiagnosis.attempts || [],
+        }
+      : null,
     failures: business.failures,
     tabId: typeof navigateResult?.parsed?.tabId === 'number' ? navigateResult.parsed.tabId : workingTabId,
   };
