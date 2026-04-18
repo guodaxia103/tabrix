@@ -102,6 +102,12 @@ function resolveRepoAndCommit(options) {
   const resolved = { ...options };
   if (!resolved.commit) {
     resolved.commit = shell('git', ['rev-parse', 'HEAD']);
+  } else {
+    try {
+      resolved.commit = shell('git', ['rev-parse', resolved.commit]);
+    } catch {
+      // keep user-provided commit when local git expansion is unavailable
+    }
   }
 
   if (!resolved.owner || !resolved.repo) {
