@@ -262,6 +262,18 @@ function buildScenarioDefinitions(baseUrl) {
   ];
 }
 
+export function normalizeWorkflowRunUrl(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  if (/^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/actions\/runs\/\d+/i.test(text)) {
+    return text;
+  }
+  if (/^\/[^/\s]+\/[^/\s]+\/actions\/runs\/\d+/i.test(text)) {
+    return `https://github.com${text}`;
+  }
+  return null;
+}
+
 function extractRunDetailUrlFromActions(timeoutMs, tabId) {
   const runLinkResult = callTool(
     'chrome_javascript',
@@ -277,11 +289,7 @@ function extractRunDetailUrlFromActions(timeoutMs, tabId) {
     timeoutMs,
   );
 
-  const value = String(runLinkResult?.parsed?.result ?? '').trim();
-  if (/^https:\/\/github\.com\/.+\/actions\/runs\/\d+/i.test(value)) {
-    return value;
-  }
-  return null;
+  return normalizeWorkflowRunUrl(runLinkResult?.parsed?.result ?? '');
 }
 
 function clickFirstWorkflowRun(timeoutMs, tabId) {
@@ -332,6 +340,7 @@ function clickFirstWorkflowRun(timeoutMs, tabId) {
     clicked: true,
     targetRef: target.ref,
     targetName: String(target.name ?? ''),
+    targetHref: normalizeWorkflowRunUrl(clickResult?.parsed?.elementInfo?.href ?? ''),
     compactSnapshot: compact.parsed,
     clickResult,
   };
@@ -362,16 +371,22 @@ function timestampForPath() {
 
 async function runScenario(definition, options, evidenceDir, tabId, runOptions = {}) {
   const scenarioStartedAt = Date.now();
+  let activeTabId = tabId;
   let navigateResult = null;
   if (!runOptions.skipNavigate) {
+    const navigateArgs = {
+      url: definition.url,
+      ...(runOptions.forceNewWindow ? { newWindow: true } : {}),
+      ...(!runOptions.forceNewWindow && typeof tabId === 'number' ? { tabId } : {}),
+    };
     navigateResult = callTool(
       'chrome_navigate',
-      {
-        url: definition.url,
-        ...(typeof tabId === 'number' ? { tabId } : {}),
-      },
+      navigateArgs,
       options.timeoutMs,
     );
+    if (typeof navigateResult?.parsed?.tabId === 'number') {
+      activeTabId = navigateResult.parsed.tabId;
+    }
   }
 
   const modeResults = [];
@@ -386,7 +401,7 @@ async function runScenario(definition, options, evidenceDir, tabId, runOptions =
         mode,
         filter: 'interactive',
         depth: 3,
-        ...(typeof tabId === 'number' ? { tabId } : {}),
+        ...(typeof activeTabId === 'number' ? { tabId: activeTabId } : {}),
       },
       options.timeoutMs,
     );
@@ -432,6 +447,7 @@ async function runScenario(definition, options, evidenceDir, tabId, runOptions =
     pageType: definition.pageType,
     url: definition.url,
     navigateResult,
+    activeTabId,
     semantic,
     preAction: runOptions.preAction ?? null,
     modeResults,
@@ -499,14 +515,17 @@ export async function runGithubBaseline(options) {
     if (scenarioDef.pageType === 'workflow_run_detail') {
       const clickResult = clickFirstWorkflowRun(options.timeoutMs, workingTabId);
       runOptions.preAction = clickResult;
-      if (clickResult.clicked) {
-        runOptions.skipNavigate = true;
-      }
 
+      if (!workflowRunDetailUrl && clickResult.targetHref) {
+        workflowRunDetailUrl = clickResult.targetHref;
+      }
       if (!workflowRunDetailUrl) {
         workflowRunDetailUrl = extractRunDetailUrlFromActions(options.timeoutMs, workingTabId);
       }
       scenarioDef.url = workflowRunDetailUrl || `${baseUrl}/actions`;
+      if (workflowRunDetailUrl) {
+        runOptions.forceNewWindow = true;
+      }
     }
 
     const result = await runScenario(scenarioDef, options, evidenceDir, workingTabId, runOptions);

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   estimateTokensFromBytes,
+  normalizeWorkflowRunUrl,
   parseCliArgs,
   parseTabrixJsonOutput,
   summarizeInteractiveElements,
@@ -72,4 +73,16 @@ test('parseCliArgs keeps defaults and supports non-strict flag', () => {
   assert.equal(parsed.owner, 'guodaxia103');
   assert.equal(parsed.repo, 'tabrix');
   assert.equal(parsed.strict, false);
+});
+
+test('normalizeWorkflowRunUrl accepts absolute and relative workflow run links', () => {
+  assert.equal(
+    normalizeWorkflowRunUrl('https://github.com/guodaxia103/tabrix/actions/runs/24601534712'),
+    'https://github.com/guodaxia103/tabrix/actions/runs/24601534712',
+  );
+  assert.equal(
+    normalizeWorkflowRunUrl('/guodaxia103/tabrix/actions/runs/24601534712'),
+    'https://github.com/guodaxia103/tabrix/actions/runs/24601534712',
+  );
+  assert.equal(normalizeWorkflowRunUrl('https://github.com/guodaxia103/tabrix/actions'), null);
 });
