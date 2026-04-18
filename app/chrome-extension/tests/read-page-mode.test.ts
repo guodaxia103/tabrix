@@ -1,7 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readPageTool } from '@/entrypoints/background/tools/browser/read-page';
 
+const MODE_MINIMUM_FIELDS: Record<'compact' | 'normal' | 'full', string[]> = {
+  compact: ['mode', 'page', 'summary', 'interactiveElements', 'artifactRefs'],
+  normal: ['mode', 'page', 'summary', 'interactiveElements', 'artifactRefs', 'diagnostics'],
+  full: ['mode', 'page', 'summary', 'interactiveElements', 'artifactRefs', 'fullSnapshot'],
+};
+
 function expectCommonSnapshotShape(payload: any, mode: 'compact' | 'normal' | 'full') {
+  for (const field of MODE_MINIMUM_FIELDS[mode]) {
+    expect(payload).toHaveProperty(field);
+  }
   expect(payload.mode).toBe(mode);
   expect(payload.page).toMatchObject({
     url: expect.any(String),
@@ -16,6 +25,9 @@ function expectCommonSnapshotShape(payload: any, mode: 'compact' | 'normal' | 'f
     kind: 'dom_snapshot',
     ref: expect.any(String),
   });
+  expect(payload.artifactRefs.map((artifact: { ref: string }) => artifact.ref)).toEqual(
+    expect.arrayContaining([expect.stringContaining('/normal'), expect.stringContaining('/full')]),
+  );
   expect(payload.pageContext).toMatchObject({
     filter: expect.any(String),
     scheme: expect.any(String),
@@ -23,6 +35,9 @@ function expectCommonSnapshotShape(payload: any, mode: 'compact' | 'normal' | 'f
     fallbackUsed: expect.any(Boolean),
     refMapCount: expect.any(Number),
   });
+  expect(payload.frameContext).toBeNull();
+  expect(payload.historyRef).toBeNull();
+  expect(Array.isArray(payload.memoryHints)).toBe(true);
 }
 
 describe('read_page mode', () => {
@@ -153,6 +168,7 @@ describe('read_page mode', () => {
     expect(result.isError).toBe(false);
     expectCommonSnapshotShape(payload, 'full');
     expect(payload.fullSnapshot).toBeDefined();
+    expect(payload.diagnostics).toBeUndefined();
     expect(payload.fullSnapshot.pageContent).toContain('button "Submit order"');
   });
 

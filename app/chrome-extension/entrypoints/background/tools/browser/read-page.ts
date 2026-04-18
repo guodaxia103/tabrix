@@ -6,6 +6,7 @@ import {
   type ReadPageCandidateAction,
   type ReadPageCandidateActionLocator,
   type ReadPageCompactSnapshot,
+  type ReadPageExtensionFields,
   type ReadPageFullSnapshot,
   type ReadPageInteractiveElement,
   type ReadPageMode,
@@ -515,6 +516,48 @@ function buildCandidateActions(
   return seeds;
 }
 
+function buildStableSnapshotLayer(params: {
+  mode: ReadPageMode;
+  currentUrl: string;
+  currentTitle: string;
+  pageType: PageType;
+  pageRole: PageRole;
+  primaryRegion: string | null;
+  quality: string;
+  interactiveElements: SnapshotInteractiveElement[];
+  artifactRefs: SnapshotArtifactRef[];
+}): Omit<ReadPageCompactSnapshot, keyof ReadPageExtensionFields> {
+  return {
+    mode: params.mode,
+    page: {
+      url: params.currentUrl,
+      title: params.currentTitle,
+      pageType: params.pageType,
+    },
+    summary: {
+      pageRole: params.pageRole,
+      primaryRegion: params.primaryRegion,
+      quality: params.quality,
+    },
+    interactiveElements: params.interactiveElements,
+    artifactRefs: params.artifactRefs,
+  };
+}
+
+function buildExtensionLayer(params: {
+  candidateActions: CandidateActionSeed[];
+  pageContext: ReadPagePageContext;
+}): ReadPageExtensionFields {
+  return {
+    candidateActions: params.candidateActions,
+    pageContext: params.pageContext,
+    // T3.2: reserved extension fields (not locked as long-term schema yet).
+    frameContext: null,
+    historyRef: null,
+    memoryHints: [],
+  };
+}
+
 function buildModeOutput(params: {
   mode: ReadPageMode;
   tabId: number;
@@ -576,22 +619,26 @@ function buildModeOutput(params: {
     markedElementsCount: params.markedElements.length,
   };
 
-  const sharedPayload: ReadPageCompactSnapshot = {
+  const stableLayer = buildStableSnapshotLayer({
     mode: params.mode,
-    page: {
-      url: params.currentUrl,
-      title: params.currentTitle,
-      pageType: params.pageType,
-    },
-    summary: {
-      pageRole: params.pageRole,
-      primaryRegion: params.primaryRegion,
-      quality: params.contentSummary.quality,
-    },
+    currentUrl: params.currentUrl,
+    currentTitle: params.currentTitle,
+    pageType: params.pageType,
+    pageRole: params.pageRole,
+    primaryRegion: params.primaryRegion,
+    quality: params.contentSummary.quality,
     interactiveElements,
-    candidateActions,
     artifactRefs,
+  });
+
+  const extensionLayer = buildExtensionLayer({
+    candidateActions,
     pageContext,
+  });
+
+  const sharedPayload: ReadPageCompactSnapshot = {
+    ...stableLayer,
+    ...extensionLayer,
   };
 
   if (params.mode === 'compact') {
