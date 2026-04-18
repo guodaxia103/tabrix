@@ -1,0 +1,427 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
+import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+
+const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_MODES = ['compact', 'normal', 'full'];
+
+export function estimateTokensFromBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return 0;
+  }
+  return Math.ceil(bytes / 4);
+}
+
+export function payloadSizeBytes(value) {
+  return Buffer.byteLength(JSON.stringify(value ?? null), 'utf8');
+}
+
+export function validateStableSnapshotContract(snapshot, expectedMode) {
+  const failures = [];
+  if (!snapshot || typeof snapshot !== 'object') {
+    failures.push('snapshot must be an object');
+    return { passed: false, failures };
+  }
+
+  if (snapshot.mode !== expectedMode) {
+    failures.push(`mode mismatch: expected ${expectedMode}, got ${String(snapshot.mode)}`);
+  }
+
+  const page = snapshot.page;
+  if (!page || typeof page !== 'object') {
+    failures.push('page must exist');
+  } else {
+    if (typeof page.url !== 'string' || !page.url) failures.push('page.url must be a non-empty string');
+    if (typeof page.title !== 'string') failures.push('page.title must be a string');
+    if (typeof page.pageType !== 'string' || !page.pageType) {
+      failures.push('page.pageType must be a non-empty string');
+    }
+  }
+
+  const summary = snapshot.summary;
+  if (!summary || typeof summary !== 'object') {
+    failures.push('summary must exist');
+  }
+
+  if (!Array.isArray(snapshot.interactiveElements)) {
+    failures.push('interactiveElements must be an array');
+  }
+
+  if (!Array.isArray(snapshot.artifactRefs)) {
+    failures.push('artifactRefs must be an array');
+  }
+
+  return {
+    passed: failures.length === 0,
+    failures,
+  };
+}
+
+export function summarizeInteractiveElements(snapshot, limit = 8) {
+  const elements = Array.isArray(snapshot?.interactiveElements) ? snapshot.interactiveElements : [];
+  const names = [];
+  for (const element of elements) {
+    const label = String(element?.name ?? element?.role ?? '').trim();
+    if (!label) continue;
+    names.push(label);
+    if (names.length >= limit) break;
+  }
+  return names;
+}
+
+export function parseTabrixJsonOutput(rawStdout) {
+  const text = String(rawStdout ?? '').trim();
+  if (!text) {
+    throw new Error('tabrix command returned empty stdout');
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace < 0 || lastBrace <= firstBrace) {
+      throw new Error(`failed to parse tabrix json output: ${text.slice(0, 200)}`);
+    }
+    return JSON.parse(text.slice(firstBrace, lastBrace + 1));
+  }
+}
+
+export function parseCliArgs(argv) {
+  const options = {
+    owner: 'microsoft',
+    repo: 'TypeScript',
+    outDir: path.join('.tmp', 't4-github-baseline'),
+    strict: true,
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const part = argv[index];
+    if (part === '--owner') {
+      options.owner = argv[index + 1] ?? options.owner;
+      index += 1;
+    } else if (part === '--repo') {
+      options.repo = argv[index + 1] ?? options.repo;
+      index += 1;
+    } else if (part === '--out-dir') {
+      options.outDir = argv[index + 1] ?? options.outDir;
+      index += 1;
+    } else if (part === '--timeout-ms') {
+      const parsed = Number(argv[index + 1]);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        options.timeoutMs = parsed;
+      }
+      index += 1;
+    } else if (part === '--non-strict') {
+      options.strict = false;
+    }
+  }
+
+  return options;
+}
+
+function callTool(toolName, args, timeoutMs) {
+  const commandArgs = [
+    'mcp',
+    'call',
+    toolName,
+    '--args',
+    JSON.stringify(args ?? {}),
+    '--json',
+    '--timeout',
+    String(timeoutMs),
+  ];
+  const result = spawnSync('tabrix', commandArgs, {
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  });
+
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || '').trim();
+    throw new Error(`tabrix ${toolName} failed (exit ${result.status}): ${detail}`);
+  }
+
+  const parsedOutput = parseTabrixJsonOutput(result.stdout);
+  if (parsedOutput?.raw?.isError) {
+    throw new Error(`${toolName} returned tool error: ${JSON.stringify(parsedOutput.parsed ?? parsedOutput.raw)}`);
+  }
+
+  return parsedOutput;
+}
+
+function collectArtifactRefs(snapshot) {
+  const artifactRefs = Array.isArray(snapshot?.artifactRefs) ? snapshot.artifactRefs : [];
+  return artifactRefs
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => ({
+      kind: String(item.kind ?? ''),
+      ref: String(item.ref ?? ''),
+    }))
+    .filter((item) => item.kind && item.ref);
+}
+
+function uniqueArtifacts(artifactRefs) {
+  const seen = new Set();
+  const deduped = [];
+  for (const item of artifactRefs) {
+    const key = `${item.kind}::${item.ref}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+  return deduped;
+}
+
+function buildScenarioDefinitions(baseUrl) {
+  return [
+    {
+      scenarioId: 'GH-L1-001',
+      pageType: 'repo_home',
+      url: baseUrl,
+      semanticExpectation: /issues|pull requests|actions/i,
+    },
+    {
+      scenarioId: 'GH-L2-001',
+      pageType: 'issues_list',
+      url: `${baseUrl}/issues`,
+      semanticExpectation: /issue|new issue|label|milestone/i,
+    },
+    {
+      scenarioId: 'GH-L2-002',
+      pageType: 'actions_list',
+      url: `${baseUrl}/actions`,
+      semanticExpectation: /workflow|run|summary|jobs|details/i,
+    },
+    {
+      scenarioId: 'GH-L2-003',
+      pageType: 'workflow_run_detail',
+      url: null,
+      semanticExpectation: /summary|show all jobs|jobs|workflow|run details/i,
+    },
+  ];
+}
+
+function extractRunDetailUrlFromActions(timeoutMs) {
+  const runLinkResult = callTool(
+    'chrome_javascript',
+    {
+      code: `
+        const anchors = Array.from(document.querySelectorAll('a[href*="/actions/runs/"]'));
+        const pick = anchors.find((item) => /\\/actions\\/runs\\/\\d+/.test(item.getAttribute('href') || ''));
+        return pick ? pick.href : '';
+      `,
+      timeoutMs: Math.min(timeoutMs, 20_000),
+    },
+    timeoutMs,
+  );
+
+  const value = String(runLinkResult?.parsed?.result ?? '').trim();
+  if (/^https:\/\/github\.com\/.+\/actions\/runs\/\d+/i.test(value)) {
+    return value;
+  }
+  return null;
+}
+
+function evaluateSemanticSignal(snapshot, semanticExpectation) {
+  const names = summarizeInteractiveElements(snapshot, 16);
+  const candidateActions = Array.isArray(snapshot?.candidateActions) ? snapshot.candidateActions : [];
+  const actionReasons = candidateActions
+    .map((item) => String(item?.matchReason ?? item?.actionType ?? ''))
+    .filter(Boolean)
+    .slice(0, 12);
+  const combined = `${names.join(' | ')} | ${actionReasons.join(' | ')}`;
+  return {
+    matched: semanticExpectation.test(combined),
+    interactiveHead: names,
+    actionHead: actionReasons,
+  };
+}
+
+function ensureDir(targetDir) {
+  fs.mkdirSync(targetDir, { recursive: true });
+}
+
+function timestampForPath() {
+  return new Date().toISOString().replaceAll(':', '-');
+}
+
+async function runScenario(definition, options, evidenceDir) {
+  const scenarioStartedAt = Date.now();
+  const navigateResult = callTool(
+    'chrome_navigate',
+    {
+      url: definition.url,
+    },
+    options.timeoutMs,
+  );
+
+  const modeResults = [];
+  const allArtifacts = [];
+  let semantic = { matched: false, interactiveHead: [], actionHead: [] };
+
+  for (const mode of DEFAULT_MODES) {
+    const startedAt = Date.now();
+    const readOutput = callTool(
+      'chrome_read_page',
+      {
+        mode,
+        filter: 'interactive',
+        depth: 3,
+      },
+      options.timeoutMs,
+    );
+    const elapsedMs = Date.now() - startedAt;
+    const snapshot = readOutput.parsed;
+    const contractCheck = validateStableSnapshotContract(snapshot, mode);
+    const bytes = payloadSizeBytes(snapshot);
+    const artifacts = collectArtifactRefs(snapshot);
+    allArtifacts.push(...artifacts);
+    if (mode === 'compact') {
+      semantic = evaluateSemanticSignal(snapshot, definition.semanticExpectation);
+    }
+
+    modeResults.push({
+      mode,
+      passed: contractCheck.passed,
+      failures: contractCheck.failures,
+      durationMs: elapsedMs,
+      payloadBytes: bytes,
+      tokenEstimate: estimateTokensFromBytes(bytes),
+      interactiveCount: Array.isArray(snapshot?.interactiveElements)
+        ? snapshot.interactiveElements.length
+        : 0,
+      candidateActionCount: Array.isArray(snapshot?.candidateActions) ? snapshot.candidateActions.length : 0,
+      artifactRefCount: artifacts.length,
+      snapshot,
+      toolResponse: readOutput,
+    });
+  }
+
+  const passedModeCount = modeResults.filter((item) => item.passed).length;
+  const semanticPassed = semantic.matched;
+  const checkTotal = modeResults.length + 1;
+  const checkPassed = passedModeCount + (semanticPassed ? 1 : 0);
+  const scenarioPassed = checkPassed === checkTotal;
+  const durationMs = Date.now() - scenarioStartedAt;
+  const payloadBytes = modeResults.reduce((total, item) => total + item.payloadBytes, 0);
+  const tokenEstimate = modeResults.reduce((total, item) => total + item.tokenEstimate, 0);
+  const artifactRefs = uniqueArtifacts(allArtifacts);
+
+  const evidence = {
+    scenarioId: definition.scenarioId,
+    pageType: definition.pageType,
+    url: definition.url,
+    navigateResult,
+    semantic,
+    modeResults,
+  };
+
+  const evidenceFile = path.join(evidenceDir, `${definition.scenarioId.toLowerCase()}.json`);
+  fs.writeFileSync(evidenceFile, JSON.stringify(evidence, null, 2), 'utf8');
+
+  return {
+    scenarioId: definition.scenarioId,
+    pageType: definition.pageType,
+    passed: scenarioPassed,
+    successRate: Number((checkPassed / checkTotal).toFixed(3)),
+    durationMs,
+    tokenEstimate,
+    payloadBytes,
+    keyResultSummary: `compact interactive head: ${semantic.interactiveHead.join(' | ') || '(none)'}`,
+    evidenceRef: evidenceFile.replaceAll('\\', '/'),
+    artifactRefs,
+    modeMetrics: modeResults.map((item) => ({
+      mode: item.mode,
+      passed: item.passed,
+      failures: item.failures,
+      durationMs: item.durationMs,
+      payloadBytes: item.payloadBytes,
+      tokenEstimate: item.tokenEstimate,
+      interactiveCount: item.interactiveCount,
+      candidateActionCount: item.candidateActionCount,
+      artifactRefCount: item.artifactRefCount,
+    })),
+    semanticSignal: {
+      passed: semanticPassed,
+      interactiveHead: semantic.interactiveHead,
+      actionHead: semantic.actionHead,
+    },
+  };
+}
+
+export async function runGithubBaseline(options) {
+  const baseUrl = `https://github.com/${options.owner}/${options.repo}`;
+  const runDir = path.resolve(options.outDir, `${options.owner}-${options.repo}-${timestampForPath()}`);
+  const evidenceDir = path.join(runDir, 'evidence');
+  ensureDir(evidenceDir);
+
+  const definitions = buildScenarioDefinitions(baseUrl);
+  const results = [];
+
+  let workflowRunDetailUrl = null;
+  for (const definition of definitions) {
+    const scenarioDef = { ...definition };
+    if (scenarioDef.pageType === 'workflow_run_detail') {
+      if (!workflowRunDetailUrl) {
+        workflowRunDetailUrl = extractRunDetailUrlFromActions(options.timeoutMs);
+      }
+      scenarioDef.url = workflowRunDetailUrl || `${baseUrl}/actions`;
+    }
+
+    const result = await runScenario(scenarioDef, options, evidenceDir);
+    results.push(result);
+
+    if (scenarioDef.pageType === 'actions_list' && !workflowRunDetailUrl) {
+      workflowRunDetailUrl = extractRunDetailUrlFromActions(options.timeoutMs);
+    }
+  }
+
+  const totalDurationMs = results.reduce((sum, item) => sum + item.durationMs, 0);
+  const totalTokens = results.reduce((sum, item) => sum + item.tokenEstimate, 0);
+  const totalBytes = results.reduce((sum, item) => sum + item.payloadBytes, 0);
+  const passedCount = results.filter((item) => item.passed).length;
+  const suiteSummary = {
+    suiteId: 'T4-GH-PUBLIC-BASELINE',
+    generatedAt: new Date().toISOString(),
+    repository: `${options.owner}/${options.repo}`,
+    scenarioCount: results.length,
+    passedCount,
+    successRate: Number((passedCount / Math.max(results.length, 1)).toFixed(3)),
+    durationMs: totalDurationMs,
+    tokenEstimate: totalTokens,
+    payloadBytes: totalBytes,
+    blocked: passedCount !== results.length,
+    scenarios: results,
+  };
+
+  const summaryFile = path.join(runDir, 'summary.json');
+  fs.writeFileSync(summaryFile, JSON.stringify(suiteSummary, null, 2), 'utf8');
+
+  return {
+    runDir,
+    summaryFile,
+    summary: suiteSummary,
+  };
+}
+
+async function main() {
+  const options = parseCliArgs(process.argv.slice(2));
+  const result = await runGithubBaseline(options);
+  process.stdout.write(`${JSON.stringify(result.summary, null, 2)}\n`);
+  process.stdout.write(`\nsummary file: ${result.summaryFile.replaceAll('\\', '/')}\n`);
+
+  if (options.strict && result.summary.blocked) {
+    process.exitCode = 1;
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`[t4-github-baseline] ${message}\n`);
+    process.exit(1);
+  });
+}

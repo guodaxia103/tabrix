@@ -44,6 +44,7 @@
     "ubuntu:self-check": "powershell -ExecutionPolicy Bypass -File ./scripts/run-ubuntu-docker-self-check.ps1",
     "ubuntu:xvfb-self-check": "powershell -ExecutionPolicy Bypass -File ./scripts/run-ubuntu-xvfb-self-check.ps1",
     "extension:reload": "node ./scripts/reload-extension.mjs",
+    "t4:github-baseline": "node ./scripts/t4-github-baseline.mjs",
     "release:check": "node ./scripts/check-release-readiness.mjs",
     "release:check:ci": "node ./scripts/check-release-readiness.mjs --allow-missing-notes",
     "ci:check": "pnpm run i18n:check && pnpm run docs:check && pnpm run typecheck && pnpm run test:core && pnpm run audit",
