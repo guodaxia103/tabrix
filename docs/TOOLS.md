@@ -213,6 +213,40 @@ The response is mode-based:
     "refMapCount": 24,
     "markedElementsCount": 0
   },
+  "taskMode": "read",
+  "complexityLevel": "simple",
+  "sourceKind": "dom_semantic",
+  "highValueObjects": [
+    {
+      "id": "hvo_ca_click_ref_3",
+      "kind": "candidate_action",
+      "label": "Submit order",
+      "ref": "ref_3",
+      "role": "button",
+      "actionType": "click",
+      "confidence": 0.93,
+      "reason": "primary action inferred from interactive label"
+    }
+  ],
+  "L0": {
+    "summary": "read view for unknown in form_region; focus on Submit order.",
+    "taskMode": "read",
+    "pageRole": "unknown",
+    "primaryRegion": "form_region",
+    "focusObjectIds": ["hvo_ca_click_ref_3"]
+  },
+  "L1": {
+    "overview": "Top objects: Submit order. Candidate actions: 1.",
+    "highValueObjectIds": ["hvo_ca_click_ref_3"],
+    "candidateActionIds": ["ca_click_ref_3"]
+  },
+  "L2": {
+    "available": true,
+    "defaultAccess": "artifact_ref",
+    "detailRefs": ["artifact://read_page/tab-101/normal", "artifact://read_page/tab-101/full"],
+    "expansions": ["interactive_elements", "candidate_actions", "dom_snapshot"],
+    "boundary": "T5.0 only defines the detail expansion entrypoint. Family-specific deep readers and non-DOM sources remain deferred."
+  },
   "frameContext": null,
   "historyRef": null,
   "memoryHints": []
@@ -223,6 +257,10 @@ The response is mode-based:
 
 - Stable contract layer (T3.2): `mode`, `page`, `summary`, `interactiveElements`, `artifactRefs`.
 - Extension layer (evolvable): `candidateActions`, `pageContext`, `frameContext`, `historyRef`, `memoryHints`.
+- T5.0 task-view skeleton: `taskMode`, `complexityLevel`, `sourceKind`, `highValueObjects`, `L0`, `L1`, `L2`.
+- Canonical `pageRole` / `primaryRegion` stay under `summary`; T5.0 adds task-oriented layers on top without replacing the T3.2 stable layer.
+- `L0` is the shortest task summary, `L1` is the minimal overview, and `L2` is only a detail-expansion skeleton in this phase.
+- Current source selection defaults to `dom_semantic` on regular web pages; `embedded_state` and `page_api` are reserved extension paths for follow-up tasks.
 - `normal` keeps the compact core and adds `diagnostics`.
 - `full` keeps the compact core and adds inline `fullSnapshot` (large payload) plus `artifactRefs` pointers.
 - `artifactRefs` are the durable pointers for large snapshots/debug payloads and follow-up tool chaining; default callers should still prefer `compact`.

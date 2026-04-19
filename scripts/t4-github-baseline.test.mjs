@@ -6,6 +6,7 @@ import {
   normalizeWorkflowRunUrl,
   parseCliArgs,
   parseTabrixJsonOutput,
+  evaluateSemanticSignal,
   summarizeInteractiveElements,
   validateStableSnapshotContract,
 } from './t4-github-baseline.mjs';
@@ -85,4 +86,20 @@ test('normalizeWorkflowRunUrl accepts absolute and relative workflow run links',
     'https://github.com/guodaxia103/tabrix/actions/runs/24601534712',
   );
   assert.equal(normalizeWorkflowRunUrl('https://github.com/guodaxia103/tabrix/actions'), null);
+});
+
+test('evaluateSemanticSignal does not allow highValueObjects or L0 to loosen the main gate', () => {
+  const result = evaluateSemanticSignal(
+    {
+      interactiveElements: [{ ref: 'ref_noise', role: 'link', name: 'Repository' }],
+      candidateActions: [{ actionType: 'click', matchReason: 'interactive clickable candidate from structured snapshot' }],
+      highValueObjects: [{ label: 'Summary' }, { label: 'Show all jobs' }],
+      L0: { summary: 'monitor view for workflow_run_detail in workflow_run_summary; focus on Summary, Show all jobs.' },
+    },
+    /summary|show all jobs|jobs/i,
+  );
+
+  assert.equal(result.matched, false);
+  assert.deepEqual(result.highValueHead, ['Summary', 'Show all jobs']);
+  assert.match(result.l0Summary, /Summary/);
 });

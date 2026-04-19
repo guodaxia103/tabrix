@@ -18,6 +18,7 @@ import {
 import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import { ERROR_MESSAGES } from '@/common/constants';
 import { listMarkersForUrl } from '@/entrypoints/background/element-marker/element-marker-storage';
+import { buildTaskProtocol } from './read-page-task-protocol';
 
 interface ReadPageStats {
   processed: number;
@@ -46,6 +47,10 @@ interface SchemeGuardSummary {
 
 type PageRole =
   | 'unknown'
+  | 'repo_home'
+  | 'issues_list'
+  | 'actions_list'
+  | 'workflow_run_detail'
   | 'hotspot_rank_list'
   | 'hotspot_topic_list'
   | 'hotspot_detail'
@@ -155,6 +160,57 @@ function inferPageUnderstanding(url: string, pageContent: string): PageUnderstan
     anchorTexts.length <= 2 &&
     /账号授权协议|用户服务协议|隐私政策|联系我们/.test(content) &&
     !/热度值|播放量|查看|发布视频|话题名称/.test(content);
+
+  const githubRepoMatch = lowerUrl.match(/^https:\/\/github\.com\/[^/]+\/[^/]+(?:[/?#]|$)/i);
+  const githubPathMatch = lowerUrl.match(/^https:\/\/github\.com\/[^/]+\/[^/]+(\/[^?#]*)?/i);
+  const githubPath = String(githubPathMatch?.[1] || '');
+  if (githubRepoMatch) {
+    if (/^\/actions\/runs\/\d+/i.test(githubPath)) {
+      const hasRunSignals = /summary|show all jobs|jobs?|artifacts?|annotations?|logs?/i.test(
+        content,
+      );
+      return {
+        pageRole: 'workflow_run_detail',
+        primaryRegion: hasRunSignals ? 'workflow_run_summary' : 'workflow_run_shell',
+        primaryRegionConfidence: hasRunSignals ? 'high' : 'medium',
+        footerOnly,
+        anchorTexts,
+      };
+    }
+
+    if (/^\/actions(?:\/?$|[?#])/i.test(githubPath) || githubPath === '/actions') {
+      const hasActionsSignals = /filter workflow runs|run\s+\d+|workflow/i.test(content);
+      return {
+        pageRole: 'actions_list',
+        primaryRegion: hasActionsSignals ? 'workflow_runs_list' : 'actions_shell',
+        primaryRegionConfidence: hasActionsSignals ? 'high' : 'medium',
+        footerOnly,
+        anchorTexts,
+      };
+    }
+
+    if (/^\/issues(?:\/?$|[?#])/i.test(githubPath) || githubPath === '/issues') {
+      const hasIssueSignals = /new issue|label|milestone|assignee|issue/i.test(content);
+      return {
+        pageRole: 'issues_list',
+        primaryRegion: hasIssueSignals ? 'issues_results' : 'issues_shell',
+        primaryRegionConfidence: hasIssueSignals ? 'high' : 'medium',
+        footerOnly,
+        anchorTexts,
+      };
+    }
+
+    if (/^$/i.test(githubPath) || githubPath === '/') {
+      const hasRepoSignals = /issues|pull requests|actions|go to file|commits?/i.test(content);
+      return {
+        pageRole: 'repo_home',
+        primaryRegion: hasRepoSignals ? 'repo_primary_nav' : 'repo_shell',
+        primaryRegionConfidence: hasRepoSignals ? 'medium' : 'low',
+        footerOnly,
+        anchorTexts,
+      };
+    }
+  }
 
   if (/手机号|验证码/.test(content) && /登录|抖音/.test(content)) {
     return {
@@ -641,9 +697,37 @@ function buildStableSnapshotLayer(params: {
 }
 
 function buildExtensionLayer(params: {
+  mode: ReadPageMode;
+  currentUrl: string;
+  currentTitle: string;
+  pageType: PageType;
+  pageRole: PageRole;
+  primaryRegion: string | null;
+  contentSummary: {
+    charCount: number;
+    normalizedLength: number;
+    lineCount: number;
+    quality: string;
+  };
+  artifactRefs: SnapshotArtifactRef[];
   candidateActions: CandidateActionSeed[];
+  interactiveElements: SnapshotInteractiveElement[];
   pageContext: ReadPagePageContext;
 }): ReadPageExtensionFields {
+  const taskProtocol = buildTaskProtocol({
+    mode: params.mode,
+    currentUrl: params.currentUrl,
+    currentTitle: params.currentTitle,
+    pageType: params.pageType,
+    pageRole: params.pageRole,
+    primaryRegion: params.primaryRegion,
+    interactiveElements: params.interactiveElements,
+    candidateActions: params.candidateActions,
+    artifactRefs: params.artifactRefs,
+    pageContext: params.pageContext,
+    contentSummary: params.contentSummary,
+  });
+
   return {
     candidateActions: params.candidateActions,
     pageContext: params.pageContext,
@@ -651,6 +735,13 @@ function buildExtensionLayer(params: {
     frameContext: null,
     historyRef: null,
     memoryHints: [],
+    taskMode: taskProtocol.taskMode,
+    complexityLevel: taskProtocol.complexityLevel,
+    sourceKind: taskProtocol.sourceKind,
+    highValueObjects: taskProtocol.highValueObjects,
+    L0: taskProtocol.L0,
+    L1: taskProtocol.L1,
+    L2: taskProtocol.L2,
   };
 }
 
@@ -729,7 +820,16 @@ function buildModeOutput(params: {
   });
 
   const extensionLayer = buildExtensionLayer({
+    mode: params.mode,
+    currentUrl: params.currentUrl,
+    currentTitle: params.currentTitle,
+    pageType: params.pageType,
+    pageRole: params.pageRole,
+    primaryRegion: params.primaryRegion,
+    contentSummary: params.contentSummary,
+    artifactRefs,
     candidateActions,
+    interactiveElements,
     pageContext,
   });
 

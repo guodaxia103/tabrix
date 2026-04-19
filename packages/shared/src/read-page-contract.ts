@@ -81,12 +81,58 @@ export interface ReadPageMemoryHint {
   confidence?: number;
 }
 
+export type ReadPageTaskMode = 'search' | 'read' | 'compare' | 'extract' | 'monitor';
+
+export type ReadPageComplexityLevel = 'simple' | 'medium' | 'complex';
+
+export type ReadPageSourceKind = 'embedded_state' | 'page_api' | 'dom_semantic' | 'artifact';
+
+export interface ReadPageHighValueObject {
+  id: string;
+  kind: 'candidate_action' | 'interactive_element' | string;
+  label: string;
+  ref?: string;
+  role?: string;
+  actionType?: string;
+  confidence?: number;
+  reason: string;
+}
+
+export interface ReadPageTaskLevel0 {
+  summary: string;
+  taskMode: ReadPageTaskMode;
+  pageRole: string;
+  primaryRegion: string | null;
+  focusObjectIds: string[];
+}
+
+export interface ReadPageTaskLevel1 {
+  overview: string;
+  highValueObjectIds: string[];
+  candidateActionIds: string[];
+}
+
+export interface ReadPageTaskLevel2 {
+  available: boolean;
+  defaultAccess: 'artifact_ref' | 'inline_full_snapshot';
+  detailRefs: string[];
+  expansions: string[];
+  boundary: string;
+}
+
 export interface ReadPageExtensionFields {
   candidateActions?: ReadPageCandidateAction[];
   pageContext?: ReadPagePageContext;
   frameContext?: ReadPageFrameContext | null;
   historyRef?: string | null;
   memoryHints?: ReadPageMemoryHint[];
+  taskMode?: ReadPageTaskMode;
+  complexityLevel?: ReadPageComplexityLevel;
+  sourceKind?: ReadPageSourceKind;
+  highValueObjects?: ReadPageHighValueObject[];
+  L0?: ReadPageTaskLevel0;
+  L1?: ReadPageTaskLevel1;
+  L2?: ReadPageTaskLevel2;
 }
 
 export interface ReadPageStableSnapshot {
@@ -149,3 +195,13 @@ export const READ_PAGE_MODE_MINIMUM_FIELDS: Record<ReadPageMode, readonly string
   normal: ['mode', 'page', 'summary', 'interactiveElements', 'artifactRefs', 'diagnostics'],
   full: ['mode', 'page', 'summary', 'interactiveElements', 'artifactRefs', 'fullSnapshot'],
 };
+
+export const READ_PAGE_TASK_PROTOCOL_FIELDS = [
+  'taskMode',
+  'complexityLevel',
+  'sourceKind',
+  'highValueObjects',
+  'L0',
+  'L1',
+  'L2',
+] as const;

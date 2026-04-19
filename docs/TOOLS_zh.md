@@ -207,6 +207,40 @@
     "refMapCount": 24,
     "markedElementsCount": 0
   },
+  "taskMode": "read",
+  "complexityLevel": "simple",
+  "sourceKind": "dom_semantic",
+  "highValueObjects": [
+    {
+      "id": "hvo_ca_click_ref_3",
+      "kind": "candidate_action",
+      "label": "Submit order",
+      "ref": "ref_3",
+      "role": "button",
+      "actionType": "click",
+      "confidence": 0.93,
+      "reason": "primary action inferred from interactive label"
+    }
+  ],
+  "L0": {
+    "summary": "read view for unknown in form_region; focus on Submit order.",
+    "taskMode": "read",
+    "pageRole": "unknown",
+    "primaryRegion": "form_region",
+    "focusObjectIds": ["hvo_ca_click_ref_3"]
+  },
+  "L1": {
+    "overview": "Top objects: Submit order. Candidate actions: 1.",
+    "highValueObjectIds": ["hvo_ca_click_ref_3"],
+    "candidateActionIds": ["ca_click_ref_3"]
+  },
+  "L2": {
+    "available": true,
+    "defaultAccess": "artifact_ref",
+    "detailRefs": ["artifact://read_page/tab-101/normal", "artifact://read_page/tab-101/full"],
+    "expansions": ["interactive_elements", "candidate_actions", "dom_snapshot"],
+    "boundary": "T5.0 only defines the detail expansion entrypoint. Family-specific deep readers and non-DOM sources remain deferred."
+  },
   "frameContext": null,
   "historyRef": null,
   "memoryHints": []
@@ -217,6 +251,10 @@
 
 - T3.2 稳定契约层：`mode`、`page`、`summary`、`interactiveElements`、`artifactRefs`。
 - 可演进扩展层：`candidateActions`、`pageContext`、`frameContext`、`historyRef`、`memoryHints`。
+- T5.0 任务导向协议骨架：`taskMode`、`complexityLevel`、`sourceKind`、`highValueObjects`、`L0`、`L1`、`L2`。
+- `pageRole` / `primaryRegion` 的权威位置仍在 `summary`，T5.0 只是在其上叠加任务视图，不替换 T3.2 稳定层。
+- `L0` 是最短任务摘要，`L1` 是最小概览，`L2` 目前只提供细节按需展开入口骨架。
+- 当前常规网页默认 `sourceKind=dom_semantic`；`embedded_state` 与 `page_api` 仍保留给后续任务扩展。
 - `normal` 保留 compact 主体并增加 `diagnostics`。
 - `full` 保留 compact 主体并增加内联 `fullSnapshot`（大体积结构）与 `artifactRefs` 引用。
 - `artifactRefs` 是大结构与调试快照的稳定引用锚点；默认调用仍建议优先 `compact`。

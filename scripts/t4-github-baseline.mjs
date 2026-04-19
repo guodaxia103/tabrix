@@ -346,18 +346,27 @@ function clickFirstWorkflowRun(timeoutMs, tabId) {
   };
 }
 
-function evaluateSemanticSignal(snapshot, semanticExpectation) {
+export function evaluateSemanticSignal(snapshot, semanticExpectation) {
   const names = summarizeInteractiveElements(snapshot, 16);
   const candidateActions = Array.isArray(snapshot?.candidateActions) ? snapshot.candidateActions : [];
   const actionReasons = candidateActions
     .map((item) => String(item?.matchReason ?? item?.actionType ?? ''))
     .filter(Boolean)
     .slice(0, 12);
-  const combined = `${names.join(' | ')} | ${actionReasons.join(' | ')}`;
+  const highValueLabels = Array.isArray(snapshot?.highValueObjects)
+    ? snapshot.highValueObjects
+        .map((item) => String(item?.label ?? ''))
+        .filter(Boolean)
+        .slice(0, 12)
+    : [];
+  const l0Summary = String(snapshot?.L0?.summary ?? '');
+  const gateText = `${names.join(' | ')} | ${actionReasons.join(' | ')}`;
   return {
-    matched: semanticExpectation.test(combined),
+    matched: semanticExpectation.test(gateText),
     interactiveHead: names,
     actionHead: actionReasons,
+    highValueHead: highValueLabels,
+    l0Summary,
   };
 }
 
@@ -464,7 +473,9 @@ async function runScenario(definition, options, evidenceDir, tabId, runOptions =
     durationMs,
     tokenEstimate,
     payloadBytes,
-    keyResultSummary: `compact interactive head: ${semantic.interactiveHead.join(' | ') || '(none)'}`,
+    keyResultSummary:
+      semantic.l0Summary ||
+      `compact interactive head: ${semantic.interactiveHead.join(' | ') || '(none)'}`,
     evidenceRef: evidenceFile.replaceAll('\\', '/'),
     artifactRefs,
     modeMetrics: modeResults.map((item) => ({
@@ -482,6 +493,8 @@ async function runScenario(definition, options, evidenceDir, tabId, runOptions =
       passed: semanticPassed,
       interactiveHead: semantic.interactiveHead,
       actionHead: semantic.actionHead,
+      highValueHead: semantic.highValueHead,
+      l0Summary: semantic.l0Summary,
     },
   };
 }

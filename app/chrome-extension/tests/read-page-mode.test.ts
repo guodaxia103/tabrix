@@ -38,6 +38,27 @@ function expectCommonSnapshotShape(payload: any, mode: 'compact' | 'normal' | 'f
   expect(payload.frameContext).toBeNull();
   expect(payload.historyRef).toBeNull();
   expect(Array.isArray(payload.memoryHints)).toBe(true);
+  expect(payload.taskMode).toEqual(expect.any(String));
+  expect(payload.complexityLevel).toEqual(expect.any(String));
+  expect(payload.sourceKind).toEqual(expect.any(String));
+  expect(Array.isArray(payload.highValueObjects)).toBe(true);
+  expect(payload.L0).toMatchObject({
+    summary: expect.any(String),
+    taskMode: expect.any(String),
+    pageRole: expect.any(String),
+  });
+  expect(payload.L1).toMatchObject({
+    overview: expect.any(String),
+    highValueObjectIds: expect.any(Array),
+    candidateActionIds: expect.any(Array),
+  });
+  expect(payload.L2).toMatchObject({
+    available: true,
+    defaultAccess: expect.any(String),
+    detailRefs: expect.any(Array),
+    expansions: expect.any(Array),
+    boundary: expect.any(String),
+  });
 }
 
 describe('read_page mode', () => {
@@ -88,6 +109,8 @@ describe('read_page mode', () => {
     expect(payload.summary).toMatchObject({
       quality: 'usable',
     });
+    expect(payload.taskMode).toBe('read');
+    expect(payload.sourceKind).toBe('dom_semantic');
     expect(Array.isArray(payload.interactiveElements)).toBe(true);
     expect(Array.isArray(payload.artifactRefs)).toBe(true);
     expect(payload.artifactRefs[0].kind).toBe('dom_snapshot');
@@ -221,6 +244,7 @@ describe('read_page mode', () => {
     expect(result.isError).toBe(false);
     expectCommonSnapshotShape(payload, 'compact');
     expect(payload.summary.pageRole).toBe('login_required');
+    expect(payload.taskMode).toBe('read');
     expect(payload.interactiveElements).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ref: 'ref_phone', role: 'textbox' }),
@@ -405,6 +429,9 @@ describe('read_page mode', () => {
     const payload = JSON.parse((result.content[0] as { text: string }).text);
 
     expect(result.isError).toBe(false);
+    expect(payload.summary.pageRole).toBe('repo_home');
+    expect(payload.summary.primaryRegion).toBe('repo_primary_nav');
+    expect(payload.taskMode).toBe('read');
     expect(payload.interactiveElements).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ref: 'ref_issues_link', name: 'Issues' }),
@@ -460,6 +487,9 @@ describe('read_page mode', () => {
     const payload = JSON.parse((result.content[0] as { text: string }).text);
 
     expect(result.isError).toBe(false);
+    expect(payload.summary.pageRole).toBe('workflow_run_detail');
+    expect(payload.summary.primaryRegion).toBe('workflow_run_summary');
+    expect(payload.taskMode).toBe('monitor');
     expect(payload.interactiveElements).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ref: 'ref_jobs_button', name: 'Show all jobs' }),
@@ -519,6 +549,9 @@ describe('read_page mode', () => {
     const orderedRefs = payload.interactiveElements.map((element: { ref: string }) => element.ref);
 
     expect(result.isError).toBe(false);
+    expect(payload.summary.pageRole).toBe('workflow_run_detail');
+    expect(payload.summary.primaryRegion).toBe('workflow_run_summary');
+    expect(payload.taskMode).toBe('monitor');
     expect(payload.interactiveElements).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ref: 'ref_summary', name: 'Summary' }),
