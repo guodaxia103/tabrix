@@ -432,6 +432,12 @@ describe('read_page mode', () => {
     expect(payload.summary.pageRole).toBe('repo_home');
     expect(payload.summary.primaryRegion).toBe('repo_primary_nav');
     expect(payload.taskMode).toBe('read');
+    expect(
+      payload.highValueObjects.slice(0, 3).map((item: { label: string }) => item.label),
+    ).toEqual(['Issues', 'Pull requests', 'Actions']);
+    expect(payload.L0.summary).toContain(
+      'Primary repo entry points are Issues, Pull requests, Actions.',
+    );
     expect(payload.interactiveElements).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ref: 'ref_issues_link', name: 'Issues' }),

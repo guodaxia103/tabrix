@@ -47,26 +47,88 @@ const MONITOR_HINT_PATTERN = /\b(summary|jobs?|logs?|annotations?|workflow run|r
 const SEARCH_HINT_PATTERN = /\b(search|filter|find|labels?|milestone|assignee|query|issues?)\b/i;
 const COMMIT_SHA_PATTERN = /\b[0-9a-f]{7,40}\b/i;
 
-const PAGE_ROLE_PRIORITY_RULES: Partial<Record<string, RegExp[]>> = {
-  repo_home: [
-    /\bissues\b/i,
-    /\bpull requests?\b/i,
-    /\bactions\b/i,
-    /\bgo to file\b/i,
-    /\bmain branch\b/i,
-    /\bwatch\b/i,
-    /\bstar\b/i,
-  ],
-  issues_list: [/\bsearch issues\b/i, /\bfilter\b/i, /\bnew issue\b/i],
-  actions_list: [/\bfilter workflow runs\b/i, /\brun\s+\d+\b/i, /\bsummary\b/i, /\bjobs?\b/i],
-  workflow_run_detail: [
-    /\bsummary\b/i,
-    /\bshow all jobs\b/i,
-    /\bjobs?\b/i,
-    /\bartifacts?\b/i,
-    /\blogs?\b/i,
-  ],
+const PAGE_ROLE_PRIORITY_RULES: Partial<
+  Record<
+    string,
+    {
+      primary: RegExp[];
+      secondary?: RegExp[];
+      tertiary?: RegExp[];
+      deprioritize?: RegExp[];
+      l0Prefix?: string;
+    }
+  >
+> = {
+  repo_home: {
+    primary: [/\bissues\b/i, /\bpull requests?\b/i, /\bactions\b/i],
+    secondary: [/\bgo to file\b/i],
+    tertiary: [/\bmain branch\b/i],
+    deprioritize: [
+      /\bwatch\b/i,
+      /\bstar(?:red)?\b/i,
+      /\bpin this repository\b/i,
+      /\bsee your forks\b/i,
+      /\badd file\b/i,
+      /\bcommits? by\b/i,
+      /^commit\b/i,
+    ],
+    l0Prefix: 'Primary repo entry points are',
+  },
+  issues_list: {
+    primary: [/\bsearch issues\b/i],
+    secondary: [/\bfilter by\b/i, /\bfilter\b/i, /\bnew issue\b/i],
+    tertiary: [/\bissue\b/i],
+    deprioritize: [/^search or jump to/i, /^open copilot/i, /^skip to content$/i],
+    l0Prefix: 'Primary issue controls are',
+  },
+  actions_list: {
+    primary: [/\bfilter workflow runs\b/i],
+    secondary: [/\brun\s+\d+\b/i, /\bcompleted successfully: run\b/i],
+    tertiary: [/\bsummary\b/i, /\bjobs?\b/i],
+    deprioritize: [/^search or jump to/i, /^open copilot/i, /^skip to content$/i],
+    l0Prefix: 'Primary workflow run entries are',
+  },
+  workflow_run_detail: {
+    primary: [/\bsummary\b/i, /\bshow all jobs\b/i, /\bjobs?\b/i],
+    secondary: [/\bartifacts?\b/i, /\blogs?\b/i, /\bannotations?\b/i],
+    tertiary: [/\bshow more\b/i],
+    deprioritize: [/^\d+[smhd]$/i, /github\.blog/i, /^v?\d+\.\d+\.\d+$/i],
+    l0Prefix: 'Primary workflow diagnostics are',
+  },
 };
+
+const PAGE_ROLE_TASK_SEEDS: Partial<
+  Record<
+    string,
+    {
+      labels: string[];
+      reason: string;
+    }
+  >
+> = {
+  repo_home: {
+    labels: ['Issues', 'Pull requests', 'Actions'],
+    reason: 'primary repo navigation inferred from page role',
+  },
+  issues_list: {
+    labels: ['Search Issues', 'Filter issues', 'Issue entries'],
+    reason: 'primary issue triage objects inferred from page role',
+  },
+  actions_list: {
+    labels: ['Filter workflow runs', 'Workflow run entries', 'Run detail entry'],
+    reason: 'primary workflow list objects inferred from page role',
+  },
+  workflow_run_detail: {
+    labels: ['Summary', 'Jobs', 'Artifacts', 'Logs'],
+    reason: 'primary workflow diagnostics inferred from page role',
+  },
+};
+
+function normalizeHighValueLabel(label: string): string {
+  return String(label || '')
+    .trim()
+    .toLowerCase();
+}
 
 function buildInteractiveMap(elements: ReadPageInteractiveElement[]) {
   const map = new Map<string, ReadPageInteractiveElement>();
@@ -152,10 +214,25 @@ function scoreHighValueLabel(label: string, params: TaskProtocolParams): number 
   if (!normalized) return Number.NEGATIVE_INFINITY;
 
   let score = 0;
-  const rules = PAGE_ROLE_PRIORITY_RULES[params.pageRole] || [];
-  rules.forEach((pattern, index) => {
+  const rules = PAGE_ROLE_PRIORITY_RULES[params.pageRole];
+  rules?.primary.forEach((pattern, index) => {
     if (pattern.test(normalized)) {
-      score += 180 - index * 20;
+      score += 320 - index * 24;
+    }
+  });
+  rules?.secondary?.forEach((pattern, index) => {
+    if (pattern.test(normalized)) {
+      score += 180 - index * 18;
+    }
+  });
+  rules?.tertiary?.forEach((pattern, index) => {
+    if (pattern.test(normalized)) {
+      score += 90 - index * 12;
+    }
+  });
+  rules?.deprioritize?.forEach((pattern, index) => {
+    if (pattern.test(normalized)) {
+      score -= 140 - index * 10;
     }
   });
 
@@ -199,7 +276,7 @@ function buildHighValueObjects(params: TaskProtocolParams): ReadPageHighValueObj
       actionType: action.actionType,
       confidence: action.confidence,
       reason: action.matchReason,
-      score: labelScore + Number(action.confidence || 0) * 100 + 40,
+      score: labelScore + Number(action.confidence || 0) * 10 + 8,
       order,
     });
     order += 1;
@@ -226,8 +303,30 @@ function buildHighValueObjects(params: TaskProtocolParams): ReadPageHighValueObj
     order += 1;
   }
 
+  const seedConfig = PAGE_ROLE_TASK_SEEDS[params.pageRole];
+  if (seedConfig) {
+    seedConfig.labels.forEach((label, index) => {
+      candidates.push({
+        id: `hvo_seed_${params.pageRole}_${index}`,
+        kind: 'page_role_seed',
+        label,
+        reason: seedConfig.reason,
+        score: 1000 - index * 40,
+        order: -100 + index,
+      });
+    });
+  }
+
   return candidates
     .sort((left, right) => right.score - left.score || left.order - right.order)
+    .filter((item, index, sorted) => {
+      const normalized = normalizeHighValueLabel(item.label);
+      if (!normalized) return false;
+      return (
+        sorted.findIndex((candidate) => normalizeHighValueLabel(candidate.label) === normalized) ===
+        index
+      );
+    })
     .slice(0, 6)
     .map(({ score: _score, order: _order, ...item }) => item);
 }
@@ -242,16 +341,19 @@ function buildLevel0(
   const focusLabels = highValueObjects
     .slice(0, 3)
     .map((item) => item.label)
-    .filter(Boolean)
-    .join(', ');
+    .filter(Boolean);
+  const focusText = focusLabels.join(', ');
+  const l0Prefix = PAGE_ROLE_PRIORITY_RULES[pageRole]?.l0Prefix;
 
   return {
     taskMode,
     pageRole,
     primaryRegion,
     focusObjectIds,
-    summary: focusLabels
-      ? `${taskMode} view for ${pageRole}${primaryRegion ? ` in ${primaryRegion}` : ''}; focus on ${focusLabels}.`
+    summary: focusText
+      ? l0Prefix
+        ? `${taskMode} view for ${pageRole}${primaryRegion ? ` in ${primaryRegion}` : ''}. ${l0Prefix} ${focusText}.`
+        : `${taskMode} view for ${pageRole}${primaryRegion ? ` in ${primaryRegion}` : ''}; focus on ${focusText}.`
       : `${taskMode} view for ${pageRole}${primaryRegion ? ` in ${primaryRegion}` : ''}.`,
   };
 }

@@ -76,10 +76,80 @@ describe('read_page task protocol', () => {
     });
 
     expect(protocol.highValueObjects[0]?.label).toBe('Issues');
-    expect(protocol.highValueObjects.slice(0, 3).map((item) => item.label)).toEqual(
-      expect.arrayContaining(['Issues', 'Pull requests', 'Actions']),
+    expect(protocol.highValueObjects.slice(0, 3).map((item) => item.label)).toEqual([
+      'Issues',
+      'Pull requests',
+      'Actions',
+    ]);
+    expect(protocol.L0.summary).toContain(
+      'Primary repo entry points are Issues, Pull requests, Actions.',
     );
-    expect(protocol.L0.summary).toContain('Issues');
     expect(protocol.L0.summary).not.toContain('fix(t4): stabilize workflow run detail baseline');
+  });
+
+  it('injects repo task seeds when compact snapshot misses named repo tabs', () => {
+    const protocol = buildTaskProtocol({
+      mode: 'compact',
+      currentUrl: 'https://github.com/example/project',
+      currentTitle: 'example/project',
+      pageType: 'web_page',
+      pageRole: 'repo_home',
+      primaryRegion: 'repo_primary_nav',
+      interactiveElements: [
+        { ref: 'ref_go_to_file', role: 'combobox', name: 'Go to file' },
+        { ref: 'ref_watch', role: 'button', name: 'Watching a repository' },
+        { ref: 'ref_branch', role: 'button', name: 'main branch' },
+      ],
+      candidateActions: [
+        {
+          id: 'ca_fill_ref_go_to_file',
+          actionType: 'fill',
+          targetRef: 'ref_go_to_file',
+          confidence: 0.68,
+          matchReason: 'form input candidate from structured snapshot',
+          locatorChain: [{ type: 'aria', value: 'Go to file' }],
+        },
+        {
+          id: 'ca_click_ref_watch',
+          actionType: 'click',
+          targetRef: 'ref_watch',
+          confidence: 0.72,
+          matchReason: 'interactive clickable candidate from structured snapshot',
+          locatorChain: [{ type: 'aria', value: 'Watching a repository' }],
+        },
+      ],
+      artifactRefs: [
+        { kind: 'dom_snapshot', ref: 'artifact://read_page/tab-1/normal' },
+        { kind: 'dom_snapshot', ref: 'artifact://read_page/tab-1/full' },
+      ],
+      pageContext: {
+        filter: 'interactive',
+        depth: 3,
+        focus: null,
+        scheme: 'https',
+        viewport: { width: 1280, height: 720, dpr: 1 },
+        sparse: false,
+        fallbackUsed: false,
+        fallbackSource: null,
+        refMapCount: 8,
+        markedElementsCount: 0,
+      },
+      contentSummary: {
+        charCount: 1000,
+        normalizedLength: 900,
+        lineCount: 24,
+        quality: 'usable',
+      },
+    });
+
+    expect(protocol.highValueObjects.slice(0, 3).map((item) => item.label)).toEqual([
+      'Issues',
+      'Pull requests',
+      'Actions',
+    ]);
+    expect(protocol.L0.summary).toContain(
+      'Primary repo entry points are Issues, Pull requests, Actions.',
+    );
+    expect(protocol.highValueObjects[3]?.label).toBe('Go to file');
   });
 });
