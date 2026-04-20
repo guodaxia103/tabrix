@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **MKEP Memory Phase 0.2** — `chrome_read_page` now emits a real
+  `historyRef` of the form `memory://snapshot/<uuid>` and persists a
+  structured slice of the read-page response into a new
+  `memory_page_snapshots` SQLite table. The snapshot row also flows
+  back into the owning `ExecutionStep.artifactRefs`, giving every
+  read-page call a stable Memory handle that downstream tools can
+  point at.
+- New `app/native-server/src/memory/page-snapshot-service.ts`
+  service and `app/native-server/src/memory/db/page-snapshot-repository.ts`
+  repo — follow the same sync write-through pattern as Phase 0.1.
+- New `app/native-server/src/mcp/tool-post-processors.ts` registry
+  hooks the `chrome_read_page` success path in `handleToolCall`
+  without affecting any other tool; unrelated tools pay zero overhead.
+- Design rationale: `docs/MEMORY_PHASE_0_2.md`.
+
+### Changed
+
+- `SessionManager` now exposes a `pageSnapshots` façade
+  (`PageSnapshotService | null`). Public API otherwise unchanged;
+  `reset()` additionally clears `memory_page_snapshots`.
+
 ## [v2.1.0] - 2026-04-20
 
 ### Added

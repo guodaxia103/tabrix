@@ -9,6 +9,7 @@ import { NativeMessageType, TOOL_SCHEMAS } from '@tabrix/shared';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
+import { runPostProcessor } from './tool-post-processors';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -908,16 +909,25 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           `flow:${name}`,
         );
         if (proxyRes.status === 'success') {
-          const normalized = normalizeToolCallResult(name, proxyRes.data);
+          const postResult = runPostProcessor({
+            toolName: name,
+            rawResult: proxyRes.data,
+            stepId: step.stepId,
+            sessionManager,
+            args,
+          });
+          const normalized = normalizeToolCallResult(name, postResult.rawResult);
           sessionManager.completeStep(session.sessionId, step.stepId, {
             status: 'completed',
             resultSummary: normalized.stepSummary,
+            artifactRefs:
+              postResult.extraArtifactRefs.length > 0 ? postResult.extraArtifactRefs : undefined,
           });
           sessionManager.finishSession(session.sessionId, {
             status: 'completed',
             summary: normalized.executionResult.summary,
           });
-          return proxyRes.data;
+          return postResult.rawResult;
         }
         const result = createErrorResult(
           bridgeFailure
@@ -968,16 +978,25 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       `tool:${name}`,
     );
     if (response.status === 'success') {
-      const normalized = normalizeToolCallResult(name, response.data);
+      const postResult = runPostProcessor({
+        toolName: name,
+        rawResult: response.data,
+        stepId: step.stepId,
+        sessionManager,
+        args,
+      });
+      const normalized = normalizeToolCallResult(name, postResult.rawResult);
       sessionManager.completeStep(session.sessionId, step.stepId, {
         status: 'completed',
         resultSummary: normalized.stepSummary,
+        artifactRefs:
+          postResult.extraArtifactRefs.length > 0 ? postResult.extraArtifactRefs : undefined,
       });
       sessionManager.finishSession(session.sessionId, {
         status: 'completed',
         summary: normalized.executionResult.summary,
       });
-      return response.data;
+      return postResult.rawResult;
     } else {
       const responseError = String(response.error || 'Unknown tool error');
       const isBridgeError =

@@ -74,4 +74,43 @@ CREATE TABLE IF NOT EXISTS memory_steps (
 
 CREATE INDEX IF NOT EXISTS memory_steps_session_id_idx ON memory_steps(session_id);
 CREATE INDEX IF NOT EXISTS memory_steps_tool_name_idx  ON memory_steps(tool_name);
+
+-- Phase 0.2: structured page snapshots produced by chrome_read_page.
+-- Stable columns are kept narrow (query-friendly, low volatility).
+-- Blob columns hold JSON-serialized slices of the original response,
+-- intentionally trimmed (e.g. top-24 interactive elements) so the
+-- table stays lightweight enough for long-horizon retention.
+CREATE TABLE IF NOT EXISTS memory_page_snapshots (
+  snapshot_id               TEXT PRIMARY KEY,
+  step_id                   TEXT NOT NULL REFERENCES memory_steps(step_id) ON DELETE CASCADE,
+  tab_id                    INTEGER,
+  url                       TEXT,
+  title                     TEXT,
+  page_type                 TEXT,
+  mode                      TEXT,
+  page_role                 TEXT,
+  primary_region            TEXT,
+  quality                   TEXT,
+  task_mode                 TEXT,
+  complexity_level          TEXT,
+  source_kind               TEXT,
+  fallback_used             INTEGER DEFAULT 0,
+  interactive_count         INTEGER DEFAULT 0,
+  candidate_action_count    INTEGER DEFAULT 0,
+  high_value_object_count   INTEGER DEFAULT 0,
+  summary_blob              TEXT,
+  page_context_blob         TEXT,
+  high_value_objects_blob   TEXT,
+  interactive_elements_blob TEXT,
+  candidate_actions_blob    TEXT,
+  protocol_l0_blob          TEXT,
+  protocol_l1_blob          TEXT,
+  protocol_l2_blob          TEXT,
+  captured_at               TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS memory_page_snapshots_step_id_idx      ON memory_page_snapshots(step_id);
+CREATE INDEX IF NOT EXISTS memory_page_snapshots_url_idx          ON memory_page_snapshots(url);
+CREATE INDEX IF NOT EXISTS memory_page_snapshots_page_role_idx    ON memory_page_snapshots(page_role);
+CREATE INDEX IF NOT EXISTS memory_page_snapshots_captured_at_idx  ON memory_page_snapshots(captured_at);
 `;

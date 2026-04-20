@@ -9,12 +9,14 @@ import {
 } from './types';
 import {
   openMemoryDb,
+  PageSnapshotRepository,
   resolveMemoryDbPath,
   SessionRepository,
   StepRepository,
   TaskRepository,
   type SqliteDatabase,
 } from '../memory/db';
+import { PageSnapshotService } from '../memory/page-snapshot-service';
 
 export interface CreateTaskInput {
   taskType: string;
@@ -66,12 +68,14 @@ interface Repos {
   task: TaskRepository;
   session: SessionRepository;
   step: StepRepository;
+  pageSnapshot: PageSnapshotRepository;
 }
 
 interface StorageInit {
   repos: Repos | null;
   dbHandle: SqliteDatabase | null;
   persistenceMode: SessionPersistenceMode;
+  pageSnapshots: PageSnapshotService | null;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -88,23 +92,30 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
   const persistenceOptOut =
     options?.persistenceEnabled === false || process.env.TABRIX_MEMORY_PERSIST === 'false';
   if (persistenceOptOut) {
-    return { repos: null, dbHandle: null, persistenceMode: 'off' };
+    return { repos: null, dbHandle: null, persistenceMode: 'off', pageSnapshots: null };
   }
 
   try {
     const dbPath = resolveRuntimeDbPath(options);
     const opened = openMemoryDb({ dbPath });
+    const pageSnapshotRepo = new PageSnapshotRepository(opened.db);
     const repos: Repos = {
       task: new TaskRepository(opened.db),
       session: new SessionRepository(opened.db),
       step: new StepRepository(opened.db),
+      pageSnapshot: pageSnapshotRepo,
     };
-    return { repos, dbHandle: opened.db, persistenceMode: opened.persistenceMode };
+    return {
+      repos,
+      dbHandle: opened.db,
+      persistenceMode: opened.persistenceMode,
+      pageSnapshots: new PageSnapshotService(pageSnapshotRepo),
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
     console.warn(`[tabrix/memory] falling back to in-memory session storage: ${message}`);
-    return { repos: null, dbHandle: null, persistenceMode: 'off' };
+    return { repos: null, dbHandle: null, persistenceMode: 'off', pageSnapshots: null };
   }
 }
 
@@ -114,13 +125,24 @@ export class SessionManager {
   private readonly repos: Repos | null;
   private readonly dbHandle: SqliteDatabase | null;
   private readonly persistenceMode: SessionPersistenceMode;
+  private readonly pageSnapshotService: PageSnapshotService | null;
 
   constructor(options?: SessionManagerOptions) {
     const init = initStorage(options);
     this.repos = init.repos;
     this.dbHandle = init.dbHandle;
     this.persistenceMode = init.persistenceMode;
+    this.pageSnapshotService = init.pageSnapshots;
     if (this.repos) this.hydrateFromDb(this.repos);
+  }
+
+  /**
+   * Memory Phase 0.2 — page snapshot façade. `null` when persistence
+   * is off (or DB init failed). Callers must treat `null` as
+   * "Memory unavailable, proceed without a historyRef".
+   */
+  public get pageSnapshots(): PageSnapshotService | null {
+    return this.pageSnapshotService;
   }
 
   private hydrateFromDb(repos: Repos): void {
@@ -293,8 +315,9 @@ export class SessionManager {
   public reset(): void {
     if (this.repos) {
       // Order matters due to FK cascade: clearing tasks cascades to
-      // sessions and steps, but we clear all three explicitly so
+      // sessions and steps, but we clear all four explicitly so
       // behavior stays identical whether persistence is on or off.
+      this.repos.pageSnapshot.clear();
       this.repos.step.clear();
       this.repos.session.clear();
       this.repos.task.clear();
