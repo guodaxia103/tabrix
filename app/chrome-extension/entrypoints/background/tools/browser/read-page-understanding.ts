@@ -12,6 +12,13 @@ import {
 } from './read-page-understanding-core';
 import { githubPageFamilyAdapter } from './read-page-understanding-github';
 import { douyinPageFamilyAdapter } from './read-page-understanding-douyin';
+import {
+  KNOWLEDGE_REGISTRY_MODE,
+  isKnowledgeRegistryDiffMode,
+  isKnowledgeRegistryEnabled,
+} from '../../knowledge/feature-flag';
+import { resolveSiteProfile } from '../../knowledge/lookup/resolve-site-profile';
+import { resolvePageRole } from '../../knowledge/lookup/resolve-page-role';
 
 export type { PageRole, PageUnderstandingSummary } from './read-page-understanding-core';
 
@@ -104,6 +111,54 @@ function inferFallback(context: PageUnderstandingContext): PageUnderstandingSumm
   };
 }
 
+function runLegacyPipeline(ctx: PageUnderstandingContext): PageUnderstandingSummary {
+  const familySummary = runFamilyAdapters(ctx);
+  if (familySummary) {
+    return familySummary;
+  }
+
+  const loginSummary = inferLoginRequired(ctx);
+  if (loginSummary) {
+    return loginSummary;
+  }
+
+  return inferFallback(ctx);
+}
+
+function summariesEqual(
+  a: PageUnderstandingSummary | null,
+  b: PageUnderstandingSummary | null,
+): boolean {
+  if (!a || !b) {
+    return a === b;
+  }
+  if (
+    a.pageRole !== b.pageRole ||
+    a.primaryRegion !== b.primaryRegion ||
+    a.primaryRegionConfidence !== b.primaryRegionConfidence ||
+    a.footerOnly !== b.footerOnly
+  ) {
+    return false;
+  }
+  if (a.anchorTexts.length !== b.anchorTexts.length) {
+    return false;
+  }
+  for (let i = 0; i < a.anchorTexts.length; i += 1) {
+    if (a.anchorTexts[i] !== b.anchorTexts[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function resolveViaRegistry(ctx: PageUnderstandingContext): PageUnderstandingSummary | null {
+  const siteId = resolveSiteProfile(ctx.lowerUrl);
+  if (!siteId) {
+    return null;
+  }
+  return resolvePageRole({ siteId, context: ctx });
+}
+
 export function inferPageUnderstanding(
   url: string,
   title: string,
@@ -111,15 +166,27 @@ export function inferPageUnderstanding(
 ): PageUnderstandingSummary {
   const neutralContext = buildUnderstandingContext(url, title, pageContent);
 
-  const familySummary = runFamilyAdapters(neutralContext);
-  if (familySummary) {
-    return familySummary;
+  if (!isKnowledgeRegistryEnabled(KNOWLEDGE_REGISTRY_MODE)) {
+    return runLegacyPipeline(neutralContext);
   }
 
-  const loginSummary = inferLoginRequired(neutralContext);
-  if (loginSummary) {
-    return loginSummary;
+  if (isKnowledgeRegistryDiffMode(KNOWLEDGE_REGISTRY_MODE)) {
+    const registryHit = resolveViaRegistry(neutralContext);
+    const legacy = runLegacyPipeline(neutralContext);
+    if (registryHit && !summariesEqual(registryHit, legacy)) {
+      console.warn('[tabrix/knowledge] registry/legacy diff', {
+        url,
+        registry: registryHit,
+        legacy,
+      });
+    }
+    return legacy;
   }
 
-  return inferFallback(neutralContext);
+  const registryHit = resolveViaRegistry(neutralContext);
+  if (registryHit) {
+    return registryHit;
+  }
+
+  return runLegacyPipeline(neutralContext);
 }
