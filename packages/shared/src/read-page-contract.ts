@@ -87,15 +87,50 @@ export type ReadPageComplexityLevel = 'simple' | 'medium' | 'complex';
 
 export type ReadPageSourceKind = 'embedded_state' | 'page_api' | 'dom_semantic' | 'artifact';
 
+/**
+ * T5.4 object-type enumeration. Source of truth: Feishu
+ * `Tabrix T5.4 高价值对象提取 正式产品级规格 v2026.04.20.1`.
+ *
+ * These are *semantic* types (what the object IS in task terms), distinct
+ * from the legacy `kind` field (where the object came FROM).
+ */
+export type ReadPageObjectType =
+  | 'nav_entry'
+  | 'record'
+  | 'entry'
+  | 'control'
+  | 'status_item'
+  | 'metric_card'
+  | 'doc_block';
+
+export interface ReadPageHighValueObjectAction {
+  type: 'open_detail' | 'click' | 'fill' | 'navigate' | 'expand' | string;
+  ref?: string;
+  actionType?: string;
+}
+
+/**
+ * T3.2 legacy shape is preserved for backward compatibility. T5.4 adds
+ * optional semantic fields (objectType / region / importance / reasons /
+ * actions / sourceKind). The protocol starts emitting them at T5.4.4.
+ * Until then the T3.2 fields are the only stable surface; downstream
+ * consumers MUST treat T5.4 fields as optional.
+ */
 export interface ReadPageHighValueObject {
   id: string;
-  kind: 'candidate_action' | 'interactive_element' | string;
+  kind: 'candidate_action' | 'interactive_element' | 'page_role_seed' | string;
   label: string;
   ref?: string;
   role?: string;
   actionType?: string;
   confidence?: number;
   reason: string;
+  objectType?: ReadPageObjectType;
+  region?: string | null;
+  importance?: number;
+  reasons?: string[];
+  actions?: ReadPageHighValueObjectAction[];
+  sourceKind?: ReadPageSourceKind;
 }
 
 export interface ReadPageTaskLevel0 {
