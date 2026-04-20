@@ -112,14 +112,19 @@ describe('read_page understanding', () => {
     expect(summary.primaryRegionConfidence).toBe('high');
   });
 
-  it('detects workflow_run_shell when workflow run url has not hydrated diagnostics yet', () => {
+  it('keeps pageRole=workflow_run_detail even when only the shell has hydrated, but reports primaryRegion=workflow_run_shell', () => {
+    // T5.4.5 contract: pageRole is URL-derived (stable navigation identity);
+    // primaryRegion is content-derived (hydration progress). A freshly clicked
+    // /actions/runs/<id> URL must NOT regress pageRole to workflow_run_shell
+    // just because the detail body has not rendered yet — that broke
+    // downstream consumers that treat pageRole as the page's identity.
     const summary = inferPageUnderstanding(
       'https://github.com/example/project/actions/runs/42',
       'Release Tabrix',
       'Actions Run 42 Loading',
     );
 
-    expect(summary.pageRole).toBe('workflow_run_shell');
+    expect(summary.pageRole).toBe('workflow_run_detail');
     expect(summary.primaryRegion).toBe('workflow_run_shell');
     expect(summary.primaryRegionConfidence).toBe('medium');
   });

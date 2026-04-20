@@ -130,15 +130,24 @@ export const githubPageFamilyAdapter: PageFamilyAdapter = {
     const titleAndContent = [context.lowerTitle, context.content];
 
     if (/^\/actions\/runs\/\d+/i.test(githubPath)) {
+      // T5.4.5 fix: URL-derived `pageRole` and content-derived `primaryRegion`
+      // are ORTHOGONAL. A page is always `workflow_run_detail` when the URL
+      // points at `/actions/runs/<id>` — regardless of whether the content
+      // has finished loading. `primaryRegion` independently reports whether
+      // we see the fully-loaded `workflow_run_summary` body or only the
+      // still-loading `workflow_run_shell` skeleton.
+      //
+      // Previously we mapped shell-content → pageRole=workflow_run_shell,
+      // which confused downstream consumers (tests + LLM agents) that
+      // expect `pageRole` to be a stable navigation identity, not a
+      // content-readiness flag. See Group F T5-F-GH-WORKFLOW-RUN-ROLE.
       const region = resolvePrimaryRegion(
         titleAndContent,
         GITHUB_PRIMARY_REGION_RULES.workflow_run_detail,
         'workflow_run_shell',
         'medium',
       );
-      return region.region === 'workflow_run_summary'
-        ? buildGithubSummary('workflow_run_detail', region.region, context, region.confidence)
-        : buildGithubSummary('workflow_run_shell', region.region, context, region.confidence);
+      return buildGithubSummary('workflow_run_detail', region.region, context, region.confidence);
     }
 
     if (/^\/actions(?:\/?$|[?#])/i.test(githubPath) || githubPath === '/actions') {

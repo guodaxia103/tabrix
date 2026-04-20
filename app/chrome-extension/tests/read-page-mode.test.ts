@@ -546,7 +546,7 @@ describe('read_page mode', () => {
     );
   });
 
-  it('classifies workflow run shell separately before diagnostics hydrate', async () => {
+  it('keeps pageRole=workflow_run_detail before diagnostics hydrate, surfacing shell via primaryRegion only', async () => {
     vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
       id: 5217,
       windowId: 1,
@@ -583,7 +583,9 @@ describe('read_page mode', () => {
     const payload = JSON.parse((result.content[0] as { text: string }).text);
 
     expect(result.isError).toBe(false);
-    expect(payload.summary.pageRole).toBe('workflow_run_shell');
+    // T5.4.5 contract: URL-derived pageRole is stable; content-derived
+    // primaryRegion independently reports hydration progress.
+    expect(payload.summary.pageRole).toBe('workflow_run_detail');
     expect(payload.summary.primaryRegion).toBe('workflow_run_shell');
     expect(payload.taskMode).toBe('monitor');
   });

@@ -346,11 +346,13 @@ function toHighValueObject(
   if (scored.actionType) out.actionType = scored.actionType;
   if (typeof confidence === 'number') out.confidence = confidence;
   if (scored.objectType) out.objectType = scored.objectType;
+  if (scored.objectSubType) out.objectSubType = scored.objectSubType;
   if (scored.region !== undefined) out.region = scored.region;
   if (typeof importance === 'number') out.importance = importance;
   if (combinedReasons.length > 0) out.reasons = combinedReasons;
   if (scored.actions && scored.actions.length > 0) out.actions = scored.actions;
   if (scored.sourceKind) out.sourceKind = scored.sourceKind;
+  if (scored.href) out.href = scored.href;
   return out;
 }
 
