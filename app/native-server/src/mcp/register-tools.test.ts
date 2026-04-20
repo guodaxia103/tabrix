@@ -139,6 +139,48 @@ describe('handleToolCall execution wrapper', () => {
     });
   });
 
+  it('persists a page snapshot and injects historyRef for chrome_read_page', async () => {
+    markBridgeReady();
+    const readPageBody = {
+      mode: 'compact',
+      page: {
+        url: 'https://github.com/openclaw/openclaw',
+        title: 'openclaw/openclaw',
+        pageType: 'web_page',
+      },
+      summary: { pageRole: 'github_repo_home', primaryRegion: 'main', quality: 'usable' },
+      interactiveElements: [
+        { ref: 'e1', role: 'link', name: 'Code' },
+        { ref: 'e2', role: 'link', name: 'Issues' },
+      ],
+      artifactRefs: [{ kind: 'dom_snapshot', ref: 'artifact://read_page/1/t' }],
+      highValueObjects: [],
+      historyRef: null,
+    };
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      items: [],
+    } as never);
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      data: {
+        content: [{ type: 'text', text: JSON.stringify(readPageBody) }],
+        isError: false,
+      },
+    } as never);
+
+    const result = await handleToolCall('chrome_read_page', { tabId: 1 });
+
+    expect(result.isError).toBe(false);
+    const body = JSON.parse(String((result.content as any[])[0].text));
+    expect(body.historyRef).toMatch(/^memory:\/\/snapshot\/[0-9a-f-]+$/);
+
+    const sessions = sessionManager.listSessions();
+    const step = sessions[0].steps[0];
+    expect(step.artifactRefs).toHaveLength(1);
+    expect(step.artifactRefs![0]).toBe(body.historyRef);
+  });
+
   it('allows non-sensitive tools when MCP_DISABLE_SENSITIVE_TOOLS is set', async () => {
     markBridgeReady();
     process.env.MCP_DISABLE_SENSITIVE_TOOLS = 'true';

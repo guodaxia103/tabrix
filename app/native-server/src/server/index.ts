@@ -142,6 +142,7 @@ interface ServerStatusSnapshot {
       aborted: number;
     };
     lastSessionId: string | null;
+    persistenceMode: 'disk' | 'memory' | 'off';
   };
 }
 
@@ -963,6 +964,7 @@ export class Server {
           executionSessions.length > 0
             ? executionSessions[executionSessions.length - 1].sessionId
             : null,
+        persistenceMode: sessionManager.getPersistenceStatus().mode,
       },
     };
   }
