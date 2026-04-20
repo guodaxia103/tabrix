@@ -383,10 +383,6 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 - [Why MCP on Chrome](docs/WHY_MCP_CHROME.md)
 - [Error Codes](docs/ERROR_CODES.md)
 
-### Internal Governance (Feishu wiki)
-
-Product requirement document, positioning, tool layering, audit gates, T4 acceptance, maintenance log, and internal AI-contributor rules are maintained in the Feishu `Tabrix` knowledge base. See [AGENTS.md](AGENTS.md) for the navigation map.
-
 ## License
 
 MIT. See [LICENSE](LICENSE).

@@ -39,7 +39,6 @@ const mustReference = [
       'docs/CLI_AND_MCP.md',
       'CONTRIBUTING.md',
       'SECURITY.md',
-      'Feishu',
     ],
   },
   {
@@ -69,7 +68,6 @@ const mustReference = [
       'docs/ARCHITECTURE.md',
       'CONTRIBUTING.md',
       'SECURITY.md',
-      'Tabrix 知识库',
     ],
   },
   {
@@ -88,7 +86,6 @@ const mustReference = [
       'ROADMAP.md',
       'RELEASE_PROCESS.md',
       'TOOLS.md',
-      'Feishu',
     ],
   },
 ];

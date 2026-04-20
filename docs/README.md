@@ -9,7 +9,7 @@ It is intended for:
 - Contributors working on the public codebase
 - Release, security, and compliance readers
 
-Internal product-management, governance, audit, and gate-maintenance materials are **not** kept here. They live in the private Feishu knowledge base (`Tabrix` wiki space).
+Internal product-management, governance, audit, and gate-maintenance materials are **not** kept here. They are maintained separately by the project maintainers outside this repository and are not required for contributing against the public surface.
 
 ## Entry Points
 
@@ -44,39 +44,27 @@ Internal product-management, governance, audit, and gate-maintenance materials a
 ### Repository Root
 
 - [`../README.md`](../README.md) and [`../README_zh.md`](../README_zh.md) — public landing pages
-- [`../AGENTS.md`](../AGENTS.md) — mandatory reading for AI contributors (governance summary with Feishu pointers)
+- [`../AGENTS.md`](../AGENTS.md) — mandatory reading for AI contributors (public contributor rules)
 - [`../SECURITY.md`](../SECURITY.md) — security disclosure policy
 - [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — contributor workflow
 - [`../CHANGELOG.md`](../CHANGELOG.md) — versioned user-visible changes
 
 ## Internal Documents (Not Here)
 
-The following categories are maintained in the Feishu `Tabrix` wiki, not in this repository:
+The following categories are maintained outside this public repository by the project maintainers:
 
-- Product Requirement Document (PRD v1)
-- Product positioning and technical principles
-- Tool layering and risk classification
-- AI development rules (internal governance)
-- Code entrypoints and ownership map
-- Skills catalog (internal AI skill inventory)
-- Maintenance log
-- Browser bridge state design
-- Browser tool settle audit
-- OSV audit gate
-- Release readiness checklist and criteria (internal gate)
-- T4 GitHub baseline gate
-- T4 Douyin login golden gate
-- Third-party reuse matrix and workflow
-- GitHub-first troubleshooting runbook
-- AI contributor onboarding (detailed internal version)
+- Internal product-management artifacts (PRD, positioning, roadmap sequencing)
+- Internal governance (tool layering, AI contributor rules, Skills catalog, ownership map)
+- Internal acceptance and gate materials (release readiness, audit gate, GA baseline gates)
+- Internal runbooks for non-public scenarios
 
-If you need access to these, consult the Feishu `Tabrix` wiki space or contact the project owner.
+None of these materials are required for contributing against the public surface. If you need access to internal materials, contact the project owner directly.
 
 ## Language Policy
 
 - English is the single public language for `docs/`
 - The only Chinese documents in the repository are [`../README_zh.md`](../README_zh.md) (public landing page in Chinese) and [`../AGENTS.md`](../AGENTS.md) (internal contributor rules, bilingual prose)
-- Chinese variants of internal materials live in the Feishu wiki
+- Chinese variants of internal materials are maintained outside this repository
 
 ## Naming Rules
 
@@ -87,4 +75,4 @@ If you need access to these, consult the Feishu `Tabrix` wiki space or contact t
 
 ## Public Source of Truth
 
-For public-facing documentation, this directory is the source of truth. For anything else (governance, audit, roadmap sequencing, acceptance evidence, gate maintenance), the Feishu `Tabrix` wiki is authoritative.
+For public-facing documentation, this directory is the source of truth. Anything else (internal governance, audit, roadmap sequencing, acceptance evidence, gate maintenance) is managed by the project maintainers outside this repository and is not part of the public contract.
