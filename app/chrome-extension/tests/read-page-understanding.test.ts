@@ -1,7 +1,33 @@
 import { describe, expect, it } from 'vitest';
+import { buildUnderstandingContext } from '@/entrypoints/background/tools/browser/read-page-understanding-core';
+import { githubPageFamilyAdapter } from '@/entrypoints/background/tools/browser/read-page-understanding-github';
 import { inferPageUnderstanding } from '@/entrypoints/background/tools/browser/read-page-understanding';
 
 describe('read_page understanding', () => {
+  it('routes github pages through the github family adapter', () => {
+    const summary = githubPageFamilyAdapter.infer(
+      buildUnderstandingContext(
+        'https://github.com/example/project/issues',
+        'Issues · example/project',
+        'Search Issues Filter by assignee New issue',
+      ),
+    );
+
+    expect(summary).toMatchObject({
+      pageRole: 'issues_list',
+      primaryRegion: 'issues_results',
+      primaryRegionConfidence: 'high',
+    });
+  });
+
+  it('returns null from github family adapter for non-github pages', () => {
+    const summary = githubPageFamilyAdapter.infer(
+      buildUnderstandingContext('https://example.com/signin', '登录', '手机号 验证码 登录'),
+    );
+
+    expect(summary).toBeNull();
+  });
+
   it('detects repo_home from repo url and primary navigation signals', () => {
     const summary = inferPageUnderstanding(
       'https://github.com/example/project',
