@@ -161,6 +161,43 @@ const GITHUB_CLASSIFICATION: Partial<Record<string, GithubClassificationRule[]>>
 
 const GITHUB_OWNED_ROLES = new Set(Object.keys(GITHUB_PAGE_ROLE_TASK_SEEDS));
 
+/**
+ * GitHub-specific noise patterns per SoT section "明确的低价值对象降权规则".
+ * These are shell / site-chrome wording that would otherwise rank high simply
+ * because they are everywhere on GitHub. They stay in the GitHub adapter
+ * (not core) because they are GitHub vocabulary.
+ */
+const GITHUB_NOISE_PATTERNS: Array<{ pattern: RegExp; delta: number; label: string }> = [
+  { pattern: /^(watch|star(?:red)?|pin this repository)\b/i, delta: -0.4, label: 'watch_star_pin' },
+  { pattern: /^search or jump to/i, delta: -0.5, label: 'search_or_jump' },
+  { pattern: /^open copilot/i, delta: -0.5, label: 'open_copilot' },
+  { pattern: /^skip to content$/i, delta: -0.5, label: 'skip_to_content' },
+  { pattern: /github\.blog/i, delta: -0.25, label: 'footer_blog' },
+  {
+    pattern: /^(terms|privacy|security|status|docs|api|training|pricing|about)$/i,
+    delta: -0.3,
+    label: 'footer_links',
+  },
+  { pattern: /^v?\d+\.\d+\.\d+$/i, delta: -0.25, label: 'version_string' },
+];
+
+/**
+ * Preferred primary labels per GitHub pageRole. When the candidate label
+ * matches one of these in order, it gets a positional importance boost
+ * (first match: +0.20, second: +0.16, third: +0.12, ...). This is what
+ * makes seed labels outrank generic interactives of the same objectType.
+ */
+const GITHUB_PREFERRED_LABELS: Partial<Record<string, RegExp[]>> = {
+  repo_home: [/^issues$/i, /^pull requests?$/i, /^actions$/i, /^go to file$/i],
+  issues_list: [/^search issues$/i, /^filter issues$/i, /^issue entries$/i, /^new issue$/i],
+  actions_list: [/^filter workflow runs$/i, /^workflow run entries$/i, /^run detail entry$/i],
+  workflow_run_detail: [/^summary$/i, /^jobs?$/i, /^artifacts?$/i, /^logs?$/i],
+};
+
+function formatGithubDelta(delta: number): string {
+  return delta >= 0 ? `+${delta.toFixed(2)}` : delta.toFixed(2);
+}
+
 export const githubObjectLayerAdapter: ObjectLayerFamilyAdapter = {
   family: 'github',
   owns(pageRole: PageRole): boolean {
@@ -231,5 +268,36 @@ export const githubObjectLayerAdapter: ObjectLayerFamilyAdapter = {
     }
 
     return null;
+  },
+  scorePrior(
+    classified: ClassifiedCandidateObject,
+    context: ObjectLayerContext,
+  ): { delta: number; reasons: string[] } {
+    const reasons: string[] = [];
+    let delta = 0;
+
+    for (const noise of GITHUB_NOISE_PATTERNS) {
+      if (noise.pattern.test(classified.label)) {
+        delta += noise.delta;
+        reasons.push(`${formatGithubDelta(noise.delta)} github_noise=${noise.label}`);
+      }
+    }
+
+    const roleKey = String(context.pageRole || '');
+    const preferred = GITHUB_PREFERRED_LABELS[roleKey];
+    if (preferred) {
+      for (let i = 0; i < preferred.length; i += 1) {
+        if (preferred[i].test(classified.label)) {
+          const boost = Math.max(0, Number((0.1 - i * 0.02).toFixed(2)));
+          if (boost > 0) {
+            delta += boost;
+            reasons.push(`${formatGithubDelta(boost)} github_preferred[index=${i}]`);
+          }
+          break;
+        }
+      }
+    }
+
+    return { delta, reasons };
   },
 };

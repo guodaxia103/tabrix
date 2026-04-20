@@ -321,13 +321,151 @@ export function classifyCandidateObject(
 }
 
 /**
- * T5.4.1 stub. Real scoring lands in T5.4.3. Throws to ensure callers do not
- * silently observe importance=0.
+ * Neutral noise patterns — site-agnostic signals that a label is low-value.
+ * Per SoT `T5.4 高价值对象提取 正式产品级规格`, section "明确的低价值对象降权规则":
+ *   - commit hash / commit headlines
+ *   - duration / timing wording (e.g. `15s`, `3m`, `2h`)
+ *   - commitlint prefixes (`fix(...)`, `feat(...)`, ...)
+ *
+ * Family-specific noise (watch/star/pin, "Search or jump to...",
+ * "Open Copilot...", "Skip to content", footer links) belongs in family
+ * adapters via `scorePrior` so core stays neutral.
+ */
+const NEUTRAL_NOISE_PATTERNS: Array<{ pattern: RegExp; delta: number; label: string }> = [
+  { pattern: /\b[0-9a-f]{7,40}\b/i, delta: -0.5, label: 'commit_hash' },
+  { pattern: /^\d+[smhd]$/i, delta: -0.45, label: 'duration_timing' },
+  { pattern: /^commit\b/i, delta: -0.35, label: 'commit_prefix' },
+  {
+    pattern: /^(fix|feat|docs|chore|refactor|test|build|ci|perf)\s*\(/i,
+    delta: -0.35,
+    label: 'commitlint_prefix',
+  },
+];
+
+function formatDelta(delta: number): string {
+  return delta >= 0 ? `+${delta.toFixed(2)}` : delta.toFixed(2);
+}
+
+function alignsWithTaskMode(
+  objectType: ReadPageObjectType,
+  taskMode: ReadPageTaskMode | null,
+): boolean {
+  if (!taskMode) return false;
+  switch (taskMode) {
+    case 'search':
+      return objectType === 'control' || objectType === 'record';
+    case 'extract':
+      return objectType === 'record' || objectType === 'doc_block';
+    case 'monitor':
+      return objectType === 'status_item' || objectType === 'metric_card';
+    case 'compare':
+      return objectType === 'record' || objectType === 'entry';
+    case 'read':
+      return objectType === 'nav_entry' || objectType === 'entry' || objectType === 'doc_block';
+    default:
+      return false;
+  }
+}
+
+/**
+ * T5.4.3: importance + confidence scoring.
+ *
+ * `importance` is the task-relevance weight in `[0, 1]`. It starts at 0.5 and
+ * receives signed contributions from:
+ *   - origin (page_role_seed > candidate_action > others)
+ *   - primaryRegion alignment
+ *   - family classifier match (pageRole-specific)
+ *   - taskMode alignment with objectType
+ *   - neutral noise penalties (commit hash / duration / commitlint)
+ *   - family `scorePrior` (e.g. watch/star/pin, "Search or jump to...")
+ *
+ * `confidence` is the recognition confidence in `[0, 1]` and reflects how
+ * sure we are the classified type is correct, not how important the label is.
+ *
+ * `scoringReasons` records every non-zero contribution for explainability.
  */
 export function scoreCandidateObject(
-  _classified: ClassifiedCandidateObject,
-  _context: ObjectLayerContext,
-  _adapters: readonly ObjectLayerFamilyAdapter[] = [],
+  classified: ClassifiedCandidateObject,
+  context: ObjectLayerContext,
+  adapters: readonly ObjectLayerFamilyAdapter[] = [],
 ): ScoredCandidateObject {
-  throw new Error('scoreCandidateObject is not yet implemented (pending T5.4.3)');
+  const reasons: string[] = ['base=0.50'];
+  let importance = 0.5;
+  let confidence: number;
+
+  if (classified.origin === 'page_role_seed') {
+    confidence = 0.85;
+    importance += 0.08;
+    reasons.push('+0.08 origin=page_role_seed');
+  } else if (classified.origin === 'candidate_action') {
+    const raw = classified.rawConfidence;
+    confidence = typeof raw === 'number' && raw > 0 ? Math.max(0.5, Math.min(1, raw)) : 0.6;
+    importance += 0.05;
+    reasons.push('+0.05 actionability=candidate_action');
+  } else {
+    confidence = classified.role ? 0.7 : 0.5;
+  }
+
+  if (classified.region && classified.region === context.primaryRegion) {
+    importance += 0.1;
+    reasons.push('+0.10 region matches primaryRegion');
+  } else if (classified.region && !context.primaryRegion) {
+    importance += 0.03;
+    reasons.push('+0.03 region present, primaryRegion unknown');
+  }
+
+  const familyClassified = classified.classificationReasons.some(
+    (reason) => reason.includes('pageRole=') && reason.includes('matched'),
+  );
+  if (familyClassified) {
+    importance += 0.1;
+    reasons.push('+0.10 family classifier matched');
+  }
+
+  if (alignsWithTaskMode(classified.objectType, context.taskMode)) {
+    importance += 0.06;
+    reasons.push(
+      `+0.06 objectType=${classified.objectType} aligns with taskMode=${context.taskMode}`,
+    );
+  }
+
+  if (classified.actions && classified.actions.length > 0) {
+    importance += 0.02;
+    reasons.push('+0.02 has executable actions');
+  }
+
+  for (const noise of NEUTRAL_NOISE_PATTERNS) {
+    if (noise.pattern.test(classified.label)) {
+      importance += noise.delta;
+      confidence = Math.max(0, confidence - 0.15);
+      reasons.push(`${formatDelta(noise.delta)} noise=${noise.label}`);
+    }
+  }
+
+  if (classified.label.length > 96) {
+    importance -= 0.1;
+    reasons.push('-0.10 label_too_long');
+  }
+
+  for (const adapter of adapters) {
+    if (!adapter.owns(context.pageRole)) continue;
+    const prior = adapter.scorePrior?.(classified, context);
+    if (prior) {
+      importance += prior.delta;
+      for (const r of prior.reasons) reasons.push(r);
+      if (prior.delta < 0) {
+        confidence = Math.max(0, confidence - 0.1);
+      }
+    }
+  }
+
+  importance = Math.max(0, Math.min(1, importance));
+  confidence = Math.max(0, Math.min(1, confidence));
+
+  return {
+    ...classified,
+    importance,
+    confidence,
+    scoringReasons: reasons,
+  };
 }
