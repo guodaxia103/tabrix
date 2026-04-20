@@ -31,23 +31,135 @@ interface PageUnderstandingContext {
   footerOnly: boolean;
 }
 
+interface RegionRule {
+  region: string;
+  patterns: RegExp[];
+  minMatches?: number;
+  priority?: number;
+  confidence: ReadPagePrimaryRegionConfidence;
+}
+
+interface RegionResolution {
+  region: string | null;
+  confidence: ReadPagePrimaryRegionConfidence;
+  matchedPatterns: number;
+}
+
 const GITHUB_REPO_URL_PATTERN = /^https:\/\/github\.com\/[^/]+\/[^/]+(?:[/?#]|$)/i;
 const GITHUB_PATH_PATTERN = /^https:\/\/github\.com\/[^/]+\/[^/]+(\/[^?#]*)?/i;
 
-const GITHUB_SIGNALS = {
-  repoHome: [/\bissues\b/i, /\bpull requests?\b/i, /\bactions\b/i, /\bgo to file\b/i],
-  issuesList: [/\bsearch issues\b/i, /\bfilter\b/i, /\bnew issue\b/i, /\bassignee\b/i],
-  actionsList: [/\bfilter workflow runs\b/i, /\brun\s+\d+\b/i, /\bworkflow\b/i],
-  workflowRunDetail: [
-    /\bsummary\b/i,
-    /\bshow all jobs\b/i,
-    /\bjobs?\b/i,
-    /\bartifacts?\b/i,
-    /\bannotations?\b/i,
-    /\blogs?\b/i,
+const GITHUB_PRIMARY_REGION_RULES: Record<
+  'repo_home' | 'issues_list' | 'actions_list' | 'workflow_run_detail',
+  RegionRule[]
+> = {
+  repo_home: [
+    {
+      region: 'repo_primary_nav',
+      patterns: [/\bissues\b/i, /\bpull requests?\b/i, /\bactions\b/i, /\bgo to file\b/i],
+      minMatches: 1,
+      priority: 1000,
+      confidence: 'medium',
+    },
+    {
+      region: 'repo_shell',
+      patterns: [/\bcode\b/i, /\breadme\b/i, /\bcommit\b/i, /\bmain branch\b/i],
+      minMatches: 1,
+      priority: 0,
+      confidence: 'low',
+    },
   ],
-  workflowRunShell: [/\bactions\b/i, /\bworkflow run\b/i, /\brun\s+\d+\b/i, /\bloading\b/i],
+  issues_list: [
+    {
+      region: 'issues_results',
+      patterns: [
+        /\bsearch issues\b/i,
+        /\bfilter(?: by)?\b/i,
+        /\bnew issue\b/i,
+        /\bassignee\b/i,
+        /\blabels?\b/i,
+        /\bmilestone\b/i,
+        /\bissue entries\b/i,
+      ],
+      minMatches: 1,
+      priority: 1000,
+      confidence: 'high',
+    },
+    {
+      region: 'issues_shell',
+      patterns: [/\bissues\b/i, /\bloading\b/i, /\brepository\b/i],
+      minMatches: 1,
+      priority: 0,
+      confidence: 'medium',
+    },
+  ],
+  actions_list: [
+    {
+      region: 'workflow_runs_list',
+      patterns: [
+        /\bfilter workflow runs\b/i,
+        /\brun\s+\d+\b/i,
+        /\bcompleted successfully\b/i,
+        /\bworkflow run entries\b/i,
+        /\brun detail entry\b/i,
+        /\bqueued\b/i,
+        /\bfailed\b/i,
+      ],
+      minMatches: 1,
+      priority: 1000,
+      confidence: 'high',
+    },
+    {
+      region: 'actions_shell',
+      patterns: [/\bactions\b/i, /\bworkflows?\b/i, /\bloading\b/i],
+      minMatches: 1,
+      priority: 0,
+      confidence: 'medium',
+    },
+  ],
+  workflow_run_detail: [
+    {
+      region: 'workflow_run_summary',
+      patterns: [
+        /\bsummary\b/i,
+        /\bshow all jobs\b/i,
+        /\bjobs?\b/i,
+        /\bartifacts?\b/i,
+        /\bannotations?\b/i,
+        /\blogs?\b/i,
+      ],
+      minMatches: 1,
+      priority: 1000,
+      confidence: 'high',
+    },
+    {
+      region: 'workflow_run_shell',
+      patterns: [/\bworkflow run\b/i, /\bloading\b/i, /\bchecks\b/i, /\bqueued\b/i, /\bstarted\b/i],
+      minMatches: 1,
+      priority: 0,
+      confidence: 'medium',
+    },
+  ],
 };
+
+const LOGIN_GATE_RULES: RegionRule[] = [
+  {
+    region: 'login_gate',
+    patterns: [/登录/i, /login/i, /signin/i, /手机号/i, /验证码/i, /phone/i, /code/i],
+    minMatches: 2,
+    priority: 1000,
+    confidence: 'high',
+  },
+];
+
+const FOOTER_SHELL_RULES: RegionRule[] = [
+  {
+    region: 'footer_shell',
+    patterns: [/账号授权协议/i, /用户服务协议/i, /隐私政策/i, /联系我们/i],
+    minMatches: 2,
+    priority: 1000,
+    confidence: 'low',
+  },
+];
 
 function collectAnchorTexts(pageContent: string) {
   const anchors = [
@@ -80,6 +192,46 @@ function hasAnySignal(sources: string[], patterns: RegExp[]) {
   return patterns.some((pattern) => sources.some((source) => pattern.test(source)));
 }
 
+function countMatchedPatterns(sources: string[], patterns: RegExp[]) {
+  return patterns.filter((pattern) => sources.some((source) => pattern.test(source))).length;
+}
+
+function resolvePrimaryRegion(
+  sources: string[],
+  rules: RegionRule[],
+  fallbackRegion: string | null,
+  fallbackConfidence: ReadPagePrimaryRegionConfidence,
+): RegionResolution {
+  let bestMatch: RegionResolution | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const rule of rules) {
+    const matchedPatterns = countMatchedPatterns(sources, rule.patterns);
+    const minMatches = Math.max(1, Number(rule.minMatches || 1));
+    if (matchedPatterns < minMatches) {
+      continue;
+    }
+    const score = matchedPatterns * 100 + Number(rule.priority || 0);
+
+    if (!bestMatch || score > bestScore) {
+      bestMatch = {
+        region: rule.region,
+        confidence: rule.confidence,
+        matchedPatterns,
+      };
+      bestScore = score;
+    }
+  }
+
+  return (
+    bestMatch || {
+      region: fallbackRegion,
+      confidence: fallbackConfidence,
+      matchedPatterns: 0,
+    }
+  );
+}
+
 function buildGithubSummary(
   pageRole: PageRole,
   primaryRegion: string | null,
@@ -107,40 +259,45 @@ function inferGithubPageUnderstanding(
   const titleAndContent = [context.lowerTitle, context.content];
 
   if (/^\/actions\/runs\/\d+/i.test(githubPath)) {
-    const hasRunDetailSignals = hasAnySignal(titleAndContent, GITHUB_SIGNALS.workflowRunDetail);
-    return hasRunDetailSignals
-      ? buildGithubSummary('workflow_run_detail', 'workflow_run_summary', 'high', context)
-      : buildGithubSummary('workflow_run_shell', 'workflow_run_shell', 'medium', context);
+    const region = resolvePrimaryRegion(
+      titleAndContent,
+      GITHUB_PRIMARY_REGION_RULES.workflow_run_detail,
+      'workflow_run_shell',
+      'medium',
+    );
+    return region.region === 'workflow_run_summary'
+      ? buildGithubSummary('workflow_run_detail', region.region, region.confidence, context)
+      : buildGithubSummary('workflow_run_shell', region.region, region.confidence, context);
   }
 
   if (/^\/actions(?:\/?$|[?#])/i.test(githubPath) || githubPath === '/actions') {
-    const hasActionsSignals = hasAnySignal(titleAndContent, GITHUB_SIGNALS.actionsList);
-    return buildGithubSummary(
-      'actions_list',
-      hasActionsSignals ? 'workflow_runs_list' : 'actions_shell',
-      hasActionsSignals ? 'high' : 'medium',
-      context,
+    const region = resolvePrimaryRegion(
+      titleAndContent,
+      GITHUB_PRIMARY_REGION_RULES.actions_list,
+      'actions_shell',
+      'medium',
     );
+    return buildGithubSummary('actions_list', region.region, region.confidence, context);
   }
 
   if (/^\/issues(?:\/?$|[?#])/i.test(githubPath) || githubPath === '/issues') {
-    const hasIssueSignals = hasAnySignal(titleAndContent, GITHUB_SIGNALS.issuesList);
-    return buildGithubSummary(
-      'issues_list',
-      hasIssueSignals ? 'issues_results' : 'issues_shell',
-      hasIssueSignals ? 'high' : 'medium',
-      context,
+    const region = resolvePrimaryRegion(
+      titleAndContent,
+      GITHUB_PRIMARY_REGION_RULES.issues_list,
+      'issues_shell',
+      'medium',
     );
+    return buildGithubSummary('issues_list', region.region, region.confidence, context);
   }
 
   if (/^$/i.test(githubPath) || githubPath === '/') {
-    const hasRepoSignals = hasAnySignal(titleAndContent, GITHUB_SIGNALS.repoHome);
-    return buildGithubSummary(
-      'repo_home',
-      hasRepoSignals ? 'repo_primary_nav' : 'repo_shell',
-      hasRepoSignals ? 'medium' : 'low',
-      context,
+    const region = resolvePrimaryRegion(
+      titleAndContent,
+      GITHUB_PRIMARY_REGION_RULES.repo_home,
+      'repo_shell',
+      'low',
     );
+    return buildGithubSummary('repo_home', region.region, region.confidence, context);
   }
 
   return null;
@@ -177,10 +334,11 @@ export function inferPageUnderstanding(
     hasAnySignal(loginSignals, [/登录/i, /login/i, /signin/i]) &&
     hasAnySignal(loginSignals, [/手机号/i, /验证码/i, /phone/i, /code/i, /抖音/i])
   ) {
+    const loginRegion = resolvePrimaryRegion(loginSignals, LOGIN_GATE_RULES, 'login_gate', 'high');
     return {
       pageRole: 'login_required',
-      primaryRegion: 'login_gate',
-      primaryRegionConfidence: 'high',
+      primaryRegion: loginRegion.region,
+      primaryRegionConfidence: loginRegion.confidence,
       footerOnly,
       anchorTexts,
     };
@@ -249,10 +407,11 @@ export function inferPageUnderstanding(
     };
   }
 
+  const footerRegion = resolvePrimaryRegion([content], FOOTER_SHELL_RULES, null, null);
   return {
     pageRole: footerOnly ? 'outer_shell' : 'unknown',
-    primaryRegion: footerOnly ? 'footer_shell' : null,
-    primaryRegionConfidence: footerOnly ? 'low' : null,
+    primaryRegion: footerOnly ? footerRegion.region || 'footer_shell' : null,
+    primaryRegionConfidence: footerOnly ? footerRegion.confidence || 'low' : null,
     footerOnly,
     anchorTexts,
   };

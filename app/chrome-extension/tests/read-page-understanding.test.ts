@@ -14,6 +14,30 @@ describe('read_page understanding', () => {
     expect(summary.primaryRegionConfidence).toBe('medium');
   });
 
+  it('prefers repo_primary_nav over repo_shell when task navigation and shell hints both exist', () => {
+    const summary = inferPageUnderstanding(
+      'https://github.com/example/project',
+      'example/project',
+      'Go to file Code README Latest commit main branch',
+    );
+
+    expect(summary.pageRole).toBe('repo_home');
+    expect(summary.primaryRegion).toBe('repo_primary_nav');
+    expect(summary.primaryRegionConfidence).toBe('medium');
+  });
+
+  it('keeps repo_home pageRole but falls back to repo_shell when only shell signals are visible', () => {
+    const summary = inferPageUnderstanding(
+      'https://github.com/example/project',
+      'example/project',
+      'Code README Latest commit main branch',
+    );
+
+    expect(summary.pageRole).toBe('repo_home');
+    expect(summary.primaryRegion).toBe('repo_shell');
+    expect(summary.primaryRegionConfidence).toBe('low');
+  });
+
   it('detects issues_list from url and issue controls', () => {
     const summary = inferPageUnderstanding(
       'https://github.com/example/project/issues',
@@ -43,6 +67,18 @@ describe('read_page understanding', () => {
       'https://github.com/example/project/actions/runs/42',
       'Release Tabrix',
       'Summary Show all jobs Jobs Artifacts Logs',
+    );
+
+    expect(summary.pageRole).toBe('workflow_run_detail');
+    expect(summary.primaryRegion).toBe('workflow_run_summary');
+    expect(summary.primaryRegionConfidence).toBe('high');
+  });
+
+  it('prefers workflow_run_summary over workflow_run_shell when both shell and diagnostics hints exist', () => {
+    const summary = inferPageUnderstanding(
+      'https://github.com/example/project/actions/runs/42',
+      'Release Tabrix',
+      'Actions Run 42 Loading Summary Show all jobs Jobs Artifacts Logs',
     );
 
     expect(summary.pageRole).toBe('workflow_run_detail');
