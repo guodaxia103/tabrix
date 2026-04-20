@@ -233,9 +233,15 @@ Rule 声明顺序必须和 `githubPageFamilyAdapter.infer` 里的判断顺序（
 3. `issues_list` — urlPattern 保真拷贝 `read-page-understanding-github.ts:154` 原式；primaryRegions 用 `.issues_list`。
 4. `repo_home` — urlPattern 保真拷贝 `read-page-understanding-github.ts:164` 原式（空字符串或单斜杠根）；primaryRegions 用 `.repo_home`。
 
-### 5.3 workflow_run_detail 的 dual-outcome 特殊处理
+### 5.3 workflow_run_detail 的稳定契约（T5.4.5 之后）
 
-现有代码（`read-page-understanding-github.ts:132-142`）有一个"primary-region 的 `region` 值反过来决定最终 `pageRole`"的逻辑：
+T5.4.5 之后（`read-page-understanding-github.ts:132-151`），`workflow_run_detail` 的 `pageRole` 对 `/actions/runs/<id>` URL **始终稳定**；`primaryRegion` 独立承担"summary 是否 hydrate"的信号。因此 GitHub seed 里此条规则**不需要 `dualOutcome`**，只保留 `fallback.primaryRegion='workflow_run_shell'`。
+
+`dualOutcome` 机制本身仍保留在 Stage 1 的 `types.ts` / `compile`/`resolvePageRole` 里，作为未来真正需要"region-promotes-role"表达的站点（例如 Stage 2 若引入某类列表/详情共路由）预留的抽象。
+
+### 5.3.1 旧契约归档（仅供历史参考）
+
+在 T5.4.5 落地前，`read-page-understanding-github.ts:132-142` 曾经有一个"primary-region 的 `region` 值反过来决定最终 `pageRole`"的逻辑：
 
 ```ts
 return region.region === 'workflow_run_summary'

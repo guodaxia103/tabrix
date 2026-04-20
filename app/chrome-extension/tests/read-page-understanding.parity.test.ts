@@ -83,7 +83,10 @@ const GITHUB_PARITY_FIXTURES: readonly ParityFixture[] = [
     content: 'Actions Run 42 Loading Summary Show all jobs Jobs Artifacts Logs',
   },
   {
-    name: 'workflow_run_shell when only shell hints visible',
+    // T5.4.5: pageRole stays `workflow_run_detail` even when only the
+    // shell skeleton has hydrated; `primaryRegion` carries the readiness
+    // signal independently.
+    name: 'workflow_run_detail stable even when only shell hints visible',
     url: 'https://github.com/example/project/actions/runs/42',
     title: 'Release Tabrix',
     content: 'Workflow run Loading Checks Queued Started',

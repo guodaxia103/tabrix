@@ -55,13 +55,12 @@ describe('knowledge-registry compile', () => {
     );
   });
 
-  it('carries dualOutcome through to the compiled workflow_run_detail rule', () => {
+  it('keeps workflow_run_detail stable without dualOutcome (T5.4.5 contract)', () => {
     const compiled = compileKnowledgeRegistry([GITHUB_KNOWLEDGE_SEEDS]);
     const rules = compiled.pageRoleRulesBySite.get('github') ?? [];
     const wrd = rules.find((r) => r.pageRole === 'workflow_run_detail');
-    expect(wrd?.dualOutcome).toMatchObject({
-      defaultRole: 'workflow_run_shell',
-      primaryRegionToRole: { workflow_run_summary: 'workflow_run_detail' },
-    });
+    expect(wrd).toBeDefined();
+    expect(wrd?.dualOutcome).toBeNull();
+    expect(wrd?.fallback.primaryRegion).toBe('workflow_run_shell');
   });
 });
