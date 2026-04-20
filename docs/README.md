@@ -1,57 +1,90 @@
 # Tabrix Public Docs
 
-This directory keeps only public documentation for `Tabrix`.
+This directory keeps the English-only public documentation for `Tabrix`.
 
 It is intended for:
 
-- users onboarding to the product
-- developers integrating through CLI or MCP
-- contributors working on the public codebase
-- release, security, and compliance readers
+- Users onboarding to the product
+- Developers integrating through CLI or MCP
+- Contributors working on the public codebase
+- Release, security, and compliance readers
 
-This directory does not keep internal product-management or review materials.
+Internal product-management, governance, audit, and gate-maintenance materials are **not** kept here. They live in the private Feishu knowledge base (`Tabrix` wiki space).
 
-Those materials are maintained separately as internal governance documents and should be rewritten before any public release.
-Implementation design notes, audits, acceptance evidence, release-gate maintenance notes, and governance records belong in internal docs rather than this public tree.
+## Entry Points
 
-## What Belongs Here
+### Getting Started
 
-- README, install, quickstart, and troubleshooting guides
-- AI contributor onboarding and public AI collaboration rules
-- CLI, tools, transport, and architecture references
-- project structure, release, security, and changelog documents
-- public-facing compliance and contribution guidance
+- [`QUICKSTART.md`](./QUICKSTART.md) — first-success path, extension install, local verification, MCP client connection, first task
+- [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md) — popup status, connection errors, Windows FAQ, browser-first GitHub triage, log locations
 
-## High-Value Entry Points
+### CLI and MCP
 
-- `AI_CONTRIBUTOR_QUICKSTART_zh.md`: first-stop onboarding for AI contributors working in the public repo
-- `AI_DEV_RULES_zh.md`: public development rules for AI-assisted changes
-- `PRODUCT_SURFACE_MATRIX.md` / `PRODUCT_SURFACE_MATRIX_zh.md`: public capability boundaries and tier definitions
-- `TESTING.md` / `TESTING_zh.md`: contributor verification standards
-- `PLATFORM_SUPPORT.md` / `PLATFORM_SUPPORT_zh.md`: current public platform support posture
-- `COMPATIBILITY_MATRIX.md` / `COMPATIBILITY_MATRIX_zh.md`: current MCP client and environment compatibility posture
-- `CODE_ENTRYPOINTS_AND_OWNERSHIP_zh.md`: contributor execution map for common change types
-- `STABLE_QUICKSTART.md`: user-facing first-success path
-- `BROWSER_TOOL_SETTLE_AUDIT_zh.md`: browser tool settle effectiveness review and optimization policy
-- `RELEASE_READINESS_CHECKLIST_zh.md`: Phase 0 发布前验收清单
-- `BROWSER_BRIDGE_STATE_DESIGN_zh.md`: 浏览器桥接状态机与自动恢复设计
-- `OSV_AUDIT_GATE_zh.md`: 生产依赖安全门禁与 OSV 门禁说明
-- `T4_GITHUB_BASELINE_GATE_zh.md`: T4 GitHub 公共基线门禁执行入口与输出规范
-- `T4_DOUYIN_LOGIN_GOLDEN_GATE_zh.md`: T4 登录态黄金场景迁移边界说明（私有仓库维护）
-- `MAINTENANCE_LOG.md` / `MAINTENANCE_LOG_zh.md`: lightweight public log for verified maintenance findings and contributor-visible follow-up items
-- `ROADMAP.md` / `ROADMAP_zh.md`: public product direction and contributor-facing future priorities
-- `USE_CASES.md` / `USE_CASES_zh.md`: realistic early-stage scenarios for new users
-- `ARCHITECTURE.md` / `ARCHITECTURE_zh.md`: public architecture overview
-- `PROJECT_STRUCTURE.md` / `PROJECT_STRUCTURE_zh.md`: codebase map and module responsibilities
+- [`CLI_AND_MCP.md`](./CLI_AND_MCP.md) — executables, recommended commands, transports, per-client configuration, remote access, `/status` semantics, environment variables, verification
+- [`TOOLS.md`](./TOOLS.md) — registered MCP tool catalog and contracts
+
+### Architecture and Capabilities
+
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — high-level component overview
+- [`PROJECT_STRUCTURE.md`](./PROJECT_STRUCTURE.md) — codebase map and module responsibilities
+- [`PRODUCT_SURFACE_MATRIX.md`](./PRODUCT_SURFACE_MATRIX.md) — capability boundaries and tier definitions
+- [`COMPATIBILITY_MATRIX.md`](./COMPATIBILITY_MATRIX.md) — MCP client and environment compatibility
+- [`PLATFORM_SUPPORT.md`](./PLATFORM_SUPPORT.md) — OS and browser support posture
+- [`WHY_MCP_CHROME.md`](./WHY_MCP_CHROME.md) — rationale behind the Chrome-native architecture
+- [`VISUAL_EDITOR.md`](./VISUAL_EDITOR.md) — visual editor surface
+- [`ERROR_CODES.md`](./ERROR_CODES.md) — error code reference
+
+### Release and Process
+
+- [`ROADMAP.md`](./ROADMAP.md) — public product direction
+- [`RELEASE_PROCESS.md`](./RELEASE_PROCESS.md) — public release workflow
+- [`TESTING.md`](./TESTING.md) — contributor verification standards
+- [`USE_CASES.md`](./USE_CASES.md) — realistic early-stage scenarios
+
+### Repository Root
+
+- [`../README.md`](../README.md) and [`../README_zh.md`](../README_zh.md) — public landing pages
+- [`../AGENTS.md`](../AGENTS.md) — mandatory reading for AI contributors (governance summary with Feishu pointers)
+- [`../SECURITY.md`](../SECURITY.md) — security disclosure policy
+- [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — contributor workflow
+- [`../CHANGELOG.md`](../CHANGELOG.md) — versioned user-visible changes
+
+## Internal Documents (Not Here)
+
+The following categories are maintained in the Feishu `Tabrix` wiki, not in this repository:
+
+- Product Requirement Document (PRD v1)
+- Product positioning and technical principles
+- Tool layering and risk classification
+- AI development rules (internal governance)
+- Code entrypoints and ownership map
+- Skills catalog (internal AI skill inventory)
+- Maintenance log
+- Browser bridge state design
+- Browser tool settle audit
+- OSV audit gate
+- Release readiness checklist and criteria (internal gate)
+- T4 GitHub baseline gate
+- T4 Douyin login golden gate
+- Third-party reuse matrix and workflow
+- GitHub-first troubleshooting runbook
+- AI contributor onboarding (detailed internal version)
+
+If you need access to these, consult the Feishu `Tabrix` wiki space or contact the project owner.
+
+## Language Policy
+
+- English is the single public language for `docs/`
+- The only Chinese documents in the repository are [`../README_zh.md`](../README_zh.md) (public landing page in Chinese) and [`../AGENTS.md`](../AGENTS.md) (internal contributor rules, bilingual prose)
+- Chinese variants of internal materials live in the Feishu wiki
 
 ## Naming Rules
 
-- Use stable public filenames in `UPPER_SNAKE_CASE.md` form when possible
-- Chinese public variants should use the `_zh.md` suffix
-- Avoid temporary status words such as `draft`, `latest`, or `temp`
-- Do not publish internal review or planning docs under date-stamped filenames unless the document is intentionally public-facing
-- `README.md`, `README_zh.md`, `CHANGELOG.md`, and versioned release notes are maintained as explicit legacy exceptions
+- Public filenames use `UPPER_SNAKE_CASE.md`
+- No temporary status words such as `draft`, `latest`, `temp`, or `v2_zh`
+- Versioned release notes and dated governance documents do not belong in this directory
+- `README.md`, `CHANGELOG.md` (root), and the public entry documents above are the only stable exceptions
 
-## Public Source Of Truth
+## Public Source of Truth
 
-For public docs, this repository is the source of truth.
+For public-facing documentation, this directory is the source of truth. For anything else (governance, audit, roadmap sequencing, acceptance evidence, gate maintenance), the Feishu `Tabrix` wiki is authoritative.

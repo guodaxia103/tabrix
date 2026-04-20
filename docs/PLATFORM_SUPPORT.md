@@ -4,10 +4,10 @@ This document explains the current public support posture by platform.
 
 ## Current Support Position
 
-| Platform | Current Position |
-| --- | --- |
-| Windows | Primary validated platform |
-| macOS | Supported in principle, but still benefits from more real-machine validation |
+| Platform       | Current Position                                                             |
+| -------------- | ---------------------------------------------------------------------------- |
+| Windows        | Primary validated platform                                                   |
+| macOS          | Supported in principle, but still benefits from more real-machine validation |
 | Ubuntu / Linux | Supported in principle, but still benefits from more real-machine validation |
 
 ## What This Means Publicly

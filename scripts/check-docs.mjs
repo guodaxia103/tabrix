@@ -7,76 +7,93 @@ const requiredFiles = [
   'AGENTS.md',
   'README.md',
   'README_zh.md',
+  'CHANGELOG.md',
+  'CONTRIBUTING.md',
+  'SECURITY.md',
   'docs/README.md',
-  'docs/AI_CONTRIBUTOR_QUICKSTART_zh.md',
-  'docs/AI_DEV_RULES_zh.md',
+  'docs/QUICKSTART.md',
+  'docs/TROUBLESHOOTING.md',
+  'docs/CLI_AND_MCP.md',
   'docs/PRODUCT_SURFACE_MATRIX.md',
-  'docs/PRODUCT_SURFACE_MATRIX_zh.md',
   'docs/TESTING.md',
-  'docs/TESTING_zh.md',
   'docs/PLATFORM_SUPPORT.md',
-  'docs/PLATFORM_SUPPORT_zh.md',
   'docs/COMPATIBILITY_MATRIX.md',
-  'docs/COMPATIBILITY_MATRIX_zh.md',
   'docs/USE_CASES.md',
-  'docs/USE_CASES_zh.md',
+  'docs/ARCHITECTURE.md',
+  'docs/PROJECT_STRUCTURE.md',
+  'docs/ROADMAP.md',
+  'docs/RELEASE_PROCESS.md',
+  'docs/TOOLS.md',
 ];
 
 const mustReference = [
   {
     file: 'AGENTS.md',
     includes: [
-      'docs/AI_CONTRIBUTOR_QUICKSTART_zh.md',
-      'docs/AI_DEV_RULES_zh.md',
+      'docs/README.md',
       'docs/PRODUCT_SURFACE_MATRIX.md',
-      'docs/TESTING.md',
-      'docs/PLATFORM_SUPPORT.md',
+      'docs/ARCHITECTURE.md',
+      'docs/PROJECT_STRUCTURE.md',
+      'docs/QUICKSTART.md',
+      'docs/TROUBLESHOOTING.md',
+      'docs/CLI_AND_MCP.md',
+      'CONTRIBUTING.md',
+      'SECURITY.md',
+      'Feishu',
     ],
   },
   {
     file: 'README.md',
     includes: [
       'docs/README.md',
-      'docs/AI_CONTRIBUTOR_QUICKSTART_zh.md',
-      'docs/AI_DEV_RULES_zh.md',
+      'docs/QUICKSTART.md',
+      'docs/TROUBLESHOOTING.md',
+      'docs/CLI_AND_MCP.md',
       'docs/USE_CASES.md',
       'docs/PRODUCT_SURFACE_MATRIX.md',
       'docs/TESTING.md',
       'docs/PLATFORM_SUPPORT.md',
       'docs/COMPATIBILITY_MATRIX.md',
+      'docs/ARCHITECTURE.md',
+      'CONTRIBUTING.md',
+      'SECURITY.md',
     ],
   },
   {
     file: 'README_zh.md',
     includes: [
       'docs/README.md',
-      'docs/AI_CONTRIBUTOR_QUICKSTART_zh.md',
-      'docs/AI_DEV_RULES_zh.md',
-      'docs/USE_CASES_zh.md',
-      'docs/PRODUCT_SURFACE_MATRIX_zh.md',
-      'docs/TESTING_zh.md',
-      'docs/PLATFORM_SUPPORT_zh.md',
-      'docs/COMPATIBILITY_MATRIX_zh.md',
+      'docs/QUICKSTART.md',
+      'docs/TROUBLESHOOTING.md',
+      'docs/CLI_AND_MCP.md',
+      'docs/ARCHITECTURE.md',
+      'CONTRIBUTING.md',
+      'SECURITY.md',
+      'Tabrix 知识库',
     ],
   },
   {
     file: 'docs/README.md',
     includes: [
-      'AI_CONTRIBUTOR_QUICKSTART_zh.md',
-      'AI_DEV_RULES_zh.md',
+      'QUICKSTART.md',
+      'TROUBLESHOOTING.md',
+      'CLI_AND_MCP.md',
       'USE_CASES.md',
       'PRODUCT_SURFACE_MATRIX.md',
       'TESTING.md',
       'PLATFORM_SUPPORT.md',
       'COMPATIBILITY_MATRIX.md',
+      'ARCHITECTURE.md',
+      'PROJECT_STRUCTURE.md',
+      'ROADMAP.md',
+      'RELEASE_PROCESS.md',
+      'TOOLS.md',
+      'Feishu',
     ],
   },
 ];
 
-const forbiddenPatterns = [
-  /internal-docs[\\/]/,
-  /E:\\projects\\AI\\codex\\internal-docs/i,
-];
+const forbiddenPatterns = [/internal-docs[\\/]/, /E:\\projects\\AI\\codex\\internal-docs/i];
 
 const codeSearchRoots = ['app', 'packages', 'scripts'];
 const allowedCodeDocLinkFiles = new Set(['app/chrome-extension/common/constants.ts']);
@@ -155,7 +172,9 @@ for (const relativeFile of publicDocsFiles) {
   const content = fs.readFileSync(absoluteFile, 'utf8');
   for (const pattern of forbiddenPatterns) {
     if (pattern.test(content)) {
-      console.error(`[docs:check] forbidden internal reference found in ${relativeFile}: ${pattern}`);
+      console.error(
+        `[docs:check] forbidden internal reference found in ${relativeFile}: ${pattern}`,
+      );
       failed = true;
     }
   }

@@ -16,31 +16,31 @@ This matrix is the public source of truth for capability classification.
 
 ## Tier Definitions
 
-| Tier | Meaning | External Positioning |
-| --- | --- | --- |
-| `GA` | Stable, public, and expected to work for normal users and contributors | Safe to present as default product surface |
-| `Beta` | Publicly visible and strategically important, but still improving in reliability or coverage | Present with clear expectations and boundaries |
-| `Experimental` | Useful for contributors or internal exploration, but not part of the default public product promise | Mention only with caution |
-| `Internal` | Not part of the public product surface | Do not present as default public capability |
+| Tier           | Meaning                                                                                             | External Positioning                           |
+| -------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `GA`           | Stable, public, and expected to work for normal users and contributors                              | Safe to present as default product surface     |
+| `Beta`         | Publicly visible and strategically important, but still improving in reliability or coverage        | Present with clear expectations and boundaries |
+| `Experimental` | Useful for contributors or internal exploration, but not part of the default public product promise | Mention only with caution                      |
+| `Internal`     | Not part of the public product surface                                                              | Do not present as default public capability    |
 
 ## Current Capability Matrix
 
-| Capability Area | Tier | Why It Matters |
-| --- | --- | --- |
-| Real Chrome execution via extension | `GA` | Core product value and main differentiator |
-| MCP transport via `stdio` | `GA` | Tier-1 assistant integration path |
-| MCP transport via `Streamable HTTP` | `GA` | Tier-1 remote and local service path |
-| Browser tool execution (`read`, `navigate`, `click`, `fill`, screenshots, network helpers) | `GA` | Core daily use capability |
-| Runtime diagnostics (`status`, `doctor`, `smoke`, `report`) | `GA` | Required for trust, support, and operations |
-| Remote access with token-based control | `Beta` | High strategic value, but still needs continued hardening |
-| Record-replay v3 execution core | `Beta` | Important reuse direction, but not yet the main onboarding surface |
-| Visual editor | `Beta` | Useful product surface, but not the center of current positioning |
-| Multi-client compatibility guidance | `Beta` | Important for adoption, but should not outrun core reliability |
-| Experience reuse / locator fallback / memory-like recovery helpers | `Experimental` | Strong future direction, but not yet a default public promise |
-| Workflow UI as a default product surface | `Experimental` | Code exists, but should not define the public story today |
-| Agent / sidepanel assistant surface | `Experimental` | Present in code, not the main public product promise |
-| Local semantic indexing / vector-heavy AI features | `Experimental` | Technically interesting but not a primary public positioning pillar |
-| Internal review systems, acceptance evidence, nightly reports, PM execution docs | `Internal` | Governance material, not public product surface |
+| Capability Area                                                                            | Tier           | Why It Matters                                                      |
+| ------------------------------------------------------------------------------------------ | -------------- | ------------------------------------------------------------------- |
+| Real Chrome execution via extension                                                        | `GA`           | Core product value and main differentiator                          |
+| MCP transport via `stdio`                                                                  | `GA`           | Tier-1 assistant integration path                                   |
+| MCP transport via `Streamable HTTP`                                                        | `GA`           | Tier-1 remote and local service path                                |
+| Browser tool execution (`read`, `navigate`, `click`, `fill`, screenshots, network helpers) | `GA`           | Core daily use capability                                           |
+| Runtime diagnostics (`status`, `doctor`, `smoke`, `report`)                                | `GA`           | Required for trust, support, and operations                         |
+| Remote access with token-based control                                                     | `Beta`         | High strategic value, but still needs continued hardening           |
+| Record-replay v3 execution core                                                            | `Beta`         | Important reuse direction, but not yet the main onboarding surface  |
+| Visual editor                                                                              | `Beta`         | Useful product surface, but not the center of current positioning   |
+| Multi-client compatibility guidance                                                        | `Beta`         | Important for adoption, but should not outrun core reliability      |
+| Experience reuse / locator fallback / memory-like recovery helpers                         | `Experimental` | Strong future direction, but not yet a default public promise       |
+| Workflow UI as a default product surface                                                   | `Experimental` | Code exists, but should not define the public story today           |
+| Agent / sidepanel assistant surface                                                        | `Experimental` | Present in code, not the main public product promise                |
+| Local semantic indexing / vector-heavy AI features                                         | `Experimental` | Technically interesting but not a primary public positioning pillar |
+| Internal review systems, acceptance evidence, nightly reports, PM execution docs           | `Internal`     | Governance material, not public product surface                     |
 
 ## Public Story We Should Keep Repeating
 

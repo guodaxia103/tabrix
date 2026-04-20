@@ -157,7 +157,7 @@ Tabrix currently supports both MCP mainline transports:
 ```
 
 Configs for popular MCP clients (Claude Desktop, Cursor, Claude Code CLI, Codex CLI, Cherry Studio, Windsurf, Dify, etc.):
-[Client Config Quick Reference](docs/CLIENT_CONFIG_QUICKREF.md)
+[CLI and MCP Configuration](docs/CLI_AND_MCP.md)
 
 ## 🌐 Remote Control
 
@@ -303,9 +303,9 @@ tabrix daemon status
 tabrix daemon stop
 ```
 
-Full command reference: [CLI.md](docs/CLI.md)
+Full command reference: [CLI and MCP Configuration](docs/CLI_AND_MCP.md)
 
-Full tool list: [TOOLS API (EN)](docs/TOOLS.md) | [TOOLS API (ZH)](docs/TOOLS_zh.md)
+Full tool list: [TOOLS API](docs/TOOLS.md)
 
 ## Public Roadmap
 
@@ -322,11 +322,11 @@ Read the full public roadmap: [ROADMAP.md](docs/ROADMAP.md)
 
 Contributions are welcome from both first-time contributors and maintainers.
 
-- Start here: [Contributing Guide](docs/CONTRIBUTING.md)
+- Start here: [Contributing Guide](CONTRIBUTING.md)
 - Good first issues: [Start with beginner-friendly tasks](https://github.com/guodaxia103/tabrix/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22)
 - Community discussions: [GitHub Discussions](https://github.com/guodaxia103/tabrix/discussions)
 - Architecture: [ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Security model: [SECURITY.md](docs/SECURITY.md)
+- Security model: [SECURITY.md](SECURITY.md)
 - Error codes: [ERROR_CODES.md](docs/ERROR_CODES.md)
 
 ### High-impact contribution areas
@@ -359,33 +359,33 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 
 ### For Users
 
-- [CLI Commands](docs/CLI.md)
-- [Stable Quickstart](docs/STABLE_QUICKSTART.md)
-- [Transport Modes (Streamable HTTP / stdio)](docs/TRANSPORT.md)
-- [Popup Troubleshooting](docs/POPUP_TROUBLESHOOTING.md)
+- [Quickstart](docs/QUICKSTART.md)
+- [CLI and MCP Configuration](docs/CLI_AND_MCP.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Changelog](docs/CHANGELOG.md)
+- [Changelog](CHANGELOG.md)
 - [GitHub Releases](https://github.com/guodaxia103/tabrix/releases)
 
 ### For Developers
 
 - [Docs Index](docs/README.md)
-- [AI Contributor Quickstart (ZH)](docs/AI_CONTRIBUTOR_QUICKSTART_zh.md)
-- [AI Development Rules (ZH)](docs/AI_DEV_RULES_zh.md)
-- [Public Roadmap](docs/ROADMAP.md)
-- [Use Cases](docs/USE_CASES.md)
-- [Product Surface Matrix](docs/PRODUCT_SURFACE_MATRIX.md)
-- [Compatibility Matrix](docs/COMPATIBILITY_MATRIX.md)
-- [Testing Guide](docs/TESTING.md)
-- [Platform Support](docs/PLATFORM_SUPPORT.md)
+- [Contributing](CONTRIBUTING.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Project Structure Guide](docs/PROJECT_STRUCTURE.md)
-- [Code Entrypoints and Ownership (ZH)](docs/CODE_ENTRYPOINTS_AND_OWNERSHIP_zh.md)
-- [Product Positioning and Technical Principles (ZH)](docs/TABRIX_PRODUCT_POSITIONING_AND_TECHNICAL_PRINCIPLES_zh.md)
-- [Tool Layering and Risk Classification (ZH)](docs/TABRIX_TOOL_LAYERING_AND_RISK_CLASSIFICATION_zh.md)
-- [Contributing](docs/CONTRIBUTING.md)
+- [Product Surface Matrix](docs/PRODUCT_SURFACE_MATRIX.md)
+- [Compatibility Matrix](docs/COMPATIBILITY_MATRIX.md)
+- [Platform Support](docs/PLATFORM_SUPPORT.md)
+- [Tools API](docs/TOOLS.md)
+- [Testing Guide](docs/TESTING.md)
 - [Visual Editor](docs/VISUAL_EDITOR.md)
+- [Use Cases](docs/USE_CASES.md)
+- [Public Roadmap](docs/ROADMAP.md)
 - [Release Process](docs/RELEASE_PROCESS.md)
+- [Why MCP on Chrome](docs/WHY_MCP_CHROME.md)
+- [Error Codes](docs/ERROR_CODES.md)
+
+### Internal Governance (Feishu wiki)
+
+Product requirement document, positioning, tool layering, audit gates, T4 acceptance, maintenance log, and internal AI-contributor rules are maintained in the Feishu `Tabrix` knowledge base. See [AGENTS.md](AGENTS.md) for the navigation map.
 
 ## License
 
