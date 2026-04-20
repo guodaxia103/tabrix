@@ -12,14 +12,24 @@ import type {
   ReadPageTaskMode,
 } from '@tabrix/shared';
 import type {
+  CollectInputs,
+  ObjectLayerContext,
+  ObjectLayerFamilyAdapter,
   PageObjectFamilyAdapter,
   PageObjectPriors,
+  ScoredCandidateObject,
 } from './read-page-high-value-objects-core';
 import {
-  applyPriorityRuleMatch,
+  classifyCandidateObject,
+  collectCandidateObjects,
   resolvePageObjectPriors,
+  scoreCandidateObject,
 } from './read-page-high-value-objects-core';
-import { githubHighValueObjectAdapter } from './read-page-high-value-objects-github';
+import type { PageRole } from './read-page-understanding-core';
+import {
+  githubHighValueObjectAdapter,
+  githubObjectLayerAdapter,
+} from './read-page-high-value-objects-github';
 
 interface TaskProtocolParams {
   mode: 'compact' | 'normal' | 'full';
@@ -71,6 +81,17 @@ interface TaskModeSignalContext {
 const PAGE_OBJECT_FAMILY_ADAPTERS: readonly PageObjectFamilyAdapter[] = [
   githubHighValueObjectAdapter,
 ];
+
+/**
+ * T5.4.4: four-layer object pipeline adapters. The task protocol only calls
+ * the neutral `collectCandidateObjects` / `classifyCandidateObject` /
+ * `scoreCandidateObject` helpers and hands these family adapters in so that
+ * family-specific seeds, classification rules, and prior boosts stay out of
+ * the protocol layer.
+ */
+const OBJECT_LAYER_ADAPTERS: readonly ObjectLayerFamilyAdapter[] = [githubObjectLayerAdapter];
+
+const MAX_HIGH_VALUE_OBJECTS = 6;
 
 // T5.4.0 intentionally scopes out generic task-mode inference. These role/region
 // hints drive the taskMode (read/search/monitor/...) scoring, not the object
@@ -274,111 +295,132 @@ function inferSourceKind(params: TaskProtocolParams): ReadPageSourceKind {
   return 'dom_semantic';
 }
 
-function scoreHighValueLabel(
-  label: string,
-  params: TaskProtocolParams,
-  priors: PageObjectPriors,
-): number {
-  const normalized = String(label || '').trim();
-  if (!normalized) return Number.NEGATIVE_INFINITY;
-
-  let score = applyPriorityRuleMatch(priors.priorityRule, normalized);
-
-  if (
-    params.primaryRegion &&
-    normalized.toLowerCase().includes(params.primaryRegion.toLowerCase())
-  ) {
-    score += 40;
+function originPriority(origin: ScoredCandidateObject['origin']): number {
+  switch (origin) {
+    case 'page_role_seed':
+      return 3;
+    case 'candidate_action':
+      return 2;
+    case 'interactive_element':
+      return 1;
+    default:
+      return 0;
   }
+}
 
-  if (COMMIT_SHA_PATTERN.test(normalized)) score -= 160;
-  if (/^\d+[smhd]$/i.test(normalized)) score -= 120;
-  if (/^commit\b/i.test(normalized)) score -= 100;
-  if (/^fix\(|^feat\(|^docs\(|^chore\(/i.test(normalized)) score -= 90;
-  if (normalized.length > 96) score -= 30;
-  if (normalized.length > 140) score -= 60;
+function originToKind(origin: ScoredCandidateObject['origin']): ReadPageHighValueObject['kind'] {
+  return origin;
+}
 
-  return score;
+function buildReason(scored: ScoredCandidateObject, params: TaskProtocolParams): string {
+  if (scored.matchReason) return scored.matchReason;
+  if (scored.origin === 'interactive_element') {
+    const role = scored.role || 'element';
+    return params.primaryRegion
+      ? `high-value ${role} surfaced from ${params.primaryRegion}`
+      : `high-value ${role} surfaced from compact snapshot`;
+  }
+  return scored.classificationReasons[0] || 'scored high-value object';
+}
+
+function toHighValueObject(
+  scored: ScoredCandidateObject,
+  params: TaskProtocolParams,
+): ReadPageHighValueObject {
+  const confidence = Number.isFinite(scored.confidence)
+    ? Number(scored.confidence.toFixed(3))
+    : undefined;
+  const importance = Number.isFinite(scored.importance)
+    ? Number(scored.importance.toFixed(3))
+    : undefined;
+  const combinedReasons = [...scored.classificationReasons, ...scored.scoringReasons];
+
+  const out: ReadPageHighValueObject = {
+    id: scored.id,
+    kind: originToKind(scored.origin),
+    label: scored.label,
+    reason: buildReason(scored, params),
+  };
+  if (scored.ref) out.ref = scored.ref;
+  if (scored.role) out.role = scored.role;
+  if (scored.actionType) out.actionType = scored.actionType;
+  if (typeof confidence === 'number') out.confidence = confidence;
+  if (scored.objectType) out.objectType = scored.objectType;
+  if (scored.region !== undefined) out.region = scored.region;
+  if (typeof importance === 'number') out.importance = importance;
+  if (combinedReasons.length > 0) out.reasons = combinedReasons;
+  if (scored.actions && scored.actions.length > 0) out.actions = scored.actions;
+  if (scored.sourceKind) out.sourceKind = scored.sourceKind;
+  return out;
+}
+
+function runObjectPipeline(
+  context: ObjectLayerContext,
+  inputs: CollectInputs,
+): ScoredCandidateObject[] {
+  const candidates = collectCandidateObjects(context, inputs, OBJECT_LAYER_ADAPTERS);
+  const scored: ScoredCandidateObject[] = [];
+  for (const candidate of candidates) {
+    const classified = classifyCandidateObject(candidate, context, OBJECT_LAYER_ADAPTERS);
+    scored.push(scoreCandidateObject(classified, context, OBJECT_LAYER_ADAPTERS));
+  }
+  return scored;
+}
+
+function rankScoredObjects(scored: readonly ScoredCandidateObject[]): ScoredCandidateObject[] {
+  const indexed = scored.map((item, index) => ({ item, index }));
+  indexed.sort((left, right) => {
+    if (right.item.importance !== left.item.importance) {
+      return right.item.importance - left.item.importance;
+    }
+    if (right.item.confidence !== left.item.confidence) {
+      return right.item.confidence - left.item.confidence;
+    }
+    const originDelta = originPriority(right.item.origin) - originPriority(left.item.origin);
+    if (originDelta !== 0) return originDelta;
+    return left.index - right.index;
+  });
+
+  const seenLabels = new Set<string>();
+  const deduped: ScoredCandidateObject[] = [];
+  for (const { item } of indexed) {
+    const normalized = normalizeHighValueLabel(item.label);
+    if (!normalized) continue;
+    if (seenLabels.has(normalized)) continue;
+    seenLabels.add(normalized);
+    deduped.push(item);
+  }
+  return deduped;
 }
 
 function buildHighValueObjects(
   params: TaskProtocolParams,
-  priors: PageObjectPriors,
-): ReadPageHighValueObject[] {
-  const interactiveByRef = buildInteractiveMap(params.interactiveElements);
-  const candidates: Array<ReadPageHighValueObject & { score: number; order: number }> = [];
-  const seenIds = new Set<string>();
-  const seenRefs = new Set<string>();
-  let order = 0;
+  initialContext: ObjectLayerContext,
+): { highValueObjects: ReadPageHighValueObject[]; taskMode: ReadPageTaskMode } {
+  const inputs: CollectInputs = {
+    interactiveElements: params.interactiveElements,
+    candidateActions: params.candidateActions,
+  };
 
-  for (const action of params.candidateActions) {
-    const target = interactiveByRef.get(action.targetRef);
-    const label = getCandidateActionLabel(action, interactiveByRef);
-    const objectId = `hvo_${action.id}`;
-    if (!label || seenIds.has(objectId)) continue;
-    const labelScore = scoreHighValueLabel(label, params, priors);
-    candidates.push({
-      id: objectId,
-      kind: 'candidate_action',
-      label,
-      ref: action.targetRef,
-      role: target?.role,
-      actionType: action.actionType,
-      confidence: action.confidence,
-      reason: action.matchReason,
-      score: labelScore + Number(action.confidence || 0) * 10 + 8,
-      order,
-    });
-    order += 1;
-    seenIds.add(objectId);
-    if (action.targetRef) seenRefs.add(action.targetRef);
-  }
+  // Pass 1: score without a taskMode hint so we can infer taskMode from a
+  // neutral baseline (taskMode alignment is a small +0.06 boost that cannot
+  // dominate the ranking on its own).
+  const preliminaryScored = runObjectPipeline(initialContext, inputs);
+  const preliminaryObjects = rankScoredObjects(preliminaryScored)
+    .slice(0, MAX_HIGH_VALUE_OBJECTS)
+    .map((item) => toHighValueObject(item, params));
 
-  for (const element of params.interactiveElements) {
-    if (!element?.ref || seenRefs.has(element.ref)) continue;
-    const label = String(element.name || element.role || element.ref).trim();
-    if (!label) continue;
-    candidates.push({
-      id: `hvo_ref_${element.ref.replace(/[^a-zA-Z0-9_]/g, '_')}`,
-      kind: 'interactive_element',
-      label,
-      ref: element.ref,
-      role: element.role,
-      reason: params.primaryRegion
-        ? `high-value ${element.role} surfaced from ${params.primaryRegion}`
-        : `high-value ${element.role} surfaced from compact snapshot`,
-      score: scoreHighValueLabel(label, params, priors),
-      order,
-    });
-    order += 1;
-  }
+  const taskMode = inferTaskMode(params, preliminaryObjects);
 
-  const seedConfig = priors.seed;
-  if (seedConfig) {
-    seedConfig.labels.forEach((label, index) => {
-      candidates.push({
-        id: `hvo_seed_${params.pageRole}_${index}`,
-        kind: 'page_role_seed',
-        label,
-        reason: seedConfig.reason,
-        score: 1000 - index * 40,
-        order: -100 + index,
-      });
-    });
-  }
+  // Pass 2: rescore with the resolved taskMode so the objectType/taskMode
+  // alignment boost applies correctly. Reuse `initialContext` inputs untouched.
+  const finalContext: ObjectLayerContext = { ...initialContext, taskMode };
+  const finalScored = runObjectPipeline(finalContext, inputs);
+  const highValueObjects = rankScoredObjects(finalScored)
+    .slice(0, MAX_HIGH_VALUE_OBJECTS)
+    .map((item) => toHighValueObject(item, params));
 
-  return candidates
-    .sort((left, right) => right.score - left.score || left.order - right.order)
-    .filter((item, index, sorted) => {
-      const normalized = normalizeHighValueLabel(item.label);
-      if (!normalized) return false;
-      return (
-        sorted.findIndex((candidate) => normalizeHighValueLabel(candidate.label) === normalized) ===
-        index
-      );
-    })
-    .slice(0, 6)
-    .map(({ score: _score, order: _order, ...item }) => item);
+  return { highValueObjects, taskMode };
 }
 
 function buildLevel0(
@@ -445,8 +487,16 @@ export function buildTaskProtocol(params: TaskProtocolParams): TaskProtocolResul
   const priors = resolvePageObjectPriors(PAGE_OBJECT_FAMILY_ADAPTERS, params.pageRole);
   const complexityLevel = inferComplexityLevel(params);
   const sourceKind = inferSourceKind(params);
-  const highValueObjects = buildHighValueObjects(params, priors);
-  const taskMode = inferTaskMode(params, highValueObjects);
+
+  const objectLayerContext: ObjectLayerContext = {
+    pageRole: params.pageRole as PageRole,
+    primaryRegion: params.primaryRegion,
+    taskMode: null,
+    currentUrl: params.currentUrl,
+    priors,
+  };
+
+  const { highValueObjects, taskMode } = buildHighValueObjects(params, objectLayerContext);
   const L0 = buildLevel0(taskMode, params.pageRole, params.primaryRegion, highValueObjects, priors);
   const L1 = buildLevel1(params, highValueObjects);
   const L2 = buildLevel2(params);

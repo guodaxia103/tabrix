@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `read_page` T5.4 four-layer high-value object pipeline wired into the task
+  protocol:
+  - Neutral `collectCandidateObjects` / `classifyCandidateObject` /
+    `scoreCandidateObject` in `read-page-high-value-objects-core.ts`.
+  - GitHub family adapter (`githubObjectLayerAdapter`) contributes per-role
+    seeds, label classification (`nav_entry` / `record` / `control` /
+    `status_item` / `entry`), and prior boosts/penalties.
+  - New optional fields on `ReadPageHighValueObject`: `objectType`, `region`,
+    `importance` (0..1), `reasons` (multi-step explainability), `actions`,
+    `sourceKind`. `reason` (singular) remains for backward compatibility.
+  - Neutral noise downranking for commit hashes, timing durations, commitlint
+    prefixes, and overly long labels. GitHub-specific shell wording
+    (watch/star/pin, "Search or jump to...", "Open Copilot...",
+    "Skip to content", footer links) is downranked via the family adapter.
+
+### Changed
+
+- `read-page-task-protocol.ts` no longer owns GitHub object-layer priors or
+  custom label scoring. It calls the neutral pipeline with family adapters
+  and runs a two-pass score so taskMode alignment applies without coupling
+  taskMode inference to family-specific scoring.
+- GitHub 4 core-page ranking continues to place seed navigation entries
+  (Issues / Pull requests / Actions / Summary / Jobs / ...) above
+  generic interactives, and `L0` summary wording is preserved
+  (`Primary repo entry points are ...`).
+
 ## [v2.0.9] - 2026-04-17
 
 ### Added
