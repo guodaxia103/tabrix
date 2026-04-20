@@ -5,8 +5,18 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import nativeMessagingHostInstance from '../native-messaging-host';
-import { NativeMessageType, TOOL_SCHEMAS } from '@tabrix/shared';
+import {
+  NativeMessageType,
+  TOOL_SCHEMAS,
+  getToolRiskTier,
+  isExplicitOptInTool,
+} from '@tabrix/shared';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import {
+  buildPolicyDeniedPayload,
+  isToolAllowedByPolicy,
+  resolveOptInAllowlist,
+} from '../policy/phase0-opt-in';
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { spawn, spawnSync } from 'node:child_process';
@@ -63,6 +73,45 @@ function filterToolsByEnvironment(tools: Tool[]): Tool[] {
 
 function isToolAllowed(toolName: string, tools: Tool[]): boolean {
   return tools.some((tool) => tool.name === toolName);
+}
+
+/**
+ * Phase 0 Policy view of the tools list. Removes P3 opt-in tools that have not been opted-in
+ * and injects the Tabrix-private `riskTier` annotation so clients that choose to render it can.
+ * Never mutates the input tool objects.
+ */
+function filterToolsByPolicy(tools: Tool[]): Tool[] {
+  const optInAllow = resolveOptInAllowlist(process.env);
+  const result: Tool[] = [];
+  for (const tool of tools) {
+    if (isExplicitOptInTool(tool.name) && !optInAllow.has(tool.name)) {
+      continue;
+    }
+    const riskTier = getToolRiskTier(tool.name);
+    if (!riskTier) {
+      result.push(tool);
+      continue;
+    }
+    const annotations = {
+      ...(tool.annotations ?? {}),
+      riskTier,
+      ...(isExplicitOptInTool(tool.name) ? { requiresExplicitOptIn: true } : {}),
+    } as Tool['annotations'];
+    result.push({ ...tool, annotations });
+  }
+  return result;
+}
+
+function createPolicyDeniedResult(toolName: string): CallToolResult {
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(buildPolicyDeniedPayload(toolName)),
+      },
+    ],
+    isError: true,
+  };
 }
 
 function createErrorResult(text: string): CallToolResult {
@@ -838,7 +887,8 @@ export const setupTools = (server: McpServer) => {
   // List tools handler
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const dynamicTools = await listDynamicFlowTools();
-    return { tools: filterToolsByEnvironment([...TOOL_SCHEMAS, ...dynamicTools]) };
+    const byEnv = filterToolsByEnvironment([...TOOL_SCHEMAS, ...dynamicTools]);
+    return { tools: filterToolsByPolicy(byEnv) };
   });
 
   // Call tool handler
@@ -884,6 +934,21 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       sessionManager.finishSession(session.sessionId, {
         status: 'failed',
         summary: `Tool ${name} rejected by configuration`,
+      });
+      return result;
+    }
+
+    if (!isToolAllowedByPolicy(name, process.env)) {
+      const result = createPolicyDeniedResult(name);
+      sessionManager.completeStep(session.sessionId, step.stepId, {
+        status: 'failed',
+        errorCode: 'policy_denied_p3',
+        errorSummary: `Tool "${name}" blocked by Tabrix Policy (P3 opt-in required)`,
+        resultSummary: 'Tool rejected by Tabrix Policy',
+      });
+      sessionManager.finishSession(session.sessionId, {
+        status: 'failed',
+        summary: `Tool ${name} rejected by Tabrix Policy`,
       });
       return result;
     }

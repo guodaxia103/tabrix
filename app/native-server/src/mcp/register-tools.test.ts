@@ -32,6 +32,7 @@ describe('handleToolCall execution wrapper', () => {
     delete process.env.ENABLE_MCP_TOOLS;
     delete process.env.DISABLE_MCP_TOOLS;
     delete process.env.MCP_DISABLE_SENSITIVE_TOOLS;
+    delete process.env.TABRIX_POLICY_ALLOW_P3;
   });
 
   it('tracks a successful tool call as a completed execution session', async () => {
@@ -156,5 +157,101 @@ describe('handleToolCall execution wrapper', () => {
     const result = await handleToolCall('chrome_read_page', { tabId: 1 });
 
     expect(result.isError).toBe(false);
+  });
+
+  it('denies P3 opt-in tools by default Tabrix policy with TABRIX_POLICY_DENIED_P3', async () => {
+    markBridgeReady();
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValue({
+      status: 'success',
+      items: [],
+    } as never);
+
+    const result = await handleToolCall('chrome_javascript', { code: 'noop()' });
+
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(String(result.content[0].text));
+    expect(payload).toMatchObject({
+      code: 'TABRIX_POLICY_DENIED_P3',
+      riskTier: 'P3',
+      requiresExplicitOptIn: true,
+    });
+    expect(payload.hint).toContain('TABRIX_POLICY_ALLOW_P3');
+
+    const sessions = sessionManager.listSessions();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].status).toBe('failed');
+    expect(sessions[0].steps[0].errorCode).toBe('policy_denied_p3');
+  });
+
+  it('allows P3 opt-in tools when TABRIX_POLICY_ALLOW_P3=all', async () => {
+    markBridgeReady();
+    process.env.TABRIX_POLICY_ALLOW_P3 = 'all';
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      items: [],
+    } as never);
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      data: {
+        content: [{ type: 'text', text: 'ok' }],
+        isError: false,
+      },
+    } as never);
+
+    const result = await handleToolCall('chrome_javascript', { code: 'noop()' });
+
+    expect(result.isError).toBe(false);
+  });
+
+  it('allows a specific P3 tool when listed in TABRIX_POLICY_ALLOW_P3', async () => {
+    markBridgeReady();
+    process.env.TABRIX_POLICY_ALLOW_P3 = 'chrome_javascript';
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      items: [],
+    } as never);
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      data: {
+        content: [{ type: 'text', text: 'ok' }],
+        isError: false,
+      },
+    } as never);
+
+    const result = await handleToolCall('chrome_javascript', { code: 'noop()' });
+
+    expect(result.isError).toBe(false);
+  });
+
+  it('still denies other P3 tools when TABRIX_POLICY_ALLOW_P3 is narrow', async () => {
+    markBridgeReady();
+    process.env.TABRIX_POLICY_ALLOW_P3 = 'chrome_javascript';
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValue({
+      status: 'success',
+      items: [],
+    } as never);
+
+    const result = await handleToolCall('chrome_computer', { action: 'screenshot' });
+
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(String(result.content[0].text));
+    expect(payload.code).toBe('TABRIX_POLICY_DENIED_P3');
+  });
+
+  it('prefers tool_not_available over policy denial when a P3 tool is disabled by MCP_DISABLE_SENSITIVE_TOOLS', async () => {
+    markBridgeReady();
+    process.env.MCP_DISABLE_SENSITIVE_TOOLS = 'true';
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValue({
+      status: 'success',
+      items: [],
+    } as never);
+
+    const result = await handleToolCall('chrome_javascript', { code: 'noop()' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('disabled'),
+    });
   });
 });
