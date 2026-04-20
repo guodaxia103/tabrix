@@ -182,28 +182,142 @@ export interface ObjectLayerFamilyAdapter {
 }
 
 /**
- * T5.4.1 stub. Real candidate collection lands in T5.4.2.
- * Returns an empty list today so any premature wiring produces "no objects"
- * rather than stale data.
+ * T5.4.2: neutral candidate collection.
+ *
+ * Three sources in order:
+ *   1. `candidateActions` (labelled via matching interactive element / aria).
+ *   2. `interactiveElements` not already covered by a candidate action.
+ *   3. `adapters[].collectExtraCandidates(context)` for family-specific seeds
+ *      when the adapter owns the current pageRole.
+ *
+ * Deduplication keys on candidate id and interactive ref. Empty labels are
+ * dropped.
+ *
+ * The function itself is family-agnostic: no site-specific vocabulary or
+ * role-literal lookups live here. All family-specific behaviour comes from
+ * the adapters.
  */
 export function collectCandidateObjects(
-  _context: ObjectLayerContext,
-  _inputs: CollectInputs,
-  _adapters: readonly ObjectLayerFamilyAdapter[] = [],
+  context: ObjectLayerContext,
+  inputs: CollectInputs,
+  adapters: readonly ObjectLayerFamilyAdapter[] = [],
 ): CandidateObject[] {
-  return [];
+  const byRef = new Map<string, ReadPageInteractiveElement>();
+  for (const element of inputs.interactiveElements) {
+    if (element?.ref) byRef.set(element.ref, element);
+  }
+
+  const candidates: CandidateObject[] = [];
+  const seenIds = new Set<string>();
+  const seenRefs = new Set<string>();
+
+  for (const action of inputs.candidateActions) {
+    const target = action.targetRef ? byRef.get(action.targetRef) : undefined;
+    const ariaLabel = action.locatorChain.find((item) => item.type === 'aria')?.value;
+    const label = String(target?.name || ariaLabel || action.targetRef || action.id).trim();
+    if (!label) continue;
+    const id = `hvo_${action.id}`;
+    if (seenIds.has(id)) continue;
+    const actions: ReadPageHighValueObjectAction[] | undefined = action.targetRef
+      ? [
+          {
+            type: action.actionType === 'fill' ? 'fill' : 'click',
+            ref: action.targetRef,
+            actionType: action.actionType,
+          },
+        ]
+      : undefined;
+    candidates.push({
+      id,
+      label,
+      ref: action.targetRef || undefined,
+      role: target?.role,
+      actionType: action.actionType,
+      sourceKind: 'dom_semantic',
+      origin: 'candidate_action',
+      provenance: { candidateActionId: action.id },
+      actions,
+      rawConfidence: action.confidence,
+      matchReason: action.matchReason,
+    });
+    seenIds.add(id);
+    if (action.targetRef) seenRefs.add(action.targetRef);
+  }
+
+  for (const element of inputs.interactiveElements) {
+    if (!element?.ref || seenRefs.has(element.ref)) continue;
+    const label = String(element.name || element.role || element.ref).trim();
+    if (!label) continue;
+    const id = `hvo_ref_${element.ref.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    if (seenIds.has(id)) continue;
+    candidates.push({
+      id,
+      label,
+      ref: element.ref,
+      role: element.role,
+      sourceKind: 'dom_semantic',
+      origin: 'interactive_element',
+      provenance: { interactiveRef: element.ref },
+      actions: [{ type: 'click', ref: element.ref }],
+    });
+    seenIds.add(id);
+    seenRefs.add(element.ref);
+  }
+
+  for (const adapter of adapters) {
+    if (!adapter.owns(context.pageRole)) continue;
+    const extras = adapter.collectExtraCandidates?.(context) ?? [];
+    for (const extra of extras) {
+      if (!extra?.label || seenIds.has(extra.id)) continue;
+      candidates.push(extra);
+      seenIds.add(extra.id);
+      if (extra.ref) seenRefs.add(extra.ref);
+    }
+  }
+
+  return candidates;
 }
 
 /**
- * T5.4.1 stub. Real classification lands in T5.4.2. Throws to ensure callers
- * do not accidentally rely on the stub shape.
+ * T5.4.2: neutral classification.
+ *
+ * Ask each owning adapter first — a family adapter may return `null` to
+ * defer to the neutral fallback. The neutral fallback keys off generic ARIA
+ * role names (`button`, `textbox`, ...) and the candidate origin so it
+ * contains no site-specific vocabulary.
  */
 export function classifyCandidateObject(
-  _candidate: CandidateObject,
-  _context: ObjectLayerContext,
-  _adapters: readonly ObjectLayerFamilyAdapter[] = [],
+  candidate: CandidateObject,
+  context: ObjectLayerContext,
+  adapters: readonly ObjectLayerFamilyAdapter[] = [],
 ): ClassifiedCandidateObject {
-  throw new Error('classifyCandidateObject is not yet implemented (pending T5.4.2)');
+  for (const adapter of adapters) {
+    if (!adapter.owns(context.pageRole)) continue;
+    const classified = adapter.classify?.(candidate, context);
+    if (classified) return classified;
+  }
+
+  const role = (candidate.role || '').toLowerCase();
+  let objectType: ReadPageObjectType = 'entry';
+  let reason = 'neutral role-based classification';
+
+  if (['button', 'textbox', 'searchbox', 'combobox', 'switch', 'checkbox'].includes(role)) {
+    objectType = 'control';
+  } else if (role === 'tab' || role === 'menuitem') {
+    objectType = 'nav_entry';
+  } else if (role === 'link') {
+    objectType = 'entry';
+  } else if (candidate.origin === 'candidate_action') {
+    objectType = 'control';
+    reason = 'neutral origin-based classification (candidate_action)';
+  }
+
+  return {
+    ...candidate,
+    objectType,
+    region: context.primaryRegion,
+    classificationReasons: [reason],
+  };
 }
 
 /**
