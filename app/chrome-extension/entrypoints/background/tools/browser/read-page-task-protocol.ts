@@ -141,6 +141,7 @@ const PAGE_ROLE_TASK_MODE_HINTS: Partial<Record<string, ReadPageTaskMode>> = {
   issues_list: 'search',
   actions_list: 'monitor',
   workflow_run_detail: 'monitor',
+  workflow_run_shell: 'monitor',
   login_required: 'read',
 };
 
@@ -149,6 +150,8 @@ const PRIMARY_REGION_TASK_MODE_HINTS: Partial<Record<string, ReadPageTaskMode>> 
   issues_results: 'search',
   workflow_runs_list: 'monitor',
   workflow_run_summary: 'monitor',
+  workflow_run_shell: 'monitor',
+  login_gate: 'read',
   login_form: 'read',
 };
 
@@ -221,7 +224,6 @@ function buildTaskModeSignalContext(
   const interactiveLabels = params.interactiveElements
     .map((item) => String(item?.name || '').trim())
     .filter((item) => !isTaskModeNoiseLabel(item));
-
   return {
     url: String(params.currentUrl || '').toLowerCase(),
     title: String(params.currentTitle || '').toLowerCase(),

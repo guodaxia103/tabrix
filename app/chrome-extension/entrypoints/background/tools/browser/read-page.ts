@@ -19,6 +19,7 @@ import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import { ERROR_MESSAGES } from '@/common/constants';
 import { listMarkersForUrl } from '@/entrypoints/background/element-marker/element-marker-storage';
 import { buildTaskProtocol } from './read-page-task-protocol';
+import { inferPageUnderstanding, type PageRole } from './read-page-understanding';
 
 interface ReadPageStats {
   processed: number;
@@ -43,28 +44,6 @@ interface SchemeGuardSummary {
   supportedForContentScript: boolean;
   unsupportedPageType: string | null;
   recommendedAction: string | null;
-}
-
-type PageRole =
-  | 'unknown'
-  | 'repo_home'
-  | 'issues_list'
-  | 'actions_list'
-  | 'workflow_run_detail'
-  | 'hotspot_rank_list'
-  | 'hotspot_topic_list'
-  | 'hotspot_detail'
-  | 'creator_home'
-  | 'creator_overview'
-  | 'login_required'
-  | 'outer_shell';
-
-interface PageUnderstandingSummary {
-  pageRole: PageRole;
-  primaryRegion: string | null;
-  primaryRegionConfidence: PrimaryRegionConfidence;
-  footerOnly: boolean;
-  anchorTexts: string[];
 }
 
 function inferSchemeGuard(url: string): SchemeGuardSummary {
@@ -122,175 +101,6 @@ function inferSchemeGuard(url: string): SchemeGuardSummary {
     supportedForContentScript: false,
     unsupportedPageType: 'non_web_tab',
     recommendedAction: 'switch_to_http_tab',
-  };
-}
-
-function collectAnchorTexts(pageContent: string) {
-  const anchors = [
-    '视频总榜',
-    '话题榜',
-    '话题总榜',
-    '热度飙升的话题榜',
-    '话题名称',
-    '热度趋势',
-    '热度值',
-    '视频量',
-    '播放量',
-    '稿均播放量',
-    '查看',
-    '发布视频',
-    '趋势',
-    '关联内容',
-    '用户关注',
-    '评论',
-    '账号总览',
-    '近30天未发布新作品',
-    '手机号',
-    '验证码',
-  ];
-
-  return anchors.filter((anchor) => pageContent.includes(anchor));
-}
-
-function inferPageUnderstanding(url: string, pageContent: string): PageUnderstandingSummary {
-  const lowerUrl = String(url || '').toLowerCase();
-  const content = String(pageContent || '');
-  const anchorTexts = collectAnchorTexts(content);
-  const footerOnly =
-    anchorTexts.length <= 2 &&
-    /账号授权协议|用户服务协议|隐私政策|联系我们/.test(content) &&
-    !/热度值|播放量|查看|发布视频|话题名称/.test(content);
-
-  const githubRepoMatch = lowerUrl.match(/^https:\/\/github\.com\/[^/]+\/[^/]+(?:[/?#]|$)/i);
-  const githubPathMatch = lowerUrl.match(/^https:\/\/github\.com\/[^/]+\/[^/]+(\/[^?#]*)?/i);
-  const githubPath = String(githubPathMatch?.[1] || '');
-  if (githubRepoMatch) {
-    if (/^\/actions\/runs\/\d+/i.test(githubPath)) {
-      const hasRunSignals = /summary|show all jobs|jobs?|artifacts?|annotations?|logs?/i.test(
-        content,
-      );
-      return {
-        pageRole: 'workflow_run_detail',
-        primaryRegion: hasRunSignals ? 'workflow_run_summary' : 'workflow_run_shell',
-        primaryRegionConfidence: hasRunSignals ? 'high' : 'medium',
-        footerOnly,
-        anchorTexts,
-      };
-    }
-
-    if (/^\/actions(?:\/?$|[?#])/i.test(githubPath) || githubPath === '/actions') {
-      const hasActionsSignals = /filter workflow runs|run\s+\d+|workflow/i.test(content);
-      return {
-        pageRole: 'actions_list',
-        primaryRegion: hasActionsSignals ? 'workflow_runs_list' : 'actions_shell',
-        primaryRegionConfidence: hasActionsSignals ? 'high' : 'medium',
-        footerOnly,
-        anchorTexts,
-      };
-    }
-
-    if (/^\/issues(?:\/?$|[?#])/i.test(githubPath) || githubPath === '/issues') {
-      const hasIssueSignals = /new issue|label|milestone|assignee|issue/i.test(content);
-      return {
-        pageRole: 'issues_list',
-        primaryRegion: hasIssueSignals ? 'issues_results' : 'issues_shell',
-        primaryRegionConfidence: hasIssueSignals ? 'high' : 'medium',
-        footerOnly,
-        anchorTexts,
-      };
-    }
-
-    if (/^$/i.test(githubPath) || githubPath === '/') {
-      const hasRepoSignals = /issues|pull requests|actions|go to file|commits?/i.test(content);
-      return {
-        pageRole: 'repo_home',
-        primaryRegion: hasRepoSignals ? 'repo_primary_nav' : 'repo_shell',
-        primaryRegionConfidence: hasRepoSignals ? 'medium' : 'low',
-        footerOnly,
-        anchorTexts,
-      };
-    }
-  }
-
-  if (/手机号|验证码/.test(content) && /登录|抖音/.test(content)) {
-    return {
-      pageRole: 'login_required',
-      primaryRegion: 'login_gate',
-      primaryRegionConfidence: 'high',
-      footerOnly,
-      anchorTexts,
-    };
-  }
-
-  if (lowerUrl.includes('active_tab=hotspot_topic')) {
-    const isTopicTable =
-      /话题名称|热度趋势|热度值|视频量|播放量|稿均播放量/.test(content) ||
-      /发布视频查看/.test(content);
-
-    return {
-      pageRole: isTopicTable
-        ? 'hotspot_topic_list'
-        : footerOnly
-          ? 'outer_shell'
-          : 'hotspot_topic_list',
-      primaryRegion: isTopicTable ? 'topic_table' : footerOnly ? 'footer_shell' : 'topic_shell',
-      primaryRegionConfidence: isTopicTable ? 'high' : footerOnly ? 'low' : 'medium',
-      footerOnly,
-      anchorTexts,
-    };
-  }
-
-  if (
-    lowerUrl.includes('active_tab=hotspot_all') ||
-    /视频总榜|低粉爆款视频榜|高完播率视频榜|高涨粉率视频榜/.test(content)
-  ) {
-    return {
-      pageRole: footerOnly ? 'outer_shell' : 'hotspot_rank_list',
-      primaryRegion: /视频总榜|低粉爆款视频榜|高完播率视频榜|高涨粉率视频榜/.test(content)
-        ? 'rank_panels'
-        : 'rank_shell',
-      primaryRegionConfidence: footerOnly ? 'low' : /视频总榜/.test(content) ? 'high' : 'medium',
-      footerOnly,
-      anchorTexts,
-    };
-  }
-
-  if (/趋势|关联内容|用户关注/.test(content)) {
-    return {
-      pageRole: 'hotspot_detail',
-      primaryRegion: 'detail_evidence',
-      primaryRegionConfidence: 'medium',
-      footerOnly,
-      anchorTexts,
-    };
-  }
-
-  if (lowerUrl.includes('/creator') || lowerUrl.includes('creator')) {
-    if (/账号总览|播放量|互动指数|视频完播率/.test(content)) {
-      return {
-        pageRole: 'creator_overview',
-        primaryRegion: 'creator_metrics',
-        primaryRegionConfidence: 'medium',
-        footerOnly,
-        anchorTexts,
-      };
-    }
-
-    return {
-      pageRole: 'creator_home',
-      primaryRegion: footerOnly ? 'footer_shell' : 'creator_shell',
-      primaryRegionConfidence: footerOnly ? 'low' : 'medium',
-      footerOnly,
-      anchorTexts,
-    };
-  }
-
-  return {
-    pageRole: footerOnly ? 'outer_shell' : 'unknown',
-    primaryRegion: footerOnly ? 'footer_shell' : null,
-    primaryRegionConfidence: footerOnly ? 'low' : null,
-    footerOnly,
-    anchorTexts,
   };
 }
 
@@ -1015,7 +825,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       const treeOk = resp && resp.success === true;
       const pageContent: string =
         resp && typeof resp.pageContent === 'string' ? resp.pageContent : '';
-      const pageUnderstanding = inferPageUnderstanding(currentUrl, pageContent);
+      const pageUnderstanding = inferPageUnderstanding(currentUrl, currentTitle, pageContent);
 
       // Extract stats from response
       const stats: ReadPageStats | null =
@@ -1181,6 +991,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
           }
           const fallbackUnderstanding = inferPageUnderstanding(
             currentUrl,
+            currentTitle,
             String(basePayload.pageContent || ''),
           );
           basePayload.pageRole = fallbackUnderstanding.pageRole;

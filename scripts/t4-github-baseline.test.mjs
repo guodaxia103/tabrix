@@ -9,6 +9,7 @@ import {
   evaluateSemanticSignal,
   shouldRecoverForcedTabNavigation,
   shouldRetryWorkflowRunDetailShell,
+  shouldRetryRepoHomeSnapshot,
   summarizeInteractiveElements,
   validateStableSnapshotContract,
 } from './t4-github-baseline.mjs';
@@ -146,4 +147,23 @@ test('evaluateSemanticSignal does not allow highValueObjects or L0 to loosen the
   assert.equal(result.matched, false);
   assert.deepEqual(result.highValueHead, ['Summary', 'Show all jobs']);
   assert.match(result.l0Summary, /Summary/);
+});
+
+test('shouldRetryRepoHomeSnapshot detects sparse repo shell captures', () => {
+  assert.equal(
+    shouldRetryRepoHomeSnapshot({
+      page: { title: '提交 · guodaxia103/tabrix' },
+      summary: { pageRole: 'repo_home', primaryRegion: 'repo_shell', quality: 'sparse' },
+      interactiveElements: [{ role: 'generic', name: '' }],
+    }),
+    true,
+  );
+  assert.equal(
+    shouldRetryRepoHomeSnapshot({
+      page: { title: 'guodaxia103/tabrix' },
+      summary: { pageRole: 'repo_home', primaryRegion: 'repo_primary_nav', quality: 'usable' },
+      interactiveElements: [{ name: 'Issues' }, { name: 'Pull requests' }, { name: 'Actions' }],
+    }),
+    false,
+  );
 });

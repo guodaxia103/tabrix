@@ -420,6 +420,22 @@ export function evaluateSemanticSignal(snapshot, semanticExpectation) {
   };
 }
 
+export function shouldRetryRepoHomeSnapshot(snapshot) {
+  const pageRole = String(snapshot?.summary?.pageRole ?? '');
+  const primaryRegion = String(snapshot?.summary?.primaryRegion ?? '');
+  const quality = String(snapshot?.summary?.quality ?? '');
+  const title = String(snapshot?.page?.title ?? '');
+  const interactiveCount = Array.isArray(snapshot?.interactiveElements)
+    ? snapshot.interactiveElements.length
+    : 0;
+
+  return (
+    pageRole === 'repo_home' &&
+    interactiveCount <= 1 &&
+    (primaryRegion === 'repo_shell' || quality === 'sparse' || /提交/i.test(title))
+  );
+}
+
 function ensureDir(targetDir) {
   fs.mkdirSync(targetDir, { recursive: true });
 }
@@ -464,51 +480,77 @@ async function runScenario(definition, options, evidenceDir, tabId, runOptions =
     }
   }
 
-  const modeResults = [];
-  const allArtifacts = [];
-  let semantic = { matched: false, interactiveHead: [], actionHead: [] };
+  const collectModeResults = (currentTabId) => {
+    const modeResults = [];
+    const allArtifacts = [];
+    let semantic = { matched: false, interactiveHead: [], actionHead: [] };
+    if (definition.pageType === 'workflow_run_detail' && typeof currentTabId === 'number') {
+      settleWorkflowRunDetailTab(currentTabId, definition.semanticExpectation, options.timeoutMs);
+    }
 
-  if (definition.pageType === 'workflow_run_detail' && typeof activeTabId === 'number') {
-    settleWorkflowRunDetailTab(activeTabId, definition.semanticExpectation, options.timeoutMs);
-  }
+    for (const mode of DEFAULT_MODES) {
+      const startedAt = Date.now();
+      const readOutput = callTool(
+        'chrome_read_page',
+        {
+          mode,
+          filter: 'interactive',
+          depth: 3,
+          ...(typeof currentTabId === 'number' ? { tabId: currentTabId } : {}),
+        },
+        options.timeoutMs,
+      );
+      const elapsedMs = Date.now() - startedAt;
+      const snapshot = readOutput.parsed;
+      const contractCheck = validateStableSnapshotContract(snapshot, mode);
+      const bytes = payloadSizeBytes(snapshot);
+      const artifacts = collectArtifactRefs(snapshot);
+      allArtifacts.push(...artifacts);
+      if (mode === 'compact') {
+        semantic = evaluateSemanticSignal(snapshot, definition.semanticExpectation);
+      }
 
-  for (const mode of DEFAULT_MODES) {
-    const startedAt = Date.now();
-    const readOutput = callTool(
-      'chrome_read_page',
-      {
+      modeResults.push({
         mode,
-        filter: 'interactive',
-        depth: 3,
-        ...(typeof activeTabId === 'number' ? { tabId: activeTabId } : {}),
+        passed: contractCheck.passed,
+        failures: contractCheck.failures,
+        durationMs: elapsedMs,
+        payloadBytes: bytes,
+        tokenEstimate: estimateTokensFromBytes(bytes),
+        interactiveCount: Array.isArray(snapshot?.interactiveElements)
+          ? snapshot.interactiveElements.length
+          : 0,
+        candidateActionCount: Array.isArray(snapshot?.candidateActions)
+          ? snapshot.candidateActions.length
+          : 0,
+        artifactRefCount: artifacts.length,
+        snapshot,
+        toolResponse: readOutput,
+      });
+    }
+
+    return { modeResults, allArtifacts, semantic };
+  };
+
+  let { modeResults, allArtifacts, semantic } = collectModeResults(activeTabId);
+  const compactSnapshot = modeResults.find((item) => item.mode === 'compact')?.snapshot;
+  if (definition.pageType === 'repo_home' && shouldRetryRepoHomeSnapshot(compactSnapshot)) {
+    const retryNavigate = callTool(
+      'chrome_navigate',
+      {
+        url: definition.url,
+        newWindow: true,
       },
       options.timeoutMs,
     );
-    const elapsedMs = Date.now() - startedAt;
-    const snapshot = readOutput.parsed;
-    const contractCheck = validateStableSnapshotContract(snapshot, mode);
-    const bytes = payloadSizeBytes(snapshot);
-    const artifacts = collectArtifactRefs(snapshot);
-    allArtifacts.push(...artifacts);
-    if (mode === 'compact') {
-      semantic = evaluateSemanticSignal(snapshot, definition.semanticExpectation);
+    if (typeof retryNavigate?.parsed?.tabId === 'number') {
+      activeTabId = retryNavigate.parsed.tabId;
+      navigateResult = {
+        initial: navigateResult,
+        retry: retryNavigate,
+      };
+      ({ modeResults, allArtifacts, semantic } = collectModeResults(activeTabId));
     }
-
-    modeResults.push({
-      mode,
-      passed: contractCheck.passed,
-      failures: contractCheck.failures,
-      durationMs: elapsedMs,
-      payloadBytes: bytes,
-      tokenEstimate: estimateTokensFromBytes(bytes),
-      interactiveCount: Array.isArray(snapshot?.interactiveElements)
-        ? snapshot.interactiveElements.length
-        : 0,
-      candidateActionCount: Array.isArray(snapshot?.candidateActions) ? snapshot.candidateActions.length : 0,
-      artifactRefCount: artifacts.length,
-      snapshot,
-      toolResponse: readOutput,
-    });
   }
 
   const passedModeCount = modeResults.filter((item) => item.passed).length;

@@ -38,6 +38,55 @@ function createBaseParams(overrides: Record<string, unknown> = {}) {
 }
 
 describe('read_page task protocol', () => {
+  it('keeps workflow_run_shell in monitor mode before detail diagnostics are visible', () => {
+    const protocol = buildTaskProtocol({
+      mode: 'compact',
+      currentUrl: 'https://github.com/example/project/actions/runs/42',
+      currentTitle: 'Release Tabrix',
+      pageType: 'web_page',
+      pageRole: 'workflow_run_shell',
+      primaryRegion: 'workflow_run_shell',
+      interactiveElements: [
+        { ref: 'ref_actions', role: 'link', name: 'Actions' },
+        { ref: 'ref_run', role: 'link', name: 'Run 42' },
+      ],
+      candidateActions: [
+        {
+          id: 'ca_click_ref_run',
+          actionType: 'click',
+          targetRef: 'ref_run',
+          confidence: 0.72,
+          matchReason: 'interactive clickable candidate from structured snapshot',
+          locatorChain: [{ type: 'aria', value: 'Run 42' }],
+        },
+      ],
+      artifactRefs: [
+        { kind: 'dom_snapshot', ref: 'artifact://read_page/tab-1/normal' },
+        { kind: 'dom_snapshot', ref: 'artifact://read_page/tab-1/full' },
+      ],
+      pageContext: {
+        filter: 'interactive',
+        depth: 3,
+        focus: null,
+        scheme: 'https',
+        viewport: { width: 1280, height: 720, dpr: 1 },
+        sparse: false,
+        fallbackUsed: false,
+        fallbackSource: null,
+        refMapCount: 2,
+        markedElementsCount: 0,
+      },
+      contentSummary: {
+        charCount: 320,
+        normalizedLength: 280,
+        lineCount: 8,
+        quality: 'usable',
+      },
+    });
+
+    expect(protocol.taskMode).toBe('monitor');
+  });
+
   it('prioritizes repo navigation over commit headlines on repo_home', () => {
     const protocol = buildTaskProtocol(
       createBaseParams({

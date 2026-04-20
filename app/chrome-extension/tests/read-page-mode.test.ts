@@ -546,6 +546,48 @@ describe('read_page mode', () => {
     );
   });
 
+  it('classifies workflow run shell separately before diagnostics hydrate', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5217,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://github.com/example/project/actions/runs/42',
+      title: 'Release Tabrix',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [
+        '- navigation "Actions" [ref=ref_actions] (x=120,y=190)',
+        '  - link "Actions" [ref=ref_actions_link] (x=132,y=190)',
+        '  - link "Run 42" [ref=ref_run_link] (x=172,y=210)',
+        '  - generic "Release Tabrix" [ref=ref_title] (x=220,y=230)',
+        '  - generic "Queued" [ref=ref_status] (x=240,y=250)',
+        '  - generic "Started" [ref=ref_started] (x=260,y=270)',
+        '  - generic "Checks" [ref=ref_checks] (x=280,y=290)',
+        '  - generic "Workflow run" [ref=ref_shell_label] (x=300,y=310)',
+        '  - generic "Actions shell" [ref=ref_shell_hint] (x=320,y=330)',
+        '- generic "Loading" [ref=ref_loading] (x=420,y=451)',
+      ].join('\n'),
+      refMap: [
+        { ref: 'ref_actions_link', selector: 'a[href$="/actions"]' },
+        { ref: 'ref_run_link', selector: 'a[href*="/actions/runs/42"]' },
+        { ref: 'ref_loading', selector: '.workflow-run-loading' },
+      ],
+      stats: { processed: 14, included: 9, durationMs: 4 },
+      viewport: { width: 1280, height: 720, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(result.isError).toBe(false);
+    expect(payload.summary.pageRole).toBe('workflow_run_shell');
+    expect(payload.summary.primaryRegion).toBe('workflow_run_shell');
+    expect(payload.taskMode).toBe('monitor');
+  });
+
   it('prioritizes workflow run detail task links over commit metadata when labels are href-only', async () => {
     vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
       id: 5216,
