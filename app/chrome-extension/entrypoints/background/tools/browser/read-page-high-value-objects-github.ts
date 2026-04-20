@@ -161,6 +161,141 @@ const GITHUB_CLASSIFICATION: Partial<Record<string, GithubClassificationRule[]>>
 
 const GITHUB_OWNED_ROLES = new Set(Object.keys(GITHUB_PAGE_ROLE_TASK_SEEDS));
 
+/* -------------------------------------------------------------------------- */
+/* T5.4.5 URL-based sub-type classifier                                        */
+/*                                                                             */
+/* Problem solved: on GitHub's `/actions` page the visible labels and ARIA    */
+/* roles for a workflow FILE link (`.github/workflows/foo.yml`), a workflow  */
+/* RUN link (`/actions/runs/<id>`), and the "All workflows" filter button    */
+/* are nearly identical (all `<a>` with generic text). Real LLMs and our      */
+/* test pickers consistently click the wrong one. The fix: expose the         */
+/* underlying `href` on HVO + tag the target with a namespaced                */
+/* `objectSubType` derived from URL shape so downstream can match precisely.  */
+/* -------------------------------------------------------------------------- */
+
+const GITHUB_REPO_URL_RE = /^https?:\/\/(?:www\.)?github\.com\/([^/]+)\/([^/]+?)(?:\/|\?|#|$)/i;
+
+interface GithubRepoContext {
+  owner: string;
+  repo: string;
+}
+
+function resolveGithubRepoContext(currentUrl: string): GithubRepoContext | null {
+  const match = GITHUB_REPO_URL_RE.exec(String(currentUrl || '').trim());
+  if (!match) return null;
+  return { owner: match[1], repo: match[2] };
+}
+
+function normalizeHrefToPath(href: string, repoCtx: GithubRepoContext | null): string | null {
+  const trimmed = String(href || '').trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('#')) return trimmed;
+  if (trimmed.startsWith('/')) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      if (!/(^|\.)github\.com$/i.test(url.hostname)) return null;
+      if (repoCtx) {
+        const expectedPrefix = `/${repoCtx.owner}/${repoCtx.repo}`;
+        if (!url.pathname.toLowerCase().startsWith(expectedPrefix.toLowerCase())) {
+          return `${url.pathname}${url.search}${url.hash}`;
+        }
+      }
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+interface GithubUrlClassification {
+  objectSubType: string;
+  objectType: ReadPageObjectType;
+  region: string | null;
+  reason: string;
+}
+
+function classifyByGithubUrl(href: string, currentUrl: string): GithubUrlClassification | null {
+  const repoCtx = resolveGithubRepoContext(currentUrl);
+  const path = normalizeHrefToPath(href, repoCtx);
+  if (!path) return null;
+
+  if (path.startsWith('#')) {
+    return {
+      objectSubType: 'github.page_anchor',
+      objectType: 'entry',
+      region: null,
+      reason: `github url-class href=${path} -> page_anchor`,
+    };
+  }
+
+  const ownerRepoPrefix = repoCtx ? `/${repoCtx.owner}/${repoCtx.repo}` : '';
+  const relPath =
+    ownerRepoPrefix && path.toLowerCase().startsWith(ownerRepoPrefix.toLowerCase())
+      ? path.slice(ownerRepoPrefix.length)
+      : path;
+
+  if (/^\/actions\/runs\/\d+(?:\/|\?|#|$)/i.test(relPath)) {
+    return {
+      objectSubType: 'github.workflow_run_entry',
+      objectType: 'record',
+      region: 'workflow_runs_list',
+      reason: `github url-class matched /actions/runs/<id> -> workflow_run_entry`,
+    };
+  }
+
+  if (/^\/actions\/workflows\/[^/]+\.ya?ml(?:\?|#|$)/i.test(relPath)) {
+    return {
+      objectSubType: 'github.workflow_file_entry',
+      objectType: 'control',
+      region: 'workflow_runs_list',
+      reason: `github url-class matched /actions/workflows/*.yml -> workflow_file_entry`,
+    };
+  }
+
+  if (/^\/actions(?:\?|#|$)/i.test(relPath)) {
+    return {
+      objectSubType: 'github.workflow_filter_control',
+      objectType: 'control',
+      region: 'workflow_runs_list',
+      reason: `github url-class matched /actions(?query) -> workflow_filter_control`,
+    };
+  }
+
+  if (/^\/security\/code-scanning(?:\/|\?|#|$)/i.test(relPath)) {
+    return {
+      objectSubType: 'github.security_quality_tab',
+      objectType: 'nav_entry',
+      region: 'repo_primary_nav',
+      reason: `github url-class matched /security/code-scanning -> security_quality_tab`,
+    };
+  }
+  if (/^\/security(?:\/|\?|#|$)/i.test(relPath)) {
+    return {
+      objectSubType: 'github.security_quality_tab',
+      objectType: 'nav_entry',
+      region: 'repo_primary_nav',
+      reason: `github url-class matched /security -> security_quality_tab`,
+    };
+  }
+
+  if (
+    /^\/(issues|pulls|actions|security|insights|wiki|projects|discussions|settings)(?:\/|\?|#|$)/i.test(
+      relPath,
+    )
+  ) {
+    return {
+      objectSubType: 'github.repo_nav_tab',
+      objectType: 'nav_entry',
+      region: 'repo_primary_nav',
+      reason: `github url-class matched top-level repo tab -> repo_nav_tab`,
+    };
+  }
+
+  return null;
+}
+
 /**
  * GitHub-specific noise patterns per SoT section "明确的低价值对象降权规则".
  * These are shell / site-chrome wording that would otherwise rank high simply
@@ -222,6 +357,29 @@ export const githubObjectLayerAdapter: ObjectLayerFamilyAdapter = {
     context: ObjectLayerContext,
   ): ClassifiedCandidateObject | null {
     const roleKey = String(context.pageRole || '');
+
+    // T5.4.5: URL-based classification takes priority over label regex when
+    // the candidate carries a href. This disambiguates visually-identical
+    // links (workflow file vs workflow run vs filter) on `/actions` and
+    // similar pages where label alone is insufficient.
+    const hrefForClass = candidate.href ? String(candidate.href).trim() : '';
+    if (hrefForClass) {
+      const urlClass = classifyByGithubUrl(hrefForClass, context.currentUrl);
+      if (urlClass) {
+        const reasons = [urlClass.reason];
+        if (candidate.origin === 'page_role_seed') {
+          reasons.push('page_role_seed prior');
+        }
+        return {
+          ...candidate,
+          objectType: urlClass.objectType,
+          objectSubType: urlClass.objectSubType,
+          region: urlClass.region ?? context.primaryRegion,
+          classificationReasons: reasons,
+        };
+      }
+    }
+
     const rules = GITHUB_CLASSIFICATION[roleKey];
     if (rules) {
       for (const rule of rules) {

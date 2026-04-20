@@ -15,8 +15,14 @@ import type { KnowledgeSeeds } from '../types';
  * - `primaryRegions` mirror `GITHUB_PRIMARY_REGION_RULES[role]` entries
  *   from the same file (lines 13-104). `minMatches` / `priority` /
  *   `confidence` are preserved verbatim.
- * - `workflow_run_detail` uses `dualOutcome` to express the
- *   "region-promotes-role" branch at `read-page-understanding-github.ts:132-142`.
+ * - `workflow_run_detail` is **stable for any `/actions/runs/<id>` URL**
+ *   (T5.4.5 contract, `read-page-understanding-github.ts:132-151`).
+ *   URL-derived `pageRole` and content-derived `primaryRegion` are
+ *   orthogonal: the role says "what navigation identity is this page",
+ *   while the primary region reports whether `workflow_run_summary` has
+ *   hydrated or we only see the `workflow_run_shell` skeleton. No
+ *   `dualOutcome` is needed — Stage 1 plumbing retains the type only
+ *   for future seeds that genuinely promote the role.
  *
  * Regex sources are copied as plain strings so the registry loader can
  * compile them with a consistent `'i'` flag; the full `lowerUrl` is used
@@ -73,12 +79,6 @@ export const GITHUB_KNOWLEDGE_SEEDS: KnowledgeSeeds = {
       fallback: {
         primaryRegion: 'workflow_run_shell',
         primaryRegionConfidence: 'medium',
-      },
-      dualOutcome: {
-        primaryRegionToRole: {
-          workflow_run_summary: 'workflow_run_detail',
-        },
-        defaultRole: 'workflow_run_shell',
       },
     },
     {

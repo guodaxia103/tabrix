@@ -84,14 +84,14 @@ describe('knowledge-lookup resolvePageRole', () => {
     });
   });
 
-  it('demotes workflow_run_shell when only shell hints are visible', () => {
+  it('keeps pageRole=workflow_run_detail when only shell hints are visible (T5.4.5)', () => {
     const hit = understand(
       'https://github.com/example/project/actions/runs/42',
       'Release Tabrix',
       'Workflow run Loading Checks',
     );
     expect(hit).toMatchObject({
-      pageRole: 'workflow_run_shell',
+      pageRole: 'workflow_run_detail',
       primaryRegion: 'workflow_run_shell',
     });
   });

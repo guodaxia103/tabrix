@@ -126,11 +126,25 @@ export interface CandidateObject {
   actions?: ReadPageHighValueObjectAction[];
   rawConfidence?: number;
   matchReason?: string;
+  /**
+   * T5.4.5 — optional raw href mirrored from the originating
+   * `ReadPageInteractiveElement`. Enables URL-based classification
+   * (e.g. distinguishing workflow_run_entry vs workflow_file_entry
+   * on GitHub `/actions`).
+   */
+  href?: string;
 }
 
 /** Layer 2 output: classified candidate with a semantic objectType. */
 export interface ClassifiedCandidateObject extends CandidateObject {
   objectType: ReadPageObjectType;
+  /**
+   * T5.4.5 — optional namespaced sub-type set by family adapters when they
+   * can distinguish finer categories than the neutral `objectType` enum
+   * (e.g. `github.workflow_run_entry` vs `github.workflow_file_entry`).
+   * Consumers MUST treat this as optional and prefix-matched.
+   */
+  objectSubType?: string;
   region: string | null;
   classificationReasons: string[];
 }
@@ -227,6 +241,7 @@ export function collectCandidateObjects(
           },
         ]
       : undefined;
+    const hrefFromTarget = target?.href ? String(target.href).trim() : '';
     candidates.push({
       id,
       label,
@@ -239,6 +254,7 @@ export function collectCandidateObjects(
       actions,
       rawConfidence: action.confidence,
       matchReason: action.matchReason,
+      ...(hrefFromTarget ? { href: hrefFromTarget } : {}),
     });
     seenIds.add(id);
     if (action.targetRef) seenRefs.add(action.targetRef);
@@ -250,6 +266,7 @@ export function collectCandidateObjects(
     if (!label) continue;
     const id = `hvo_ref_${element.ref.replace(/[^a-zA-Z0-9_]/g, '_')}`;
     if (seenIds.has(id)) continue;
+    const hrefFromElement = element.href ? String(element.href).trim() : '';
     candidates.push({
       id,
       label,
@@ -259,6 +276,7 @@ export function collectCandidateObjects(
       origin: 'interactive_element',
       provenance: { interactiveRef: element.ref },
       actions: [{ type: 'click', ref: element.ref }],
+      ...(hrefFromElement ? { href: hrefFromElement } : {}),
     });
     seenIds.add(id);
     seenRefs.add(element.ref);

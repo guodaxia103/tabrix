@@ -329,6 +329,17 @@ function scoreCompactInteractiveNode(
   return score;
 }
 
+function toInteractiveElement(node: SnapshotNode): SnapshotInteractiveElement {
+  const element: SnapshotInteractiveElement = {
+    ref: node.ref,
+    role: node.role || 'generic',
+    name: node.name || '',
+  };
+  const href = typeof node.href === 'string' ? node.href.trim() : '';
+  if (href) element.href = href;
+  return element;
+}
+
 function prioritizeCompactNodes(
   nodes: SnapshotNode[],
   limit: number,
@@ -343,11 +354,7 @@ function prioritizeCompactNodes(
     }))
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .slice(0, limit)
-    .map(({ node }) => ({
-      ref: node.ref,
-      role: node.role || 'generic',
-      name: node.name || '',
-    }));
+    .map(({ node }) => toInteractiveElement(node));
 }
 
 function buildInteractiveElements(
@@ -381,30 +388,22 @@ function buildInteractiveElements(
       : source
           .filter((node) => node.ref)
           .slice(0, limit)
-          .map((node) => ({
-            ref: node.ref,
-            role: node.role || 'generic',
-            name: node.name || '',
-          }));
+          .map((node) => toInteractiveElement(node));
 
   if (fromSnapshot.length > 0) return fromSnapshot;
 
   const fromFallback = Array.isArray(fallbackElements) ? fallbackElements : [];
-  const fallbackNodes = fromFallback.map((item: any, index: number) => ({
+  const fallbackNodes: SnapshotNode[] = fromFallback.map((item: any, index: number) => ({
     ref: String(item?.ref || item?.selector || `fallback_${index + 1}`),
     role: String(item?.type || 'generic').toLowerCase(),
     name: String(item?.text || '').trim(),
     depth: 0,
-    href: null,
+    href: typeof item?.href === 'string' ? item.href : null,
   }));
   if (mode === 'compact') {
     return prioritizeCompactNodes(fallbackNodes, limit, scoringContext);
   }
-  return fallbackNodes.slice(0, limit).map((node) => ({
-    ref: node.ref,
-    role: node.role,
-    name: node.name,
-  }));
+  return fallbackNodes.slice(0, limit).map((node) => toInteractiveElement(node));
 }
 
 function buildArtifactRefs(tabId: number): SnapshotArtifactRef[] {
