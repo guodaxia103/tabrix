@@ -7,6 +7,14 @@ import {
   ExecutionStepType,
   Task,
 } from './types';
+import {
+  openMemoryDb,
+  resolveMemoryDbPath,
+  SessionRepository,
+  StepRepository,
+  TaskRepository,
+  type SqliteDatabase,
+} from '../memory/db';
 
 export interface CreateTaskInput {
   taskType: string;
@@ -33,11 +41,97 @@ export interface StartStepInput {
   inputSummary?: string;
 }
 
+export interface SessionManagerOptions {
+  /**
+   * Override SQLite path. Use ':memory:' for an ephemeral in-process
+   * DB (used by tests). When omitted, defaults to
+   * `~/.chrome-mcp-agent/memory.db` in production and to ':memory:'
+   * when `NODE_ENV=test` or `JEST_WORKER_ID` is set so that the
+   * module-level singleton never writes to a developer's real data
+   * file during tests.
+   */
+  dbPath?: string;
+  /**
+   * When `false`, skip DB initialization entirely and run with pure
+   * in-memory Maps (same shape as pre-persistence behavior). Useful
+   * as a kill-switch; also controlled globally by
+   * `TABRIX_MEMORY_PERSIST=false`.
+   */
+  persistenceEnabled?: boolean;
+}
+
+export type SessionPersistenceMode = 'disk' | 'memory' | 'off';
+
+interface Repos {
+  task: TaskRepository;
+  session: SessionRepository;
+  step: StepRepository;
+}
+
+interface StorageInit {
+  repos: Repos | null;
+  dbHandle: SqliteDatabase | null;
+  persistenceMode: SessionPersistenceMode;
+}
+
 const nowIso = () => new Date().toISOString();
+
+function resolveRuntimeDbPath(options?: SessionManagerOptions): string {
+  if (options?.dbPath !== undefined) return options.dbPath;
+  if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined) {
+    return ':memory:';
+  }
+  return resolveMemoryDbPath({});
+}
+
+function initStorage(options?: SessionManagerOptions): StorageInit {
+  const persistenceOptOut =
+    options?.persistenceEnabled === false || process.env.TABRIX_MEMORY_PERSIST === 'false';
+  if (persistenceOptOut) {
+    return { repos: null, dbHandle: null, persistenceMode: 'off' };
+  }
+
+  try {
+    const dbPath = resolveRuntimeDbPath(options);
+    const opened = openMemoryDb({ dbPath });
+    const repos: Repos = {
+      task: new TaskRepository(opened.db),
+      session: new SessionRepository(opened.db),
+      step: new StepRepository(opened.db),
+    };
+    return { repos, dbHandle: opened.db, persistenceMode: opened.persistenceMode };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    console.warn(`[tabrix/memory] falling back to in-memory session storage: ${message}`);
+    return { repos: null, dbHandle: null, persistenceMode: 'off' };
+  }
+}
 
 export class SessionManager {
   private tasks = new Map<string, Task>();
   private sessions = new Map<string, ExecutionSession>();
+  private readonly repos: Repos | null;
+  private readonly dbHandle: SqliteDatabase | null;
+  private readonly persistenceMode: SessionPersistenceMode;
+
+  constructor(options?: SessionManagerOptions) {
+    const init = initStorage(options);
+    this.repos = init.repos;
+    this.dbHandle = init.dbHandle;
+    this.persistenceMode = init.persistenceMode;
+    if (this.repos) this.hydrateFromDb(this.repos);
+  }
+
+  private hydrateFromDb(repos: Repos): void {
+    for (const task of repos.task.list()) {
+      this.tasks.set(task.taskId, task);
+    }
+    for (const session of repos.session.list()) {
+      const steps = repos.step.listBySession(session.sessionId);
+      this.sessions.set(session.sessionId, { ...session, steps });
+    }
+  }
 
   public createTask(input: CreateTaskInput): Task {
     const timestamp = nowIso();
@@ -55,6 +149,7 @@ export class SessionManager {
       labels: input.labels ?? [],
     };
 
+    this.repos?.task.insert(task);
     this.tasks.set(task.taskId, task);
     return task;
   }
@@ -73,6 +168,7 @@ export class SessionManager {
       steps: [],
     };
 
+    this.repos?.session.insert(session);
     this.sessions.set(session.sessionId, session);
     this.updateTaskStatus(task.taskId, 'running');
     return session;
@@ -92,6 +188,7 @@ export class SessionManager {
       artifactRefs: [],
     };
 
+    this.repos?.step.insert(step);
     session.steps.push(step);
     return step;
   }
@@ -117,6 +214,16 @@ export class SessionManager {
     step.artifactRefs = updates?.artifactRefs ?? step.artifactRefs;
     step.endedAt = nowIso();
 
+    this.repos?.step.complete({
+      stepId: step.stepId,
+      status: step.status,
+      resultSummary: step.resultSummary,
+      errorCode: step.errorCode,
+      errorSummary: step.errorSummary,
+      artifactRefs: step.artifactRefs,
+      endedAt: step.endedAt,
+    });
+
     return step;
   }
 
@@ -131,6 +238,13 @@ export class SessionManager {
     session.status = updates?.status ?? 'completed';
     session.summary = updates?.summary;
     session.endedAt = nowIso();
+
+    this.repos?.session.finish({
+      sessionId: session.sessionId,
+      status: session.status,
+      summary: session.summary,
+      endedAt: session.endedAt,
+    });
 
     const taskStatusMap: Record<
       Extract<ExecutionSessionStatus, 'completed' | 'failed' | 'aborted'>,
@@ -169,9 +283,32 @@ export class SessionManager {
     return Array.from(this.sessions.values());
   }
 
+  public getPersistenceStatus(): {
+    mode: SessionPersistenceMode;
+    enabled: boolean;
+  } {
+    return { mode: this.persistenceMode, enabled: this.repos !== null };
+  }
+
   public reset(): void {
+    if (this.repos) {
+      // Order matters due to FK cascade: clearing tasks cascades to
+      // sessions and steps, but we clear all three explicitly so
+      // behavior stays identical whether persistence is on or off.
+      this.repos.step.clear();
+      this.repos.session.clear();
+      this.repos.task.clear();
+    }
     this.tasks.clear();
     this.sessions.clear();
+  }
+
+  /**
+   * Close the underlying DB handle. Intended for graceful shutdown
+   * and test teardown. Safe to call when persistence is off.
+   */
+  public close(): void {
+    this.dbHandle?.close();
   }
 
   private getStep(session: ExecutionSession, stepId: string): ExecutionStep {
@@ -186,6 +323,7 @@ export class SessionManager {
     const task = this.getTask(taskId);
     task.status = status;
     task.updatedAt = nowIso();
+    this.repos?.task.updateStatus(taskId, status, task.updatedAt);
   }
 }
 
