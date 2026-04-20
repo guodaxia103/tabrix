@@ -25,6 +25,27 @@ file`. Root cause: `pnpm install --ignore-scripts` **overrides**
 
 ### Added
 
+- **MKEP Knowledge Registry — Stage 1** — first data-ification pass of
+  the Knowledge layer. The GitHub understanding-layer rules (Site
+  Profile, Page Catalog, Primary Region anchors) that used to live as
+  TS expressions in `read-page-understanding-github.ts` now also ship
+  as typed seed data under
+  `app/chrome-extension/entrypoints/background/knowledge/`
+  (`types.ts` / `registry/` / `seeds/github.ts` / `lookup/`).
+  `inferPageUnderstanding` becomes **registry-first, legacy-fallback
+  -second**, gated by a `KNOWLEDGE_REGISTRY_MODE` internal constant
+  (`on` / `off` / `diff`) so a regression can be rolled back by
+  editing a single line. Per user instruction, Stage 1 carries **no
+  tenancy dimension**: seeds are single-user local data. Scope is
+  deliberately narrow — HVO classifier, object priors, and Douyin
+  seeds all stay TS-side for Stage 2. A new parity suite
+  (`read-page-understanding.parity.test.ts`) asserts bit-exact
+  equivalence between the registry path and
+  `githubPageFamilyAdapter` for 10 GitHub fixtures; combined with
+  the existing `read-page-understanding.test.ts` / `read-page-mode.test.ts`
+  / `read-page-high-value-objects-github.test.ts` suites this keeps
+  the `read_page` contract stable through the migration. See
+  `docs/KNOWLEDGE_STAGE_1.md` for the full design.
 - **MKEP Memory Phase 0.3** — DOM action history. Every
   `chrome_click_element` / `chrome_fill_or_select` / `chrome_navigate` /
   `chrome_keyboard` call now persists a `memory_actions` row and
