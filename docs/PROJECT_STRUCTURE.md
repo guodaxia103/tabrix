@@ -10,8 +10,8 @@ Scope note:
 Related docs:
 
 - Architecture: `docs/ARCHITECTURE.md`
-- Contributing: `docs/CONTRIBUTING.md`
-- CLI reference: `docs/CLI.md`
+- Contributing: `CONTRIBUTING.md` (repository root)
+- CLI and MCP reference: `docs/CLI_AND_MCP.md`
 - Tools reference: `docs/TOOLS.md`
 
 ## 1. Repository Overview

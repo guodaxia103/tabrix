@@ -131,7 +131,7 @@ if (normalizedTagVersion == null) {
 }
 
 const releaseNotesFile = `docs/RELEASE_NOTES_v${nativePkg.version}.md`;
-const fallbackNotesFile = 'docs/CHANGELOG.md';
+const fallbackNotesFile = 'CHANGELOG.md';
 let selectedNotesFile = releaseNotesFile;
 
 if (!fileExists(releaseNotesFile)) {
