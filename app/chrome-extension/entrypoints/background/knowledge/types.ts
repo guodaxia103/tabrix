@@ -1,4 +1,4 @@
-import type { ReadPagePrimaryRegionConfidence } from '@tabrix/shared';
+import type { ReadPageObjectType, ReadPagePrimaryRegionConfidence } from '@tabrix/shared';
 import type { PageRole } from '../tools/browser/read-page-understanding-core';
 
 /**
@@ -75,10 +75,47 @@ export interface KnowledgePageRoleRule {
   readonly dualOutcome?: KnowledgeDualOutcome;
 }
 
+/**
+ * Stage 2 — authored object classifier rule (HVO layer).
+ *
+ * Design rationale: `docs/KNOWLEDGE_STAGE_2.md`.
+ *
+ * Replaces the per-site `classify(candidate, context)` branches in
+ * `read-page-high-value-objects-<site>.ts`. A single rule can match on
+ * any of `hrefPatterns` (T5.4.5-style URL → `objectSubType` mapping),
+ * `labelPatterns` (legacy `GITHUB_CLASSIFICATION` table), or `ariaRoles`.
+ * Rules are applied in authoring order — declaration wins, no numeric
+ * priority — so URL rules authored before label rules preserve the
+ * URL-first dispatch semantics.
+ */
+export interface KnowledgeObjectClassifier {
+  readonly siteId: string;
+  /** If present, rule only considered when `ObjectLayerContext.pageRole` equals this. */
+  readonly pageRole?: PageRole;
+  readonly match: {
+    /**
+     * Each pattern is matched against the normalized href path
+     * (e.g. `/actions/runs/123`, `#readme`). Cross-repo hosts on
+     * github.com are normalized relative to the repo in `currentUrl`.
+     */
+    readonly hrefPatterns?: readonly KnowledgePatternSource[];
+    readonly labelPatterns?: readonly KnowledgePatternSource[];
+    readonly ariaRoles?: readonly string[];
+  };
+  readonly objectType: ReadPageObjectType;
+  readonly objectSubType?: string;
+  /** `null` (or omitted) keeps the legacy "fallback to primaryRegion" behaviour. */
+  readonly region?: string | null;
+  /** Optional reason string; the lookup generates a default when omitted. */
+  readonly reason?: string;
+}
+
 /** The authored seed set for one site. Loader accepts arrays of these. */
 export interface KnowledgeSeeds {
   readonly siteProfiles: readonly KnowledgeSiteProfile[];
   readonly pageRoleRules: readonly KnowledgePageRoleRule[];
+  /** Stage 2+. Optional so Stage 1-only seeds (e.g. placeholder) compile. */
+  readonly objectClassifiers?: readonly KnowledgeObjectClassifier[];
 }
 
 /** Compiled forms used at lookup time. Patterns are compiled once. */
@@ -114,8 +151,27 @@ export interface CompiledPageRoleRule {
   readonly dualOutcome: KnowledgeDualOutcome | null;
 }
 
+/** Stage 2 compiled object classifier rule. */
+export interface CompiledKnowledgeObjectClassifier {
+  readonly siteId: string;
+  readonly pageRole: PageRole | null;
+  readonly match: {
+    readonly hrefPatterns: readonly CompiledKnowledgePattern[];
+    readonly labelPatterns: readonly CompiledKnowledgePattern[];
+    readonly ariaRoles: readonly string[];
+  };
+  readonly objectType: ReadPageObjectType;
+  readonly objectSubType: string | null;
+  readonly region: string | null;
+  readonly reason: string | null;
+}
+
 /** The registry view consumed by lookup functions. */
 export interface CompiledKnowledgeRegistry {
   readonly siteProfiles: ReadonlyMap<string, CompiledSiteProfile>;
   readonly pageRoleRulesBySite: ReadonlyMap<string, readonly CompiledPageRoleRule[]>;
+  readonly objectClassifiersBySite: ReadonlyMap<
+    string,
+    readonly CompiledKnowledgeObjectClassifier[]
+  >;
 }

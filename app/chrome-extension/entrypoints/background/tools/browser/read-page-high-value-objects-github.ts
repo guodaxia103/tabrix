@@ -10,6 +10,12 @@ import type {
   PageObjectFamilyAdapter,
   PageObjectPriors,
 } from './read-page-high-value-objects-core';
+import {
+  isKnowledgeRegistryEnabled,
+  isKnowledgeRegistryDiffMode,
+  KNOWLEDGE_REGISTRY_MODE,
+} from '../../knowledge/feature-flag';
+import { resolveObjectClassification } from '../../knowledge/lookup/resolve-object-classification';
 
 /**
  * T5.4.0 Object Layer — GitHub Family Priors
@@ -356,76 +362,41 @@ export const githubObjectLayerAdapter: ObjectLayerFamilyAdapter = {
     candidate: CandidateObject,
     context: ObjectLayerContext,
   ): ClassifiedCandidateObject | null {
-    const roleKey = String(context.pageRole || '');
-
-    // T5.4.5: URL-based classification takes priority over label regex when
-    // the candidate carries a href. This disambiguates visually-identical
-    // links (workflow file vs workflow run vs filter) on `/actions` and
-    // similar pages where label alone is insufficient.
-    const hrefForClass = candidate.href ? String(candidate.href).trim() : '';
-    if (hrefForClass) {
-      const urlClass = classifyByGithubUrl(hrefForClass, context.currentUrl);
-      if (urlClass) {
-        const reasons = [urlClass.reason];
-        if (candidate.origin === 'page_role_seed') {
-          reasons.push('page_role_seed prior');
-        }
-        return {
-          ...candidate,
-          objectType: urlClass.objectType,
-          objectSubType: urlClass.objectSubType,
-          region: urlClass.region ?? context.primaryRegion,
-          classificationReasons: reasons,
-        };
+    // Stage 2 — Knowledge Registry is the primary classifier for
+    // URL + label rules. Legacy ARIA fallback always stays TS-side.
+    //
+    // Shape mirrors `inferPageUnderstanding` (`read-page-understanding.ts`):
+    // registry-first, legacy-fallback, and a `diff` dev-mode that emits
+    // `console.warn` when the two paths diverge while still returning the
+    // legacy result so production behaviour is never gated on registry.
+    if (!isKnowledgeRegistryEnabled(KNOWLEDGE_REGISTRY_MODE)) {
+      return legacyGithubClassify(candidate, context);
+    }
+    if (isKnowledgeRegistryDiffMode(KNOWLEDGE_REGISTRY_MODE)) {
+      const viaRegistry = resolveObjectClassification({
+        siteId: 'github',
+        candidate,
+        context,
+      });
+      const viaLegacy = legacyGithubClassify(candidate, context);
+      if (!classifiedObjectsEqual(viaRegistry, viaLegacy)) {
+        console.warn('[tabrix/knowledge] hvo classifier diff', {
+          label: candidate.label,
+          href: candidate.href,
+          pageRole: context.pageRole,
+          viaRegistry,
+          viaLegacy,
+        });
       }
+      return viaLegacy;
     }
-
-    const rules = GITHUB_CLASSIFICATION[roleKey];
-    if (rules) {
-      for (const rule of rules) {
-        if (rule.match.test(candidate.label)) {
-          const reasons = [`github pageRole=${roleKey} matched ${rule.match.source}`];
-          if (candidate.origin === 'page_role_seed') {
-            reasons.push('page_role_seed prior');
-          }
-          return {
-            ...candidate,
-            objectType: rule.objectType,
-            region: rule.region,
-            classificationReasons: reasons,
-          };
-        }
-      }
-    }
-
-    const ariaRole = (candidate.role || '').toLowerCase();
-    const fallbackRegion = context.primaryRegion;
-    if (['button', 'textbox', 'searchbox', 'combobox', 'switch', 'checkbox'].includes(ariaRole)) {
-      return {
-        ...candidate,
-        objectType: 'control',
-        region: fallbackRegion,
-        classificationReasons: [`github fallback role=${ariaRole} -> control`],
-      };
-    }
-    if (ariaRole === 'tab' || ariaRole === 'menuitem') {
-      return {
-        ...candidate,
-        objectType: 'nav_entry',
-        region: fallbackRegion,
-        classificationReasons: [`github fallback role=${ariaRole} -> nav_entry`],
-      };
-    }
-    if (ariaRole === 'link') {
-      return {
-        ...candidate,
-        objectType: 'entry',
-        region: fallbackRegion,
-        classificationReasons: [`github fallback role=link -> entry`],
-      };
-    }
-
-    return null;
+    const viaRegistry = resolveObjectClassification({
+      siteId: 'github',
+      candidate,
+      context,
+    });
+    if (viaRegistry) return viaRegistry;
+    return legacyGithubClassify(candidate, context);
   },
   scorePrior(
     classified: ClassifiedCandidateObject,
@@ -459,3 +430,109 @@ export const githubObjectLayerAdapter: ObjectLayerFamilyAdapter = {
     return { delta, reasons };
   },
 };
+
+/* -------------------------------------------------------------------------- */
+/* Legacy classifier body, kept for:                                          */
+/*   - `KNOWLEDGE_REGISTRY_MODE='off'` rollback path                           */
+/*   - ARIA-role fallback that Stage 2 deliberately did not migrate           */
+/*   - `diff` mode golden reference                                           */
+/* Behaviour is bit-identical to the pre-Stage-2 `classify` body.             */
+/* -------------------------------------------------------------------------- */
+
+function legacyGithubClassify(
+  candidate: CandidateObject,
+  context: ObjectLayerContext,
+): ClassifiedCandidateObject | null {
+  const roleKey = String(context.pageRole || '');
+
+  const hrefForClass = candidate.href ? String(candidate.href).trim() : '';
+  if (hrefForClass) {
+    const urlClass = classifyByGithubUrl(hrefForClass, context.currentUrl);
+    if (urlClass) {
+      const reasons = [urlClass.reason];
+      if (candidate.origin === 'page_role_seed') {
+        reasons.push('page_role_seed prior');
+      }
+      return {
+        ...candidate,
+        objectType: urlClass.objectType,
+        objectSubType: urlClass.objectSubType,
+        region: urlClass.region ?? context.primaryRegion,
+        classificationReasons: reasons,
+      };
+    }
+  }
+
+  const rules = GITHUB_CLASSIFICATION[roleKey];
+  if (rules) {
+    for (const rule of rules) {
+      if (rule.match.test(candidate.label)) {
+        const reasons = [`github pageRole=${roleKey} matched ${rule.match.source}`];
+        if (candidate.origin === 'page_role_seed') {
+          reasons.push('page_role_seed prior');
+        }
+        return {
+          ...candidate,
+          objectType: rule.objectType,
+          region: rule.region,
+          classificationReasons: reasons,
+        };
+      }
+    }
+  }
+
+  const ariaRole = (candidate.role || '').toLowerCase();
+  const fallbackRegion = context.primaryRegion;
+  if (['button', 'textbox', 'searchbox', 'combobox', 'switch', 'checkbox'].includes(ariaRole)) {
+    return {
+      ...candidate,
+      objectType: 'control',
+      region: fallbackRegion,
+      classificationReasons: [`github fallback role=${ariaRole} -> control`],
+    };
+  }
+  if (ariaRole === 'tab' || ariaRole === 'menuitem') {
+    return {
+      ...candidate,
+      objectType: 'nav_entry',
+      region: fallbackRegion,
+      classificationReasons: [`github fallback role=${ariaRole} -> nav_entry`],
+    };
+  }
+  if (ariaRole === 'link') {
+    return {
+      ...candidate,
+      objectType: 'entry',
+      region: fallbackRegion,
+      classificationReasons: [`github fallback role=link -> entry`],
+    };
+  }
+
+  return null;
+}
+
+function classifiedObjectsEqual(
+  a: ClassifiedCandidateObject | null,
+  b: ClassifiedCandidateObject | null,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.objectType !== b.objectType) return false;
+  if ((a.objectSubType ?? null) !== (b.objectSubType ?? null)) return false;
+  if ((a.region ?? null) !== (b.region ?? null)) return false;
+  const ra = a.classificationReasons;
+  const rb = b.classificationReasons;
+  if (ra.length !== rb.length) return false;
+  for (let i = 0; i < ra.length; i += 1) {
+    if (ra[i] !== rb[i]) return false;
+  }
+  return true;
+}
+
+/** Testing hook — expose the legacy classifier for parity tests. */
+export function __githubLegacyClassifyForTest(
+  candidate: CandidateObject,
+  context: ObjectLayerContext,
+): ClassifiedCandidateObject | null {
+  return legacyGithubClassify(candidate, context);
+}

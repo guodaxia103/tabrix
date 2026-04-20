@@ -1,9 +1,11 @@
 import type {
+  CompiledKnowledgeObjectClassifier,
   CompiledKnowledgePattern,
   CompiledKnowledgeRegistry,
   CompiledPageRoleRule,
   CompiledPrimaryRegionRule,
   CompiledSiteProfile,
+  KnowledgeObjectClassifier,
   KnowledgePageRoleRule,
   KnowledgePatternSource,
   KnowledgePrimaryRegionRule,
@@ -25,10 +27,12 @@ import { DOUYIN_KNOWLEDGE_SEEDS } from '../seeds/douyin';
  * expected to treat `null` as "fall back to legacy".
  */
 
-const STAGE_1_SEED_SETS: readonly KnowledgeSeeds[] = [
-  GITHUB_KNOWLEDGE_SEEDS,
-  DOUYIN_KNOWLEDGE_SEEDS,
-];
+/**
+ * Canonical seed load order. GitHub first, then Douyin placeholder.
+ * Stage 2 adds `objectClassifiers` to each seed; the registry loader
+ * compiles them into the new `objectClassifiersBySite` index.
+ */
+const SEED_SETS: readonly KnowledgeSeeds[] = [GITHUB_KNOWLEDGE_SEEDS, DOUYIN_KNOWLEDGE_SEEDS];
 
 let cachedRegistry: CompiledKnowledgeRegistry | null = null;
 
@@ -37,7 +41,7 @@ export function getCompiledKnowledgeRegistry(): CompiledKnowledgeRegistry | null
     return cachedRegistry;
   }
   try {
-    cachedRegistry = compileKnowledgeRegistry(STAGE_1_SEED_SETS);
+    cachedRegistry = compileKnowledgeRegistry(SEED_SETS);
     return cachedRegistry;
   } catch (error) {
     console.warn('[tabrix/knowledge] registry compile failed', error);
@@ -51,11 +55,12 @@ export function compileKnowledgeRegistry(
 ): CompiledKnowledgeRegistry {
   const siteProfiles = new Map<string, CompiledSiteProfile>();
   const pageRoleRulesBySite = new Map<string, CompiledPageRoleRule[]>();
+  const objectClassifiersBySite = new Map<string, CompiledKnowledgeObjectClassifier[]>();
 
   for (const seeds of seedSets) {
     for (const profile of seeds.siteProfiles) {
       if (siteProfiles.has(profile.siteId)) {
-        throw new Error(`[tabrix/knowledge] duplicate siteId in Stage 1 seeds: ${profile.siteId}`);
+        throw new Error(`[tabrix/knowledge] duplicate siteId in seeds: ${profile.siteId}`);
       }
       siteProfiles.set(profile.siteId, compileSiteProfile(profile));
     }
@@ -64,11 +69,17 @@ export function compileKnowledgeRegistry(
       list.push(compilePageRoleRule(rule));
       pageRoleRulesBySite.set(rule.siteId, list);
     }
+    for (const classifier of seeds.objectClassifiers ?? []) {
+      const list = objectClassifiersBySite.get(classifier.siteId) ?? [];
+      list.push(compileObjectClassifier(classifier));
+      objectClassifiersBySite.set(classifier.siteId, list);
+    }
   }
 
   return {
     siteProfiles,
     pageRoleRulesBySite,
+    objectClassifiersBySite,
   };
 }
 
@@ -112,6 +123,24 @@ function compilePrimaryRegionRule(rule: KnowledgePrimaryRegionRule): CompiledPri
     minMatches: Math.max(1, Number(rule.minMatches ?? 1)),
     priority: Number(rule.priority ?? 0),
     confidence: rule.confidence,
+  };
+}
+
+function compileObjectClassifier(
+  rule: KnowledgeObjectClassifier,
+): CompiledKnowledgeObjectClassifier {
+  return {
+    siteId: rule.siteId,
+    pageRole: rule.pageRole ?? null,
+    match: {
+      hrefPatterns: compilePatternList(rule.match.hrefPatterns ?? [], 'i'),
+      labelPatterns: compilePatternList(rule.match.labelPatterns ?? [], 'i'),
+      ariaRoles: (rule.match.ariaRoles ?? []).map((role) => role.toLowerCase()),
+    },
+    objectType: rule.objectType,
+    objectSubType: rule.objectSubType ?? null,
+    region: rule.region ?? null,
+    reason: rule.reason ?? null,
   };
 }
 

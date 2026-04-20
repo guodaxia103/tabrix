@@ -63,4 +63,58 @@ describe('knowledge-registry compile', () => {
     expect(wrd?.dualOutcome).toBeNull();
     expect(wrd?.fallback.primaryRegion).toBe('workflow_run_shell');
   });
+
+  describe('stage 2 object classifiers', () => {
+    it('compiles the full GitHub classifier catalog (7 URL + 27 label = 34)', () => {
+      const compiled = compileKnowledgeRegistry([GITHUB_KNOWLEDGE_SEEDS]);
+      const list = compiled.objectClassifiersBySite.get('github');
+      expect(list).toBeDefined();
+      const hrefOnly = list?.filter((r) => r.match.hrefPatterns.length > 0) ?? [];
+      const labelOnly = list?.filter((r) => r.match.labelPatterns.length > 0) ?? [];
+      expect(hrefOnly.length).toBe(7);
+      expect(labelOnly.length).toBe(27);
+      expect(list?.length).toBe(34);
+    });
+
+    it('declares URL rules before label rules so URL-first dispatch is preserved', () => {
+      const compiled = compileKnowledgeRegistry([GITHUB_KNOWLEDGE_SEEDS]);
+      const list = compiled.objectClassifiersBySite.get('github') ?? [];
+      const firstLabelIndex = list.findIndex((r) => r.match.labelPatterns.length > 0);
+      const lastHrefIndex = (() => {
+        for (let i = list.length - 1; i >= 0; i -= 1) {
+          if (list[i].match.hrefPatterns.length > 0) return i;
+        }
+        return -1;
+      })();
+      expect(lastHrefIndex).toBeGreaterThanOrEqual(0);
+      expect(firstLabelIndex).toBeGreaterThan(lastHrefIndex);
+    });
+
+    it('preserves declaration order inside URL rules (specific before generic /actions)', () => {
+      const compiled = compileKnowledgeRegistry([GITHUB_KNOWLEDGE_SEEDS]);
+      const list = compiled.objectClassifiersBySite.get('github') ?? [];
+      const sources = list
+        .filter((r) => r.match.hrefPatterns.length > 0)
+        .map((r) => r.match.hrefPatterns[0].source);
+      const runsIdx = sources.findIndex((s) => s.includes('/actions/runs/'));
+      const actionsIdx = sources.findIndex((s) => /\^\/actions\(\?:/.test(s));
+      expect(runsIdx).toBeGreaterThanOrEqual(0);
+      expect(actionsIdx).toBeGreaterThanOrEqual(0);
+      expect(runsIdx).toBeLessThan(actionsIdx);
+    });
+
+    it('applies the i flag to every object classifier pattern', () => {
+      const compiled = compileKnowledgeRegistry([GITHUB_KNOWLEDGE_SEEDS]);
+      const list = compiled.objectClassifiersBySite.get('github') ?? [];
+      for (const rule of list) {
+        for (const p of rule.match.hrefPatterns) expect(p.pattern.flags).toContain('i');
+        for (const p of rule.match.labelPatterns) expect(p.pattern.flags).toContain('i');
+      }
+    });
+
+    it('tolerates seeds with no object classifiers (Douyin placeholder)', () => {
+      const compiled = compileKnowledgeRegistry([DOUYIN_KNOWLEDGE_SEEDS]);
+      expect(compiled.objectClassifiersBySite.size).toBe(0);
+    });
+  });
 });
