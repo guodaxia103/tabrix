@@ -1,19 +1,8 @@
 import type { ReadPagePrimaryRegionConfidence } from '@tabrix/shared';
 
-export type PageRole =
-  | 'unknown'
-  | 'repo_home'
-  | 'issues_list'
-  | 'actions_list'
-  | 'workflow_run_detail'
-  | 'workflow_run_shell'
-  | 'hotspot_rank_list'
-  | 'hotspot_topic_list'
-  | 'hotspot_detail'
-  | 'creator_home'
-  | 'creator_overview'
-  | 'login_required'
-  | 'outer_shell';
+export type CorePageRole = 'unknown' | 'outer_shell' | 'login_required';
+
+export type PageRole = CorePageRole | (string & Record<never, never>);
 
 export interface PageUnderstandingSummary {
   pageRole: PageRole;
@@ -50,46 +39,37 @@ export interface PageFamilyAdapter {
   infer: (context: PageUnderstandingContext) => PageUnderstandingSummary | null;
 }
 
-export function collectAnchorTexts(pageContent: string) {
-  const anchors = [
-    '视频总榜',
-    '话题榜',
-    '话题总榜',
-    '热度飙升的话题榜',
-    '话题名称',
-    '热度趋势',
-    '热度值',
-    '视频量',
-    '播放量',
-    '稿均播放量',
-    '查看',
-    '发布视频',
-    '趋势',
-    '关联内容',
-    '用户关注',
-    '评论',
-    '账号总览',
-    '近30天未发布新作品',
-    '手机号',
-    '验证码',
-  ];
+export interface UnderstandingContextOptions {
+  anchors?: readonly string[];
+  footerDetector?: (content: string, anchorTexts: string[]) => boolean;
+}
 
+const GENERIC_LEGAL_FOOTER_PATTERN =
+  /用户服务协议|隐私政策|联系我们|账号授权协议|terms of service|privacy policy|contact us/i;
+
+export function collectAnchorTexts(pageContent: string, anchors: readonly string[] = []): string[] {
+  if (!anchors.length) {
+    return [];
+  }
   return anchors.filter((anchor) => pageContent.includes(anchor));
+}
+
+export function detectLegalFooter(content: string): boolean {
+  return GENERIC_LEGAL_FOOTER_PATTERN.test(content);
 }
 
 export function buildUnderstandingContext(
   url: string,
   title: string,
   pageContent: string,
+  options: UnderstandingContextOptions = {},
 ): PageUnderstandingContext {
   const lowerUrl = String(url || '').toLowerCase();
   const lowerTitle = String(title || '').toLowerCase();
   const content = String(pageContent || '');
-  const anchorTexts = collectAnchorTexts(content);
-  const footerOnly =
-    anchorTexts.length <= 2 &&
-    /账号授权协议|用户服务协议|隐私政策|联系我们/.test(content) &&
-    !/热度值|播放量|查看|发布视频|话题名称/.test(content);
+  const anchorTexts = collectAnchorTexts(content, options.anchors);
+  const footerDetector = options.footerDetector ?? defaultFooterDetector;
+  const footerOnly = footerDetector(content, anchorTexts);
 
   return {
     lowerUrl,
@@ -100,11 +80,21 @@ export function buildUnderstandingContext(
   };
 }
 
-export function hasAnySignal(sources: string[], patterns: RegExp[]) {
+function defaultFooterDetector(content: string, anchorTexts: string[]): boolean {
+  if (!detectLegalFooter(content)) {
+    return false;
+  }
+  const trimmedLength = content.replace(/\s+/g, '').length;
+  const hasFewAnchors = anchorTexts.length <= 2;
+  const isShortContent = trimmedLength <= 120;
+  return hasFewAnchors && isShortContent;
+}
+
+export function hasAnySignal(sources: string[], patterns: RegExp[]): boolean {
   return patterns.some((pattern) => sources.some((source) => pattern.test(source)));
 }
 
-function countMatchedPatterns(sources: string[], patterns: RegExp[]) {
+function countMatchedPatterns(sources: string[], patterns: RegExp[]): number {
   return patterns.filter((pattern) => sources.some((source) => pattern.test(source))).length;
 }
 

@@ -221,20 +221,19 @@ describe('browser settle guidance', () => {
     expect(Array.isArray(payload.artifactRefs)).toBe(true);
   });
 
-  it('classifies hotspot topic list pages in read_page metadata', async () => {
+  it('classifies github issues_list pages in read_page metadata (public baseline)', async () => {
     vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
       id: 42,
       windowId: 1,
       active: true,
       status: 'complete',
-      url: 'https://creator.douyin.com/creator-micro/data/hotspot?active_tab=hotspot_topic',
-      title: '热点话题榜',
+      url: 'https://github.com/example/project/issues',
+      title: 'Issues · example/project',
     });
     vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
     vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
       success: true,
-      pageContent:
-        '话题名称\n热度趋势\n热度值\n视频量\n播放量\n稿均播放量\n发布视频\n查看\n示例话题 A\n示例话题 B',
+      pageContent: 'Search Issues\nFilter by assignee\nLabels\nMilestone\nNew issue\nissue entries',
       refMap: ['ref_10', 'ref_11', 'ref_12'],
       stats: {
         processed: 18,
@@ -255,13 +254,10 @@ describe('browser settle guidance', () => {
       scheme: 'https',
     });
     expect(payload.summary).toMatchObject({
-      pageRole: 'hotspot_topic_list',
-      primaryRegion: 'topic_table',
+      pageRole: 'issues_list',
+      primaryRegion: 'issues_results',
       primaryRegionConfidence: 'high',
       footerOnly: false,
     });
-    expect(payload.summary.anchorTexts).toEqual(
-      expect.arrayContaining(['话题名称', '热度趋势', '热度值', '视频量', '播放量', '稿均播放量']),
-    );
   });
 });

@@ -127,7 +127,7 @@ describe('read_page understanding', () => {
   it('detects login_required from title and visible login controls', () => {
     const summary = inferPageUnderstanding(
       'https://example.com/signin',
-      '抖音登录',
+      'Sign in',
       '手机号 验证码 登录',
     );
 
