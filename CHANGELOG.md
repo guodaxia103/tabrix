@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v2.1.0] - 2026-04-20
+
 ### Added
 
 - `read_page` T5.4 four-layer high-value object pipeline wired into the task
@@ -34,6 +36,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Issues / Pull requests / Actions / Summary / Jobs / ...) above
   generic interactives, and `L0` summary wording is preserved
   (`Primary repo entry points are ...`).
+- Lockstep package versions moved to `2.1.0`:
+  - `tabrix-monorepo`
+  - `@tabrix/tabrix`
+  - `@tabrix/extension`
+  - `@tabrix/shared`
+  - `@tabrix/wasm-simd`
+- `@tabrix/tabrix` dependency updated to `@tabrix/shared@^2.1.0`.
+
+### Verified
+
+- T5.0~T5.4 full-chain real-browser compatibility verified end-to-end by the
+  maintainer-held `tabrix-private-tests` suite at commit
+  [`8f47ea7`](https://github.com/guodaxia103/tabrix-private-tests/commit/8f47ea7)
+  (15 / 15 scenarios passed, `productLevelReady: true`, all four verdicts
+  `legacyCorePassed` / `t5UnderstandingPassed` / `compatibilityPassed` /
+  `recoveryCompatibilityPassed` == `true`). See
+  `docs/RELEASE_NOTES_v2.1.0.md` for the acceptance envelope.
 
 ## [v2.0.9] - 2026-04-17
 
