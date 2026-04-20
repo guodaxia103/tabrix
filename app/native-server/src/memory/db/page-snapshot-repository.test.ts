@@ -138,3 +138,145 @@ describe('PageSnapshotRepository', () => {
     }
   });
 });
+
+describe('PageSnapshotRepository.findLatestInSessionForTab', () => {
+  function multiSessionBootstrap() {
+    const { db } = openMemoryDb({ dbPath: ':memory:' });
+    const taskRepo = new TaskRepository(db);
+    const sessionRepo = new SessionRepository(db);
+    const stepRepo = new StepRepository(db);
+    const repo = new PageSnapshotRepository(db);
+
+    taskRepo.insert({
+      taskId: 'task-a',
+      taskType: 't',
+      title: 't',
+      intent: 'i',
+      origin: 'jest',
+      labels: [],
+      status: 'running',
+      createdAt: '2026-04-20T00:00:00.000Z',
+      updatedAt: '2026-04-20T00:00:00.000Z',
+    });
+    for (const s of [
+      { sessionId: 'sess-A', startedAt: '2026-04-20T00:00:01.000Z' },
+      { sessionId: 'sess-B', startedAt: '2026-04-20T00:00:02.000Z' },
+    ]) {
+      sessionRepo.insert({
+        sessionId: s.sessionId,
+        taskId: 'task-a',
+        transport: 'stdio',
+        clientName: 'jest',
+        status: 'running',
+        startedAt: s.startedAt,
+        steps: [],
+      });
+    }
+    for (const st of [
+      { stepId: 'step-A1', sessionId: 'sess-A', index: 1 },
+      { stepId: 'step-B1', sessionId: 'sess-B', index: 1 },
+    ]) {
+      stepRepo.insert({
+        stepId: st.stepId,
+        sessionId: st.sessionId,
+        index: st.index,
+        toolName: 'chrome_read_page',
+        stepType: 'tool_call',
+        status: 'running',
+        inputSummary: undefined,
+        resultSummary: undefined,
+        errorCode: undefined,
+        errorSummary: undefined,
+        artifactRefs: [],
+        startedAt: '2026-04-20T00:00:05.000Z',
+      });
+    }
+    return { repo, close: () => db.close() };
+  }
+
+  function snap(
+    stepId: string,
+    snapshotId: string,
+    tabId: number,
+    capturedAt: string,
+  ): PageSnapshot {
+    return {
+      snapshotId,
+      stepId,
+      tabId,
+      url: null,
+      title: null,
+      pageType: null,
+      mode: null,
+      pageRole: null,
+      primaryRegion: null,
+      quality: null,
+      taskMode: null,
+      complexityLevel: null,
+      sourceKind: null,
+      fallbackUsed: false,
+      interactiveCount: 0,
+      candidateActionCount: 0,
+      highValueObjectCount: 0,
+      summaryBlob: null,
+      pageContextBlob: null,
+      highValueObjectsBlob: null,
+      interactiveElementsBlob: null,
+      candidateActionsBlob: null,
+      protocolL0Blob: null,
+      protocolL1Blob: null,
+      protocolL2Blob: null,
+      capturedAt,
+    };
+  }
+
+  it('returns the latest snapshot for the session+tab before the cutoff', () => {
+    const { repo, close } = multiSessionBootstrap();
+    try {
+      repo.insert(snap('step-A1', 'a-old', 7, '2026-04-20T00:00:10.000Z'));
+      repo.insert(snap('step-A1', 'a-mid', 7, '2026-04-20T00:00:20.000Z'));
+      repo.insert(snap('step-A1', 'a-new', 7, '2026-04-20T00:00:30.000Z'));
+
+      const got = repo.findLatestInSessionForTab({
+        sessionId: 'sess-A',
+        tabId: 7,
+        beforeIso: '2026-04-20T00:00:25.000Z',
+      });
+      expect(got?.snapshotId).toBe('a-mid');
+    } finally {
+      close();
+    }
+  });
+
+  it('excludes snapshots from other sessions', () => {
+    const { repo, close } = multiSessionBootstrap();
+    try {
+      repo.insert(snap('step-A1', 'a-1', 7, '2026-04-20T00:00:10.000Z'));
+      repo.insert(snap('step-B1', 'b-1', 7, '2026-04-20T00:00:20.000Z'));
+
+      const got = repo.findLatestInSessionForTab({
+        sessionId: 'sess-A',
+        tabId: 7,
+        beforeIso: '2026-04-20T00:00:30.000Z',
+      });
+      expect(got?.snapshotId).toBe('a-1');
+    } finally {
+      close();
+    }
+  });
+
+  it('returns undefined when no snapshot matches', () => {
+    const { repo, close } = multiSessionBootstrap();
+    try {
+      repo.insert(snap('step-A1', 'a-1', 99, '2026-04-20T00:00:10.000Z'));
+      const got = repo.findLatestInSessionForTab({
+        sessionId: 'sess-A',
+        tabId: 7,
+        beforeIso: '2026-04-20T00:00:30.000Z',
+      });
+      expect(got).toBeUndefined();
+    } finally {
+      close();
+    }
+  });
+});

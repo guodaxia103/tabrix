@@ -8,6 +8,7 @@ import {
   Task,
 } from './types';
 import {
+  ActionRepository,
   openMemoryDb,
   PageSnapshotRepository,
   resolveMemoryDbPath,
@@ -17,6 +18,7 @@ import {
   type SqliteDatabase,
 } from '../memory/db';
 import { PageSnapshotService } from '../memory/page-snapshot-service';
+import { ActionService } from '../memory/action-service';
 
 export interface CreateTaskInput {
   taskType: string;
@@ -69,6 +71,7 @@ interface Repos {
   session: SessionRepository;
   step: StepRepository;
   pageSnapshot: PageSnapshotRepository;
+  action: ActionRepository;
 }
 
 interface StorageInit {
@@ -76,6 +79,7 @@ interface StorageInit {
   dbHandle: SqliteDatabase | null;
   persistenceMode: SessionPersistenceMode;
   pageSnapshots: PageSnapshotService | null;
+  actions: ActionService | null;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -92,30 +96,45 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
   const persistenceOptOut =
     options?.persistenceEnabled === false || process.env.TABRIX_MEMORY_PERSIST === 'false';
   if (persistenceOptOut) {
-    return { repos: null, dbHandle: null, persistenceMode: 'off', pageSnapshots: null };
+    return {
+      repos: null,
+      dbHandle: null,
+      persistenceMode: 'off',
+      pageSnapshots: null,
+      actions: null,
+    };
   }
 
   try {
     const dbPath = resolveRuntimeDbPath(options);
     const opened = openMemoryDb({ dbPath });
     const pageSnapshotRepo = new PageSnapshotRepository(opened.db);
+    const actionRepo = new ActionRepository(opened.db);
     const repos: Repos = {
       task: new TaskRepository(opened.db),
       session: new SessionRepository(opened.db),
       step: new StepRepository(opened.db),
       pageSnapshot: pageSnapshotRepo,
+      action: actionRepo,
     };
     return {
       repos,
       dbHandle: opened.db,
       persistenceMode: opened.persistenceMode,
       pageSnapshots: new PageSnapshotService(pageSnapshotRepo),
+      actions: new ActionService(actionRepo, pageSnapshotRepo),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
     console.warn(`[tabrix/memory] falling back to in-memory session storage: ${message}`);
-    return { repos: null, dbHandle: null, persistenceMode: 'off', pageSnapshots: null };
+    return {
+      repos: null,
+      dbHandle: null,
+      persistenceMode: 'off',
+      pageSnapshots: null,
+      actions: null,
+    };
   }
 }
 
@@ -126,6 +145,7 @@ export class SessionManager {
   private readonly dbHandle: SqliteDatabase | null;
   private readonly persistenceMode: SessionPersistenceMode;
   private readonly pageSnapshotService: PageSnapshotService | null;
+  private readonly actionService: ActionService | null;
 
   constructor(options?: SessionManagerOptions) {
     const init = initStorage(options);
@@ -133,6 +153,7 @@ export class SessionManager {
     this.dbHandle = init.dbHandle;
     this.persistenceMode = init.persistenceMode;
     this.pageSnapshotService = init.pageSnapshots;
+    this.actionService = init.actions;
     if (this.repos) this.hydrateFromDb(this.repos);
   }
 
@@ -143,6 +164,14 @@ export class SessionManager {
    */
   public get pageSnapshots(): PageSnapshotService | null {
     return this.pageSnapshotService;
+  }
+
+  /**
+   * Memory Phase 0.3 — DOM action façade (click / fill / navigate /
+   * keyboard). `null` when persistence is off.
+   */
+  public get actions(): ActionService | null {
+    return this.actionService;
   }
 
   private hydrateFromDb(repos: Repos): void {
@@ -315,8 +344,9 @@ export class SessionManager {
   public reset(): void {
     if (this.repos) {
       // Order matters due to FK cascade: clearing tasks cascades to
-      // sessions and steps, but we clear all four explicitly so
+      // sessions and steps, but we clear all five explicitly so
       // behavior stays identical whether persistence is on or off.
+      this.repos.action.clear();
       this.repos.pageSnapshot.clear();
       this.repos.step.clear();
       this.repos.session.clear();

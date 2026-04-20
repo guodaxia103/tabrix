@@ -24,11 +24,18 @@
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { SessionManager } from '../execution/session-manager';
+import { ACTION_KIND_BY_TOOL } from '../memory/action-service';
 
 export interface ToolPostProcessorContext {
   toolName: string;
   rawResult: CallToolResult;
   stepId: string;
+  /**
+   * Added in Phase 0.3 so action post-processors can scope
+   * pre-snapshot lookups to the current session without a second
+   * round-trip through `memory_steps`.
+   */
+  sessionId: string;
   sessionManager: SessionManager;
   args: unknown;
 }
@@ -103,10 +110,80 @@ export const chromeReadPagePostProcessor: ToolPostProcessor = (ctx) => {
 };
 
 /**
+ * Phase 0.3 — a single generic processor handles all four DOM action
+ * tools (click / fill / navigate / keyboard). The per-kind branch
+ * logic lives inside {@link ActionService.recordFromToolCall} via
+ * {@link ACTION_KIND_BY_TOOL}; this processor is thin glue:
+ *
+ * 1. Bail early if Memory persistence is off.
+ * 2. Persist the action row (synchronous write-through).
+ * 3. Inject `historyRef` into the JSON body when the extension
+ *    returned a JSON text payload, falling back to "only an
+ *    artifactRef" when the body is non-JSON (hard failures return
+ *    plain-text error messages via `createErrorResponse`).
+ *
+ * Failure in any step degrades gracefully — the original result and
+ * an empty `extraArtifactRefs` are returned.
+ */
+export const chromeActionPostProcessor: ToolPostProcessor = (ctx) => {
+  const empty: ToolPostProcessorResult = {
+    rawResult: ctx.rawResult,
+    extraArtifactRefs: [],
+  };
+  try {
+    const service = ctx.sessionManager.actions;
+    if (!service) return empty;
+
+    const record = service.recordFromToolCall({
+      stepId: ctx.stepId,
+      sessionId: ctx.sessionId,
+      toolName: ctx.toolName,
+      args: ctx.args,
+      rawResult: ctx.rawResult,
+    });
+    if (!record) return empty;
+
+    const cloned = cloneCallToolResult(ctx.rawResult);
+    const first = cloned.content?.[0];
+    if (first && first.type === 'text' && typeof first.text === 'string') {
+      try {
+        const parsed = JSON.parse(first.text);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          (parsed as Record<string, unknown>).historyRef = record.historyRef;
+          (cloned.content as Array<{ type: string; text: string }>)[0] = {
+            ...first,
+            text: JSON.stringify(parsed),
+          };
+        }
+      } catch {
+        // Non-JSON body (typical of `isError: true` plain-text
+        // failures). We still recorded the row and return the
+        // artifactRef; skip inline injection.
+      }
+    }
+
+    return {
+      rawResult: cloned,
+      extraArtifactRefs: [record.historyRef],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    console.warn(`[tabrix/memory] chrome_action post-processor failed: ${message}`);
+    return empty;
+  }
+};
+
+/**
  * Registry. Keep keys narrow — unrelated tools pay zero cost.
  */
 export const TOOL_POST_PROCESSORS: Partial<Record<string, ToolPostProcessor>> = {
   chrome_read_page: chromeReadPagePostProcessor,
+  // Phase 0.3: four DOM action tools share the same processor;
+  // `ACTION_KIND_BY_TOOL` keeps the mapping in one place.
+  ...Object.fromEntries(
+    Object.keys(ACTION_KIND_BY_TOOL).map((toolName) => [toolName, chromeActionPostProcessor]),
+  ),
 };
 
 export function runPostProcessor(ctx: ToolPostProcessorContext): ToolPostProcessorResult {

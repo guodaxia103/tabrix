@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **MKEP Memory Phase 0.3** — DOM action history. Every
+  `chrome_click_element` / `chrome_fill_or_select` / `chrome_navigate` /
+  `chrome_keyboard` call now persists a `memory_actions` row and
+  returns a stable `memory://action/<uuid>` historyRef (attached to
+  the owning `ExecutionStep.artifactRefs` and injected into the
+  JSON body when present). Action rows carry `pre_snapshot_ref` ↦
+  the most recent `memory_page_snapshots` row for the same tab in
+  the same session, closing the Memory **snapshot → action →
+  snapshot** evidence graph.
+- `chrome_fill_or_select.value` is **never** written in plaintext:
+  `args_blob` replaces the field with `"[redacted]"`, `value_summary`
+  stores only `{kind, type, length, sha256}`, and `result_blob` is
+  omitted entirely for `fill` because the extension message may
+  echo the submitted value.
+- Failed / soft-failed action attempts are also recorded
+  (`status: 'failed' | 'soft_failure'`) so replay / debugging can
+  see what was tried even when the call did not succeed.
+- New modules: `app/native-server/src/memory/action-service.ts` and
+  `app/native-server/src/memory/db/action-repository.ts`;
+  `PageSnapshotRepository` gains
+  `findLatestInSessionForTab({ sessionId, tabId, beforeIso })` with
+  a new companion index `memory_page_snapshots_tab_captured_idx`.
+- Design rationale: `docs/MEMORY_PHASE_0_3.md`.
+
 - **MKEP Memory Phase 0.2** — `chrome_read_page` now emits a real
   `historyRef` of the form `memory://snapshot/<uuid>` and persists a
   structured slice of the read-page response into a new

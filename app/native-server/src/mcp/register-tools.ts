@@ -978,6 +978,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
             toolName: name,
             rawResult: proxyRes.data,
             stepId: step.stepId,
+            sessionId: session.sessionId,
             sessionManager,
             args,
           });
@@ -1047,6 +1048,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         toolName: name,
         rawResult: response.data,
         stepId: step.stepId,
+        sessionId: session.sessionId,
         sessionManager,
         args,
       });

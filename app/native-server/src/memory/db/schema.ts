@@ -113,4 +113,45 @@ CREATE INDEX IF NOT EXISTS memory_page_snapshots_step_id_idx      ON memory_page
 CREATE INDEX IF NOT EXISTS memory_page_snapshots_url_idx          ON memory_page_snapshots(url);
 CREATE INDEX IF NOT EXISTS memory_page_snapshots_page_role_idx    ON memory_page_snapshots(page_role);
 CREATE INDEX IF NOT EXISTS memory_page_snapshots_captured_at_idx  ON memory_page_snapshots(captured_at);
+-- Added in Phase 0.3 to support "latest snapshot for this tab in the
+-- current session" lookup from the action post-processor.
+CREATE INDEX IF NOT EXISTS memory_page_snapshots_tab_captured_idx ON memory_page_snapshots(tab_id, captured_at);
+
+-- Phase 0.3: structured trail of DOM-interaction actions produced by
+-- click / fill / navigate / keyboard tools. Each row links back to
+-- the owning execution step, the session, and (when available) the
+-- most recent page snapshot for the same tab in the same session.
+-- Sensitive values (notably chrome_fill_or_select.value) are never
+-- stored in plaintext; only a redacted {kind,type,length,sha256}
+-- summary lands in value_summary. result_blob is omitted for fill
+-- because the extension response may echo the submitted value.
+CREATE TABLE IF NOT EXISTS memory_actions (
+  action_id         TEXT PRIMARY KEY,
+  step_id           TEXT NOT NULL REFERENCES memory_steps(step_id) ON DELETE CASCADE,
+  session_id        TEXT NOT NULL REFERENCES memory_sessions(session_id) ON DELETE CASCADE,
+  tool_name         TEXT NOT NULL,
+  action_kind       TEXT NOT NULL,       -- 'click' | 'fill' | 'navigate' | 'keyboard'
+  navigate_mode     TEXT,                -- 'url' | 'refresh' | 'back' | 'forward' | 'new_tab' | null
+  tab_id            INTEGER,
+  window_id         INTEGER,
+  target_ref        TEXT,
+  target_selector   TEXT,
+  target_frame_id   INTEGER,
+  url_requested     TEXT,
+  url_before        TEXT,
+  url_after         TEXT,
+  key_spec          TEXT,
+  value_summary     TEXT,                -- JSON redaction record; null unless action_kind='fill'
+  status            TEXT NOT NULL,       -- 'success' | 'failed' | 'soft_failure'
+  error_code        TEXT,
+  pre_snapshot_ref  TEXT,                -- memory://snapshot/<uuid> | null
+  args_blob         TEXT,                -- JSON; sensitive fields replaced with '[redacted]'
+  result_blob       TEXT,                -- JSON; null for fill (see above)
+  captured_at       TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS memory_actions_step_id_idx     ON memory_actions(step_id);
+CREATE INDEX IF NOT EXISTS memory_actions_session_id_idx  ON memory_actions(session_id);
+CREATE INDEX IF NOT EXISTS memory_actions_action_kind_idx ON memory_actions(action_kind);
+CREATE INDEX IF NOT EXISTS memory_actions_captured_at_idx ON memory_actions(captured_at);
 `;
