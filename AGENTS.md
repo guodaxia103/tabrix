@@ -62,6 +62,8 @@ Read:
 Read:
 
 - [docs/RELEASE_PROCESS.md](./docs/RELEASE_PROCESS.md) or [docs/RELEASE_PROCESS_zh.md](./docs/RELEASE_PROCESS_zh.md)
+- [docs/RELEASE_READINESS_CHECKLIST_zh.md](./docs/RELEASE_READINESS_CHECKLIST_zh.md)
+- [docs/RELEASE_READINESS_CRITERIA_v2.md](./docs/RELEASE_READINESS_CRITERIA_v2.md) or [docs/RELEASE_READINESS_CRITERIA_v2_zh.md](./docs/RELEASE_READINESS_CRITERIA_v2_zh.md)
 - [docs/TESTING.md](./docs/TESTING.md) or [docs/TESTING_zh.md](./docs/TESTING_zh.md)
 - [docs/PLATFORM_SUPPORT.md](./docs/PLATFORM_SUPPORT.md) or [docs/PLATFORM_SUPPORT_zh.md](./docs/PLATFORM_SUPPORT_zh.md)
 - [docs/SECURITY.md](./docs/SECURITY.md)
@@ -95,5 +97,6 @@ Default expectations:
 14. When extension code changes, the default local acceptance loop is: `pnpm -C app/chrome-extension build` -> `pnpm run extension:reload` -> real browser validation. Do not claim browser-side verification if the unpacked extension has not been reloaded.
 15. Architecture-review trigger: after every 3 consecutive `feat:` / `fix:` commits on the same subsystem, stop adding more feat/fix and run a short architecture-debt checkpoint before continuing. Deliver: (a) a listing of any site-specific / domain-specific names that leaked into a core layer, (b) a listing of any files that grew past the size budget defined in `docs/RELEASE_READINESS_CRITERIA_v2.md`, (c) an explicit decision to either open a `refactor:` task or to record an accepted debt item. Do not silently skip this checkpoint — if no debt is found, state that explicitly in the task summary.
 16. When editing any file under `app/chrome-extension/entrypoints/background/tools/browser/read-page-understanding-core.ts` or other files tagged "core neutral" by `docs/RELEASE_READINESS_CRITERIA_v2.md` Gate A, the change MUST NOT introduce site-specific vocabulary (e.g. Chinese/English anchors belonging to a single product, hostnames, or family-specific role literals). Such logic belongs in a `*-<family>.ts` adapter. The neutrality invariant is protected by `tests/read-page-understanding-core-neutrality.test.ts`; do not weaken or skip that test to unblock a change.
+17. Public / private test split. Any test or fixture that reproduces a specific real-world site's URL, DOM content, brand-named accessibility tree, or login-state flow (e.g. Douyin / BOSS / private-console vendors) belongs in the sibling `tabrix-private-tests` repository, not in this repo. In this public repo only the declared GA baseline (currently: GitHub) may appear in `app/**/tests/**` as realistic fixture data. Generic login, footer, dashboard, and accessibility-tree fixtures must use neutral wording and MUST NOT embed a specific vendor brand as flavoring. Exception: guardrail tests that list brand words as forbidden tokens (e.g. `tests/read-page-understanding-core-neutrality.test.ts`) may contain those words because their purpose is to assert absence, not reproduce a scenario.
 
 If a task conflicts with these rules, stop and surface the tradeoff instead of guessing.

@@ -259,13 +259,13 @@ describe('read_page mode', () => {
       active: true,
       status: 'complete',
       url: 'https://example.com/login',
-      title: '抖音登录',
+      title: 'Sign in',
     });
     vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
     vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
       success: true,
       pageContent:
-        '- form "抖音登录" [ref=ref_0] (x=640,y=300)\n  - textbox "手机号" [ref=ref_phone] (x=600,y=260)\n  - textbox "验证码" [ref=ref_code] (x=600,y=300)\n  - button "登录" [ref=ref_login] (x=600,y=340)\n- generic "请输入手机号和验证码登录抖音" [ref=ref_5] (x=580,y=220)\n- generic "用户协议" [ref=ref_6] (x=580,y=380)\n- generic "隐私政策" [ref=ref_7] (x=580,y=410)\n- generic "联系我们" [ref=ref_8] (x=580,y=440)\n- generic "帮助中心" [ref=ref_9] (x=580,y=470)\n- generic "页面底部信息" [ref=ref_10] (x=580,y=520)',
+        '- form "Sign in" [ref=ref_0] (x=640,y=300)\n  - textbox "手机号" [ref=ref_phone] (x=600,y=260)\n  - textbox "验证码" [ref=ref_code] (x=600,y=300)\n  - button "登录" [ref=ref_login] (x=600,y=340)\n- generic "请输入手机号和验证码登录" [ref=ref_5] (x=580,y=220)\n- generic "用户协议" [ref=ref_6] (x=580,y=380)\n- generic "隐私政策" [ref=ref_7] (x=580,y=410)\n- generic "联系我们" [ref=ref_8] (x=580,y=440)\n- generic "帮助中心" [ref=ref_9] (x=580,y=470)\n- generic "页面底部信息" [ref=ref_10] (x=580,y=520)',
       refMap: [
         { ref: 'ref_phone', selector: 'input[name=phone]' },
         { ref: 'ref_code', selector: 'input[name=captcha]' },
