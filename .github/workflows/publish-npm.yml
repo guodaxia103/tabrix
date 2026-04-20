@@ -57,6 +57,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Rebuild allow-listed native dependencies
+        run: pnpm rebuild better-sqlite3
+
       - name: Prepare extension generated types
         run: pnpm --filter @tabrix/extension exec wxt prepare
 

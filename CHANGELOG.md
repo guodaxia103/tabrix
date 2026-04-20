@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **CI**: `better-sqlite3` native binding (`node-v127-linux-x64`) was
+  missing on GitHub Actions because `pnpm install --ignore-scripts`
+  (kept as a supply-chain hardening measure) silently overrode the
+  `pnpm.onlyBuiltDependencies` allowlist and blocked the prebuild
+  postinstall. Both `.github/workflows/ci.yml` and
+  `.github/workflows/publish-npm.yml` now run
+  `pnpm rebuild better-sqlite3` right after install so the
+  Memory / SessionManager SQLite layer (Phases 0.1–0.3) boots in
+  core tests and release builds.
+
 ### Added
 
 - **MKEP Memory Phase 0.3** — DOM action history. Every
