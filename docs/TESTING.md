@@ -11,12 +11,12 @@ This document explains how contributors should verify changes before claiming th
 
 ## Common Verification Levels
 
-| Level | What It Proves |
-| --- | --- |
-| Unit / targeted test | The changed logic behaves as expected in isolation |
-| Package-level build or typecheck | The changed package still compiles |
-| Runtime CLI verification | The local service path still responds correctly |
-| Real browser verification | The extension + native path works in a real Chrome session |
+| Level                            | What It Proves                                             |
+| -------------------------------- | ---------------------------------------------------------- |
+| Unit / targeted test             | The changed logic behaves as expected in isolation         |
+| Package-level build or typecheck | The changed package still compiles                         |
+| Runtime CLI verification         | The local service path still responds correctly            |
+| Real browser verification        | The extension + native path works in a real Chrome session |
 
 ## Recommended Checks By Change Type
 

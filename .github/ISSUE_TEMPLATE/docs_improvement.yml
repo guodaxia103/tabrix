@@ -9,7 +9,7 @@ body:
     attributes:
       label: Document Location
       description: Which file or section?
-      placeholder: e.g. README.md quick start, docs/STABLE_QUICKSTART.md
+      placeholder: e.g. README.md quick start, docs/QUICKSTART.md
     validations:
       required: true
   - type: textarea
