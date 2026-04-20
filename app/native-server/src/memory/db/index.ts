@@ -12,6 +12,13 @@ export { SessionRepository, type SessionUpdate } from './session-repository';
 export { StepRepository, type StepCompletion } from './step-repository';
 export { PageSnapshotRepository, type PageSnapshot } from './page-snapshot-repository';
 export {
+  ActionRepository,
+  type MemoryAction,
+  type MemoryActionKind,
+  type MemoryActionStatus,
+  type MemoryNavigateMode,
+} from './action-repository';
+export {
   rowToTask,
   taskToRow,
   rowToSession,

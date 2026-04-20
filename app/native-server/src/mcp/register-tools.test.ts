@@ -181,6 +181,88 @@ describe('handleToolCall execution wrapper', () => {
     expect(step.artifactRefs![0]).toBe(body.historyRef);
   });
 
+  it('persists a memory_actions row and injects historyRef for chrome_click_element', async () => {
+    markBridgeReady();
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      items: [],
+    } as never);
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              message: 'Clicked e-1',
+              elementInfo: { role: 'button', name: 'Submit' },
+              navigationOccurred: false,
+              clickMethod: 'dom',
+            }),
+          },
+        ],
+        isError: false,
+      },
+    } as never);
+
+    const result = await handleToolCall('chrome_click_element', { tabId: 1, ref: 'e-1' });
+
+    expect(result.isError).toBe(false);
+    const body = JSON.parse(String((result.content as any[])[0].text));
+    expect(body.historyRef).toMatch(/^memory:\/\/action\/[0-9a-f-]+$/);
+
+    const sessions = sessionManager.listSessions();
+    const step = sessions[0].steps[0];
+    expect(step.artifactRefs).toHaveLength(1);
+    expect(step.artifactRefs![0]).toBe(body.historyRef);
+
+    const actions = sessionManager.actions!.listByStep(step.stepId);
+    expect(actions).toHaveLength(1);
+    expect(actions[0].actionKind).toBe('click');
+    expect(actions[0].tabId).toBe(1);
+    expect(actions[0].targetRef).toBe('e-1');
+    expect(actions[0].status).toBe('success');
+  });
+
+  it('redacts fill value and omits result_blob for chrome_fill_or_select', async () => {
+    markBridgeReady();
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      items: [],
+    } as never);
+    jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValueOnce({
+      status: 'success',
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ message: 'Filled input#user' }),
+          },
+        ],
+        isError: false,
+      },
+    } as never);
+
+    const result = await handleToolCall('chrome_fill_or_select', {
+      tabId: 1,
+      ref: 'e-1',
+      value: 'hunter2',
+    });
+
+    expect(result.isError).toBe(false);
+    const sessions = sessionManager.listSessions();
+    const step = sessions[0].steps[0];
+    const actions = sessionManager.actions!.listByStep(step.stepId);
+    expect(actions).toHaveLength(1);
+    expect(actions[0].actionKind).toBe('fill');
+    expect(actions[0].resultBlob).toBeNull();
+    expect(actions[0].argsBlob).not.toContain('hunter2');
+    expect(actions[0].argsBlob).toContain('[redacted]');
+    const summary = JSON.parse(actions[0].valueSummary!);
+    expect(summary.kind).toBe('redacted');
+    expect(summary.length).toBe('hunter2'.length);
+  });
+
   it('allows non-sensitive tools when MCP_DISABLE_SENSITIVE_TOOLS is set', async () => {
     markBridgeReady();
     process.env.MCP_DISABLE_SENSITIVE_TOOLS = 'true';

@@ -130,6 +130,7 @@ export class PageSnapshotRepository {
   private readonly insertStmt;
   private readonly getStmt;
   private readonly listByStepStmt;
+  private readonly findLatestInSessionForTabStmt;
   private readonly clearStmt;
 
   constructor(private readonly db: SqliteDatabase) {
@@ -153,6 +154,18 @@ export class PageSnapshotRepository {
     this.listByStepStmt = db.prepare(
       'SELECT * FROM memory_page_snapshots WHERE step_id = ? ORDER BY captured_at ASC',
     );
+    // Phase 0.3: pre-snapshot lookup for an action. Scoped to the
+    // current session to avoid binding stale page state from other
+    // sessions to a new task.
+    this.findLatestInSessionForTabStmt = db.prepare(
+      `SELECT s.* FROM memory_page_snapshots s
+       JOIN memory_steps st ON st.step_id = s.step_id
+       WHERE s.tab_id = @tab_id
+         AND st.session_id = @session_id
+         AND s.captured_at <= @before_iso
+       ORDER BY s.captured_at DESC
+       LIMIT 1`,
+    );
     this.clearStmt = db.prepare('DELETE FROM memory_page_snapshots');
   }
 
@@ -167,6 +180,25 @@ export class PageSnapshotRepository {
 
   public listByStep(stepId: string): PageSnapshot[] {
     return (this.listByStepStmt.all(stepId) as PageSnapshotRow[]).map(rowToSnapshot);
+  }
+
+  /**
+   * Find the most recent page snapshot for the given tab within the
+   * given session, captured at or before `beforeIso`. Returns
+   * `undefined` when no snapshot is available (e.g. action fires
+   * without a prior `chrome_read_page`).
+   */
+  public findLatestInSessionForTab(params: {
+    sessionId: string;
+    tabId: number;
+    beforeIso: string;
+  }): PageSnapshot | undefined {
+    const row = this.findLatestInSessionForTabStmt.get({
+      session_id: params.sessionId,
+      tab_id: params.tabId,
+      before_iso: params.beforeIso,
+    }) as PageSnapshotRow | undefined;
+    return row ? rowToSnapshot(row) : undefined;
   }
 
   public clear(): void {
