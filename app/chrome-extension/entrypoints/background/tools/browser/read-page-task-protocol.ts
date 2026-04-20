@@ -11,6 +11,15 @@ import type {
   ReadPageTaskLevel2,
   ReadPageTaskMode,
 } from '@tabrix/shared';
+import type {
+  PageObjectFamilyAdapter,
+  PageObjectPriors,
+} from './read-page-high-value-objects-core';
+import {
+  applyPriorityRuleMatch,
+  resolvePageObjectPriors,
+} from './read-page-high-value-objects-core';
+import { githubHighValueObjectAdapter } from './read-page-high-value-objects-github';
 
 interface TaskProtocolParams {
   mode: 'compact' | 'normal' | 'full';
@@ -59,83 +68,15 @@ interface TaskModeSignalContext {
   highValueText: string[];
 }
 
-const PAGE_ROLE_PRIORITY_RULES: Partial<
-  Record<
-    string,
-    {
-      primary: RegExp[];
-      secondary?: RegExp[];
-      tertiary?: RegExp[];
-      deprioritize?: RegExp[];
-      l0Prefix?: string;
-    }
-  >
-> = {
-  repo_home: {
-    primary: [/\bissues\b/i, /\bpull requests?\b/i, /\bactions\b/i],
-    secondary: [/\bgo to file\b/i],
-    tertiary: [/\bmain branch\b/i],
-    deprioritize: [
-      /\bwatch\b/i,
-      /\bstar(?:red)?\b/i,
-      /\bpin this repository\b/i,
-      /\bsee your forks\b/i,
-      /\badd file\b/i,
-      /\bcommits? by\b/i,
-      /^commit\b/i,
-    ],
-    l0Prefix: 'Primary repo entry points are',
-  },
-  issues_list: {
-    primary: [/\bsearch issues\b/i],
-    secondary: [/\bfilter by\b/i, /\bfilter\b/i, /\bnew issue\b/i],
-    tertiary: [/\bissue\b/i],
-    deprioritize: [/^search or jump to/i, /^open copilot/i, /^skip to content$/i],
-    l0Prefix: 'Primary issue controls are',
-  },
-  actions_list: {
-    primary: [/\bfilter workflow runs\b/i],
-    secondary: [/\brun\s+\d+\b/i, /\bcompleted successfully: run\b/i],
-    tertiary: [/\bsummary\b/i, /\bjobs?\b/i],
-    deprioritize: [/^search or jump to/i, /^open copilot/i, /^skip to content$/i],
-    l0Prefix: 'Primary workflow run entries are',
-  },
-  workflow_run_detail: {
-    primary: [/\bsummary\b/i, /\bshow all jobs\b/i, /\bjobs?\b/i],
-    secondary: [/\bartifacts?\b/i, /\blogs?\b/i, /\bannotations?\b/i],
-    tertiary: [/\bshow more\b/i],
-    deprioritize: [/^\d+[smhd]$/i, /github\.blog/i, /^v?\d+\.\d+\.\d+$/i],
-    l0Prefix: 'Primary workflow diagnostics are',
-  },
-};
+const PAGE_OBJECT_FAMILY_ADAPTERS: readonly PageObjectFamilyAdapter[] = [
+  githubHighValueObjectAdapter,
+];
 
-const PAGE_ROLE_TASK_SEEDS: Partial<
-  Record<
-    string,
-    {
-      labels: string[];
-      reason: string;
-    }
-  >
-> = {
-  repo_home: {
-    labels: ['Issues', 'Pull requests', 'Actions'],
-    reason: 'primary repo navigation inferred from page role',
-  },
-  issues_list: {
-    labels: ['Search Issues', 'Filter issues', 'Issue entries'],
-    reason: 'primary issue triage objects inferred from page role',
-  },
-  actions_list: {
-    labels: ['Filter workflow runs', 'Workflow run entries', 'Run detail entry'],
-    reason: 'primary workflow list objects inferred from page role',
-  },
-  workflow_run_detail: {
-    labels: ['Summary', 'Jobs', 'Artifacts', 'Logs'],
-    reason: 'primary workflow diagnostics inferred from page role',
-  },
-};
-
+// T5.4.0 intentionally scopes out generic task-mode inference. These role/region
+// hints drive the taskMode (read/search/monitor/...) scoring, not the object
+// layer priors, and remain GitHub-flavoured today. A later pass (expected in
+// the T5.4+ task-mode cleanup) will lift them behind a family adapter; until
+// then they stay here to avoid scope creep on the object-layer boundary work.
 const PAGE_ROLE_TASK_MODE_HINTS: Partial<Record<string, ReadPageTaskMode>> = {
   repo_home: 'read',
   issues_list: 'search',
@@ -317,6 +258,8 @@ function inferComplexityLevel(params: TaskProtocolParams): ReadPageComplexityLev
   if (lineCount > 40) score += 1;
   if (lineCount > 120) score += 1;
   if (params.pageContext.fallbackUsed) score += 1;
+  // Deferred to post-T5.4.0: complexity scoring still has one GitHub-specific
+  // bump. Kept stable here so T5.4.0 remains a pure object-layer boundary move.
   if (params.pageRole === 'workflow_run_detail') score += 1;
 
   if (score >= 4) return 'complex';
@@ -331,32 +274,15 @@ function inferSourceKind(params: TaskProtocolParams): ReadPageSourceKind {
   return 'dom_semantic';
 }
 
-function scoreHighValueLabel(label: string, params: TaskProtocolParams): number {
+function scoreHighValueLabel(
+  label: string,
+  params: TaskProtocolParams,
+  priors: PageObjectPriors,
+): number {
   const normalized = String(label || '').trim();
   if (!normalized) return Number.NEGATIVE_INFINITY;
 
-  let score = 0;
-  const rules = PAGE_ROLE_PRIORITY_RULES[params.pageRole];
-  rules?.primary.forEach((pattern, index) => {
-    if (pattern.test(normalized)) {
-      score += 320 - index * 24;
-    }
-  });
-  rules?.secondary?.forEach((pattern, index) => {
-    if (pattern.test(normalized)) {
-      score += 180 - index * 18;
-    }
-  });
-  rules?.tertiary?.forEach((pattern, index) => {
-    if (pattern.test(normalized)) {
-      score += 90 - index * 12;
-    }
-  });
-  rules?.deprioritize?.forEach((pattern, index) => {
-    if (pattern.test(normalized)) {
-      score -= 140 - index * 10;
-    }
-  });
+  let score = applyPriorityRuleMatch(priors.priorityRule, normalized);
 
   if (
     params.primaryRegion &&
@@ -375,7 +301,10 @@ function scoreHighValueLabel(label: string, params: TaskProtocolParams): number 
   return score;
 }
 
-function buildHighValueObjects(params: TaskProtocolParams): ReadPageHighValueObject[] {
+function buildHighValueObjects(
+  params: TaskProtocolParams,
+  priors: PageObjectPriors,
+): ReadPageHighValueObject[] {
   const interactiveByRef = buildInteractiveMap(params.interactiveElements);
   const candidates: Array<ReadPageHighValueObject & { score: number; order: number }> = [];
   const seenIds = new Set<string>();
@@ -387,7 +316,7 @@ function buildHighValueObjects(params: TaskProtocolParams): ReadPageHighValueObj
     const label = getCandidateActionLabel(action, interactiveByRef);
     const objectId = `hvo_${action.id}`;
     if (!label || seenIds.has(objectId)) continue;
-    const labelScore = scoreHighValueLabel(label, params);
+    const labelScore = scoreHighValueLabel(label, params, priors);
     candidates.push({
       id: objectId,
       kind: 'candidate_action',
@@ -418,13 +347,13 @@ function buildHighValueObjects(params: TaskProtocolParams): ReadPageHighValueObj
       reason: params.primaryRegion
         ? `high-value ${element.role} surfaced from ${params.primaryRegion}`
         : `high-value ${element.role} surfaced from compact snapshot`,
-      score: scoreHighValueLabel(label, params),
+      score: scoreHighValueLabel(label, params, priors),
       order,
     });
     order += 1;
   }
 
-  const seedConfig = PAGE_ROLE_TASK_SEEDS[params.pageRole];
+  const seedConfig = priors.seed;
   if (seedConfig) {
     seedConfig.labels.forEach((label, index) => {
       candidates.push({
@@ -457,6 +386,7 @@ function buildLevel0(
   pageRole: string,
   primaryRegion: string | null,
   highValueObjects: ReadPageHighValueObject[],
+  priors: PageObjectPriors,
 ): ReadPageTaskLevel0 {
   const focusObjectIds = highValueObjects.slice(0, 3).map((item) => item.id);
   const focusLabels = highValueObjects
@@ -464,7 +394,7 @@ function buildLevel0(
     .map((item) => item.label)
     .filter(Boolean);
   const focusText = focusLabels.join(', ');
-  const l0Prefix = PAGE_ROLE_PRIORITY_RULES[pageRole]?.l0Prefix;
+  const l0Prefix = priors.l0Prefix;
 
   return {
     taskMode,
@@ -512,11 +442,12 @@ function buildLevel2(params: TaskProtocolParams): ReadPageTaskLevel2 {
 }
 
 export function buildTaskProtocol(params: TaskProtocolParams): TaskProtocolResult {
+  const priors = resolvePageObjectPriors(PAGE_OBJECT_FAMILY_ADAPTERS, params.pageRole);
   const complexityLevel = inferComplexityLevel(params);
   const sourceKind = inferSourceKind(params);
-  const highValueObjects = buildHighValueObjects(params);
+  const highValueObjects = buildHighValueObjects(params, priors);
   const taskMode = inferTaskMode(params, highValueObjects);
-  const L0 = buildLevel0(taskMode, params.pageRole, params.primaryRegion, highValueObjects);
+  const L0 = buildLevel0(taskMode, params.pageRole, params.primaryRegion, highValueObjects, priors);
   const L1 = buildLevel1(params, highValueObjects);
   const L2 = buildLevel2(params);
 
