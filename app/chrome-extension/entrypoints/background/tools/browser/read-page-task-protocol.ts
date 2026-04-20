@@ -44,8 +44,20 @@ interface TaskProtocolResult {
 const COMPARE_HINT_PATTERN = /\b(compare|diff|review changes)\b/i;
 const EXTRACT_HINT_PATTERN = /\b(export|download|copy|artifact|csv|json)\b/i;
 const MONITOR_HINT_PATTERN = /\b(summary|jobs?|logs?|annotations?|workflow run|runs?)\b/i;
-const SEARCH_HINT_PATTERN = /\b(search|filter|find|labels?|milestone|assignee|query|issues?)\b/i;
+const SEARCH_HINT_PATTERN =
+  /\b(search(?: issues?)?|filter(?: issues?)?|find|labels?|milestone|assignee|query|new issue|issue entries)\b/i;
 const COMMIT_SHA_PATTERN = /\b[0-9a-f]{7,40}\b/i;
+
+type RankedTaskMode = Exclude<ReadPageTaskMode, 'read'>;
+
+interface TaskModeSignalContext {
+  url: string;
+  title: string;
+  pageRole: string;
+  primaryRegion: string;
+  signalText: string[];
+  highValueText: string[];
+}
 
 const PAGE_ROLE_PRIORITY_RULES: Partial<
   Record<
@@ -124,10 +136,46 @@ const PAGE_ROLE_TASK_SEEDS: Partial<
   },
 };
 
+const PAGE_ROLE_TASK_MODE_HINTS: Partial<Record<string, ReadPageTaskMode>> = {
+  repo_home: 'read',
+  issues_list: 'search',
+  actions_list: 'monitor',
+  workflow_run_detail: 'monitor',
+  login_required: 'read',
+};
+
+const PRIMARY_REGION_TASK_MODE_HINTS: Partial<Record<string, ReadPageTaskMode>> = {
+  repo_primary_nav: 'read',
+  issues_results: 'search',
+  workflow_runs_list: 'monitor',
+  workflow_run_summary: 'monitor',
+  login_form: 'read',
+};
+
+const TASK_MODE_SIGNAL_PATTERNS: Record<RankedTaskMode, RegExp[]> = {
+  search: [SEARCH_HINT_PATTERN],
+  monitor: [MONITOR_HINT_PATTERN],
+  compare: [COMPARE_HINT_PATTERN],
+  extract: [EXTRACT_HINT_PATTERN],
+};
+
 function normalizeHighValueLabel(label: string): string {
   return String(label || '')
     .trim()
     .toLowerCase();
+}
+
+function isTaskModeNoiseLabel(label: string): boolean {
+  const normalized = String(label || '').trim();
+  if (!normalized) return true;
+  if (COMMIT_SHA_PATTERN.test(normalized)) return true;
+  if (/^\d+[smhd]$/i.test(normalized)) return true;
+  if (/^commit\b/i.test(normalized)) return true;
+  if (/^fix\(|^feat\(|^docs\(|^chore\(/i.test(normalized)) return true;
+  if (/^search or jump to/i.test(normalized)) return true;
+  if (/^open copilot/i.test(normalized)) return true;
+  if (/^skip to content$/i.test(normalized)) return true;
+  return false;
 }
 
 function buildInteractiveMap(elements: ReadPageInteractiveElement[]) {
@@ -139,46 +187,118 @@ function buildInteractiveMap(elements: ReadPageInteractiveElement[]) {
   return map;
 }
 
-function inferTaskMode(params: TaskProtocolParams): ReadPageTaskMode {
-  const url = String(params.currentUrl || '').toLowerCase();
-  const title = String(params.currentTitle || '').toLowerCase();
-  const elementLabels = params.interactiveElements
-    .map((item) => String(item?.name || ''))
-    .join(' | ');
+function getCandidateActionLabel(
+  action: ReadPageCandidateAction,
+  interactiveByRef: Map<string, ReadPageInteractiveElement>,
+): string {
+  const target = interactiveByRef.get(action.targetRef);
+  const ariaLabel = action.locatorChain.find((item) => item.type === 'aria')?.value;
+  return String(target?.name || ariaLabel || action.targetRef || action.id).trim();
+}
+
+function countPatternMatches(patterns: RegExp[], values: string[]): number {
+  let matchCount = 0;
+  for (const value of values) {
+    if (!value) continue;
+    if (patterns.some((pattern) => pattern.test(value))) {
+      matchCount += 1;
+    }
+  }
+  return matchCount;
+}
+
+function buildTaskModeSignalContext(
+  params: TaskProtocolParams,
+  highValueObjects: ReadPageHighValueObject[],
+): TaskModeSignalContext {
+  const interactiveByRef = buildInteractiveMap(params.interactiveElements);
+  const candidateLabels = params.candidateActions
+    .map((item) => getCandidateActionLabel(item, interactiveByRef))
+    .filter((item) => !isTaskModeNoiseLabel(item));
   const actionHints = params.candidateActions
-    .map((item) => String(item?.matchReason || item?.actionType || ''))
-    .join(' | ');
+    .map((item) => String(item?.matchReason || item?.actionType || '').trim())
+    .filter(Boolean);
+  const interactiveLabels = params.interactiveElements
+    .map((item) => String(item?.name || '').trim())
+    .filter((item) => !isTaskModeNoiseLabel(item));
 
-  if (params.pageRole === 'workflow_run_detail' || params.pageRole === 'actions_list') {
-    return 'monitor';
+  return {
+    url: String(params.currentUrl || '').toLowerCase(),
+    title: String(params.currentTitle || '').toLowerCase(),
+    pageRole: String(params.pageRole || ''),
+    primaryRegion: String(params.primaryRegion || ''),
+    signalText: [...interactiveLabels, ...candidateLabels, ...actionHints].map((item) =>
+      item.toLowerCase(),
+    ),
+    highValueText: highValueObjects
+      .slice(0, 4)
+      .map((item) =>
+        String(item?.label || '')
+          .trim()
+          .toLowerCase(),
+      )
+      .filter((item) => !isTaskModeNoiseLabel(item)),
+  };
+}
+
+function scoreTaskMode(mode: RankedTaskMode, context: TaskModeSignalContext): number {
+  let score = 0;
+  if (PAGE_ROLE_TASK_MODE_HINTS[context.pageRole] === mode) {
+    score += 6;
   }
-  if (params.pageRole === 'issues_list') {
-    return 'search';
+  if (PRIMARY_REGION_TASK_MODE_HINTS[context.primaryRegion] === mode) {
+    score += 5;
   }
-  if (params.pageRole === 'repo_home' || params.pageRole === 'login_required') {
+
+  const patterns = TASK_MODE_SIGNAL_PATTERNS[mode];
+  score += countPatternMatches(patterns, [context.title]) * 3;
+  score += countPatternMatches(patterns, context.signalText) * 2;
+  score += countPatternMatches(patterns, context.highValueText) * 3;
+
+  if (mode === 'search' && /\/issues(?:\/?|$)/i.test(context.url)) {
+    score += 4;
+  }
+  if (mode === 'monitor' && /\/actions(?:\/?|$)/i.test(context.url)) {
+    score += 4;
+  }
+  if (mode === 'compare' && COMPARE_HINT_PATTERN.test(context.url)) {
+    score += 4;
+  }
+  if (mode === 'extract' && EXTRACT_HINT_PATTERN.test(context.url)) {
+    score += 4;
+  }
+
+  return score;
+}
+
+function scoreReadTaskMode(context: TaskModeSignalContext): number {
+  let score = 0;
+  if (PAGE_ROLE_TASK_MODE_HINTS[context.pageRole] === 'read') {
+    score += 6;
+  }
+  if (PRIMARY_REGION_TASK_MODE_HINTS[context.primaryRegion] === 'read') {
+    score += 5;
+  }
+  return score;
+}
+
+function inferTaskMode(
+  params: TaskProtocolParams,
+  highValueObjects: ReadPageHighValueObject[],
+): ReadPageTaskMode {
+  const context = buildTaskModeSignalContext(params, highValueObjects);
+  const readScore = scoreReadTaskMode(context);
+  const rankedModes: RankedTaskMode[] = ['monitor', 'search', 'extract', 'compare'];
+  const ranked = rankedModes
+    .map((mode) => ({ mode, score: scoreTaskMode(mode, context) }))
+    .sort((left, right) => right.score - left.score);
+
+  if (ranked[0]?.score >= 5 && ranked[0].score > readScore) {
+    return ranked[0].mode;
+  }
+
+  if (readScore > 0) {
     return 'read';
-  }
-
-  if (
-    COMPARE_HINT_PATTERN.test(url) ||
-    COMPARE_HINT_PATTERN.test(title) ||
-    COMPARE_HINT_PATTERN.test(elementLabels)
-  ) {
-    return 'compare';
-  }
-  if (
-    url.includes('/actions') ||
-    MONITOR_HINT_PATTERN.test(title) ||
-    MONITOR_HINT_PATTERN.test(elementLabels) ||
-    MONITOR_HINT_PATTERN.test(actionHints)
-  ) {
-    return 'monitor';
-  }
-  if (EXTRACT_HINT_PATTERN.test(elementLabels)) {
-    return 'extract';
-  }
-  if (url.includes('/issues') || SEARCH_HINT_PATTERN.test(elementLabels)) {
-    return 'search';
   }
   return 'read';
 }
@@ -262,8 +382,7 @@ function buildHighValueObjects(params: TaskProtocolParams): ReadPageHighValueObj
 
   for (const action of params.candidateActions) {
     const target = interactiveByRef.get(action.targetRef);
-    const ariaLabel = action.locatorChain.find((item) => item.type === 'aria')?.value;
-    const label = String(target?.name || ariaLabel || action.targetRef || action.id).trim();
+    const label = getCandidateActionLabel(action, interactiveByRef);
     const objectId = `hvo_${action.id}`;
     if (!label || seenIds.has(objectId)) continue;
     const labelScore = scoreHighValueLabel(label, params);
@@ -391,10 +510,10 @@ function buildLevel2(params: TaskProtocolParams): ReadPageTaskLevel2 {
 }
 
 export function buildTaskProtocol(params: TaskProtocolParams): TaskProtocolResult {
-  const taskMode = inferTaskMode(params);
   const complexityLevel = inferComplexityLevel(params);
   const sourceKind = inferSourceKind(params);
   const highValueObjects = buildHighValueObjects(params);
+  const taskMode = inferTaskMode(params, highValueObjects);
   const L0 = buildLevel0(taskMode, params.pageRole, params.primaryRegion, highValueObjects);
   const L1 = buildLevel1(params, highValueObjects);
   const L2 = buildLevel2(params);

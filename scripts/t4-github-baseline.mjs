@@ -274,6 +274,28 @@ export function normalizeWorkflowRunUrl(value) {
   return null;
 }
 
+export function shouldRecoverForcedTabNavigation(navigateParsed, sourceTabId, forceNewWindow) {
+  return Boolean(
+    forceNewWindow &&
+      typeof sourceTabId === 'number' &&
+      navigateParsed &&
+      typeof navigateParsed === 'object' &&
+      navigateParsed.usedExistingTab === true,
+  );
+}
+
+export function shouldRetryWorkflowRunDetailShell(snapshot, semanticExpectation) {
+  const primaryRegion = String(snapshot?.summary?.primaryRegion ?? '');
+  const interactiveHead = summarizeInteractiveElements(snapshot, 6);
+  if (primaryRegion !== 'workflow_run_shell') {
+    return false;
+  }
+  if (interactiveHead.some((item) => /filter workflow runs/i.test(item))) {
+    return true;
+  }
+  return !evaluateSemanticSignal(snapshot, semanticExpectation).matched;
+}
+
 function extractRunDetailUrlFromActions(timeoutMs, tabId) {
   const runLinkResult = callTool(
     'chrome_javascript',
@@ -346,6 +368,34 @@ function clickFirstWorkflowRun(timeoutMs, tabId) {
   };
 }
 
+function settleWorkflowRunDetailTab(tabId, semanticExpectation, timeoutMs) {
+  const compactArgs = {
+    mode: 'compact',
+    filter: 'interactive',
+    depth: 3,
+    tabId,
+  };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const compact = callTool('chrome_read_page', compactArgs, timeoutMs);
+    const snapshot = compact?.parsed;
+    if (!shouldRetryWorkflowRunDetailShell(snapshot, semanticExpectation)) {
+      return;
+    }
+    if (attempt === 0) {
+      callTool(
+        'chrome_javascript',
+        {
+          code: 'window.location.reload(); return { reloaded: true, href: window.location.href };',
+          timeoutMs: Math.min(timeoutMs, 20_000),
+          tabId,
+        },
+        timeoutMs,
+      );
+    }
+    sleepSync(1200);
+  }
+}
+
 export function evaluateSemanticSignal(snapshot, semanticExpectation) {
   const names = summarizeInteractiveElements(snapshot, 16);
   const candidateActions = Array.isArray(snapshot?.candidateActions) ? snapshot.candidateActions : [];
@@ -393,6 +443,22 @@ async function runScenario(definition, options, evidenceDir, tabId, runOptions =
       navigateArgs,
       options.timeoutMs,
     );
+    if (
+      shouldRecoverForcedTabNavigation(
+        navigateResult?.parsed,
+        tabId,
+        Boolean(runOptions.forceNewWindow),
+      )
+    ) {
+      navigateResult = callTool(
+        'chrome_navigate',
+        {
+          url: definition.url,
+          tabId,
+        },
+        options.timeoutMs,
+      );
+    }
     if (typeof navigateResult?.parsed?.tabId === 'number') {
       activeTabId = navigateResult.parsed.tabId;
     }
@@ -401,6 +467,10 @@ async function runScenario(definition, options, evidenceDir, tabId, runOptions =
   const modeResults = [];
   const allArtifacts = [];
   let semantic = { matched: false, interactiveHead: [], actionHead: [] };
+
+  if (definition.pageType === 'workflow_run_detail' && typeof activeTabId === 'number') {
+    settleWorkflowRunDetailTab(activeTabId, definition.semanticExpectation, options.timeoutMs);
+  }
 
   for (const mode of DEFAULT_MODES) {
     const startedAt = Date.now();

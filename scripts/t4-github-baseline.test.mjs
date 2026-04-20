@@ -7,6 +7,8 @@ import {
   parseCliArgs,
   parseTabrixJsonOutput,
   evaluateSemanticSignal,
+  shouldRecoverForcedTabNavigation,
+  shouldRetryWorkflowRunDetailShell,
   summarizeInteractiveElements,
   validateStableSnapshotContract,
 } from './t4-github-baseline.mjs';
@@ -86,6 +88,48 @@ test('normalizeWorkflowRunUrl accepts absolute and relative workflow run links',
     'https://github.com/guodaxia103/tabrix/actions/runs/24601534712',
   );
   assert.equal(normalizeWorkflowRunUrl('https://github.com/guodaxia103/tabrix/actions'), null);
+});
+
+test('shouldRecoverForcedTabNavigation only recovers forced new-window reuse onto an existing tab', () => {
+  assert.equal(
+    shouldRecoverForcedTabNavigation({ usedExistingTab: true }, 123, true),
+    true,
+  );
+  assert.equal(
+    shouldRecoverForcedTabNavigation({ usedExistingTab: false }, 123, true),
+    false,
+  );
+  assert.equal(
+    shouldRecoverForcedTabNavigation({ usedExistingTab: true }, null, true),
+    false,
+  );
+  assert.equal(
+    shouldRecoverForcedTabNavigation({ usedExistingTab: true }, 123, false),
+    false,
+  );
+});
+
+test('shouldRetryWorkflowRunDetailShell detects workflow detail shell snapshots before semantic sampling', () => {
+  assert.equal(
+    shouldRetryWorkflowRunDetailShell(
+      {
+        summary: { primaryRegion: 'workflow_run_shell' },
+        interactiveElements: [{ name: 'Filter workflow runs' }],
+      },
+      /summary|show all jobs|jobs/i,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldRetryWorkflowRunDetailShell(
+      {
+        summary: { primaryRegion: 'workflow_run_summary' },
+        interactiveElements: [{ name: 'Summary' }, { name: 'Jobs' }],
+      },
+      /summary|show all jobs|jobs/i,
+    ),
+    false,
+  );
 });
 
 test('evaluateSemanticSignal does not allow highValueObjects or L0 to loosen the main gate', () => {

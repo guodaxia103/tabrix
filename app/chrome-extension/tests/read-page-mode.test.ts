@@ -163,6 +163,43 @@ describe('read_page mode', () => {
     expect(payload.fullSnapshot).toBeUndefined();
   });
 
+  it('maps issue triage pages to search task mode in read_page output', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5204,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://github.com/example/project/issues',
+      title: 'Issues · example/project',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [
+        '- heading "Issues" [ref=ref_heading] (x=220,y=120)',
+        '- textbox "Search Issues" [ref=ref_search] (x=320,y=180)',
+        '- combobox "Filter issues" [ref=ref_filter] (x=520,y=180)',
+        '- link "Issue entries" [ref=ref_issue_entry] (x=400,y=240)',
+      ].join('\n'),
+      refMap: [
+        { ref: 'ref_search', selector: 'input[aria-label="Search Issues"]' },
+        { ref: 'ref_filter', selector: 'button[aria-label="Filter issues"]' },
+        { ref: 'ref_issue_entry', selector: 'a[href*="/issues/"]' },
+      ],
+      stats: { processed: 12, included: 9, durationMs: 10 },
+      viewport: { width: 1280, height: 720, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(result.isError).toBe(false);
+    expectCommonSnapshotShape(payload, 'compact');
+    expect(payload.summary.pageRole).toBe('issues_list');
+    expect(payload.summary.primaryRegion).toBe('issues_results');
+    expect(payload.taskMode).toBe('search');
+  });
+
   it('echoes explicit full mode', async () => {
     vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
       id: 5202,
@@ -628,6 +665,7 @@ describe('read_page mode', () => {
         expect.objectContaining({ ref: 'ref_filter', name: 'Filter workflow runs' }),
       ]),
     );
+    expect(payload.taskMode).toBe('monitor');
     expect(orderedRefs.indexOf('ref_run_detail')).toBeLessThan(
       orderedRefs.indexOf('ref_close_issues'),
     );
