@@ -10,14 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **CI**: `better-sqlite3` native binding (`node-v127-linux-x64`) was
-  missing on GitHub Actions because `pnpm install --ignore-scripts`
-  (kept as a supply-chain hardening measure) silently overrode the
-  `pnpm.onlyBuiltDependencies` allowlist and blocked the prebuild
-  postinstall. Both `.github/workflows/ci.yml` and
-  `.github/workflows/publish-npm.yml` now run
-  `pnpm rebuild better-sqlite3` right after install so the
-  Memory / SessionManager SQLite layer (Phases 0.1–0.3) boots in
-  core tests and release builds.
+  missing on GitHub Actions so all Memory / SessionManager Jest
+  suites (Phases 0.1–0.3) crashed on `Could not locate the bindings
+file`. Root cause: `pnpm install --ignore-scripts` **overrides**
+  `pnpm.onlyBuiltDependencies`, and once pnpm 10 records the skip in
+  `node_modules/.modules.yaml` a follow-up `pnpm rebuild` is still
+  cached-out. The install step in `.github/workflows/ci.yml` and
+  `.github/workflows/publish-npm.yml` now drops `--ignore-scripts`
+  and relies on pnpm 10's default script-blocking plus the
+  allow-list (`better-sqlite3` only) for supply-chain hardening.
+  A belt-and-suspenders `pnpm rebuild better-sqlite3` plus a
+  `require('better-sqlite3')` smoke check run immediately after
+  install so the failure mode surfaces before `Core tests`.
 
 ### Added
 

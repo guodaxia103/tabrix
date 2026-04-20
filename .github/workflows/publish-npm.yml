@@ -55,10 +55,20 @@ jobs:
         run: pnpm run release:check
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        # NOTE: do not add --ignore-scripts. pnpm 10 already blocks all
+        # lifecycle scripts by default and allow-lists exactly the packages
+        # declared in package.json `pnpm.onlyBuiltDependencies` (currently
+        # only `better-sqlite3`). Passing --ignore-scripts additionally
+        # overrides that allowlist and prevents better-sqlite3's
+        # prebuild-install from landing the native .node binary.
+        run: pnpm install --frozen-lockfile
 
-      - name: Rebuild allow-listed native dependencies
+      - name: Ensure better-sqlite3 native binding is built
         run: pnpm rebuild better-sqlite3
+
+      - name: Verify better-sqlite3 binding
+        run: node -e "require('better-sqlite3'); console.log('better-sqlite3 binding ok')"
+        working-directory: app/native-server
 
       - name: Prepare extension generated types
         run: pnpm --filter @tabrix/extension exec wxt prepare
