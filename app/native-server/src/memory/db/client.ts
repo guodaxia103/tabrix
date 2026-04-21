@@ -19,7 +19,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import type Database from 'better-sqlite3';
 
 import { getTabrixDataDir } from '../../shared/data-dirs';
-import { MEMORY_CREATE_TABLES_SQL } from './schema';
+import { EXPERIENCE_CREATE_TABLES_SQL, MEMORY_CREATE_TABLES_SQL } from './schema';
 
 export type SqliteDatabase = Database.Database;
 
@@ -111,6 +111,7 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   }
   db.pragma('foreign_keys = ON');
   db.exec(MEMORY_CREATE_TABLES_SQL);
+  db.exec(EXPERIENCE_CREATE_TABLES_SQL);
 
   return {
     db,

@@ -155,3 +155,56 @@ CREATE INDEX IF NOT EXISTS memory_actions_session_id_idx  ON memory_actions(sess
 CREATE INDEX IF NOT EXISTS memory_actions_action_kind_idx ON memory_actions(action_kind);
 CREATE INDEX IF NOT EXISTS memory_actions_captured_at_idx ON memory_actions(captured_at);
 `;
+
+/**
+ * Stage 3b seed (Sprint 2, B-005): empty Experience tables.
+ *
+ * Intentionally **no repository class, no INSERT/UPDATE code** in this
+ * sprint — the aggregator that populates these tables (reading Memory,
+ * writing Experience) is scheduled for Sprint 3+ (B-012). Shipping the
+ * schema early means the aggregator can land as a pure writer-side PR
+ * without a migration coupled in.
+ *
+ * Co-located in the same `memory.db` file as Memory: Experience is a
+ * derived view of Memory data, and keeping them in one DB simplifies
+ * cross-table reads in the aggregator without a JOIN-across-files hack.
+ * If we ever need to scale Experience out, the only thing that changes
+ * is this constant.
+ *
+ * Same idempotency rules as Memory: every `CREATE … IF NOT EXISTS`.
+ */
+export const EXPERIENCE_CREATE_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS experience_action_paths (
+  action_path_id    TEXT PRIMARY KEY,
+  page_role         TEXT NOT NULL,
+  intent_signature  TEXT NOT NULL,
+  step_sequence     TEXT NOT NULL,          -- JSON: ordered [{ toolName, argTemplate }]
+  success_count     INTEGER NOT NULL DEFAULT 0,
+  failure_count     INTEGER NOT NULL DEFAULT 0,
+  last_used_at      TEXT,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS experience_action_paths_role_intent_idx
+  ON experience_action_paths(page_role, intent_signature);
+CREATE INDEX IF NOT EXISTS experience_action_paths_last_used_at_idx
+  ON experience_action_paths(last_used_at);
+
+CREATE TABLE IF NOT EXISTS experience_locator_prefs (
+  locator_pref_id          TEXT PRIMARY KEY,
+  page_role                TEXT NOT NULL,
+  element_purpose          TEXT NOT NULL,
+  preferred_selector_kind  TEXT NOT NULL,    -- 'role' | 'text' | 'data-testid' | 'css'
+  preferred_selector       TEXT NOT NULL,
+  hit_count                INTEGER NOT NULL DEFAULT 0,
+  last_hit_at              TEXT,
+  created_at               TEXT NOT NULL,
+  updated_at               TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS experience_locator_prefs_role_purpose_idx
+  ON experience_locator_prefs(page_role, element_purpose);
+CREATE INDEX IF NOT EXISTS experience_locator_prefs_last_hit_at_idx
+  ON experience_locator_prefs(last_hit_at);
+`;
