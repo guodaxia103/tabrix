@@ -227,7 +227,7 @@
 ### B-007 · Infra: CI bundle-size gate for `sidepanel.js`
 
 - **Stage**: — · **Layer**: X · **KPI**: 更稳
-- **Owner**: Claude · **Size**: S · **Status**: `review`
+- **Owner**: Claude · **Size**: S · **Status**: `done` (merged 2026-04-20, commit `6de2a4c`)
 - **Dependencies**: **B-006 merged** (so the threshold reflects the real post-B-006 size)
 - **Branch**: `chore/b-007-bundle-size-gate`
 - **Scope**:
