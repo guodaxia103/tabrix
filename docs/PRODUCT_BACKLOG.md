@@ -191,7 +191,7 @@
 ### B-006 · Extension: Memory tab filter + search + jump-to-last-failure
 
 - **Stage**: 3e · **Layer**: M · **KPI**: 懂用户 · 更快
-- **Owner**: Claude · **Size**: L · **Status**: `planned`
+- **Owner**: Claude · **Size**: L · **Status**: `review`
 - **Dependencies**: B-002 and B-003 merged (both `done`)
 - **Branch**: `feat/b-006-memory-tab-filter-search`
 - **Schema cite**: extends the read-side contract in `packages/shared/src/memory.ts` (the DTO module B-002 introduced); native-server surface already exists — `MemorySessionSummary.status` and `MemorySessionSummary.taskTitle` / `taskIntent` are enough for client-side filtering. **Do not** add a new backend endpoint for this — server-side search is a Sprint 3+ candidate and needs its own `B-NNN`.
@@ -216,6 +216,13 @@
     8. Clearing both filters restores full list without refetch.
   - Sidepanel bundle size delta ≤ +6 kB JS, ≤ +3 kB CSS vs. post-B-003 baseline (17.59 / 16.13).
   - Manual browser check (user-side): filtering works on a live session list; "jump to last failure" scrolls and highlights.
+- **Landed scope (2026-04-20)**:
+  - `app/chrome-extension/entrypoints/shared/composables/useMemoryTimeline.ts`: new exported `MemoryStatusChip` type, `MEMORY_STATUS_CHIPS` readonly tuple, and `chipToStatuses(chip)` helper (the "running" chip expands to `['running', 'starting']` — documented inline). Composable API grew `statusFilter` / `searchQuery` Refs, `filteredSessions` / `hasActiveFilters` / `lastFailedSessionId` Computeds, and `toggleStatusChip` / `clearFilters` / `jumpToLastFailure` methods. No new network requests — filtering is 100 % client-side against the already-paginated page.
+  - `app/chrome-extension/entrypoints/sidepanel/tabs/MemoryTab.vue`: new chip row (All + 4 status chips) with `role="radiogroup"` + `aria-checked` on each chip; `<input type="search">` bound via a computed v-model to the composable's `searchQuery`; conditional `↓ Jump to last failure` button; new empty-state variant ("No sessions match your filters"); `scrollIntoView` + `memory-row-flash` 900 ms highlight on jump. List now iterates `timeline.filteredSessions.value`. Pager shows `(showing N)` badge when a filter is active.
+  - `app/chrome-extension/tests/memory-filter.test.ts` (new): **11 tests** (over the "≥ 8" bar) covering all-default state, single chip, multi-chip OR, running→starting expansion, title/intent search, whitespace-only no-op, `jumpToLastFailure` in ordered-DESC list, post-filter null, `clearFilters` with no network call, and chip-toggle idempotency. Extension test count: 262 → 273.
+  - Sidepanel bundle: `sidepanel.js` 17.59 kB → **21.00 kB (+3.41 kB, within +6 kB budget)**; `sidepanel-*.css` 16.13 kB → **18.24 kB (+2.11 kB, within +3 kB budget)**.
+  - **Deviation from brief**: test file delivers 11 tests (not "≥ 8") because the "search whitespace-only no-op" and "toggle idempotency" were worth first-class coverage. Chip labels: "Canceled" is the user-facing label for the DB status `aborted` — spec said "canceled"; kept the existing DB name for the type/filter code and remapped only at the UI layer.
+  - **Schema cite** (per the future B-009 rule): consumes `MemorySessionSummary.taskTitle / taskIntent / status` from `packages/shared/src/memory.ts`. No server-side schema touched.
 
 ### B-007 · Infra: CI bundle-size gate for `sidepanel.js`
 
