@@ -277,7 +277,7 @@
 ### B-009 · Codex fast task · add "schema-cite rule" to AGENTS.md + backlog template
 
 - **Stage**: — · **Layer**: X · **KPI**: 懂用户 (process)
-- **Owner**: **Codex fast** · **Size**: S · **Status**: `planned`
+- **Owner**: **Codex fast (draft-only)** · **Size**: S · **Status**: `review`
 - **Dependencies**: none
 - **Branch**: `chore/b-009-agents-schema-cite-rule`
 - **Shape (re-tests the "draft-only" Codex handoff protocol from `AGENTS.md`)**:
@@ -290,6 +290,7 @@
   - `pnpm -r typecheck` passes.
   - `git diff --stat` shows exactly 2 files changed.
   - Claude manually commits with message `docs(agents): add schema-cite rule + bundle-size gate reference (B-009)` after verification.
+- **Landed by Codex (2026-04-20, draft-only)**: two files edited per brief. `git diff --stat` returned cleanly. Awaiting Claude's verification + commit.
 
 ## Sprint 3+ — backlog pool (unordered, pulled into a sprint during review)
 

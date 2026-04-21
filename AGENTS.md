@@ -176,6 +176,18 @@ These are cross-cutting size / performance / schema rules that every AI agent (C
 - Post-B-006 baseline: `sidepanel-*.js` ≈ 20.5 kB. If you add a feature that pushes the bundle above the soft threshold, either split the feature behind a dynamic import or raise the threshold **in the same reviewed commit** as the feature — never in a separate "oops" follow-up.
 - CSS is not gated yet. A future backlog item may extend the script to cover `sidepanel-*.css`.
 
+### Schema-cite rule (added in B-009)
+
+Every backlog item whose scope touches the Memory / Knowledge / Experience SQLite tables or the shared DTO contract in `packages/shared/src/` must cite the authoritative schema before implementation starts. Concretely, the "Schema cite" line of the backlog entry must:
+
+- Point at the exact repository file + (when possible) line range of the SQL DDL or TypeScript type that the task builds on — no paraphrase, no "see docs".
+- Name each new / modified column or DTO field explicitly; a vague "adds a few fields" is not acceptable.
+- Call out the idempotency story: does the migration use `CREATE … IF NOT EXISTS`, does the DTO shape stay backwards-compatible, does the client parser accept unknown keys.
+
+Why: three of the five real bugs in Sprints 1–2 were one side of the extension / native-server / shared DTO triangle drifting from the other two. Forcing a citation turns "I remember what that shape is" into "grep confirms this shape is the same".
+
+Applies equally to Claude-led and Codex-led tasks. When Claude drafts a backlog item, the citation lives in the `- **Schema cite**:` bullet (see B-005 / B-006 for examples).
+
 ## Public Source Of Truth
 
 For this public repository, treat `docs/` (English-only) plus the root-level `README.md`, `README_zh.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, and `AGENTS.md` as the public source of truth. Do not recreate internal PM systems, private review docs, nightly reports, or acceptance evidence inside the public tree.
