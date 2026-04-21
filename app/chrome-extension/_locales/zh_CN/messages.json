@@ -671,14 +671,6 @@
     "message": "验证",
     "description": "自动同步键: markerValidateButton"
   },
-  "popupAgentAssistantDesc": {
-    "message": "AI Agent 对话与任务",
-    "description": "自动同步键: popupAgentAssistantDesc"
-  },
-  "popupAgentAssistantTitle": {
-    "message": "智能助手",
-    "description": "自动同步键: popupAgentAssistantTitle"
-  },
   "popupComingSoonSuffix": {
     "message": "功能开发中，敬请期待",
     "description": "自动同步键: popupComingSoonSuffix"
@@ -859,18 +851,6 @@
     "message": "打开排查向导",
     "description": "自动同步键: popupOpenTroubleshootingGuide"
   },
-  "popupQuickToolsTitle": {
-    "message": "快捷工具",
-    "description": "自动同步键: popupQuickToolsTitle"
-  },
-  "popupRecordComingSoon": {
-    "message": "录制功能开发中",
-    "description": "自动同步键: popupRecordComingSoon"
-  },
-  "popupRecordReplayFeature": {
-    "message": "录制回放",
-    "description": "自动同步键: popupRecordReplayFeature"
-  },
   "popupRefreshClientsTitle": {
     "message": "刷新客户端列表",
     "description": "自动同步键: popupRefreshClientsTitle"
@@ -1016,14 +996,6 @@
   "popupGenericMcpClient": {
     "message": "MCP 客户端",
     "description": "自动同步键: popupGenericMcpClient"
-  },
-  "popupWorkflowManagementDesc": {
-    "message": "录制与回放自动化流程",
-    "description": "自动同步键: popupWorkflowManagementDesc"
-  },
-  "popupWorkflowManagementTitle": {
-    "message": "工作流管理",
-    "description": "自动同步键: popupWorkflowManagementTitle"
   },
   "scheduleArgsLabel": {
     "message": "参数(JSON)",

@@ -5,7 +5,4 @@ export { default as TrashIcon } from './TrashIcon.vue';
 export { default as CheckIcon } from './CheckIcon.vue';
 export { default as TabIcon } from './TabIcon.vue';
 export { default as VectorIcon } from './VectorIcon.vue';
-export { default as RecordIcon } from './RecordIcon.vue';
-export { default as StopIcon } from './StopIcon.vue';
-export { default as WorkflowIcon } from './WorkflowIcon.vue';
 export { default as RefreshIcon } from './RefreshIcon.vue';

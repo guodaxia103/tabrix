@@ -70,29 +70,10 @@ export default defineConfig({
       default_popup: 'popup.html',
       default_title: 'Tabrix',
     },
-    // Chrome Side Panel entry for workflow management
+    // Chrome Side Panel hosts the MKEP Memory/Knowledge/Experience viewers.
     // Ref: https://developer.chrome.com/docs/extensions/reference/api/sidePanel
     side_panel: {
       default_path: 'sidepanel.html',
-    },
-    // Keyboard shortcuts for quick triggers
-    commands: {
-      // run_quick_trigger_1: {
-      //   suggested_key: { default: 'Ctrl+Shift+1' },
-      //   description: 'Run quick trigger 1',
-      // },
-      // run_quick_trigger_2: {
-      //   suggested_key: { default: 'Ctrl+Shift+2' },
-      //   description: 'Run quick trigger 2',
-      // },
-      // run_quick_trigger_3: {
-      //   suggested_key: { default: 'Ctrl+Shift+3' },
-      //   description: 'Run quick trigger 3',
-      // },
-      // open_workflow_sidepanel: {
-      //   suggested_key: { default: 'Ctrl+Shift+O' },
-      //   description: 'Open workflow sidepanel',
-      // },
     },
     web_accessible_resources: [
       {

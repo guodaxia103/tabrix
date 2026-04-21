@@ -11,7 +11,7 @@
 import {
   createOffscreenKeepaliveController,
   type KeepaliveController,
-} from './record-replay-v3/engine/keepalive/offscreen-keepalive';
+} from './keepalive/offscreen-keepalive';
 
 const LOG_PREFIX = '[KeepaliveManager]';
 

@@ -1,14 +1,9 @@
 /**
  * @fileoverview Shared Utilities Index
- * @description Utility functions shared between UI entrypoints
+ * @description Utility functions shared between UI entrypoints.
+ *
+ * The record-replay flow conversion helpers were removed as part of the MKEP
+ * pruning (see docs/PRODUCT_PRUNING_PLAN.md §1.2).
  */
 
-// Flow conversion utilities
-export {
-  flowV2ToV3ForRpc,
-  flowV3ToV2ForBuilder,
-  isFlowV3,
-  isFlowV2,
-  extractFlowCandidates,
-  type FlowConversionResult,
-} from './rr-flow-convert';
+export {};

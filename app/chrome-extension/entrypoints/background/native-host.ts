@@ -10,7 +10,6 @@ import { NATIVE_HOST, STORAGE_KEYS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '@/c
 import { normalizeNativeLastError } from '@/common/normalize-native-last-error';
 import { isNoServiceWorkerError } from '@/common/is-no-service-worker-error';
 import { handleCallTool } from './tools';
-import { listPublished, getFlow } from './record-replay/flow-store';
 import { registerNativeBridgeForwarder, registerNativeBridgeRequester } from './native-bridge';
 import { acquireKeepalive } from './keepalive-manager';
 
@@ -596,38 +595,6 @@ async function handleBridgeCommandMessage(message: BridgeCommandMessage): Promis
       return;
     }
 
-    if (message.command.action === 'list_published_flows') {
-      const published = await listPublished();
-      const items = [] as any[];
-      for (const entry of published) {
-        const flow = await getFlow(entry.id);
-        if (!flow) continue;
-        items.push({
-          id: entry.id,
-          slug: entry.slug,
-          version: entry.version,
-          name: entry.name,
-          description: entry.description || flow.description || '',
-          variables: flow.variables || [],
-          meta: flow.meta || {},
-        });
-      }
-
-      await sendResult({
-        type: 'result',
-        requestId: message.requestId,
-        connectionId: bridgeSocketConnectionId || message.connectionId,
-        extensionId: chrome.runtime.id,
-        sentAt: Date.now(),
-        success: true,
-        payload: {
-          status: 'success',
-          items,
-        },
-      });
-      return;
-    }
-
     throw new Error(`Unsupported bridge command action: ${message.command.action}`);
   } catch (error) {
     await sendResult({
@@ -1015,36 +982,6 @@ export function connectNativeHost(port: number = NATIVE_HOST.DEFAULT_PORT): bool
               message: ERROR_MESSAGES.TOOL_EXECUTION_FAILED,
               error: error instanceof Error ? error.message : String(error),
             },
-          });
-        }
-      } else if (message.type === 'rr_list_published_flows' && message.requestId) {
-        const requestId = message.requestId;
-        try {
-          const published = await listPublished();
-          const items = [] as any[];
-          for (const p of published) {
-            const flow = await getFlow(p.id);
-            if (!flow) continue;
-            items.push({
-              id: p.id,
-              slug: p.slug,
-              version: p.version,
-              name: p.name,
-              description: p.description || flow.description || '',
-              variables: flow.variables || [],
-              meta: flow.meta || {},
-            });
-          }
-          if (!isActiveNativeConnection(connectionId, portHandle)) return;
-          portHandle.postMessage({
-            responseToRequestId: requestId,
-            payload: { status: 'success', items },
-          });
-        } catch (error: any) {
-          if (!isActiveNativeConnection(connectionId, portHandle)) return;
-          portHandle.postMessage({
-            responseToRequestId: requestId,
-            payload: { status: 'error', error: error?.message || String(error) },
           });
         }
       } else if (message.type === NativeMessageType.SERVER_STARTED) {

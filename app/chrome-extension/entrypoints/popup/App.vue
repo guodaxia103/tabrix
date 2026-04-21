@@ -232,87 +232,10 @@
           </div>
         </div>
 
-        <!-- 快捷工具卡片 -->
-        <div class="section">
-          <h2 class="section-title">{{ getMessage('popupQuickToolsTitle') }}</h2>
-          <div class="rr-icon-buttons">
-            <button
-              class="rr-icon-btn rr-icon-btn-record rr-icon-btn-coming-soon has-tooltip"
-              @click="startRecording"
-              :data-tooltip="getMessage('popupRecordComingSoon')"
-            >
-              <RecordIcon :recording="false" />
-            </button>
-            <button
-              class="rr-icon-btn rr-icon-btn-stop rr-icon-btn-coming-soon has-tooltip"
-              @click="stopRecording"
-              :data-tooltip="getMessage('popupRecordComingSoon')"
-            >
-              <StopIcon />
-            </button>
-          </div>
-        </div>
-
         <!-- 管理入口卡片 -->
         <div class="section">
           <h2 class="section-title">{{ getMessage('popupManagementEntrancesTitle') }}</h2>
           <div class="entry-card">
-            <button class="entry-item" @click="openAgentSidepanel">
-              <div class="entry-icon agent">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                  />
-                </svg>
-              </div>
-              <div class="entry-content">
-                <span class="entry-title">{{ getMessage('popupAgentAssistantTitle') }}</span>
-                <span class="entry-desc">{{ getMessage('popupAgentAssistantDesc') }}</span>
-              </div>
-              <svg
-                class="entry-arrow"
-                viewBox="0 0 24 24"
-                width="16"
-                height="16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-            <button class="entry-item entry-item-coming-soon" @click="openWorkflowSidepanel">
-              <div class="entry-icon workflow">
-                <WorkflowIcon />
-              </div>
-              <div class="entry-content">
-                <span class="entry-title">
-                  {{ getMessage('popupWorkflowManagementTitle') }}
-                  <span class="coming-soon-badge">Coming Soon</span>
-                </span>
-                <span class="entry-desc">{{ getMessage('popupWorkflowManagementDesc') }}</span>
-              </div>
-              <svg
-                class="entry-arrow"
-                viewBox="0 0 24 24"
-                width="16"
-                height="16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
             <button class="entry-item" @click="currentView = 'local-model'">
               <div class="entry-icon model">
                 <svg
@@ -614,9 +537,6 @@ import {
   CheckIcon,
   TabIcon,
   VectorIcon,
-  RecordIcon,
-  StopIcon,
-  WorkflowIcon,
   RefreshIcon,
 } from './components/icons';
 
@@ -648,133 +568,9 @@ function showComingSoonToast(feature: string) {
   }, 2000);
 }
 
-// Record & Replay state
-const rrRecording = ref(false);
-const rrFlows = ref<
-  Array<{ id: string; name: string; description?: string; meta?: any; variables?: any[] }>
->([]);
-const rrOnlyBound = ref(false);
-const rrSearch = ref('');
-const currentTabUrl = ref<string>('');
-const filteredRrFlows = computed(() => {
-  const base = rrOnlyBound.value ? rrFlows.value.filter(isFlowBoundToCurrent) : rrFlows.value;
-  const q = rrSearch.value.trim().toLowerCase();
-  if (!q) return base;
-  return base.filter((f: any) => {
-    const name = String(f.name || '').toLowerCase();
-    const domain = String(f?.meta?.domain || '').toLowerCase();
-    const tags = ((f?.meta?.tags || []) as any[]).join(',').toLowerCase();
-    return name.includes(q) || domain.includes(q) || tags.includes(q);
-  });
-});
-
-// Flow editor在独立窗口中打开；在popup不再展示繁杂列表
-
-const loadFlows = async () => {
-  try {
-    const res = await chrome.runtime.sendMessage({ type: BACKGROUND_MESSAGE_TYPES.RR_LIST_FLOWS });
-    if (res && res.success) rrFlows.value = res.flows || [];
-  } catch (e) {
-    /* ignore */
-  }
-};
-
-function isFlowBoundToCurrent(flow: any) {
-  try {
-    const bindings = flow?.meta?.bindings || [];
-    if (!bindings.length) return false;
-    if (!currentTabUrl.value) return true;
-    const url = new URL(currentTabUrl.value);
-    return bindings.some((b: any) => {
-      if (b.type === 'domain') return url.hostname.includes(b.value);
-      if (b.type === 'path') return url.pathname.startsWith(b.value);
-      if (b.type === 'url') return (url.href || '').startsWith(b.value);
-      return false;
-    });
-  } catch {
-    return false;
-  }
-}
-
-// 运行记录与覆盖项在侧边栏页面查看
-const startRecording = async () => {
-  showComingSoonToast(getMessage('popupRecordReplayFeature'));
-  return;
-  // if (rrRecording.value) return;
-  // try {
-  //   const res = await chrome.runtime.sendMessage({
-  //     type: BACKGROUND_MESSAGE_TYPES.RR_START_RECORDING,
-  //     meta: { name: '新录制' },
-  //   });
-  //   rrRecording.value = !!(res && res.success);
-  // } catch (e) {
-  //   console.error('开始录制失败:', e);
-  //   rrRecording.value = false;
-  // }
-};
-
-const stopRecording = async () => {
-  showComingSoonToast(getMessage('popupRecordReplayFeature'));
-  return;
-  // if (!rrRecording.value) return;
-  // try {
-  //   const res = await chrome.runtime.sendMessage({
-  //     type: BACKGROUND_MESSAGE_TYPES.RR_STOP_RECORDING,
-  //   });
-  //   rrRecording.value = false;
-  //   if (res && res.success) await loadFlows();
-  // } catch (e) {
-  //   console.error('停止录制失败:', e);
-  //   rrRecording.value = false;
-  // }
-};
-
-const runFlow = async (flowId: string) => {
-  try {
-    // load flow to get runOptions
-    let flow: any = null;
-    try {
-      const getRes = await chrome.runtime.sendMessage({
-        type: BACKGROUND_MESSAGE_TYPES.RR_GET_FLOW,
-        flowId,
-      });
-      if (getRes && getRes.success) flow = getRes.flow;
-    } catch {}
-    const runOptions = (flow && flow.meta && flow.meta.runOptions) || {};
-    // No per-run overrides in popup; sidepanel/editor manage advanced options
-    const ov: any = {};
-    const res = await chrome.runtime.sendMessage({
-      type: BACKGROUND_MESSAGE_TYPES.RR_RUN_FLOW,
-      flowId,
-      options: { ...runOptions, ...ov, returnLogs: true },
-    });
-    if (!(res && res.success)) {
-      console.warn('Playback failed');
-      return;
-    }
-    // If failed, open builder and focus the failed node
-    try {
-      const result = res.result;
-      if (result && result.success === false) {
-        const logs = result.logs || [];
-        const failed = logs.find((l: any) => l.status === 'failed');
-        if (failed && failed.stepId) {
-          // 打开独立编辑窗口并定位失败节点
-          if (flow) openBuilderWindow(flow.id, String(failed.stepId));
-        }
-      } else if (result && result.success === true) {
-        // If run succeeded but selector fallback was used, suggest updating priorities
-        const logs = result.logs || [];
-        const fb = logs.find((l: any) => l.fallbackUsed && l.fallbackTo);
-        if (fb && flow) openBuilderWindow(flow.id, String(fb.stepId || ''));
-      }
-    } catch {}
-  } catch (e) {
-    console.error('Playback failed:', e);
-  }
-};
-
-// 旧的“克隆/发布/定时/覆盖项”在侧边栏或编辑器中处理
+// Record & Replay / workflow surfaces were removed as part of the MKEP
+// pruning (see docs/PRODUCT_PRUNING_PLAN.md §P5). No flow list, recorder
+// control or workflow state lives in the popup anymore.
 
 const nativeConnectionStatus = ref<'unknown' | 'connected' | 'disconnected'>('unknown');
 const isConnecting = ref(false);
@@ -1310,16 +1106,6 @@ async function openSidepanelAndClose(tab: string) {
   }
 }
 
-// Open sidepanel from popup for workflow management
-function openWorkflowSidepanel() {
-  showComingSoonToast(getMessage('popupWorkflowManagementTitle'));
-}
-
-// Open sidepanel for agent chat
-function openAgentSidepanel() {
-  openSidepanelAndClose('agent-chat');
-}
-
 async function openWelcomePage() {
   try {
     await chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
@@ -1334,13 +1120,6 @@ async function openTroubleshooting() {
   } catch {
     // ignore
   }
-}
-
-function openBuilderWindow(flowId?: string, focusNodeId?: string) {
-  const url = new URL(chrome.runtime.getURL('builder.html'));
-  if (flowId) url.searchParams.set('flowId', flowId);
-  if (focusNodeId) url.searchParams.set('focus', focusNodeId);
-  chrome.windows.create({ url: url.toString(), type: 'popup', width: 1280, height: 800 });
 }
 
 const statusDetailText = computed(() => {
@@ -2432,14 +2211,10 @@ const setupServerStatusListener = () => {
         connectedClients.value = [];
       }
     }
-    // Flows changed - refresh list (IndexedDB-based notification)
-    if (message.type === BACKGROUND_MESSAGE_TYPES.RR_FLOWS_CHANGED) {
-      loadFlows();
-    }
   };
   chrome.runtime.onMessage.addListener(onMessage);
   // Store reference for cleanup
-  (window as any).__rr_popup_onMessage = onMessage;
+  (window as any).__tabrix_popup_onMessage = onMessage;
 };
 
 onMounted(async () => {
@@ -2452,11 +2227,6 @@ onMounted(async () => {
     await checkServerStatus();
     await refreshStorageStats();
     await loadCacheStats();
-    await loadFlows();
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      currentTabUrl.value = tab?.url || '';
-    } catch {}
 
     await checkSemanticEngineStatus();
     setupServerStatusListener();
@@ -2468,18 +2238,6 @@ onMounted(async () => {
       await testNativeConnection();
       await refreshServerStatus();
     }
-
-    // Auto-refresh workflows list when storage rr_flows changes
-    try {
-      const onChanged = (changes: any, area: string) => {
-        try {
-          if (area !== 'local') return;
-          if (Object.prototype.hasOwnProperty.call(changes || {}, 'rr_flows')) loadFlows();
-        } catch {}
-      };
-      chrome.storage.onChanged.addListener(onChanged);
-      (window as any).__rr_popup_onChanged = onChanged;
-    } catch {}
   } finally {
     isBootstrappingStatus.value = false;
   }
@@ -2490,16 +2248,9 @@ onUnmounted(() => {
   stopSemanticEngineStatusPolling();
   // Clean up runtime message listener
   try {
-    const msgFn = (window as any).__rr_popup_onMessage;
+    const msgFn = (window as any).__tabrix_popup_onMessage;
     if (msgFn && chrome?.runtime?.onMessage?.removeListener) {
       chrome.runtime.onMessage.removeListener(msgFn);
-    }
-  } catch {}
-  // Clean up storage change listener (legacy fallback)
-  try {
-    const fn = (window as any).__rr_popup_onChanged;
-    if (fn && chrome?.storage?.onChanged?.removeListener) {
-      chrome.storage.onChanged.removeListener(fn);
     }
   } catch {}
 });

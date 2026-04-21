@@ -671,14 +671,6 @@
     "message": "Validate",
     "description": "Auto-synced key: markerValidateButton"
   },
-  "popupAgentAssistantDesc": {
-    "message": "AI Agent chat and tasks",
-    "description": "Auto-synced key: popupAgentAssistantDesc"
-  },
-  "popupAgentAssistantTitle": {
-    "message": "AI Assistant",
-    "description": "Auto-synced key: popupAgentAssistantTitle"
-  },
   "popupComingSoonSuffix": {
     "message": "is under development, stay tuned",
     "description": "Auto-synced key: popupComingSoonSuffix"
@@ -859,18 +851,6 @@
     "message": "Open Troubleshooting Guide",
     "description": "Auto-synced key: popupOpenTroubleshootingGuide"
   },
-  "popupQuickToolsTitle": {
-    "message": "Quick Tools",
-    "description": "Auto-synced key: popupQuickToolsTitle"
-  },
-  "popupRecordComingSoon": {
-    "message": "Recording feature is under development",
-    "description": "Auto-synced key: popupRecordComingSoon"
-  },
-  "popupRecordReplayFeature": {
-    "message": "Record & Replay",
-    "description": "Auto-synced key: popupRecordReplayFeature"
-  },
   "popupRefreshClientsTitle": {
     "message": "Refresh client list",
     "description": "Auto-synced key: popupRefreshClientsTitle"
@@ -1016,14 +996,6 @@
   "popupGenericMcpClient": {
     "message": "MCP client",
     "description": "Auto-synced key: popupGenericMcpClient"
-  },
-  "popupWorkflowManagementDesc": {
-    "message": "Record/replay automation flows",
-    "description": "Auto-synced key: popupWorkflowManagementDesc"
-  },
-  "popupWorkflowManagementTitle": {
-    "message": "Workflow Management",
-    "description": "Auto-synced key: popupWorkflowManagementTitle"
   },
   "scheduleArgsLabel": {
     "message": "Arguments (JSON)",
