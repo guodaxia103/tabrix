@@ -2,6 +2,8 @@ import type {
   CompiledKnowledgeObjectClassifier,
   CompiledKnowledgePattern,
   CompiledKnowledgeRegistry,
+  CompiledKnowledgeUIMapLocatorHint,
+  CompiledKnowledgeUIMapRule,
   CompiledPageRoleRule,
   CompiledPrimaryRegionRule,
   CompiledSiteProfile,
@@ -11,6 +13,8 @@ import type {
   KnowledgePrimaryRegionRule,
   KnowledgeSeeds,
   KnowledgeSiteProfile,
+  KnowledgeUIMapLocatorHint,
+  KnowledgeUIMapRule,
 } from '../types';
 import { GITHUB_KNOWLEDGE_SEEDS } from '../seeds/github';
 import { DOUYIN_KNOWLEDGE_SEEDS } from '../seeds/douyin';
@@ -56,6 +60,8 @@ export function compileKnowledgeRegistry(
   const siteProfiles = new Map<string, CompiledSiteProfile>();
   const pageRoleRulesBySite = new Map<string, CompiledPageRoleRule[]>();
   const objectClassifiersBySite = new Map<string, CompiledKnowledgeObjectClassifier[]>();
+  const uiMapRulesBySite = new Map<string, CompiledKnowledgeUIMapRule[]>();
+  const uiMapRuleByKey = new Map<string, CompiledKnowledgeUIMapRule>();
 
   for (const seeds of seedSets) {
     for (const profile of seeds.siteProfiles) {
@@ -74,13 +80,38 @@ export function compileKnowledgeRegistry(
       list.push(compileObjectClassifier(classifier));
       objectClassifiersBySite.set(classifier.siteId, list);
     }
+    for (const rule of seeds.uiMapRules ?? []) {
+      const compiled = compileUIMapRule(rule);
+      const key = uiMapRuleKey(compiled.siteId, compiled.pageRole, compiled.purpose);
+      if (uiMapRuleByKey.has(key)) {
+        throw new Error(
+          `[tabrix/knowledge] duplicate UI map rule: siteId=${compiled.siteId} ` +
+            `pageRole=${compiled.pageRole} purpose=${compiled.purpose}`,
+        );
+      }
+      uiMapRuleByKey.set(key, compiled);
+      const list = uiMapRulesBySite.get(compiled.siteId) ?? [];
+      list.push(compiled);
+      uiMapRulesBySite.set(compiled.siteId, list);
+    }
   }
 
   return {
     siteProfiles,
     pageRoleRulesBySite,
     objectClassifiersBySite,
+    uiMapRulesBySite,
+    uiMapRuleByKey,
   };
+}
+
+/**
+ * Stable key builder for UI map lookups. Exposed so the lookup module
+ * can reuse exactly the same normalization (`siteId::pageRole::purpose`)
+ * the loader used to build the index.
+ */
+export function uiMapRuleKey(siteId: string, pageRole: string, purpose: string): string {
+  return `${siteId}::${pageRole}::${purpose}`;
 }
 
 /** Testing hook — clears the memoised compile so tests can swap seed sets. */
@@ -152,4 +183,30 @@ function compilePatternList(
     source,
     pattern: new RegExp(source, flags),
   }));
+}
+
+function compileUIMapRule(rule: KnowledgeUIMapRule): CompiledKnowledgeUIMapRule {
+  return {
+    siteId: rule.siteId,
+    pageRole: rule.pageRole,
+    purpose: rule.purpose,
+    region: rule.region ?? null,
+    locatorHints: rule.locatorHints.map(compileUIMapLocatorHint),
+    actionType: rule.actionType ?? null,
+    confidence: rule.confidence ?? null,
+    notes: rule.notes ?? null,
+  };
+}
+
+function compileUIMapLocatorHint(
+  hint: KnowledgeUIMapLocatorHint,
+): CompiledKnowledgeUIMapLocatorHint {
+  const pattern =
+    hint.kind === 'label_regex' || hint.kind === 'href_regex' ? new RegExp(hint.value, 'i') : null;
+  return {
+    kind: hint.kind,
+    value: hint.value,
+    pattern,
+    role: hint.role ? hint.role.toLowerCase() : null,
+  };
 }

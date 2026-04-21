@@ -110,12 +110,81 @@ export interface KnowledgeObjectClassifier {
   readonly reason?: string;
 }
 
+/**
+ * Stage 3a — authored UI Map rule (Locator Hints layer).
+ *
+ * Design rationale: `docs/MKEP_STAGE_3_PLUS_ROADMAP.md §4.1`, target schema in
+ * `docs/MKEP_CURRENT_VS_TARGET.md §3.4`.
+ *
+ * A UI Map rule says: on `(siteId, pageRole)`, the element with semantic
+ * `purpose` (e.g. `repo_home.open_issues_tab`, `issues_list.new_issue_cta`)
+ * can be located via one of the `locatorHints`. Hint order is declaration
+ * order, not score order — the runtime locator chain in
+ * `candidate-action.ts` still decides which kind wins when both fire
+ * (`ref > css > selector`-first today).
+ *
+ * B-010 intentionally stops at **schema + seed + read-only lookup**. It
+ * does not:
+ *   - emit `targetRef` into `read_page` HVOs (that is B-011);
+ *   - rewrite `candidate-action.ts:48-94` to consult these hints (that is
+ *     also B-011, dependent on `stable targetRef`);
+ *   - feed the Experience Stage 3b aggregator (B-012 / B-013).
+ *
+ * The hint kinds mirror `docs/MKEP_CURRENT_VS_TARGET.md:234-239`:
+ *   - `aria_name` — exact accessible-name match (optionally scoped by
+ *     ARIA `role`);
+ *   - `label_regex` — regex against the element's visible/accessible
+ *     label (optionally scoped by ARIA `role`);
+ *   - `href_regex` — regex against the element's normalized `href` (for
+ *     anchors and link-like controls);
+ *   - `css` — verbatim CSS selector, last-resort.
+ */
+export type KnowledgeUIMapLocatorHintKind = 'aria_name' | 'label_regex' | 'href_regex' | 'css';
+
+export interface KnowledgeUIMapLocatorHint {
+  readonly kind: KnowledgeUIMapLocatorHintKind;
+  /**
+   * For `aria_name` and `css`: the exact string.
+   * For `label_regex` and `href_regex`: the regex *source* (compiled at
+   * registry load with the `'i'` flag, matching the other patterns).
+   */
+  readonly value: string;
+  /** Optional ARIA role filter. Only meaningful for `aria_name` and `label_regex`. */
+  readonly role?: string;
+}
+
+export type KnowledgeUIMapActionType = 'click' | 'fill' | 'navigate';
+export type KnowledgeUIMapConfidence = 'high' | 'medium' | 'low';
+
+export interface KnowledgeUIMapRule {
+  readonly siteId: string;
+  readonly pageRole: PageRole;
+  /**
+   * Stable semantic key. Convention: `<pageRole>.<element_purpose>`, all
+   * lowercase snake_case (e.g. `repo_home.open_issues_tab`). Paired with
+   * `siteId + pageRole` it must be unique — see `KNOWLEDGE_STAGE_2.md`
+   * §"purpose naming" for the rule, and the registry loader enforces
+   * uniqueness at compile time.
+   */
+  readonly purpose: string;
+  /** Optional region gate. `null` means "any region under this pageRole". */
+  readonly region?: string | null;
+  /** Ordered list — earlier hints are preferred when they fire. */
+  readonly locatorHints: readonly KnowledgeUIMapLocatorHint[];
+  readonly actionType?: KnowledgeUIMapActionType;
+  readonly confidence?: KnowledgeUIMapConfidence;
+  /** Free-text authoring note; not consumed at runtime. */
+  readonly notes?: string;
+}
+
 /** The authored seed set for one site. Loader accepts arrays of these. */
 export interface KnowledgeSeeds {
   readonly siteProfiles: readonly KnowledgeSiteProfile[];
   readonly pageRoleRules: readonly KnowledgePageRoleRule[];
   /** Stage 2+. Optional so Stage 1-only seeds (e.g. placeholder) compile. */
   readonly objectClassifiers?: readonly KnowledgeObjectClassifier[];
+  /** Stage 3a+. Optional so earlier-stage seeds keep compiling. */
+  readonly uiMapRules?: readonly KnowledgeUIMapRule[];
 }
 
 /** Compiled forms used at lookup time. Patterns are compiled once. */
@@ -166,6 +235,29 @@ export interface CompiledKnowledgeObjectClassifier {
   readonly reason: string | null;
 }
 
+/**
+ * Stage 3a compiled UI map hint. Regex hint kinds carry their compiled
+ * pattern on `pattern`; `aria_name` / `css` leave it as `null`.
+ */
+export interface CompiledKnowledgeUIMapLocatorHint {
+  readonly kind: KnowledgeUIMapLocatorHintKind;
+  readonly value: string;
+  readonly pattern: RegExp | null;
+  readonly role: string | null;
+}
+
+/** Stage 3a compiled UI map rule. */
+export interface CompiledKnowledgeUIMapRule {
+  readonly siteId: string;
+  readonly pageRole: PageRole;
+  readonly purpose: string;
+  readonly region: string | null;
+  readonly locatorHints: readonly CompiledKnowledgeUIMapLocatorHint[];
+  readonly actionType: KnowledgeUIMapActionType | null;
+  readonly confidence: KnowledgeUIMapConfidence | null;
+  readonly notes: string | null;
+}
+
 /** The registry view consumed by lookup functions. */
 export interface CompiledKnowledgeRegistry {
   readonly siteProfiles: ReadonlyMap<string, CompiledSiteProfile>;
@@ -174,4 +266,11 @@ export interface CompiledKnowledgeRegistry {
     string,
     readonly CompiledKnowledgeObjectClassifier[]
   >;
+  /** Declaration-ordered list of UI map rules per `siteId`. */
+  readonly uiMapRulesBySite: ReadonlyMap<string, readonly CompiledKnowledgeUIMapRule[]>;
+  /**
+   * Fast-path triple index keyed by `${siteId}::${pageRole}::${purpose}`.
+   * `compileKnowledgeRegistry` throws on duplicate keys.
+   */
+  readonly uiMapRuleByKey: ReadonlyMap<string, CompiledKnowledgeUIMapRule>;
 }

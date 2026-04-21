@@ -1,4 +1,4 @@
-import type { KnowledgeObjectClassifier, KnowledgeSeeds } from '../types';
+import type { KnowledgeObjectClassifier, KnowledgeSeeds, KnowledgeUIMapRule } from '../types';
 
 /**
  * Stage 1 GitHub Knowledge seeds — faithful data-ification of the rules
@@ -190,6 +190,7 @@ export const GITHUB_KNOWLEDGE_SEEDS: KnowledgeSeeds = {
     },
   ],
   objectClassifiers: GITHUB_OBJECT_CLASSIFIERS(),
+  uiMapRules: GITHUB_UI_MAP_RULES(),
 };
 
 /**
@@ -474,6 +475,110 @@ function GITHUB_OBJECT_CLASSIFIERS(): readonly KnowledgeObjectClassifier[] {
       match: { labelPatterns: [String.raw`^annotations?$`] },
       objectType: 'status_item',
       region: 'workflow_run_summary',
+    },
+  ];
+}
+
+/**
+ * Stage 3a GitHub UI Map seed (B-010).
+ *
+ * Scope — intentionally the smallest demonstrable set:
+ *
+ *   - `repo_home.open_issues_tab` / `repo_home.open_actions_tab`
+ *     — the two hottest navigation jumps off `repo_home`; these are the
+ *     purposes the upcoming B-012 action-path aggregator will see first
+ *     when Memory is replayed from a fresh repo landing.
+ *   - `issues_list.new_issue_cta` / `issues_list.search_input`
+ *     — the two controls any meaningful issues-list intent touches (file
+ *     a bug, or find an existing one). `search_input` is the only `fill`
+ *     action in this seed, exercising that `actionType`.
+ *   - `actions_list.filter_input` — the filter box on Actions; B-011 will
+ *     need a stable `targetRef` here because the legacy label pattern
+ *     `filter workflow runs` is re-rendered across every run update.
+ *
+ * Everything else (`new pull request`, `fork`, branch picker, etc.) is
+ * deferred to a follow-up seed PR. Keep the set small so B-011's
+ * `targetRef` work can land against exactly these five purposes.
+ *
+ * Bit-compat note: the `label_regex` values here intentionally match the
+ * `labelPatterns` already in `GITHUB_OBJECT_CLASSIFIERS` above. When
+ * B-011 teaches `read_page` HVOs to emit `{ uiMapPurpose }` this equality
+ * is what lets a single classifier hit promote directly into a stable
+ * `purpose` ref without re-scanning the DOM.
+ */
+function GITHUB_UI_MAP_RULES(): readonly KnowledgeUIMapRule[] {
+  return [
+    {
+      siteId: 'github',
+      pageRole: 'repo_home',
+      purpose: 'repo_home.open_issues_tab',
+      region: 'repo_primary_nav',
+      locatorHints: [
+        { kind: 'href_regex', value: String.raw`^/[^/]+/[^/]+/issues(?:/?$|[?#])` },
+        { kind: 'aria_name', value: 'Issues', role: 'link' },
+        { kind: 'label_regex', value: String.raw`^issues?$`, role: 'link' },
+      ],
+      actionType: 'navigate',
+      confidence: 'high',
+      notes:
+        'Top repo nav → Issues tab. URL-first hint so a seeded repo page with rendered nav anchors resolves immediately; aria_name / label_regex are DOM fallbacks.',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'repo_home',
+      purpose: 'repo_home.open_actions_tab',
+      region: 'repo_primary_nav',
+      locatorHints: [
+        { kind: 'href_regex', value: String.raw`^/[^/]+/[^/]+/actions(?:/?$|[?#])` },
+        { kind: 'aria_name', value: 'Actions', role: 'link' },
+        { kind: 'label_regex', value: String.raw`^actions$`, role: 'link' },
+      ],
+      actionType: 'navigate',
+      confidence: 'high',
+      notes: 'Top repo nav → Actions tab.',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'issues_list',
+      purpose: 'issues_list.new_issue_cta',
+      region: 'issues_results',
+      locatorHints: [
+        { kind: 'href_regex', value: String.raw`^/[^/]+/[^/]+/issues/new(?:/|\?|#|$)` },
+        { kind: 'aria_name', value: 'New issue', role: 'link' },
+        { kind: 'label_regex', value: String.raw`^new issue$` },
+      ],
+      actionType: 'click',
+      confidence: 'high',
+      notes: 'Primary CTA on issues list. href pattern covers the link-shaped button GitHub ships.',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'issues_list',
+      purpose: 'issues_list.search_input',
+      region: 'issues_results',
+      locatorHints: [
+        { kind: 'aria_name', value: 'Search issues', role: 'searchbox' },
+        { kind: 'aria_name', value: 'Search all issues', role: 'searchbox' },
+        { kind: 'label_regex', value: String.raw`^search issues$`, role: 'searchbox' },
+      ],
+      actionType: 'fill',
+      confidence: 'medium',
+      notes:
+        'Search/filter box. The aria role is stable across GitHub redesigns; label regex is a DOM-side safety net.',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'actions_list',
+      purpose: 'actions_list.filter_input',
+      region: 'workflow_runs_list',
+      locatorHints: [
+        { kind: 'aria_name', value: 'Filter workflow runs', role: 'searchbox' },
+        { kind: 'label_regex', value: String.raw`^filter workflow runs$` },
+      ],
+      actionType: 'fill',
+      confidence: 'medium',
+      notes:
+        'Filter box on Actions. Critical for B-011 because the label text re-renders on every workflow run update — a stable ref here removes the dominant retry cause for Actions intents.',
     },
   ];
 }
