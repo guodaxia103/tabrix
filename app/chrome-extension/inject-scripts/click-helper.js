@@ -1,4 +1,4 @@
-/* global window, document, Element, MouseEvent, PointerEvent, HTMLElement, SVGElement, HTMLInputElement, HTMLButtonElement, HTMLAnchorElement, HTMLLabelElement, chrome */
+/* global window, document, Element, MouseEvent, PointerEvent, HTMLElement, SVGElement, HTMLInputElement, HTMLButtonElement, HTMLAnchorElement, HTMLLabelElement, HTMLTextAreaElement, HTMLSelectElement, MutationObserver, chrome */
 
 // click-helper.js
 // This script is injected into the page to handle click operations
@@ -281,53 +281,207 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         }
       }
 
-      let navigationPromise;
-      if (waitForNavigation) {
-        navigationPromise = new Promise((resolve) => {
-          const beforeUnloadListener = () => {
-            window.removeEventListener('beforeunload', beforeUnloadListener);
-            resolve(true);
-          };
-          window.addEventListener('beforeunload', beforeUnloadListener);
+      // B-023 verification window. Length depends on the caller's intent:
+      //   - waitForNavigation === true  →  full `timeout` (legacy behaviour).
+      //   - waitForNavigation === false →  short ~400ms window so fast-click
+      //     callers still get signal without long blocking.
+      // `beforeunload` short-circuits the window (we already have the verdict).
+      const VERIFY_FAST_WINDOW_MS = 400;
+      const verifyWindowMs = waitForNavigation
+        ? Math.max(0, Number(timeout) || VERIFY_FAST_WINDOW_MS)
+        : VERIFY_FAST_WINDOW_MS;
 
-          setTimeout(() => {
-            window.removeEventListener('beforeunload', beforeUnloadListener);
-            resolve(false);
-          }, timeout);
-        });
-      }
+      // Page-local pre-click snapshot.
+      const urlBefore = String(window.location.href || '');
+      const hashBefore = String(window.location.hash || '');
+      const focusBefore = document.activeElement;
+      const stateBefore = snapshotTargetState(element);
 
-      if (
-        element &&
-        (elementInfo.clickMethod === 'selector' || elementInfo.clickMethod === 'ref')
-      ) {
-        if (double) {
-          dispatchClickSequence(element, clickX, clickY, options, true);
-        } else {
-          dispatchClickSequence(element, clickX, clickY, options, false);
+      // B-023: raw signals, no verdict.
+      let beforeUnloadFired = false;
+      let domChanged = false;
+      let domAddedDialog = false;
+      let domAddedMenu = false;
+
+      const DIALOG_SELECTOR = '[role="dialog"], [aria-modal="true"], dialog[open]';
+      const MENU_SELECTOR =
+        '[role="menu"]:not([aria-hidden="true"]), [role="listbox"]:not([aria-hidden="true"])';
+
+      const beforeUnloadListener = () => {
+        beforeUnloadFired = true;
+      };
+      window.addEventListener('beforeunload', beforeUnloadListener);
+
+      const mutationObserver = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          if (mutation.type === 'childList' || mutation.type === 'attributes') {
+            domChanged = true;
+          }
+          if (mutation.type === 'childList') {
+            for (const node of mutation.addedNodes) {
+              if (!(node instanceof Element)) continue;
+              if (node.matches?.(DIALOG_SELECTOR) || node.querySelector?.(DIALOG_SELECTOR)) {
+                domAddedDialog = true;
+              }
+              if (node.matches?.(MENU_SELECTOR) || node.querySelector?.(MENU_SELECTOR)) {
+                domAddedMenu = true;
+              }
+            }
+          }
         }
-      } else {
-        if (double) simulateDoubleClick(clickX, clickY, options);
-        else simulateClick(clickX, clickY, options);
+      });
+      try {
+        mutationObserver.observe(document.body || document.documentElement, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: [
+            'aria-expanded',
+            'aria-selected',
+            'aria-hidden',
+            'open',
+            'checked',
+            'value',
+            'disabled',
+          ],
+        });
+      } catch {
+        // Detached body edge case — treat the observer as absent rather than crash.
       }
 
-      // Wait for navigation if needed
-      let navigationOccurred = false;
-      if (waitForNavigation) {
-        navigationOccurred = await navigationPromise;
+      let dispatchSucceeded = false;
+      try {
+        if (
+          element &&
+          (elementInfo.clickMethod === 'selector' || elementInfo.clickMethod === 'ref')
+        ) {
+          if (double) {
+            dispatchClickSequence(element, clickX, clickY, options, true);
+          } else {
+            dispatchClickSequence(element, clickX, clickY, options, false);
+          }
+          dispatchSucceeded = true;
+        } else {
+          if (double) simulateDoubleClick(clickX, clickY, options);
+          else simulateClick(clickX, clickY, options);
+          // coordinate-based path is best-effort; treat as dispatched iff an
+          // element was resolvable at the coord.
+          dispatchSucceeded = element != null;
+        }
+      } catch {
+        dispatchSucceeded = false;
       }
+
+      // Wait up to verifyWindowMs, but short-circuit on beforeunload.
+      await waitForVerificationWindow(verifyWindowMs, () => beforeUnloadFired);
+
+      window.removeEventListener('beforeunload', beforeUnloadListener);
+      try {
+        mutationObserver.disconnect();
+      } catch {
+        // ignore
+      }
+
+      const urlAfter = String(window.location.href || '');
+      const hashAfter = String(window.location.hash || '');
+      const stateAfter = snapshotTargetState(element);
+      const focusChanged = document.activeElement !== focusBefore;
+      const targetStateDelta = diffTargetState(stateBefore, stateAfter);
 
       return {
-        success: true,
-        message: 'Element clicked successfully',
+        // Compat alias for callers that only ever looked at `success`.
+        // The real success verdict is computed in the background layer from
+        // `signals` — see `mergeClickSignals()` in interaction.ts. A caller
+        // reading `success` at this layer is getting "dispatch succeeded",
+        // not "outcome verified".
+        success: dispatchSucceeded,
+        dispatchSucceeded,
+        message: dispatchSucceeded
+          ? 'Click dispatched; awaiting outcome verification in background layer'
+          : 'Click dispatch failed',
         elementInfo,
-        navigationOccurred,
+        // Compat: background layer will overwrite with verification.navigationOccurred.
+        navigationOccurred: beforeUnloadFired,
+        signals: {
+          beforeUnloadFired,
+          urlBefore,
+          urlAfter,
+          hashBefore,
+          hashAfter,
+          domChanged,
+          domAddedDialog,
+          domAddedMenu,
+          focusChanged,
+          targetStateDelta,
+        },
       };
     } catch (error) {
       return {
         error: `Error clicking element: ${error.message}`,
       };
     }
+  }
+
+  function snapshotTargetState(element) {
+    if (!(element instanceof Element)) return null;
+    const get = (name) => {
+      try {
+        return element.getAttribute(name);
+      } catch {
+        return null;
+      }
+    };
+    return {
+      ariaExpanded: get('aria-expanded'),
+      ariaSelected: get('aria-selected'),
+      ariaPressed: get('aria-pressed'),
+      ariaChecked: get('aria-checked'),
+      open: get('open'),
+      disabled: get('disabled'),
+      checked: element instanceof HTMLInputElement ? String(element.checked) : get('checked'),
+      value:
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement ||
+        element instanceof HTMLSelectElement
+          ? String(element.value ?? '')
+          : null,
+    };
+  }
+
+  function diffTargetState(before, after) {
+    if (!before || !after) return null;
+    const changed = {};
+    let anyChanged = false;
+    for (const key of Object.keys(before)) {
+      if (before[key] !== after[key]) {
+        changed[key] = { before: before[key], after: after[key] };
+        anyChanged = true;
+      }
+    }
+    return anyChanged ? changed : null;
+  }
+
+  function waitForVerificationWindow(ms, earlyExit) {
+    return new Promise((resolve) => {
+      if (earlyExit && earlyExit()) {
+        resolve();
+        return;
+      }
+      const deadline = Date.now() + Math.max(0, ms);
+      const tick = () => {
+        if (earlyExit && earlyExit()) {
+          resolve();
+          return;
+        }
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          resolve();
+          return;
+        }
+        setTimeout(tick, Math.min(remaining, 50));
+      };
+      tick();
+    });
   }
 
   /**

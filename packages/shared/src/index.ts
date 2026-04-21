@@ -5,3 +5,4 @@ export * from './labels';
 export * from './bridge-ws';
 export * from './read-page-contract';
 export * from './memory';
+export * from './click';

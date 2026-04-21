@@ -1,6 +1,11 @@
 import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
-import { TOOL_NAMES } from '@tabrix/shared';
+import {
+  TOOL_NAMES,
+  type ClickObservedOutcome,
+  type ClickVerification,
+  isClickSuccessOutcome,
+} from '@tabrix/shared';
 import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import { TIMEOUTS, ERROR_MESSAGES } from '@/common/constants';
 import { handleDownloadTool, markNextDownloadAsInteractive } from './download';
@@ -128,6 +133,177 @@ function createUnsupportedTabResponse(
     ],
     isError: false,
   };
+}
+
+/**
+ * B-023: raw page-local signals collected by `inject-scripts/click-helper.js`.
+ * These are facts, not verdicts. The verdict is computed in
+ * `mergeClickSignals()` by combining these with browser-level signals
+ * observed in the background layer (e.g. a new tab being created).
+ */
+export interface ClickPageSignals {
+  beforeUnloadFired: boolean;
+  urlBefore: string;
+  urlAfter: string;
+  hashBefore: string;
+  hashAfter: string;
+  domChanged: boolean;
+  domAddedDialog: boolean;
+  domAddedMenu: boolean;
+  focusChanged: boolean;
+  targetStateDelta: Record<string, unknown> | null;
+}
+
+/**
+ * B-023: browser-level signals gathered in the background layer for the
+ * origin tab during the verification window.
+ */
+export interface ClickBrowserSignals {
+  newTabOpened: boolean;
+}
+
+/**
+ * B-023: pure function — given the raw signals from page-local + browser-level
+ * sources, produce the public click contract fields.
+ *
+ * Ordering of the outcome checks matters: it encodes Tabrix's preference
+ * for the most specific explanation of what the user saw.
+ *
+ * Exported for direct unit-testing from `tests/click-contract.test.ts`.
+ */
+export function mergeClickSignals(
+  dispatchSucceeded: boolean,
+  page: ClickPageSignals | null,
+  browser: ClickBrowserSignals,
+): {
+  success: boolean;
+  dispatchSucceeded: boolean;
+  observedOutcome: ClickObservedOutcome;
+  verification: ClickVerification;
+} {
+  if (!dispatchSucceeded || page == null) {
+    const verification: ClickVerification = {
+      navigationOccurred: false,
+      urlChanged: false,
+      newTabOpened: browser.newTabOpened,
+      domChanged: false,
+      stateChanged: false,
+      focusChanged: false,
+    };
+    return {
+      success: false,
+      dispatchSucceeded,
+      observedOutcome: dispatchSucceeded ? 'verification_unavailable' : 'no_observed_change',
+      verification,
+    };
+  }
+
+  const urlChanged = page.urlBefore !== page.urlAfter;
+  const hashOnlyChanged =
+    urlChanged &&
+    stripHash(page.urlBefore) === stripHash(page.urlAfter) &&
+    page.hashBefore !== page.hashAfter;
+  const sameHost =
+    urlChanged &&
+    !hashOnlyChanged &&
+    (() => {
+      try {
+        const a = new URL(page.urlBefore);
+        const b = new URL(page.urlAfter);
+        return a.host === b.host;
+      } catch {
+        return false;
+      }
+    })();
+  const stateChanged = page.targetStateDelta != null;
+
+  const verification: ClickVerification = {
+    navigationOccurred: page.beforeUnloadFired,
+    urlChanged,
+    newTabOpened: browser.newTabOpened,
+    domChanged: page.domChanged,
+    stateChanged,
+    focusChanged: page.focusChanged,
+  };
+
+  // Outcome priority: the most specific and most "this is what the user
+  // saw" categories come first. `dom_changed` and `focus_changed` are
+  // catch-alls at the bottom.
+  let observedOutcome: ClickObservedOutcome;
+  if (browser.newTabOpened) {
+    observedOutcome = 'new_tab_opened';
+  } else if (page.beforeUnloadFired) {
+    observedOutcome = 'cross_document_navigation';
+  } else if (hashOnlyChanged) {
+    observedOutcome = 'hash_change';
+  } else if (urlChanged && sameHost) {
+    observedOutcome = 'spa_route_change';
+  } else if (urlChanged) {
+    // Cross-host client-side URL change without unload. Rare but real.
+    observedOutcome = 'spa_route_change';
+  } else if (page.domAddedDialog) {
+    observedOutcome = 'dialog_opened';
+  } else if (page.domAddedMenu) {
+    observedOutcome = 'menu_opened';
+  } else if (stateChanged) {
+    observedOutcome = 'state_toggled';
+  } else if (page.domChanged) {
+    observedOutcome = 'dom_changed';
+  } else if (page.focusChanged) {
+    observedOutcome = 'focus_changed';
+  } else {
+    observedOutcome = 'no_observed_change';
+  }
+
+  return {
+    success: isClickSuccessOutcome(observedOutcome),
+    dispatchSucceeded,
+    observedOutcome,
+    verification,
+  };
+}
+
+function stripHash(url: string): string {
+  const i = url.indexOf('#');
+  return i >= 0 ? url.slice(0, i) : url;
+}
+
+/**
+ * B-023: register a one-shot `chrome.tabs.onCreated` listener scoped to the
+ * origin window and report whether a new tab was created within the window.
+ *
+ * We deliberately avoid a long-lived `chrome.webNavigation` subscriber here —
+ * one-shot listener + explicit removal keeps the blast radius tiny.
+ */
+function observeNewTabOnce(
+  originWindowId: number | undefined,
+  windowMs: number,
+): Promise<ClickBrowserSignals> {
+  return new Promise((resolve) => {
+    let newTabOpened = false;
+    const listener = (tab: chrome.tabs.Tab) => {
+      if (originWindowId == null || tab.windowId === originWindowId) {
+        newTabOpened = true;
+      }
+    };
+    try {
+      chrome.tabs.onCreated.addListener(listener);
+    } catch {
+      resolve({ newTabOpened: false });
+      return;
+    }
+    setTimeout(
+      () => {
+        try {
+          chrome.tabs.onCreated.removeListener(listener);
+        } catch {
+          // ignore
+        }
+        resolve({ newTabOpened });
+      },
+      Math.max(0, windowMs),
+    );
+  });
 }
 
 /**
@@ -375,6 +551,17 @@ class ClickTool extends BaseBrowserToolExecutor {
         markNextDownloadAsInteractive(tab.id);
       }
 
+      // B-023: start browser-level observation IN PARALLEL with the
+      // click dispatch so we don't miss a `chrome.tabs.onCreated` firing
+      // during the page-local verification window. The window must at
+      // least cover the page-local window (400ms) to stay consistent
+      // with `click-helper.js`.
+      const NEW_TAB_OBSERVE_WINDOW_MS = Math.max(
+        400,
+        waitForNavigation ? Number(timeout) || 400 : 400,
+      );
+      const browserSignalsPromise = observeNewTabOnce(tab.windowId, NEW_TAB_OBSERVE_WINDOW_MS);
+
       // Send click message to content script
       const result = await this.sendMessageToTab(
         tab.id,
@@ -449,15 +636,42 @@ class ClickTool extends BaseBrowserToolExecutor {
         clickMethod = 'unknown';
       }
 
+      // B-023: if the helper returned an explicit error, propagate it
+      // verbatim with the contract fields zeroed out (no dispatch, no
+      // observed outcome to merge).
+      if (result && typeof result === 'object' && 'error' in result && result.error) {
+        return createErrorResponse(String(result.error));
+      }
+
+      const browserSignals = await browserSignalsPromise;
+      const pageSignals: ClickPageSignals | null =
+        result && typeof result === 'object' && 'signals' in result && result.signals
+          ? (result.signals as ClickPageSignals)
+          : null;
+      const dispatchSucceeded =
+        result && typeof result === 'object' && 'dispatchSucceeded' in result
+          ? Boolean(result.dispatchSucceeded)
+          : Boolean(result?.success);
+
+      const merged = mergeClickSignals(dispatchSucceeded, pageSignals, browserSignals);
+
       return {
         content: [
           {
             type: 'text',
             text: JSON.stringify({
-              success: true,
-              message: result.message || 'Click operation successful',
-              elementInfo: result.elementInfo,
-              navigationOccurred: result.navigationOccurred,
+              success: merged.success,
+              dispatchSucceeded: merged.dispatchSucceeded,
+              observedOutcome: merged.observedOutcome,
+              verification: merged.verification,
+              // One-release compat field; equals verification.navigationOccurred.
+              navigationOccurred: merged.verification.navigationOccurred,
+              message: merged.success
+                ? `Click observed outcome: ${merged.observedOutcome}`
+                : merged.observedOutcome === 'no_observed_change'
+                  ? 'Click was dispatched but no observable outcome was detected within the verification window'
+                  : `Click dispatched; outcome unverified (${merged.observedOutcome})`,
+              elementInfo: result?.elementInfo,
               clickMethod,
             }),
           },
