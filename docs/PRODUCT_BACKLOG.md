@@ -141,7 +141,7 @@
 ### B-005 · Native-server: seed Experience schema (empty tables + migrations)
 
 - **Stage**: 3b · **Layer**: E · **KPI**: — (enabling item; unblocks Sprint 3+ B-012/B-013)
-- **Owner**: Claude · **Size**: M · **Status**: `planned`
+- **Owner**: Claude · **Size**: M · **Status**: `review`
 - **Dependencies**: none (new schema, no touch to Memory/Knowledge tables)
 - **Branch**: `feat/b-005-experience-schema-seed`
 - **Schema cite**: builds alongside existing Memory schema at `app/native-server/src/memory/db/schema.ts` (the migration scaffolding used for `memory_tasks`/`memory_sessions`/`memory_steps`). Two new tables, same migration style:
@@ -179,6 +179,14 @@
     3. Both tables are empty after migration (no seed data).
   - `pnpm -r typecheck` passes.
   - No changes in `app/chrome-extension/**` or `packages/shared/**`.
+- **Landed scope (2026-04-20)**:
+  - `app/native-server/src/memory/db/schema.ts` exports new `EXPERIENCE_CREATE_TABLES_SQL` constant with the two tables + 4 indexes exactly as specified above. **Idempotency**: every statement is `CREATE … IF NOT EXISTS`, same pattern as Memory.
+  - `app/native-server/src/memory/db/client.ts`: `openMemoryDb()` now execs both `MEMORY_CREATE_TABLES_SQL` and `EXPERIENCE_CREATE_TABLES_SQL` in sequence on every open. No new migration runner — the existing "IF NOT EXISTS on open" discipline is enough at this stage; documented as a design choice in the `schema.ts` JSDoc block.
+  - New module `app/native-server/src/memory/experience/index.ts` exports `EXPERIENCE_ACTION_PATHS_TABLE`, `EXPERIENCE_LOCATOR_PREFS_TABLE` string constants + `EXPERIENCE_SELECTOR_KINDS` const tuple / `ExperienceSelectorKind` type. No repository class yet, as specified.
+  - New test file `app/native-server/src/memory/experience/schema.test.ts` adds **4 tests** (one over-delivery vs. the "≥ 3" bar): tables exist, expected indexes exist, re-exec is idempotent, both tables empty on virgin DB.
+  - `docs/MKEP_STAGE_3_PLUS_ROADMAP.md` §4.2 Stage 3b gets a "进度（Sprint 2 · B-005）" paragraph noting the schema has landed and aggregator/MCP tooling is still B-012/B-013.
+  - **Deviation from brief**: original scope said "Extend schema.ts migration runner with a new migration step (`migrate_v?_experience_seed`)". In reality, Memory never introduced a numbered migration runner — it relies on `CREATE TABLE IF NOT EXISTS` at open. B-005 follows the **actual** pattern to avoid introducing a migration framework for a single idempotent seed. If/when an in-place schema change is needed, a real runner lands as its own backlog item.
+  - **Footprint**: 0 changes in `app/chrome-extension/**`, 0 changes in `packages/shared/**`. Full monorepo test suite still green (`@tabrix/tabrix`: 172 → 176 passed / 24 skipped).
 
 ### B-006 · Extension: Memory tab filter + search + jump-to-last-failure
 
