@@ -167,15 +167,22 @@ This repository uses Codex CLI in `fast` mode as an execution helper for Claude,
 
 These are cross-cutting size / performance / schema rules that every AI agent (Claude, Codex, future others) must respect. They are enforced by CI in `.github/workflows/ci.yml`.
 
-### Sidepanel bundle-size gate (added in B-007)
+### Sidepanel bundle-size gate (added in B-007, CSS added in B-021)
 
-- Script: `scripts/check-bundle-size.mjs`, wired as `pnpm run size:check` and run in CI after the extension build step.
-- Targets: the latest `app/chrome-extension/.output/chrome-mv3/chunks/sidepanel-*.js` emitted by WXT.
+- Script: `scripts/check-bundle-size.mjs`, wired as `pnpm run size:check` and run in CI after the extension build step. One script, two targets, declared in a `TARGETS` array at the top of the file.
+- Targets (WXT splits JS into `chunks/` and CSS into `assets/`):
+  - `app/chrome-extension/.output/chrome-mv3/chunks/sidepanel-*.js`
+  - `app/chrome-extension/.output/chrome-mv3/assets/sidepanel-*.css`
 - Thresholds (raw, not gzipped — easier to eyeball against the WXT build report):
-  - **Hard** — 40 kB. CI fails.
-  - **Soft** — 25 kB. CI warns but does not fail. Investigate before the hard limit lands.
-- Post-B-006 baseline: `sidepanel-*.js` ≈ 20.5 kB. If you add a feature that pushes the bundle above the soft threshold, either split the feature behind a dynamic import or raise the threshold **in the same reviewed commit** as the feature — never in a separate "oops" follow-up.
-- CSS is not gated yet. A future backlog item may extend the script to cover `sidepanel-*.css`.
+
+  | Target             | Soft (warn)  | Hard (fail)  |
+  | ------------------ | ------------ | ------------ |
+  | `sidepanel-*.js`   | 25 kB        | 40 kB        |
+  | `sidepanel-*.css`  | 20 kB        | 22 kB        |
+
+- Post-B-021 baselines: `sidepanel-*.js` ≈ 20.5 kB, `sidepanel-*.css` ≈ 17.8 kB. The CSS cap is tighter than the JS cap on purpose — CSS renders on the critical path, and post-B-006 has already absorbed the filter/search surface that was the most obvious CSS consumer.
+- If a feature pushes either bundle past its soft threshold: either split the feature behind a dynamic import (JS) / scoped stylesheet (CSS), or raise the threshold **in the same reviewed commit** as the feature — never in a separate "oops" follow-up.
+- Adding a third target (e.g. `popup-*.js`) is a future backlog item; do not squeeze new targets in opportunistically.
 
 ### Schema-cite rule (added in B-009)
 

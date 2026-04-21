@@ -349,18 +349,19 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
 ### B-021 · Infra: extend `check-bundle-size.mjs` to gate `sidepanel-*.css`
 
 - **Stage**: N/A (infra carry-over from Sprint 2 retro §7) · **Layer**: X · **KPI**: 更稳 (prevents CSS creep)
-- **Owner**: Claude · **Size**: S · **Status**: `planned`
+- **Owner**: Claude · **Size**: S · **Status**: `done` (merged 2026-04-20)
 - **Dependencies**: B-010 merged (so the CSS baseline number is measured after B-010's non-UI-impacting edits)
 - **Branch**: `chore/b-021-bundle-size-css-gate`
 - **Scope**:
-  - Generalize `scripts/check-bundle-size.mjs` to accept a list of `{ prefix, suffix, hardLimit, soft­Limit, label }` targets; run the same latest-file-in-chunks-dir walk for each.
-  - Add a CSS target — `prefix: 'sidepanel-'`, `suffix: '.css'`, `hardLimit: 22 * 1024`, `softLimit: 20 * 1024`.
-  - Update `AGENTS.md` Operational Guardrails §"Sidepanel bundle-size gate (added in B-007)" to list both JS and CSS thresholds.
-- **Must not do**: change the JS thresholds; gate any bundle other than sidepanel; introduce a new script.
+  - Generalize `scripts/check-bundle-size.mjs` to iterate a `TARGETS` array of `{ label, subdir, prefix, suffix, softLimit, hardLimit }` entries; each target picks the latest-mtime'd file matching `prefix*suffix` in its subdir.
+  - Add a CSS target — `subdir: 'assets'`, `prefix: 'sidepanel-'`, `suffix: '.css'`, `hardLimit: 22 * 1024`, `softLimit: 20 * 1024`.
+  - Update `AGENTS.md` Operational Guardrails §"Sidepanel bundle-size gate" to list both JS and CSS thresholds.
+- **Must not do**: change the JS thresholds; gate any bundle other than sidepanel; introduce a second script; touch sidepanel source; touch CI beyond what B-007 already wired.
 - **Exit criteria**:
   - `pnpm run size:check` passes locally on a clean build and prints both JS + CSS lines.
   - `pnpm -r typecheck` green.
   - CI run on the PR passes.
+- **Landed**: `scripts/check-bundle-size.mjs` refactored from single-target to multi-target (TARGETS array). `AGENTS.md` Operational Guardrails updated with a two-row threshold table. Measured bundles on this branch: **JS 20.51 kB** (under 25 soft · under 40 hard ✓), **CSS 17.81 kB** (under 20 soft · under 22 hard ✓). Script discovered that WXT emits CSS into `.output/chrome-mv3/assets/` not `chunks/` — the TARGETS array carries a per-entry `subdir` to handle both. No sidepanel source, CI workflow, or JS thresholds touched.
 
 ### B-012 · Native-server: Experience action-path aggregator (reads Memory, writes Experience)
 
@@ -441,3 +442,4 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
 - 2026-04-20 — Sprint 2 locked: B-005 (Experience schema seed) / B-006 (Memory filter/search) / B-007 (CI bundle gate) / B-008 (testing conventions doc) / B-009 (Codex fast — schema-cite rule). Themes: Stage 3b seed + Stage 3e polish + Sprint 1 retro action items.
 - 2026-04-20 — Sprint 2 closed same day: all 5 items `done`. B-009 successfully re-tested the Codex "draft-only" handoff protocol — Codex completed the 2-file edit, Claude verified + committed. Retro at `docs/SPRINT_2_RETRO.md`. `AGENTS.md` gained an Operational Guardrails section covering bundle-size gate and schema-cite rule.
 - 2026-04-20 — Sprint 3 locked: B-010 (Knowledge UI Map schema + GitHub seed) / B-021 (CSS bundle gate) / B-012 (Experience action-path aggregator) / B-022 (Codex fast — drop rule-N numbering). Themes: Stage 3a Knowledge seed + Stage 3b first write path + Sprint 2 retro §7 follow-ups. B-021 and B-022 added to the pool as part of this lock.
+- 2026-04-20 — Sprint 3 · B-021 done: `scripts/check-bundle-size.mjs` extended to gate `sidepanel-*.css` (soft 20 kB / hard 22 kB) alongside the existing `sidepanel-*.js` gate (unchanged, soft 25 / hard 40). `AGENTS.md` Operational Guardrails updated with a two-row threshold table. Baselines: JS ≈ 20.5 kB, CSS ≈ 17.8 kB.
