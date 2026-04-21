@@ -161,6 +161,7 @@ This repository uses Codex CLI in `fast` mode as an execution helper for Claude,
   1. **Draft-only**: Codex edits files in place under `workspace-write`; Claude is responsible for `git add` / `git commit` / `git push`. Update the prompt so the "finish" step is `git diff --stat` (not `git commit`).
   2. **Full autopilot**: `codex exec --dangerously-bypass-approvals-and-sandbox` inside a throw-away worktree, where Codex may commit; only use when the task is self-contained and the worktree is disposable.
 - If Codex stops with a sandbox error mid-task, revert any whitespace-only / line-ending changes (`git checkout -- <files>`) before Claude resumes manually — otherwise the diff review becomes noisy.
+- **Verification commands under `workspace-write` also surprise**: during B-009, `pnpm -r typecheck` spawned by Codex failed with `spawn EPERM`, while `pnpm run docs:check` succeeded. Do not treat a Codex-side typecheck failure as a real regression. Claude must always re-run the full verification locally before committing.
 
 ## Operational Guardrails
 

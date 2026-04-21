@@ -116,7 +116,9 @@
 - **Landed 2026-04-20 (Codex fast attempted, Claude finished)**: JSDoc on 4 read methods (`SessionRepository.listRecent`, `SessionRepository.countAll`, `StepRepository.listBySession`, `TaskRepository.get`) + 24 `it.todo` placeholders across `session-repository.test.ts`, `step-repository.test.ts`, `task-repository.test.ts`.
 - **Codex delegation post-mortem**: the `codex exec` run (fast mode, `workspace-write` sandbox) stopped before any substantive edit because the Windows sandbox denied writes to `.git/index.lock`, so it could not honour the "commit-or-stop" contract in this prompt. Only LF→CRLF line-ending noise landed; reverted. Claude completed the task manually. Action for Sprint 2: either (a) invoke Codex with `--dangerously-bypass-approvals-and-sandbox` inside a clean worktree where `.git` is writable, or (b) keep the constraint and relax "must commit" to "must stage + write handoff note"; pick one and update `AGENTS.md` Codex Delegation Rules accordingly.
 
-## Current Sprint — Sprint 2 (2026-W18, 2026-04-20 → 2026-04-26)
+## Previous Sprint — Sprint 2 (2026-W18, 2026-04-20 → 2026-04-20) — **CLOSED 2026-04-20**
+
+All five backlog items landed on day one of the nominal sprint window. Outcome: see `docs/SPRINT_2_RETRO.md` for what went well, what friction surfaced (most notably the `status: 'ok'` envelope trap documented in B-008), and the handoff into Sprint 3. Nothing slipped.
 
 **Theme**: _Stage 3b Experience schema seed + Stage 3e polish + infra guardrails_. Balance: one schema-layer seed that unblocks Sprint 3+ aggregator work, one user-visible UI refinement on the Memory tab, and the three action items carried over from `docs/SPRINT_1_RETRO.md` §7.
 
@@ -277,7 +279,7 @@
 ### B-009 · Codex fast task · add "schema-cite rule" to AGENTS.md + backlog template
 
 - **Stage**: — · **Layer**: X · **KPI**: 懂用户 (process)
-- **Owner**: **Codex fast (draft-only)** · **Size**: S · **Status**: `review`
+- **Owner**: **Codex fast (draft-only, Claude committed)** · **Size**: S · **Status**: `done` (merged 2026-04-20, commit `c8ed033`)
 - **Dependencies**: none
 - **Branch**: `chore/b-009-agents-schema-cite-rule`
 - **Shape (re-tests the "draft-only" Codex handoff protocol from `AGENTS.md`)**:
@@ -291,6 +293,7 @@
   - `git diff --stat` shows exactly 2 files changed.
   - Claude manually commits with message `docs(agents): add schema-cite rule + bundle-size gate reference (B-009)` after verification.
 - **Landed by Codex (2026-04-20, draft-only)**: two files edited per brief. `git diff --stat` returned cleanly. Awaiting Claude's verification + commit.
+- **Claude verified + committed (2026-04-20)**: `pnpm -r typecheck` and `pnpm run docs:check` both pass locally. Committed as `c8ed033`. Sandbox behaviour confirms the draft-only shape from `AGENTS.md` §"Operational sandbox (lesson from B-004)" works on Windows — Codex could not run `pnpm -r typecheck` under the `workspace-write` sandbox (spawn EPERM on `pnpm`), which is consistent with the B-004 lesson; verification by Claude after draft is now the documented norm.
 
 ## Sprint 3+ — backlog pool (unordered, pulled into a sprint during review)
 
@@ -332,3 +335,4 @@
 - 2026-04-20 — Sprint 1 seeded: Stage 3e Memory Run History UI. Initial commit.
 - 2026-04-20 — Sprint 1 closed same day: B-001 / B-002 / B-003 / B-004 all `done`. Retro at `docs/SPRINT_1_RETRO.md`. `AGENTS.md` Codex Delegation Rules updated with sandbox lesson from B-004.
 - 2026-04-20 — Sprint 2 locked: B-005 (Experience schema seed) / B-006 (Memory filter/search) / B-007 (CI bundle gate) / B-008 (testing conventions doc) / B-009 (Codex fast — schema-cite rule). Themes: Stage 3b seed + Stage 3e polish + Sprint 1 retro action items.
+- 2026-04-20 — Sprint 2 closed same day: all 5 items `done`. B-009 successfully re-tested the Codex "draft-only" handoff protocol — Codex completed the 2-file edit, Claude verified + committed. Retro at `docs/SPRINT_2_RETRO.md`. `AGENTS.md` gained an Operational Guardrails section covering bundle-size gate and schema-cite rule.
