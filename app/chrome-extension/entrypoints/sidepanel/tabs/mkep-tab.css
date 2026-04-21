@@ -1,0 +1,134 @@
+.mkep-tab {
+  height: 100%;
+  padding: 20px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  color: #1f2937;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+
+.mkep-tab__header {
+  margin-bottom: 16px;
+}
+
+.mkep-tab__title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mkep-tab__subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.45;
+}
+
+.mkep-placeholder {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.mkep-placeholder__badge {
+  display: inline-block;
+  padding: 3px 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.mkep-placeholder__heading {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mkep-placeholder__body {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.55;
+}
+
+.mkep-placeholder__points {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.mkep-placeholder__points li {
+  margin-bottom: 4px;
+}
+
+.mkep-placeholder__hint {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px dashed #e5e7eb;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+code {
+  font-family: 'SF Mono', Menlo, Monaco, 'Cascadia Mono', Consolas, 'Roboto Mono', monospace;
+  font-size: 12px;
+  background: #f3f4f6;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #111827;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mkep-tab {
+    color: #e5e7eb;
+  }
+  .mkep-tab__title {
+    color: #f9fafb;
+  }
+  .mkep-tab__subtitle {
+    color: #9ca3af;
+  }
+  .mkep-placeholder {
+    background: #1f2937;
+    border-color: #374151;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+  .mkep-placeholder__badge {
+    background: #1e3a8a;
+    color: #bfdbfe;
+  }
+  .mkep-placeholder__heading {
+    color: #f9fafb;
+  }
+  .mkep-placeholder__body {
+    color: #d1d5db;
+  }
+  .mkep-placeholder__points {
+    color: #9ca3af;
+  }
+  .mkep-placeholder__hint {
+    color: #9ca3af;
+    border-top-color: #374151;
+  }
+  code {
+    background: #374151;
+    color: #e5e7eb;
+  }
+}
