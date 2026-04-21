@@ -253,7 +253,7 @@
 ### B-008 · Docs: Extension testing conventions
 
 - **Stage**: — · **Layer**: X · **KPI**: 更稳
-- **Owner**: Claude · **Size**: S · **Status**: `review`
+- **Owner**: Claude · **Size**: S · **Status**: `done` (merged 2026-04-20, commit `3f59080`)
 - **Dependencies**: can start after either B-005 or B-006; final pass AFTER both (capture fresh lessons)
 - **Branch**: `docs/b-008-extension-testing-conventions`
 - **Scope**:
