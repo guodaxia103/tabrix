@@ -10,4 +10,4 @@
  * exported from here in Stage 3+.
  */
 
-export {};
+export * from './useMemoryTimeline';
