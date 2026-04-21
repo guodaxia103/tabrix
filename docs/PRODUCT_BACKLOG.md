@@ -141,7 +141,7 @@
 ### B-005 · Native-server: seed Experience schema (empty tables + migrations)
 
 - **Stage**: 3b · **Layer**: E · **KPI**: — (enabling item; unblocks Sprint 3+ B-012/B-013)
-- **Owner**: Claude · **Size**: M · **Status**: `review`
+- **Owner**: Claude · **Size**: M · **Status**: `done` (merged 2026-04-20, commit `3770201`)
 - **Dependencies**: none (new schema, no touch to Memory/Knowledge tables)
 - **Branch**: `feat/b-005-experience-schema-seed`
 - **Schema cite**: builds alongside existing Memory schema at `app/native-server/src/memory/db/schema.ts` (the migration scaffolding used for `memory_tasks`/`memory_sessions`/`memory_steps`). Two new tables, same migration style:
