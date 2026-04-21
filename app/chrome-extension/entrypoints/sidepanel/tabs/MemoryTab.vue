@@ -72,30 +72,57 @@
     <template v-else>
       <ol class="memory-list" aria-label="Recent sessions">
         <li v-for="row in timeline.sessions.value" :key="row.sessionId" class="memory-row">
-          <div class="memory-row__primary">
-            <span
-              class="memory-row__status"
-              :class="`memory-row__status--${row.status}`"
-              :title="`status: ${row.status}`"
-            />
-            <h3 class="memory-row__title" :title="row.taskTitle">
-              {{ row.taskTitle || '(untitled)' }}
-            </h3>
-            <span class="memory-row__steps" :title="`${row.stepCount} steps`">
-              {{ row.stepCount }} step{{ row.stepCount === 1 ? '' : 's' }}
-            </span>
-          </div>
-          <p class="memory-row__intent" :title="row.taskIntent">
-            {{ row.taskIntent || row.sessionId }}
-          </p>
-          <div class="memory-row__meta">
-            <time :datetime="row.startedAt">{{ formatTimestamp(row.startedAt) }}</time>
-            <span class="memory-row__dot">·</span>
-            <span>{{ row.clientName || row.transport }}</span>
-            <span v-if="formatDuration(row)" class="memory-row__meta-extra">
+          <button
+            type="button"
+            class="memory-row__toggle"
+            :aria-expanded="timeline.expandedSessionId.value === row.sessionId"
+            :aria-controls="`memory-steps-${row.sessionId}`"
+            @click="timeline.toggleExpansion(row.sessionId)"
+          >
+            <div class="memory-row__primary">
+              <span
+                class="memory-row__caret"
+                :class="{
+                  'memory-row__caret--open': timeline.expandedSessionId.value === row.sessionId,
+                }"
+                aria-hidden="true"
+              >
+                ›
+              </span>
+              <span
+                class="memory-row__status"
+                :class="`memory-row__status--${row.status}`"
+                :title="`status: ${row.status}`"
+              />
+              <h3 class="memory-row__title" :title="row.taskTitle">
+                {{ row.taskTitle || '(untitled)' }}
+              </h3>
+              <span class="memory-row__steps" :title="`${row.stepCount} steps`">
+                {{ row.stepCount }} step{{ row.stepCount === 1 ? '' : 's' }}
+              </span>
+            </div>
+            <p class="memory-row__intent" :title="row.taskIntent">
+              {{ row.taskIntent || row.sessionId }}
+            </p>
+            <div class="memory-row__meta">
+              <time :datetime="row.startedAt">{{ formatTimestamp(row.startedAt) }}</time>
               <span class="memory-row__dot">·</span>
-              <span>{{ formatDuration(row) }}</span>
-            </span>
+              <span>{{ row.clientName || row.transport }}</span>
+              <span v-if="formatDuration(row)" class="memory-row__meta-extra">
+                <span class="memory-row__dot">·</span>
+                <span>{{ formatDuration(row) }}</span>
+              </span>
+            </div>
+          </button>
+
+          <div
+            v-if="timeline.expandedSessionId.value === row.sessionId"
+            :id="`memory-steps-${row.sessionId}`"
+          >
+            <MemorySessionSteps
+              :slot-data="timeline.getStepsSlot(row.sessionId)"
+              @retry="timeline.reloadSteps(row.sessionId)"
+            />
           </div>
         </li>
       </ol>
@@ -127,6 +154,7 @@
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import type { MemorySessionSummary } from '@tabrix/shared';
 import { useMemoryTimeline } from '../../shared/composables/useMemoryTimeline';
+import MemorySessionSteps from './MemorySessionSteps.vue';
 
 const timeline = useMemoryTimeline();
 
@@ -268,12 +296,31 @@ function formatDuration(row: MemorySessionSummary): string | null {
 .memory-row {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  padding: 12px 14px;
   background: #ffffff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+}
+
+.memory-row__toggle {
+  all: unset;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease;
+}
+
+.memory-row__toggle:hover {
+  background: #f9fafb;
+}
+
+.memory-row__toggle:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: -2px;
 }
 
 .memory-row__primary {
@@ -281,6 +328,21 @@ function formatDuration(row: MemorySessionSummary): string | null {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.memory-row__caret {
+  flex: 0 0 auto;
+  width: 12px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+.memory-row__caret--open {
+  transform: rotate(90deg);
+  color: #2563eb;
 }
 
 .memory-row__title {
@@ -381,6 +443,15 @@ function formatDuration(row: MemorySessionSummary): string | null {
     background: #1f2937;
     border-color: #374151;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+  .memory-row__toggle:hover {
+    background: #111827;
+  }
+  .memory-row__caret {
+    color: #6b7280;
+  }
+  .memory-row__caret--open {
+    color: #60a5fa;
   }
   .memory-state__heading,
   .memory-row__title {

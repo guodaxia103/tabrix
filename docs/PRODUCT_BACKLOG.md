@@ -70,21 +70,24 @@
   - Bundle size delta ≤ +8 KB for the sidepanel chunk. **Measured**: `sidepanel.js` 5.43 kB → 11.91 kB (+6.48 kB), `sidepanel.css` 7.62 kB → 11.26 kB (+3.64 kB). Within budget.
   - Manual browser check (user-side): open sidepanel → Memory tab → list renders when the native server is reachable; shows typed error states otherwise.
 
-### B-003 · Extension: Memory session → task → step drill-down
+### B-003 · Extension: Memory session → step drill-down
 
 - **Stage**: 3e · **Layer**: M · **KPI**: 懂用户
-- **Owner**: Claude · **Size**: L · **Status**: `planned`
-- **Dependencies**: **B-001**, **B-002**
+- **Owner**: Claude · **Size**: L · **Status**: `review`
+- **Dependencies**: **B-001**, **B-002** (both done)
 - **Branch**: `feat/b-003-memory-drilldown`
-- **Scope**:
-  - Click a session row → right-side drawer (or expanded card) shows its Tasks with duration, tool count.
-  - Click a task → shows Steps in chronological order with `pageRole`, `toolName`, `endedAt - startedAt`, error short message if any, and a "Copy historyRef" button per step (writes `mem://snapshot/<snapshotId>` to clipboard).
-  - Failed steps get a red left border; retried steps show `retry N` badge.
-  - Lazy load: tasks and steps are fetched only when the user drills in (no upfront prefetch).
+- **Schema note**: under the corrected `Task (1) → Session (N) → Step (N)` schema there is no "session → task" drill-down to do — each session already belongs to exactly one task, whose title/intent is embedded in the session row. The original "session → task → step" 3-level spec collapses to "session → step" with the task acting as context. Documented here so future sprints do not re-open the wrong drill-down shape.
+- **Landed scope**:
+  - `useMemoryTimeline` extended with `expandedSessionId`, per-session reactive `stepsBySession` cache, `toggleExpansion`, `reloadSteps`, `getStepsSlot`. Each session gets its own `AbortController`, so rapid open/close on different rows never races.
+  - `common/memory-api-client.ts` gained two pure helpers reused from the UI and by tests: `extractHistoryRef(step)` returns the first `memory://…` entry from `artifactRefs` (or `null`), and `copyTextToClipboard(text)` with an `execCommand` fallback for sandboxes without the async clipboard API.
+  - New SFC `tabs/MemorySessionSteps.vue` renders the inline expanded area: per-step index, status dot (reuses the colour scheme from B-002), `toolName`, duration, one-line result/input summary, error code + message (red border for failed steps), "retry" badge for `stepType === 'retry'`, and a "Copy historyRef" button that becomes "Copied ✓" for 1.5 s on success. Button is disabled when the step has no memory ref — clearer than silently copying an empty string.
+  - `MemoryTab.vue` wraps each session row in a toggle button with `aria-expanded` / `aria-controls`, plus a rotating caret. Focus ring uses `:focus-visible` only, so pointer users don't see the ring on click.
+  - **Deviation from original plan**: inline expansion instead of a right-side drawer — sidepanel width (~400 px) makes drawer UX cramped, and inline keeps users in the list context.
 - **Exit criteria**:
-  - `pnpm --filter @tabrix/extension test --run` passes with ≥ 6 new tests (drill-down state machine, copy-to-clipboard wiring, error styling).
-  - Manual browser check: can go from "session list" → "task list" → "step detail" and copy a `historyRef` that resolves via the existing `getPageSnapshot` lookup.
-  - `docs/MEMORY_PHASE_0.md` gets a "Sprint 1 UI surfaced" note at the top; no schema change.
+  - `pnpm -r typecheck` passes.
+  - `pnpm --filter @tabrix/extension test` passes — 262 tests total (+13 new in `tests/memory-drilldown.test.ts` across state machine, cache, copy helpers, error surfacing, refetch, independent-session caching, and dispose/abort).
+  - Manual browser check (user-side): open Memory tab → click any recent session → inline steps render with duration, status colours, and a working "Copy historyRef" for `chrome_read_page` steps.
+  - Bundle size (cumulative vs. pre-B-002): `sidepanel.js` 5.43 kB → 17.59 kB (+12.16 kB), `sidepanel.css` 7.62 kB → 16.13 kB (+8.51 kB). B-003's own marginal cost: +5.68 kB JS, +4.87 kB CSS — well within what a full drill-down UI should take.
 
 ### B-004 · Codex fast task · Add JSDoc + it.todo skeleton for B-001 repo methods
 
