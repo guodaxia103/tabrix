@@ -346,6 +346,14 @@ Check the popup's `active clients` list. You should see the remote IP and client
 
 ---
 
+## 6.5 Memory read routes (internal, sidepanel-only)
+
+The native server exposes three HTTP read routes under `/memory/*` for the Chrome extension's sidepanel Memory tab. These are **not** MCP tools — they're internal HTTP-only endpoints protected by the same Bearer token as `/mcp`, intended for an already-authenticated local viewer, and are intentionally read-only (POST/PUT/PATCH/DELETE respond 404 by design).
+
+- `GET /memory/sessions?limit=&offset=` — recent sessions with task title + intent + `stepCount` joined in; default `limit=20`, max `500`.
+- `GET /memory/sessions/:sessionId/steps` — chronological steps for one session.
+- `GET /memory/tasks/:taskId` — single task row; 404 when unknown.
+
 ## 7. `/status` semantics
 
 `/status` splits `data.transports` into two layers:

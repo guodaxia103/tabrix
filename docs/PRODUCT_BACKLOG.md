@@ -29,25 +29,27 @@
 ### B-001 · Native-server: expose Memory read API
 
 - **Stage**: 3e · **Layer**: M · **KPI**: 懂用户
-- **Owner**: Claude · **Size**: S · **Status**: `planned`
+- **Owner**: Claude · **Size**: S · **Status**: `in_progress`
 - **Dependencies**: none (builds on existing `memory/db/client.ts`)
 - **Branch**: `feat/b-001-memory-read-api`
+- **Schema note**: the MKEP Memory schema is `Task (1) → Session (N) → Step (N)` — each session belongs to exactly one task. The original "sessions/:id/tasks" and "tasks/:id/steps" shape conflicted with this and was corrected in-flight.
 - **Scope**:
-  - Add 3 repository read methods (paginated, read-only, no writes):
-    - `sessionRepo.listRecent(limit: number, offset: number): MemorySessionRow[]`
-    - `taskRepo.listBySessionId(sessionId: string): MemoryTaskRow[]`
-    - `stepRepo.listByTaskId(taskId: string): MemoryStepRow[]`
-  - Expose as HTTP routes under `/memory/*` in `app/native-server/src/server/routes/memory.ts`:
-    - `GET /memory/sessions?limit=&offset=`
-    - `GET /memory/sessions/:sessionId/tasks`
-    - `GET /memory/tasks/:taskId/steps`
-  - Wire into `server/routes/index.ts` re-export.
-  - Auth: same Bearer/loopback guard as other routes.
+  - Add repository read methods on `SessionRepository` (no schema change):
+    - `listRecent(limit: number, offset: number): SessionSummary[]` — SQL JOIN with `memory_tasks` + subquery step count, ordered `started_at DESC, session_id DESC`.
+    - `countAll(): number` — for pagination total.
+  - Add read methods on `SessionManager` (public surface for routes): `listRecentSessionSummaries`, `countAllSessions`, `getStepsForSession`, `getTaskOrNull`.
+  - Expose as HTTP routes under `/memory/*` in `app/native-server/src/server/memory-routes.ts` (factory module — matches the "future route groups" note in `routes/index.ts`):
+    - `GET /memory/sessions?limit=&offset=` (default 20, max 500)
+    - `GET /memory/sessions/:sessionId/steps`
+    - `GET /memory/tasks/:taskId` (404 when unknown)
+  - Wire into `server/index.ts::setupRoutes()`.
+  - Auth: inherits the global `onRequest` Bearer/loopback hook (no route-local override).
+  - Response envelope: `{ status: 'ok' | 'error', data: ... }` with `data.persistenceMode` on every memory response so the sidepanel can surface "persistence off" neutrally.
 - **Exit criteria**:
-  - `pnpm --filter @tabrix/tabrix test` passes with ≥ 3 new tests (1 per route, happy path + empty-result path).
+  - `pnpm --filter @tabrix/tabrix test` passes with ≥ 3 new tests (1 per route, happy path + empty-result path). Actual delivery: 5 new repo tests + 8 new route tests.
   - `GET /memory/sessions` responds in < 50 ms for a 1,000-row DB (baseline memory fixture).
-  - No write path is exposed. Unit test asserts routes reject `POST`.
-  - `docs/CLI_AND_MCP.md` gets a 3-line note that these routes are HTTP-only (not MCP tools yet — they're internal sidepanel data, not LLM context).
+  - No write path is exposed. Unit test asserts POST/PUT/DELETE against `/memory/*` return 404.
+  - `docs/CLI_AND_MCP.md` gets a short section explaining these are HTTP-only internal routes (not MCP tools — they're sidepanel data, not LLM context).
 
 ### B-002 · Extension: Memory tab session list
 
