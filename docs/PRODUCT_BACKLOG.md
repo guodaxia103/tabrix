@@ -191,7 +191,7 @@
 ### B-006 · Extension: Memory tab filter + search + jump-to-last-failure
 
 - **Stage**: 3e · **Layer**: M · **KPI**: 懂用户 · 更快
-- **Owner**: Claude · **Size**: L · **Status**: `review`
+- **Owner**: Claude · **Size**: L · **Status**: `done` (merged 2026-04-20, commit `5f37ed4`)
 - **Dependencies**: B-002 and B-003 merged (both `done`)
 - **Branch**: `feat/b-006-memory-tab-filter-search`
 - **Schema cite**: extends the read-side contract in `packages/shared/src/memory.ts` (the DTO module B-002 introduced); native-server surface already exists — `MemorySessionSummary.status` and `MemorySessionSummary.taskTitle` / `taskIntent` are enough for client-side filtering. **Do not** add a new backend endpoint for this — server-side search is a Sprint 3+ candidate and needs its own `B-NNN`.
