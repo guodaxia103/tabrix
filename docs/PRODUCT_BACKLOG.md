@@ -295,13 +295,114 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
 - **Landed by Codex (2026-04-20, draft-only)**: two files edited per brief. `git diff --stat` returned cleanly. Awaiting Claude's verification + commit.
 - **Claude verified + committed (2026-04-20)**: `pnpm -r typecheck` and `pnpm run docs:check` both pass locally. Committed as `c8ed033`. Sandbox behaviour confirms the draft-only shape from `AGENTS.md` §"Operational sandbox (lesson from B-004)" works on Windows — Codex could not run `pnpm -r typecheck` under the `workspace-write` sandbox (spawn EPERM on `pnpm`), which is consistent with the B-004 lesson; verification by Claude after draft is now the documented norm.
 
+## Current Sprint — Sprint 3 (2026-W19, 2026-04-20 → 2026-04-26)
+
+**Theme**: _Stage 3a Knowledge UI Map seed + Sprint 2 retro follow-ups + first write path into Stage 3b_. Balance: one new Knowledge surface (B-010) that gives B-011/B-012 a stable key space, the CSS half of the bundle-size gate from Sprint 2 §7, the Stage 3b aggregator that finally turns B-005's empty tables into real data, and one Codex fast task to close the sprint.
+
+**Demo outcome** (what the human should see at end of sprint):
+
+1. `GITHUB_KNOWLEDGE_SEEDS.uiMapRules` exists in `app/chrome-extension/entrypoints/background/knowledge/seeds/github.ts` with the first five `(pageRole, purpose)` pairs — `repo_home.open_issues_tab`, `repo_home.open_actions_tab`, `issues_list.new_issue_cta`, `issues_list.search_input`, `actions_list.filter_input` — and a `lookup/resolve-ui-map.ts` helper that turns a `(siteId, pageRole, purpose)` triple into the compiled rule.
+2. `scripts/check-bundle-size.mjs` now also gates the latest `sidepanel-*.css` bundle (post-B-006 baseline is 18.24 kB; hard threshold 22 kB, soft 20 kB — same 40/25 shape as the JS gate, just smaller numbers).
+3. `experience_action_paths` contains real rows for the first time — written by a new aggregator that walks Memory sessions whose status is `completed`, groups consecutive steps by `(pageRole, intent_signature)`, and upserts the resulting action path + success/failure counters. No MCP tool surface yet (that's B-013, Sprint 4+).
+4. `docs/PRODUCT_BACKLOG.md` B-NNN template no longer tells authors to "append rule N" — it tells them to "add a new subsection titled …", fixing the drift discovered during Sprint 2 B-007.
+
+**Out of scope for Sprint 3**:
+
+- **B-011 stable `targetRef`** — B-010 ships only the schema + seed + lookup; the `read_page` HVO output contract stays unchanged in this sprint. Rewiring `candidate-action.ts` to consult UI Map hints is B-011's job.
+- **B-019 Sidepanel Insights tab UI** — stays in Sprint 4+; `memory_insights` table is not created in this sprint.
+- **`experience_suggest_plan` MCP tool (B-013)** — waits on the B-012 aggregator stabilising for at least one sprint before we expose it to upstream agents.
+- **Any Douyin UI Map seed** — Stage 1 intentionally only migrated GitHub; Stage 3a follows the same "GitHub first, then Douyin when representative" cadence.
+
+**Execution order** (each merges before the next starts):
+
+1. **B-010** (UI Map schema + GitHub seed + lookup) — first because B-012's aggregator design is cleaner once the `(siteId, pageRole, purpose)` key space exists.
+2. **B-021** (CSS bundle gate) — smallest item; keeps momentum and satisfies Sprint 2 retro §7 action.
+3. **B-012** (Experience aggregator) — the big one; comes after B-010 so the aggregator's write-path can key off `purpose` strings if needed (even though the minimal B-012 may not use them yet).
+4. **B-022** (Codex fast — drop "rule N" wording) — last, low-risk, exercises the draft-only protocol for a third consecutive sprint.
+
+### B-010 · Extension: `KnowledgeUIMapRule` schema + GitHub seed + read-only lookup
+
+- **Stage**: 3a · **Layer**: K · **KPI**: 更准 · 更稳 (stable purpose key space makes retries converge)
+- **Owner**: Claude · **Size**: M · **Status**: `in_progress`
+- **Dependencies**: none (extends the existing Stage 1/2 `KnowledgeSeeds` shape without touching consumers)
+- **Branch**: `feat/b-010-knowledge-uimap-github-seed`
+- **Schema cite** _(per the schema-cite rule added in B-009)_:
+  - Authored shape extends `KnowledgeSeeds` — see `app/chrome-extension/entrypoints/background/knowledge/types.ts:113-119` (current definition before B-010). B-010 adds an optional `uiMapRules?: readonly KnowledgeUIMapRule[]` field; existing Stage 1/2 seeds continue to compile unchanged.
+  - Compiled shape extends `CompiledKnowledgeRegistry` — see `app/chrome-extension/entrypoints/background/knowledge/types.ts:169-177` (current definition). B-010 adds two new indices: `uiMapRulesBySite: ReadonlyMap<string, readonly CompiledKnowledgeUIMapRule[]>` (declaration order per site) and `uiMapRuleByKey: ReadonlyMap<string, CompiledKnowledgeUIMapRule>` (fast-path lookup keyed by `${siteId}::${pageRole}::${purpose}`).
+  - Target shape reference: `docs/MKEP_CURRENT_VS_TARGET.md:229-242` (the `KnowledgeUIMap` TypeScript sketch in the target schema). B-010 is a faithful subset — same four `locatorHints` kinds, same `actionType` tristate, same optional `confidence`.
+  - **New / modified fields**: `KnowledgeUIMapRule { siteId, pageRole, purpose, region?, locatorHints[], actionType?, confidence?, notes? }`; `KnowledgeUIMapLocatorHint { kind, value, role? }` where `kind ∈ { aria_name | label_regex | href_regex | css }`.
+  - **Idempotency**: the registry loader throws on duplicate `(siteId, pageRole, purpose)` — matches the existing pattern used for duplicate `siteId` in site profiles (`knowledge-registry.ts:62-64`). The DTO shape stays backwards-compatible (new field is optional), and Stage 1/2 tests stay green without changes.
+- **Scope**:
+  - Add `KnowledgeUIMapRule` + `CompiledKnowledgeUIMapRule` + `KnowledgeUIMapLocatorHint` + `CompiledKnowledgeUIMapLocatorHint` types in `types.ts`.
+  - Extend `compileKnowledgeRegistry` in `registry/knowledge-registry.ts` to compile and index UI map rules + reject duplicate triples.
+  - Add `GITHUB_UI_MAP_RULES()` factory in `seeds/github.ts` with exactly the five purposes listed in the demo outcome.
+  - Add `lookup/resolve-ui-map.ts` exposing `lookupUIMapRule`, `listUIMapRulesForPage`, `listUIMapRulesForSite`.
+  - Add `tests/knowledge-ui-map.test.ts` covering: compile, declaration order, regex vs non-regex hint compilation, duplicate rejection, Douyin tolerance, defaults, lookup by triple, listing, explicit-null registry path, no regression on Stage 1/2 counts.
+- **Must not do**: modify the public `read_page` contract; implement stable `targetRef`; touch `candidate-action.ts`; touch native-server schema; touch CI; touch sidepanel UI; add Douyin UI map rules; wire into Experience aggregator.
+- **Exit criteria**:
+  - `pnpm --filter @tabrix/extension typecheck` green.
+  - `pnpm --filter @tabrix/extension test` green (273 prior + ~15 new B-010 tests).
+  - Knowledge Stage 1/2 existing tests (`knowledge-registry.test.ts`, `knowledge-lookup.test.ts`, `knowledge-object-classification.test.ts`) all still green with zero edits.
+  - `git diff --stat` contains only knowledge layer files + the new test + backlog update.
+
+### B-021 · Infra: extend `check-bundle-size.mjs` to gate `sidepanel-*.css`
+
+- **Stage**: N/A (infra carry-over from Sprint 2 retro §7) · **Layer**: X · **KPI**: 更稳 (prevents CSS creep)
+- **Owner**: Claude · **Size**: S · **Status**: `planned`
+- **Dependencies**: B-010 merged (so the CSS baseline number is measured after B-010's non-UI-impacting edits)
+- **Branch**: `chore/b-021-bundle-size-css-gate`
+- **Scope**:
+  - Generalize `scripts/check-bundle-size.mjs` to accept a list of `{ prefix, suffix, hardLimit, soft­Limit, label }` targets; run the same latest-file-in-chunks-dir walk for each.
+  - Add a CSS target — `prefix: 'sidepanel-'`, `suffix: '.css'`, `hardLimit: 22 * 1024`, `softLimit: 20 * 1024`.
+  - Update `AGENTS.md` Operational Guardrails §"Sidepanel bundle-size gate (added in B-007)" to list both JS and CSS thresholds.
+- **Must not do**: change the JS thresholds; gate any bundle other than sidepanel; introduce a new script.
+- **Exit criteria**:
+  - `pnpm run size:check` passes locally on a clean build and prints both JS + CSS lines.
+  - `pnpm -r typecheck` green.
+  - CI run on the PR passes.
+
+### B-012 · Native-server: Experience action-path aggregator (reads Memory, writes Experience)
+
+- **Stage**: 3b · **Layer**: E · **KPI**: 省 token · 更快 (reusable path priors reduce planning retries)
+- **Owner**: Claude · **Size**: L · **Status**: `planned`
+- **Dependencies**: B-005 (Experience schema landed); optionally references B-010 purposes when the step's `pageRole` has an authored UI map
+- **Branch**: `feat/b-012-experience-action-path-aggregator`
+- **Schema cite**:
+  - Writes to `experience_action_paths` — see `app/native-server/src/memory/db/schema.ts` §`EXPERIENCE_CREATE_TABLES_SQL` (landed in B-005, commit `3770201`). Fields used: `action_path_id` (uuid), `page_role`, `intent_signature`, `step_sequence` (JSON array of `{toolName, status, historyRef}`), `success_count`, `failure_count`, `last_used_at`, `created_at`, `updated_at`.
+  - Reads from Memory — see `app/native-server/src/memory/db/schema.ts` §`MEMORY_CREATE_TABLES_SQL` for `execution_sessions`, `tasks`, `execution_steps`. No new columns; strictly read-only on Memory.
+  - **Idempotency**: the aggregator is a pure projection — same Memory state → same Experience state. Re-running it over the same sessions must not double-increment `success_count` / `failure_count`. The session-level "aggregated_at" marker lives on `execution_sessions` (add via `ALTER TABLE IF NOT EXISTS ADD COLUMN` migration in the same PR) so we can replay only un-aggregated sessions.
+- **Scope**: see `docs/MKEP_STAGE_3_PLUS_ROADMAP.md §4.2`. Minimal first cut:
+  - Walk `execution_sessions WHERE status = 'completed' AND aggregated_at IS NULL`, in `created_at` order.
+  - Group each session's steps by `task_id` and compute a single `intent_signature` from `task.intent` (hash + light normalization).
+  - Emit or upsert one `experience_action_paths` row per `(page_role, intent_signature)`; increment `success_count` for `status = 'completed'` sessions, `failure_count` for `failed / aborted`.
+  - Mark the session `aggregated_at = now()` so the next run skips it.
+  - Expose as an internal-only function; **no MCP tool** yet (that's B-013).
+- **Must not do**: expose an MCP tool; change Memory schema except for the `aggregated_at` column; write to `experience_locator_prefs` (deferred to a separate item); read UI Map rules in the first cut (reserve for a follow-up).
+- **Exit criteria**:
+  - Jest tests cover: empty Memory (no-op); single completed session → exactly 1 Experience row; replay is idempotent; failed session increments `failure_count`.
+  - `pnpm --filter @tabrix/tabrix test` green.
+  - A one-paragraph note appended to `docs/MKEP_STAGE_3_PLUS_ROADMAP.md §4.2` confirming Stage 3b's first write path is live.
+
+### B-022 · Codex fast task · drop "rule N" numbering convention from backlog template wording
+
+- **Stage**: N/A (docs carry-over from Sprint 2 retro §7) · **Layer**: X · **KPI**: — (tooling hygiene)
+- **Owner**: **Codex fast (draft-only, Claude commits)** · **Size**: S · **Status**: `planned`
+- **Dependencies**: none
+- **Branch**: `chore/b-022-drop-rule-n-numbering`
+- **Scope** (exactly two files, as required by Codex draft-only protocol in `AGENTS.md`):
+  - `AGENTS.md`: find any line referencing "rule 19" / "rule 20" / "rule 21" and rephrase to cite the section title (e.g. "see the 'Product pruning' section") instead of a numeric rule index. `AGENTS.md` does not use numbered rules.
+  - `docs/PRODUCT_BACKLOG.md`: update the Cross-Sprint Invariants bullet that says "see `AGENTS.md` rule 19" to cite the section title; update the `B-NNN` template wording at the top of the doc if it references "rule N"; mark B-022 as `review` with a "Landed by Codex" note.
+- **Must not do**: change any other wording; touch code; introduce new rules; renumber existing headings.
+- **Exit criteria**:
+  - `git diff --stat` shows at most 2 files changed.
+  - `pnpm run docs:check` passes inside the Codex sandbox.
+  - Claude runs `pnpm -r typecheck` locally, confirms clean, and commits as `docs(backlog): drop rule-N numbering references (B-022)`.
+
 ## Sprint 3+ — backlog pool (unordered, pulled into a sprint during review)
 
 | ID    | Stage | Layer | Title                                                                                     | Size | Rough dependencies                    |
 | ----- | ----- | ----- | ----------------------------------------------------------------------------------------- | ---- | ------------------------------------- |
-| B-010 | 3a    | K     | `KnowledgeUIMapRule` schema + GitHub seed                                                 | M    | none                                  |
 | B-011 | 3a    | K/X   | `read_page` HVO stable `targetRef` (historyRef + hvoIndex + contentHash)                  | M    | B-010                                 |
-| B-012 | 3b    | E     | Experience action-path aggregator (reads Memory, writes Experience)                       | L    | Sprint 2 Experience schema landed     |
 | B-013 | 3b    | E     | `experience_suggest_plan` MCP tool                                                        | M    | B-012                                 |
 | B-014 | 3c    | X     | `RecoveryWatchdog` table (consolidate dialog-prearm / interaction / screenshot fallbacks) | L    | none                                  |
 | B-015 | 3d    | X     | `read_page(render='markdown')` parameter + unit tests                                     | M    | none                                  |
@@ -311,6 +412,8 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
 | B-019 | 3i    | M     | `memory_insights` table + Sidepanel Insights tab                                          | M    | B-003 (shared UI layer)               |
 | B-020 | 4a    | E     | `experience_export` / `experience_import` + PII redact + dry-run                          | M    | B-012 stable                          |
 
+> Items `B-010`, `B-012`, `B-021`, `B-022` are pulled into Sprint 3 above; `B-011` stays in the pool and is a candidate for Sprint 4.
+>
 > If a candidate for a backlog item cannot be mapped to one of the Stages above, that's a signal the MKEP roadmap is missing a dimension — raise it in the next sprint review instead of coding.
 
 ## Sprint Review Protocol (run every Sunday)
@@ -336,3 +439,4 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
 - 2026-04-20 — Sprint 1 closed same day: B-001 / B-002 / B-003 / B-004 all `done`. Retro at `docs/SPRINT_1_RETRO.md`. `AGENTS.md` Codex Delegation Rules updated with sandbox lesson from B-004.
 - 2026-04-20 — Sprint 2 locked: B-005 (Experience schema seed) / B-006 (Memory filter/search) / B-007 (CI bundle gate) / B-008 (testing conventions doc) / B-009 (Codex fast — schema-cite rule). Themes: Stage 3b seed + Stage 3e polish + Sprint 1 retro action items.
 - 2026-04-20 — Sprint 2 closed same day: all 5 items `done`. B-009 successfully re-tested the Codex "draft-only" handoff protocol — Codex completed the 2-file edit, Claude verified + committed. Retro at `docs/SPRINT_2_RETRO.md`. `AGENTS.md` gained an Operational Guardrails section covering bundle-size gate and schema-cite rule.
+- 2026-04-20 — Sprint 3 locked: B-010 (Knowledge UI Map schema + GitHub seed) / B-021 (CSS bundle gate) / B-012 (Experience action-path aggregator) / B-022 (Codex fast — drop rule-N numbering). Themes: Stage 3a Knowledge seed + Stage 3b first write path + Sprint 2 retro §7 follow-ups. B-021 and B-022 added to the pool as part of this lock.
