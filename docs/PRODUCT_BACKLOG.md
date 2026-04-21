@@ -253,7 +253,7 @@
 ### B-008 · Docs: Extension testing conventions
 
 - **Stage**: — · **Layer**: X · **KPI**: 更稳
-- **Owner**: Claude · **Size**: S · **Status**: `planned`
+- **Owner**: Claude · **Size**: S · **Status**: `review`
 - **Dependencies**: can start after either B-005 or B-006; final pass AFTER both (capture fresh lessons)
 - **Branch**: `docs/b-008-extension-testing-conventions`
 - **Scope**:
@@ -268,6 +268,11 @@
 - **Exit criteria**:
   - File exists and is referenced from `AGENTS.md`.
   - `pnpm run docs:check` passes (the existing docs linter).
+- **Landed scope (2026-04-20)**:
+  - New doc `docs/EXTENSION_TESTING_CONVENTIONS.md` with 8 sections covering: (1) `fetch` + `AbortController` reject-on-signal pattern, (2) callback-only `chrome.storage.local.get` mocking + `as never` rationale, (3) the Memory API envelope discriminator `status: 'ok'` (captured from the real B-006 trap), (4) `vi.spyOn` / `vi.stubGlobal` / `vi.mock` decision matrix, (5) `await nextTick()` before DOM assertions, (6) `describe.skip` / `it.todo` globals, (7) a copy-paste minimal template, (8) when to push a test to the native-server integration suite instead.
+  - `AGENTS.md` § "Extension, popup, onboarding, and troubleshooting tasks" now has a required-reading bullet for this doc when editing `app/chrome-extension/tests/**`.
+  - `pnpm run docs:check` passes.
+  - **Deviation from brief**: delivered 8 sections instead of 5. The extras (`vi.spyOn` matrix, `nextTick`, integration-test boundary) came directly from Sprint 1/2 friction and would otherwise have had to be re-discovered each sprint.
 
 ### B-009 · Codex fast task · add "schema-cite rule" to AGENTS.md + backlog template
 

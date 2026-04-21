@@ -48,6 +48,7 @@ Read:
 
 - [docs/QUICKSTART.md](./docs/QUICKSTART.md)
 - [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)
+- [docs/EXTENSION_TESTING_CONVENTIONS.md](./docs/EXTENSION_TESTING_CONVENTIONS.md) — required when adding or editing any `app/chrome-extension/tests/**` file.
 
 ### MKEP Memory-layer tasks (SQLite / SessionManager / post-processor / sidepanel Memory tab)
 
