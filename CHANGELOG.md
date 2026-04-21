@@ -25,6 +25,32 @@ file`. Root cause: `pnpm install --ignore-scripts` **overrides**
 
 ### Added
 
+- **MKEP Knowledge Registry — Stage 2 (HVO classifier)** — second
+  data-ification pass. The GitHub object-layer rules that used to live
+  as hardcoded branches in
+  `read-page-high-value-objects-github.ts:classify` — T5.4.5's URL →
+  `objectSubType` classifier (7 branches) plus the `GITHUB_CLASSIFICATION`
+  label table (27 rows) — now ship as typed seed data in
+  `app/chrome-extension/entrypoints/background/knowledge/seeds/github.ts`
+  under the new `KnowledgeObjectClassifier` schema. A new
+  `lookup/resolve-object-classification.ts` applies the rules in
+  declaration order (URL rules first so URL-first dispatch is
+  preserved), with optional `pageRole` scoping. `githubObjectLayerAdapter.classify`
+  becomes **registry-first, legacy-fallback** and reuses the Stage 1
+  `KNOWLEDGE_REGISTRY_MODE` flag (`on` / `off` / `diff`); production
+  default stays `on`, the ARIA-role fallback continues to run TS-side.
+  Scoring (`scorePrior`, `GITHUB_NOISE_PATTERNS`, `GITHUB_PREFERRED_LABELS`)
+  and `collectExtraCandidates` / `GITHUB_PAGE_ROLE_TASK_SEEDS` are
+  explicitly out of scope for Stage 2 and remain TS — see Stage 3.
+  Added a bit-exact HVO parity suite
+  (`read-page-high-value-objects-github.parity.test.ts`, 15 fixtures
+  covering every URL rule, one label rule per pageRole, ARIA-fallback,
+  and negatives) plus lookup unit tests
+  (`knowledge-object-classification.test.ts`, 15 tests) and 5 new
+  Stage 2 assertions in `knowledge-registry.test.ts`. Full extension
+  suite goes from 843 → 878 tests, all green. Design document lives
+  at `docs/KNOWLEDGE_STAGE_2.md`.
+
 - **MKEP Knowledge Registry — Stage 1** — first data-ification pass of
   the Knowledge layer. The GitHub understanding-layer rules (Site
   Profile, Page Catalog, Primary Region anchors) that used to live as

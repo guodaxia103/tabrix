@@ -1,4 +1,4 @@
-import type { KnowledgeSeeds } from '../types';
+import type { KnowledgeObjectClassifier, KnowledgeSeeds } from '../types';
 
 /**
  * Stage 1 GitHub Knowledge seeds — faithful data-ification of the rules
@@ -189,4 +189,291 @@ export const GITHUB_KNOWLEDGE_SEEDS: KnowledgeSeeds = {
       },
     },
   ],
+  objectClassifiers: GITHUB_OBJECT_CLASSIFIERS(),
 };
+
+/**
+ * Stage 2 GitHub Object classifier seeds — data-ified replacement for
+ * the legacy `classifyByGithubUrl` (URL rules) + `GITHUB_CLASSIFICATION`
+ * (label rules) tables in `read-page-high-value-objects-github.ts`.
+ *
+ * Migration mapping:
+ *
+ * - URL rules 1..6 correspond one-to-one with `classifyByGithubUrl`
+ *   branches (lines 224-293 of `read-page-high-value-objects-github.ts`).
+ *   **Declaration order is load-bearing**: the more specific
+ *   `/actions/runs/<id>` (rule 2) must precede the generic `/actions(?query)`
+ *   (rule 4) for URL-first dispatch to remain bit-compatible.
+ * - Label rules 7..33 are copied verbatim from `GITHUB_CLASSIFICATION`
+ *   (lines 120-160); each has a `pageRole` filter so rules don't leak
+ *   across roles. Reason strings fall back to the lookup's default
+ *   `github pageRole=<role> matched <regex>` template, which is
+ *   bit-compatible with the legacy reason.
+ *
+ * The ARIA-role fallback (lines 401-425) is deliberately NOT migrated
+ * in Stage 2; see `docs/KNOWLEDGE_STAGE_2.md §2`.
+ */
+function GITHUB_OBJECT_CLASSIFIERS(): readonly KnowledgeObjectClassifier[] {
+  return [
+    // -------- URL rules (T5.4.5 origin) --------
+    {
+      siteId: 'github',
+      match: { hrefPatterns: [String.raw`^#`] },
+      objectType: 'entry',
+      objectSubType: 'github.page_anchor',
+      // region intentionally omitted → falls back to context.primaryRegion.
+      // reason intentionally omitted so the lookup's default template
+      // `github url-class href=<path> -> page_anchor` fills in the actual
+      // anchor text (e.g. `#readme`), matching legacy reason verbatim.
+    },
+    {
+      siteId: 'github',
+      match: { hrefPatterns: [String.raw`^/actions/runs/\d+(?:/|\?|#|$)`] },
+      objectType: 'record',
+      objectSubType: 'github.workflow_run_entry',
+      region: 'workflow_runs_list',
+      reason: 'github url-class matched /actions/runs/<id> -> workflow_run_entry',
+    },
+    {
+      siteId: 'github',
+      match: { hrefPatterns: [String.raw`^/actions/workflows/[^/]+\.ya?ml(?:\?|#|$)`] },
+      objectType: 'control',
+      objectSubType: 'github.workflow_file_entry',
+      region: 'workflow_runs_list',
+      reason: 'github url-class matched /actions/workflows/*.yml -> workflow_file_entry',
+    },
+    {
+      siteId: 'github',
+      match: { hrefPatterns: [String.raw`^/actions(?:\?|#|$)`] },
+      objectType: 'control',
+      objectSubType: 'github.workflow_filter_control',
+      region: 'workflow_runs_list',
+      reason: 'github url-class matched /actions(?query) -> workflow_filter_control',
+    },
+    {
+      siteId: 'github',
+      match: { hrefPatterns: [String.raw`^/security/code-scanning(?:/|\?|#|$)`] },
+      objectType: 'nav_entry',
+      objectSubType: 'github.security_quality_tab',
+      region: 'repo_primary_nav',
+      reason: 'github url-class matched /security/code-scanning -> security_quality_tab',
+    },
+    {
+      siteId: 'github',
+      match: { hrefPatterns: [String.raw`^/security(?:/|\?|#|$)`] },
+      objectType: 'nav_entry',
+      objectSubType: 'github.security_quality_tab',
+      region: 'repo_primary_nav',
+      reason: 'github url-class matched /security -> security_quality_tab',
+    },
+    {
+      siteId: 'github',
+      match: {
+        hrefPatterns: [
+          String.raw`^/(issues|pulls|actions|security|insights|wiki|projects|discussions|settings)(?:/|\?|#|$)`,
+        ],
+      },
+      objectType: 'nav_entry',
+      objectSubType: 'github.repo_nav_tab',
+      region: 'repo_primary_nav',
+      reason: 'github url-class matched top-level repo tab -> repo_nav_tab',
+    },
+
+    // -------- Label rules for repo_home --------
+    {
+      siteId: 'github',
+      pageRole: 'repo_home',
+      match: { labelPatterns: [String.raw`^issues?$`] },
+      objectType: 'nav_entry',
+      region: 'repo_primary_nav',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'repo_home',
+      match: { labelPatterns: [String.raw`^pull requests?$`] },
+      objectType: 'nav_entry',
+      region: 'repo_primary_nav',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'repo_home',
+      match: { labelPatterns: [String.raw`^actions$`] },
+      objectType: 'nav_entry',
+      region: 'repo_primary_nav',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'repo_home',
+      match: { labelPatterns: [String.raw`^projects?$`] },
+      objectType: 'nav_entry',
+      region: 'repo_primary_nav',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'repo_home',
+      match: { labelPatterns: [String.raw`^wiki$`] },
+      objectType: 'nav_entry',
+      region: 'repo_primary_nav',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'repo_home',
+      match: { labelPatterns: [String.raw`^security$`] },
+      objectType: 'nav_entry',
+      region: 'repo_primary_nav',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'repo_home',
+      match: { labelPatterns: [String.raw`^insights$`] },
+      objectType: 'nav_entry',
+      region: 'repo_primary_nav',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'repo_home',
+      match: { labelPatterns: [String.raw`^go to file$`] },
+      objectType: 'entry',
+      region: 'repo_primary_nav',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'repo_home',
+      match: { labelPatterns: [String.raw`^main branch$`] },
+      objectType: 'control',
+      region: 'repo_primary_nav',
+    },
+
+    // -------- Label rules for issues_list --------
+    {
+      siteId: 'github',
+      pageRole: 'issues_list',
+      match: { labelPatterns: [String.raw`^search issues$`] },
+      objectType: 'control',
+      region: 'issues_results',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'issues_list',
+      match: { labelPatterns: [String.raw`^filter issues$`] },
+      objectType: 'control',
+      region: 'issues_results',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'issues_list',
+      match: { labelPatterns: [String.raw`^filter\b`] },
+      objectType: 'control',
+      region: 'issues_results',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'issues_list',
+      match: { labelPatterns: [String.raw`^new issue$`] },
+      objectType: 'control',
+      region: 'issues_results',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'issues_list',
+      match: { labelPatterns: [String.raw`^issue entries$`] },
+      objectType: 'record',
+      region: 'issues_results',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'issues_list',
+      match: { labelPatterns: [String.raw`^labels?$`] },
+      objectType: 'control',
+      region: 'issues_results',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'issues_list',
+      match: { labelPatterns: [String.raw`^milestones?$`] },
+      objectType: 'control',
+      region: 'issues_results',
+    },
+
+    // -------- Label rules for actions_list --------
+    {
+      siteId: 'github',
+      pageRole: 'actions_list',
+      match: { labelPatterns: [String.raw`^filter workflow runs$`] },
+      objectType: 'control',
+      region: 'workflow_runs_list',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'actions_list',
+      match: { labelPatterns: [String.raw`^workflow run entries$`] },
+      objectType: 'record',
+      region: 'workflow_runs_list',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'actions_list',
+      match: { labelPatterns: [String.raw`^run detail entry$`] },
+      objectType: 'entry',
+      region: 'workflow_runs_list',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'actions_list',
+      match: { labelPatterns: [String.raw`^run\s+\d+\b`] },
+      objectType: 'record',
+      region: 'workflow_runs_list',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'actions_list',
+      match: { labelPatterns: [String.raw`^completed successfully:\s*run\b`] },
+      objectType: 'record',
+      region: 'workflow_runs_list',
+    },
+
+    // -------- Label rules for workflow_run_detail --------
+    {
+      siteId: 'github',
+      pageRole: 'workflow_run_detail',
+      match: { labelPatterns: [String.raw`^summary$`] },
+      objectType: 'status_item',
+      region: 'workflow_run_summary',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'workflow_run_detail',
+      match: { labelPatterns: [String.raw`^jobs?$`] },
+      objectType: 'status_item',
+      region: 'workflow_run_summary',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'workflow_run_detail',
+      match: { labelPatterns: [String.raw`^show all jobs$`] },
+      objectType: 'status_item',
+      region: 'workflow_run_summary',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'workflow_run_detail',
+      match: { labelPatterns: [String.raw`^artifacts?$`] },
+      objectType: 'status_item',
+      region: 'workflow_run_summary',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'workflow_run_detail',
+      match: { labelPatterns: [String.raw`^logs?$`] },
+      objectType: 'status_item',
+      region: 'workflow_run_summary',
+    },
+    {
+      siteId: 'github',
+      pageRole: 'workflow_run_detail',
+      match: { labelPatterns: [String.raw`^annotations?$`] },
+      objectType: 'status_item',
+      region: 'workflow_run_summary',
+    },
+  ];
+}
