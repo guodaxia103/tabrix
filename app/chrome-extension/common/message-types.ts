@@ -3,8 +3,6 @@
  * Note: Native message types are imported from the shared package
  */
 
-import type { RealtimeEvent } from '@tabrix/shared';
-
 // Message targets for routing
 export enum MessageTarget {
   Offscreen = 'offscreen',
@@ -81,13 +79,6 @@ export const BACKGROUND_MESSAGE_TYPES = {
   WEB_EDITOR_PROPS_REGISTER_EARLY_INJECTION: 'web_editor_props_register_early_injection',
   // Web editor props - open source file in VSCode
   WEB_EDITOR_OPEN_SOURCE: 'web_editor_open_source',
-  // Quick Panel <-> AgentChat integration
-  QUICK_PANEL_SEND_TO_AI: 'quick_panel_send_to_ai',
-  QUICK_PANEL_CANCEL_AI: 'quick_panel_cancel_ai',
-  // Quick Panel Search - Tabs bridge
-  QUICK_PANEL_TABS_QUERY: 'quick_panel_tabs_query',
-  QUICK_PANEL_TAB_ACTIVATE: 'quick_panel_tab_activate',
-  QUICK_PANEL_TAB_CLOSE: 'quick_panel_tab_close',
 } as const;
 
 // Offscreen message types
@@ -159,8 +150,6 @@ export const TOOL_MESSAGE_TYPES = {
   RR_RECORDER_EVENT: 'rr_recorder_event',
   // Record & Replay timeline feed (background -> content overlay)
   RR_TIMELINE_UPDATE: 'rr_timeline_update',
-  // Quick Panel AI streaming events (background -> content script)
-  QUICK_PANEL_AI_EVENT: 'quick_panel_ai_event',
   // DOM observer trigger bridge
   SET_DOM_TRIGGERS: 'set_dom_triggers',
   DOM_TRIGGER_FIRED: 'dom_trigger_fired',
@@ -168,14 +157,6 @@ export const TOOL_MESSAGE_TYPES = {
   COLLECT_VARIABLES: 'collectVariables',
   // Element marker overlay control (content-side)
   ELEMENT_MARKER_START: 'element_marker_start',
-  // Element picker (tool-driven, background <-> content scripts)
-  ELEMENT_PICKER_START: 'elementPickerStart',
-  ELEMENT_PICKER_STOP: 'elementPickerStop',
-  ELEMENT_PICKER_SET_ACTIVE_REQUEST: 'elementPickerSetActiveRequest',
-  ELEMENT_PICKER_UI_PING: 'elementPickerUiPing',
-  ELEMENT_PICKER_UI_SHOW: 'elementPickerUiShow',
-  ELEMENT_PICKER_UI_UPDATE: 'elementPickerUiUpdate',
-  ELEMENT_PICKER_UI_HIDE: 'elementPickerUiHide',
 } as const;
 
 // Type unions for type safety
@@ -220,176 +201,8 @@ export enum SendMessageType {
 }
 
 // ============================================================
-// Quick Panel <-> AgentChat Message Contracts
+// Quick Panel / AgentChat message contracts were removed as part of the
+// MKEP pruning (see docs/PRODUCT_PRUNING_PLAN.md §P2). The file keeps
+// only the cross-surface message enums that non-agent features still
+// use (extension <-> native host, element marker, record-replay etc.).
 // ============================================================
-
-/**
- * Context information that can be attached to a Quick Panel AI request.
- * Allows passing page-specific data to enhance the AI's understanding.
- */
-export interface QuickPanelAIContext {
-  /** Current page URL */
-  pageUrl?: string;
-  /** User's text selection on the page */
-  selectedText?: string;
-  /**
-   * Optional element metadata from the page.
-   * Kept as unknown to avoid tight coupling with specific element types.
-   */
-  elementInfo?: unknown;
-}
-
-/**
- * Payload for sending a message to AI via Quick Panel.
- */
-export interface QuickPanelSendToAIPayload {
-  /** The user's instruction/question for the AI */
-  instruction: string;
-  /** Optional contextual information from the page */
-  context?: QuickPanelAIContext;
-}
-
-/**
- * Response from QUICK_PANEL_SEND_TO_AI message handler.
- */
-export type QuickPanelSendToAIResponse =
-  | { success: true; requestId: string; sessionId: string }
-  | { success: false; error: string };
-
-/**
- * Message structure for sending to AI.
- */
-export interface QuickPanelSendToAIMessage {
-  type: typeof BACKGROUND_MESSAGE_TYPES.QUICK_PANEL_SEND_TO_AI;
-  payload: QuickPanelSendToAIPayload;
-}
-
-/**
- * Payload for cancelling an active AI request.
- */
-export interface QuickPanelCancelAIPayload {
-  /** The request ID to cancel */
-  requestId: string;
-  /**
-   * Optional session ID for fallback when background state is missing.
-   * This can happen after MV3 Service Worker restarts.
-   */
-  sessionId?: string;
-}
-
-/**
- * Response from QUICK_PANEL_CANCEL_AI message handler.
- */
-export type QuickPanelCancelAIResponse = { success: true } | { success: false; error: string };
-
-/**
- * Message structure for cancelling AI request.
- */
-export interface QuickPanelCancelAIMessage {
-  type: typeof BACKGROUND_MESSAGE_TYPES.QUICK_PANEL_CANCEL_AI;
-  payload: QuickPanelCancelAIPayload;
-}
-
-/**
- * Message pushed from background to content script with AI streaming events.
- * Uses the same RealtimeEvent type as AgentChat for consistency.
- */
-export interface QuickPanelAIEventMessage {
-  action: typeof TOOL_MESSAGE_TYPES.QUICK_PANEL_AI_EVENT;
-  requestId: string;
-  sessionId: string;
-  event: RealtimeEvent;
-}
-
-// ============================================================
-// Quick Panel Search - Tabs Bridge Contracts
-// ============================================================
-
-/**
- * Payload for querying open tabs.
- */
-export interface QuickPanelTabsQueryPayload {
-  /**
-   * When true (default), query tabs across all windows.
-   * When false, restrict results to the sender's window.
-   */
-  includeAllWindows?: boolean;
-}
-
-/**
- * Summary of a single tab returned from the background.
- */
-export interface QuickPanelTabSummary {
-  tabId: number;
-  windowId: number;
-  title: string;
-  url: string;
-  favIconUrl?: string;
-  active: boolean;
-  pinned: boolean;
-  audible: boolean;
-  muted: boolean;
-  index: number;
-  lastAccessed?: number;
-}
-
-/**
- * Response from QUICK_PANEL_TABS_QUERY message handler.
- */
-export type QuickPanelTabsQueryResponse =
-  | {
-      success: true;
-      tabs: QuickPanelTabSummary[];
-      currentTabId: number | null;
-      currentWindowId: number | null;
-    }
-  | { success: false; error: string };
-
-/**
- * Message structure for querying tabs.
- */
-export interface QuickPanelTabsQueryMessage {
-  type: typeof BACKGROUND_MESSAGE_TYPES.QUICK_PANEL_TABS_QUERY;
-  payload?: QuickPanelTabsQueryPayload;
-}
-
-/**
- * Payload for activating a tab.
- */
-export interface QuickPanelActivateTabPayload {
-  tabId: number;
-  windowId?: number;
-}
-
-/**
- * Response from QUICK_PANEL_TAB_ACTIVATE message handler.
- */
-export type QuickPanelActivateTabResponse = { success: true } | { success: false; error: string };
-
-/**
- * Message structure for activating a tab.
- */
-export interface QuickPanelActivateTabMessage {
-  type: typeof BACKGROUND_MESSAGE_TYPES.QUICK_PANEL_TAB_ACTIVATE;
-  payload: QuickPanelActivateTabPayload;
-}
-
-/**
- * Payload for closing a tab.
- */
-export interface QuickPanelCloseTabPayload {
-  tabId: number;
-}
-
-/**
- * Response from QUICK_PANEL_TAB_CLOSE message handler.
- */
-export type QuickPanelCloseTabResponse = { success: true } | { success: false; error: string };
-
-/**
- * Message structure for closing a tab.
- */
-export interface QuickPanelCloseTabMessage {
-  type: typeof BACKGROUND_MESSAGE_TYPES.QUICK_PANEL_TAB_CLOSE;
-  payload: QuickPanelCloseTabPayload;
-}

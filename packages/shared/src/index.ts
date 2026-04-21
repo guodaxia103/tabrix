@@ -7,6 +7,5 @@ export * from './labels';
 export * from './node-spec';
 export * from './node-spec-registry';
 export * from './node-specs-builtin';
-export * from './agent-types';
 export * from './bridge-ws';
 export * from './read-page-contract';

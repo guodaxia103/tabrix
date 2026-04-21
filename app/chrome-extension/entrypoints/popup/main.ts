@@ -3,7 +3,7 @@ import { NativeMessageType } from '@tabrix/shared';
 import './style.css';
 // 引入AgentChat主题样式
 import '../sidepanel/styles/agent-chat.css';
-import { preloadAgentTheme } from '../sidepanel/composables/useAgentTheme';
+import { preloadAgentTheme } from '../shared/composables/usePopupTheme';
 import App from './App.vue';
 
 // 在Vue挂载前预加载主题，防止主题闪烁

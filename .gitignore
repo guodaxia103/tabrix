@@ -60,3 +60,9 @@ app/chrome-extension/entrypoints/web-editor-v2/attr-ui-refactor.md
 
 # Local extension zip artifacts (do not commit binary release files)
 releases/chrome-extension/latest/*.zip
+
+# Scratch / local-only working directories (plans, evidence, mcp logs)
+.tmp/
+.private-artifacts/
+.private-tests/
+.playwright-mcp/

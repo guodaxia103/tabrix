@@ -492,11 +492,6 @@ describe('服务器测试', () => {
       setTokenData(null);
     });
 
-    test('本机请求仍可不携带 Bearer 访问受保护路由', async () => {
-      const res = await supertest(Server.getInstance().server).get('/agent/engines').expect(200);
-      expect(res.body).toHaveProperty('engines');
-    });
-
     test('远程 IP 访问公开路径 /ping、/status 无需 Bearer', async () => {
       const app = Server.getInstance();
       const ping = await app.inject({
@@ -552,18 +547,9 @@ describe('服务器测试', () => {
       expect(res.statusCode).toBe(401);
     });
 
-    test('远程 IP 携带正确 Bearer 可访问 GET /agent/engines 与 POST /mcp initialize', async () => {
+    test('远程 IP 携带正确 Bearer 可完成 POST /mcp initialize 流程', async () => {
       const app = Server.getInstance();
       const authHeaders = { authorization: `Bearer ${REMOTE_BEARER_TOKEN}` };
-
-      const engines = await app.inject({
-        method: 'GET',
-        url: '/agent/engines',
-        remoteAddress: REMOTE_CLIENT_IP,
-        headers: authHeaders,
-      });
-      expect(engines.statusCode).toBe(200);
-      expect(JSON.parse(engines.body as string)).toHaveProperty('engines');
 
       const initializeRequest = {
         jsonrpc: '2.0',

@@ -648,7 +648,7 @@ import {
   getPopupRepairCommand,
 } from '@/common/popup-native-error-guidance';
 import { getMessage } from '@/utils/i18n';
-import { useAgentTheme, type AgentThemeId } from '../sidepanel/composables/useAgentTheme';
+import { useAgentTheme, type AgentThemeId } from '../shared/composables/usePopupTheme';
 
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import ProgressIndicator from './components/ProgressIndicator.vue';
