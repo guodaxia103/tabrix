@@ -465,8 +465,11 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
 | B-018 | 3h    | K/E   | `tabrix_choose_context` MCP tool + seed decision table                                    | L    | B-011 + B-013 + B-015 + B-017 in Beta |
 | B-019 | 3i    | M     | `memory_insights` table + Sidepanel Insights tab                                          | M    | B-003 (shared UI layer)               |
 | B-020 | 4a    | E     | `experience_export` / `experience_import` + PII redact + dry-run                          | M    | B-012 stable                          |
+| B-024 | 3c    | X     | Click V2 · verifier hook v1 (GitHub repo-nav: issues / pull_requests / actions)           | S    | B-023                                 |
 
 > Items `B-010`, `B-012`, `B-021`, `B-022` are pulled into Sprint 3 above; `B-011` stays in the pool and is a candidate for Sprint 4.
+>
+> **B-024 · Click V2 · verifier hook v1** (landed outside a sprint boundary, 2026-04-21, Claude). Tracking-only entry so AGENTS.md rule 20 stays satisfied. Scope follows `docs/CLICK_V2_EXECUTION_BRIEF_V1.md`: new `click-verifier.ts`, internal `verifierContext` on `ClickToolParams` (not on the public MCP input schema yet — brief §6), public click response gains optional `postClickState` (brief §5: `beforeUrl` / `afterUrl` / `pageRoleAfter` / `verifierPassed` / `verifierReason`), `success` collapses to `false` when a requested verifier fails. Three v1 keys: `github.repo_nav.issues` / `github.repo_nav.pull_requests` / `github.repo_nav.actions`. Tests: `tests/click-verifier.test.ts` covers brief §10 cases 1–5 directly against the pure evaluator plus the IO wrapper. Real-browser acceptance **not** executed in this environment — same MV3 constraint that B-023 documented; follow-up covers workflow-run / workflow-job / security-tab verifiers (brief §13 non-goals for v1).
 >
 > If a candidate for a backlog item cannot be mapped to one of the Stages above, that's a signal the MKEP roadmap is missing a dimension — raise it in the next sprint review instead of coding.
 

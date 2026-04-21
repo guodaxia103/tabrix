@@ -1,5 +1,9 @@
 # Tabrix AI Development Rules
 
+This repository welcomes contributions from **any AI coding assistant** — Claude (Desktop / Code / Cursor), Codex CLI, Cursor Agent, Cline, Windsurf, GPT-5, Gemini, and any future tool capable of reading + writing files. The historical `Claude → Codex` two-name pairing that appears in old sprint retros was about two specific tools the original maintainer happened to be running, not a restriction on who may contribute.
+
+What matters is the **role** an AI plays for a given task (see "Tiered Execution Model" below), not which vendor ships it.
+
 This repository uses a strict "small, verifiable, low-regression" workflow for AI-assisted development.
 
 All code changes in this repository must follow the `karpathy-guidelines` skill:
@@ -11,19 +15,30 @@ All code changes in this repository must follow the `karpathy-guidelines` skill:
 
 ## Mandatory Read Path
 
-Before changing code or docs, every AI assistant should read the public repository docs below first:
+Before changing code or docs, every AI assistant should read the public repository docs below first, **in this order**:
 
 1. [README.md](./README.md)
 2. [docs/README.md](./docs/README.md)
-3. [docs/PRODUCT_SURFACE_MATRIX.md](./docs/PRODUCT_SURFACE_MATRIX.md)
-4. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
-5. [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md)
-6. [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md)
-7. [docs/PRODUCT_BACKLOG.md](./docs/PRODUCT_BACKLOG.md)
-8. [docs/PRODUCT_PRUNING_PLAN.md](./docs/PRODUCT_PRUNING_PLAN.md)
-9. [CONTRIBUTING.md](./CONTRIBUTING.md)
+3. **[docs/PRD.md](./docs/PRD.md)** — canonical product requirements (product identity, KPIs, MKEP, capability tiers, anti-patterns). This file is the product-level SoT and supersedes the "PRD" role that used to be scattered across `PRODUCT_SURFACE_MATRIX.md`, `MKEP_STAGE_3_PLUS_ROADMAP.md`, and this file.
+4. **[docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md)** — canonical Stage-level execution plan (`Stage 3a → 5e`). Every Stage maps to one or more `B-*` items in `PRODUCT_BACKLOG.md`.
+5. [docs/PRODUCT_SURFACE_MATRIX.md](./docs/PRODUCT_SURFACE_MATRIX.md) — current public product surface + capability tiers (GA/Beta/Experimental/Internal). Referenced by `PRD.md`, not superseded.
+6. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+7. [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md)
+8. [docs/PRODUCT_BACKLOG.md](./docs/PRODUCT_BACKLOG.md) — sprint-level backlog (the `B-*` items that Stages in `TASK_ROADMAP.md` break down into).
+9. [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) — historical reference only. The live roadmap is `TASK_ROADMAP.md`.
+10. [docs/PRODUCT_PRUNING_PLAN.md](./docs/PRODUCT_PRUNING_PLAN.md)
+11. [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 Then continue with the smallest relevant task-specific reading set below.
+
+### Bilingual PRD / roadmap exception to rule 18
+
+Rule 18 below says "Public English docs go under `docs/`. Chinese-language public material belongs only in root `README_zh.md` and this file." The **only** approved exceptions are:
+
+- [docs/PRD.md](./docs/PRD.md) (English, canonical) + [docs/PRD_zh.md](./docs/PRD_zh.md) (Chinese mirror).
+- [docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md) (English, canonical) + [docs/TASK_ROADMAP_zh.md](./docs/TASK_ROADMAP_zh.md) (Chinese mirror).
+
+These four files must stay semantically equivalent; any PR that edits one of a pair must edit the other in the same commit. Do not fork the pattern to other docs without an explicit governance decision.
 
 ## Task-Specific Reading
 
@@ -55,7 +70,7 @@ Read:
 Read:
 
 - [docs/MEMORY_PHASE_0.md](./docs/MEMORY_PHASE_0.md) / [MEMORY_PHASE_0_2.md](./docs/MEMORY_PHASE_0_2.md) / [MEMORY_PHASE_0_3.md](./docs/MEMORY_PHASE_0_3.md)
-- [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) §4 Stage 3e / 3i
+- [docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md) §6 Stage 3e / §10 Stage 3i
 
 Touchpoints: `app/native-server/src/memory/**`, `app/chrome-extension/entrypoints/sidepanel/**` (Memory tab).
 
@@ -65,7 +80,7 @@ Read:
 
 - [docs/KNOWLEDGE_STAGE_1.md](./docs/KNOWLEDGE_STAGE_1.md)
 - [docs/KNOWLEDGE_STAGE_2.md](./docs/KNOWLEDGE_STAGE_2.md)
-- [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) §4 Stage 3a / 3g / 3h
+- [docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md) §2 Stage 3a / §8 Stage 3g / §9 Stage 3h
 
 Touchpoints: `app/chrome-extension/entrypoints/background/knowledge/**`, `app/chrome-extension/entrypoints/background/tools/browser/read-page*`.
 
@@ -73,7 +88,7 @@ Touchpoints: `app/chrome-extension/entrypoints/background/knowledge/**`, `app/ch
 
 Read:
 
-- [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) §4 Stage 3b / 4a
+- [docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md) §3 Stage 3b / §11 Stage 4a
 
 Note: Experience tables do not yet exist in code. New schemas must be added under `app/native-server/src/memory/db/` and cross-linked from an `experience/` module, not reintroduced as a new SQLite file.
 
@@ -82,7 +97,7 @@ Note: Experience tables do not yet exist in code. New schemas must be added unde
 Read:
 
 - [docs/POLICY_PHASE_0.md](./docs/POLICY_PHASE_0.md)
-- [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) §4 Stage 3f
+- [docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md) §7 Stage 3f
 
 Touchpoints: `app/native-server/src/policy/**`, `packages/shared/src/tools.ts` (`TOOL_RISK_TIERS` + `requiresExplicitOptIn`).
 
@@ -122,50 +137,71 @@ The following product surfaces were removed as part of `docs/PRODUCT_PRUNING_PLA
 - Element Marker management, `element_picker` MCP tool.
 - Visual Editor (`web-editor-v2`).
 
-If a task seems to require any of these surfaces, stop and ask. The strategic value of the removed surfaces has been remapped to MKEP Stage 3+ (see §4 of `docs/MKEP_STAGE_3_PLUS_ROADMAP.md`).
+If a task seems to require any of these surfaces, stop and ask. The strategic value of the removed surfaces has been remapped to MKEP Stage 3+ (see [`docs/TASK_ROADMAP.md`](./docs/TASK_ROADMAP.md) §2–§18 and [`docs/PRD.md`](./docs/PRD.md) §8).
 
-## Codex CLI Delegation Rules (tight-bound)
+## Tiered Execution Model (any AI assistant)
 
-This repository uses Codex CLI in `fast` mode as an execution helper for Claude, not as an independent decision-maker. When Claude dispatches a subtask to Codex, the boundary is as follows.
+This repository splits AI-assisted work into two execution lanes. The split is based on **task nature**, not on which AI product is running. Any AI assistant (Claude, Codex, Cursor Agent, Cline, Windsurf, GPT-5, Gemini, future entrants) may run either lane — but must pick the right lane per task and must not silently cross the line.
 
-### Codex **may** do (mechanical tasks)
+| | **Owner-lane** | **Fast-lane** |
+| --- | --- | --- |
+| Who runs it | Any AI assistant **acting as the task owner** (or a human maintainer) | Any AI assistant **dispatched to execute a pre-authored brief**, including the same AI that just wrote the brief |
+| Typical invocation | Interactive session, free to ask clarifying questions, designs the approach | Non-interactive / narrow session with an explicit brief; often a CLI fast-mode (`codex exec`, `cursor-agent run`, etc.) or a sub-agent |
+| Allowed to decide | Architecture, public contracts, schema, risk tier, backlog entries, whether a removed surface should come back | Only how to carry out a decision the owner-lane already wrote down |
+| Commit authority | Yes (after verification) | No — produces a diff / patch; the owner-lane verifies and commits |
+
+The purpose of the split is to keep **decision quality** high while still getting the speed advantage of mechanical execution. Both lanes are first-class — an AI assistant that only ever does mechanical work is still a full contributor, and an AI assistant that drives owner-lane work does not need permission from any other tool to do so.
+
+### Fast-lane allowlist (mechanical tasks)
+
+When running fast-lane, an AI assistant **may** do:
 
 1. Rename a symbol / file repo-wide with explicit search-and-replace rules.
 2. Migrate imports after a module move when source and target paths are both given.
 3. Add JSDoc / TSDoc blocks to an explicit list of functions.
 4. Add `it.todo` test-skeleton scaffolding for an explicit list of methods.
-5. Delete files that are listed by path (dead-code removal after Claude has mapped references).
+5. Delete files that are listed by path (dead-code removal after the owner-lane has mapped references).
 6. Run existing lint / format / typecheck / test scripts and report the output verbatim.
-7. Apply a diff that Claude drafted in prose but did not commit yet.
+7. Apply a diff that the owner-lane drafted in prose but did not commit yet.
 
-### Codex **must not** do
+### Fast-lane must not do
 
-1. Choose between two architectural approaches. If two designs are on the table, stop and return to Claude.
+When running fast-lane, an AI assistant **must not** do any of the following — stop and return control to the owner-lane:
+
+1. Choose between two architectural approaches. If two designs are on the table, stop.
 2. Change a public contract: MCP tool schema (`packages/shared/src/tools.ts`), `read_page` HVO contract (`read-page-contract.ts`), HTTP route shape, or a cross-process message type.
 3. Add a new `TOOL_NAMES` entry, a new risk tier, or a new `requiresExplicitOptIn` flag — these are Policy-layer decisions.
 4. Change the Memory / Knowledge / Experience SQLite schema.
 5. Touch CI (`.github/workflows/**`) or commitlint rules.
-6. Touch dependency versions or the lockfile beyond what a previous Claude-authored migration already dictates.
+6. Touch dependency versions or the lockfile beyond what a prior owner-lane migration already dictates.
 7. Decide whether a removed surface should come back. Always escalate.
+
+If you are a single AI assistant running both lanes within one session, the enforcement is the same: the moment you hit a "fast-lane must not do" item, switch mental mode to owner-lane (design → write it down → then execute) rather than silently deciding inside the fast path.
 
 ### Hand-off protocol
 
-- Claude writes the task in a prose brief pointing at one `B-XXX` backlog item, with: (a) files Codex may touch, (b) files Codex must not touch, (c) explicit acceptance criteria, (d) the verification commands to run at the end.
-- Codex runs the task and returns: exit status of each verification command, the list of files changed, and any decision point it hit where the brief was ambiguous.
-- Claude reviews the diff, runs the same verification locally, and is the one who commits and pushes.
+When owner-lane and fast-lane are two different AI assistants (or two different sessions of the same one):
 
-### Operational sandbox (lesson from B-004)
+- **Owner-lane writes** a prose brief pointing at one `B-XXX` backlog item, with: (a) files fast-lane may touch, (b) files fast-lane must not touch, (c) explicit acceptance criteria, (d) the verification commands to run at the end.
+- **Fast-lane runs** the task and returns: exit status of each verification command, the list of files changed, and any decision point it hit where the brief was ambiguous.
+- **Owner-lane reviews** the diff, re-runs the same verification locally, and is the one who commits and pushes.
 
-- On Windows, `codex exec --sandbox workspace-write` denies writes to `.git/` (observed 2026-04-20 during B-004: `Unable to create .git/index.lock: Permission denied`, only line-ending noise landed). Do NOT ask Codex to `git add` / `git commit` under that sandbox.
-- Acceptable Codex invocation shapes going forward:
-  1. **Draft-only**: Codex edits files in place under `workspace-write`; Claude is responsible for `git add` / `git commit` / `git push`. Update the prompt so the "finish" step is `git diff --stat` (not `git commit`).
-  2. **Full autopilot**: `codex exec --dangerously-bypass-approvals-and-sandbox` inside a throw-away worktree, where Codex may commit; only use when the task is self-contained and the worktree is disposable.
-- If Codex stops with a sandbox error mid-task, revert any whitespace-only / line-ending changes (`git checkout -- <files>`) before Claude resumes manually — otherwise the diff review becomes noisy.
-- **Verification commands under `workspace-write` also surprise**: during B-009, `pnpm -r typecheck` spawned by Codex failed with `spawn EPERM`, while `pnpm run docs:check` succeeded. Do not treat a Codex-side typecheck failure as a real regression. Claude must always re-run the full verification locally before committing.
+When owner-lane and fast-lane are the same session, the protocol is the same but executed inline: write the brief as a short plan block in the conversation, then do the mechanical work, then verify, then commit.
+
+### Operational notes: running fast-lane under a restricted CLI sandbox
+
+Some AI CLIs run fast-lane under a filesystem sandbox (e.g. `codex exec --sandbox workspace-write`). Those environments have historically had constraints that are **not bugs in the AI product** — they are the sandbox's security model — so the operational workarounds below apply regardless of which CLI is used:
+
+- On Windows, `workspace-write`-style sandboxes may deny writes to `.git/` (observed 2026-04-20 during B-004 with Codex CLI: `Unable to create .git/index.lock: Permission denied`). Do NOT ask a sandboxed fast-lane to `git add` / `git commit`.
+- Acceptable invocation shapes for any sandboxed fast-lane:
+  1. **Draft-only**: fast-lane edits files in place under `workspace-write`; the owner-lane is responsible for `git add` / `git commit` / `git push`. Make the brief's "finish" step `git diff --stat` (not `git commit`).
+  2. **Full autopilot**: run the CLI's equivalent of "bypass approvals and sandbox" (e.g. `codex exec --dangerously-bypass-approvals-and-sandbox`) inside a throw-away worktree, where the fast-lane may commit; only use when the task is self-contained and the worktree is disposable.
+- If a sandboxed fast-lane stops mid-task with a permission error, revert any whitespace-only / line-ending changes (`git checkout -- <files>`) before the owner-lane resumes manually — otherwise the diff review becomes noisy.
+- **Verification commands inside these sandboxes also surprise**: during B-009, `pnpm -r typecheck` spawned by the sandboxed fast-lane failed with `spawn EPERM`, while `pnpm run docs:check` succeeded. Do not treat a sandbox-side typecheck failure as a real regression. The owner-lane must always re-run the full verification locally before committing.
 
 ## Operational Guardrails
 
-These are cross-cutting size / performance / schema rules that every AI agent (Claude, Codex, future others) must respect. They are enforced by CI in `.github/workflows/ci.yml`.
+These are cross-cutting size / performance / schema rules that every AI assistant (regardless of vendor or lane) must respect. They are enforced by CI in `.github/workflows/ci.yml`.
 
 ### Sidepanel bundle-size gate (added in B-007, CSS added in B-021)
 
@@ -194,7 +230,7 @@ Every backlog item whose scope touches the Memory / Knowledge / Experience SQLit
 
 Why: three of the five real bugs in Sprints 1–2 were one side of the extension / native-server / shared DTO triangle drifting from the other two. Forcing a citation turns "I remember what that shape is" into "grep confirms this shape is the same".
 
-Applies equally to Claude-led and Codex-led tasks. When Claude drafts a backlog item, the citation lives in the `- **Schema cite**:` bullet (see B-005 / B-006 for examples).
+Applies equally to owner-lane and fast-lane tasks. Whoever drafts the backlog item (any AI assistant or a human maintainer) puts the citation in the `- **Schema cite**:` bullet (see B-005 / B-006 for examples).
 
 ## Public Source Of Truth
 

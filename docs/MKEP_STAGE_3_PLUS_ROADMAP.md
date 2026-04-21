@@ -1,5 +1,16 @@
 # MKEP Stage 3+ 路线图（产品愿景 + 竞品借鉴融合稿）
 
+> **⚠️ Superseded notice (2026-04-21)**
+>
+> 这份文档的**路线图职能**已被拆分并迁移到两份新的集中化文档：
+>
+> - 产品身份 / KPI / MKEP 架构 / 能力分级 / 工具表面 / 反模式 → [`PRD.md`](./PRD.md)（英文正本）/ [`PRD_zh.md`](./PRD_zh.md)（中文镜像）。
+> - `Stage 3a → 5e` 执行计划、DoD、`B-*` 映射、波次图 → [`TASK_ROADMAP.md`](./TASK_ROADMAP.md)（英文正本）/ [`TASK_ROADMAP_zh.md`](./TASK_ROADMAP_zh.md)（中文镜像）。
+>
+> 本文作为 v0.3 时点的**历史快照**保留 —— 包括当时的调研溯源、竞品对照、产品表面精简叙事。**不要**在本文里继续规划新的 Stage；Stage 级的活规划从现在起只在 `TASK_ROADMAP.md` 下迭代。
+>
+> —— 以下为 v0.3 原文 ——
+>
 > 文档版本：v0.3 · 2026-04-20 更新（v0.2 的基础上叠加「产品表面精简已落地」事实；v0.1 合并用户产品愿景与 API Knowledge / Context Strategy 两条新维度）
 >
 > v0.3 差量：
