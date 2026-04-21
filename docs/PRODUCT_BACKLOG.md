@@ -116,13 +116,153 @@
 - **Landed 2026-04-20 (Codex fast attempted, Claude finished)**: JSDoc on 4 read methods (`SessionRepository.listRecent`, `SessionRepository.countAll`, `StepRepository.listBySession`, `TaskRepository.get`) + 24 `it.todo` placeholders across `session-repository.test.ts`, `step-repository.test.ts`, `task-repository.test.ts`.
 - **Codex delegation post-mortem**: the `codex exec` run (fast mode, `workspace-write` sandbox) stopped before any substantive edit because the Windows sandbox denied writes to `.git/index.lock`, so it could not honour the "commit-or-stop" contract in this prompt. Only LF→CRLF line-ending noise landed; reverted. Claude completed the task manually. Action for Sprint 2: either (a) invoke Codex with `--dangerously-bypass-approvals-and-sandbox` inside a clean worktree where `.git` is writable, or (b) keep the constraint and relax "must commit" to "must stage + write handoff note"; pick one and update `AGENTS.md` Codex Delegation Rules accordingly.
 
-## Sprint 2 (2026-W18) — placeholders to be confirmed after Sprint 1 review
+## Current Sprint — Sprint 2 (2026-W18, 2026-04-20 → 2026-04-26)
 
-Tentative themes (final call made during Sprint 1 review):
+**Theme**: _Stage 3b Experience schema seed + Stage 3e polish + infra guardrails_. Balance: one schema-layer seed that unblocks Sprint 3+ aggregator work, one user-visible UI refinement on the Memory tab, and the three action items carried over from `docs/SPRINT_1_RETRO.md` §7.
 
-- Expand Stage 3e: filter/search in Memory tab, pagination controls, "jump to last failure" shortcut.
-- Seed Stage 3b Experience schema (`experience_action_paths`, `experience_locator_prefs`) under `app/native-server/src/memory/experience/`, **no aggregator yet** — empty tables + migrations only.
-- Claude-led Policy Phase 0.1: add `requiresExplicitOptIn` hints to 3–5 currently under-tiered tools (needs fresh risk review).
+**Demo outcome** (what the human should see at end of sprint):
+
+1. Sidepanel Memory tab now has a **status filter chip row** (all / running / completed / failed / canceled) + a free-text search box (matches task title or intent); "jump to last failure" button scrolls to the nearest failed session on the current page.
+2. Native-server ships with two new empty Experience tables (`experience_action_paths`, `experience_locator_prefs`) and their migrations — `SELECT * FROM sqlite_master` shows them, but no aggregator writes to them yet. This is deliberate: Sprint 3+ items B-012/B-013 depend on this schema landing first.
+3. CI now hard-fails any PR that pushes `sidepanel.js` past the bundle-size threshold (see B-007 for the exact number — pinned to the post-B-006 baseline + 5 kB headroom).
+4. `docs/EXTENSION_TESTING_CONVENTIONS.md` exists as the one-stop reference for the `fetch` / `AbortController` / `chrome.storage` mocking patterns that tripped us up in Sprint 1.
+5. `AGENTS.md` has a new invariant: every `B-NNN` touching Memory / Knowledge / Experience must cite the actual repository file + line of the schema it builds on, before implementation starts.
+
+**Out of scope for Sprint 2**: Experience aggregator logic (that's B-012, Sprint 3+), `experience_suggest_plan` MCP tool (B-013), Policy Phase 0.1 risk retiering (moved to Sprint 3 — needs a dedicated risk review that would crowd this sprint).
+
+**Execution order** (each item should merge before the next starts so Claude can rebase cleanly, except where noted as parallelisable):
+
+1. **B-005** (schema seed) — independent, lands first.
+2. **B-006** (Memory filter/search) — independent of B-005; may run in parallel but must not share the same PR.
+3. **B-007** (CI bundle gate) — must run AFTER B-006 merges so the threshold reflects post-B-006 size.
+4. **B-008** (testing conventions doc) — captures lessons from B-005 + B-006; can run in parallel with B-007.
+5. **B-009** (Codex fast re-attempt) — last, re-tests the Codex handoff protocol with the new "draft-only" shape from `AGENTS.md`.
+
+### B-005 · Native-server: seed Experience schema (empty tables + migrations)
+
+- **Stage**: 3b · **Layer**: E · **KPI**: — (enabling item; unblocks Sprint 3+ B-012/B-013)
+- **Owner**: Claude · **Size**: M · **Status**: `planned`
+- **Dependencies**: none (new schema, no touch to Memory/Knowledge tables)
+- **Branch**: `feat/b-005-experience-schema-seed`
+- **Schema cite**: builds alongside existing Memory schema at `app/native-server/src/memory/db/schema.ts` (the migration scaffolding used for `memory_tasks`/`memory_sessions`/`memory_steps`). Two new tables, same migration style:
+  - `experience_action_paths`
+    - `action_path_id TEXT PRIMARY KEY`
+    - `page_role TEXT NOT NULL` (e.g. `github.repo.home`, `generic.form`)
+    - `intent_signature TEXT NOT NULL` (normalised intent hash, populated by aggregator in B-012)
+    - `step_sequence TEXT NOT NULL` (JSON: ordered list of `{ toolName, argTemplate }`)
+    - `success_count INTEGER NOT NULL DEFAULT 0`
+    - `failure_count INTEGER NOT NULL DEFAULT 0`
+    - `last_used_at TEXT NULL` (ISO timestamp)
+    - `created_at TEXT NOT NULL`
+    - `updated_at TEXT NOT NULL`
+    - Index: `(page_role, intent_signature)` — composite, used by future `experience_suggest_plan` lookups.
+  - `experience_locator_prefs`
+    - `locator_pref_id TEXT PRIMARY KEY`
+    - `page_role TEXT NOT NULL`
+    - `element_purpose TEXT NOT NULL` (e.g. `search-box`, `submit-button`)
+    - `preferred_selector_kind TEXT NOT NULL` (`role` / `text` / `data-testid` / `css` — enforced at the app layer)
+    - `preferred_selector TEXT NOT NULL`
+    - `hit_count INTEGER NOT NULL DEFAULT 0`
+    - `last_hit_at TEXT NULL`
+    - `created_at TEXT NOT NULL`
+    - `updated_at TEXT NOT NULL`
+    - Index: `(page_role, element_purpose)`.
+- **Scope**:
+  - Extend `schema.ts` migration runner with a new migration step (`migrate_v?_experience_seed`) that creates both tables + indexes. Must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`).
+  - Add new folder `app/native-server/src/memory/experience/` with `index.ts` re-exporting the two table names as exported constants (no repository class yet — empty surface).
+  - Update `docs/MKEP_STAGE_3_PLUS_ROADMAP.md` §Stage 3b to say "schema landed in Sprint 2 (B-005); aggregator scheduled for B-012".
+- **Must not do**: write any INSERT/UPDATE code against these tables (that's B-012). Do not expose MCP tools. Do not touch the extension package.
+- **Exit criteria**:
+  - `pnpm --filter @tabrix/tabrix test` passes, plus ≥ 3 new tests:
+    1. Migration creates both tables on a virgin DB.
+    2. Migration is idempotent (running twice does not error, does not duplicate indexes).
+    3. Both tables are empty after migration (no seed data).
+  - `pnpm -r typecheck` passes.
+  - No changes in `app/chrome-extension/**` or `packages/shared/**`.
+
+### B-006 · Extension: Memory tab filter + search + jump-to-last-failure
+
+- **Stage**: 3e · **Layer**: M · **KPI**: 懂用户 · 更快
+- **Owner**: Claude · **Size**: L · **Status**: `planned`
+- **Dependencies**: B-002 and B-003 merged (both `done`)
+- **Branch**: `feat/b-006-memory-tab-filter-search`
+- **Schema cite**: extends the read-side contract in `packages/shared/src/memory.ts` (the DTO module B-002 introduced); native-server surface already exists — `MemorySessionSummary.status` and `MemorySessionSummary.taskTitle` / `taskIntent` are enough for client-side filtering. **Do not** add a new backend endpoint for this — server-side search is a Sprint 3+ candidate and needs its own `B-NNN`.
+- **Scope**:
+  - In `useMemoryTimeline`: add `statusFilter: Ref<Set<MemorySessionStatus> | 'all'>` and `searchQuery: Ref<string>`; derive a `filteredSessions` computed that applies both filters locally to the already-paginated `sessions`. Clear filters does not trigger a network refetch.
+  - Add `jumpToLastFailure()` method: returns the `sessionId` of the most recent `failed` session in the current page, or `null`.
+  - In `MemoryTab.vue`: status chip row (5 chips: `all` / `running` / `completed` / `failed` / `canceled`; `all` deselects the others), free-text search input (matches `taskTitle` OR `taskIntent`, case-insensitive, trimmed). Button "↓ Jump to last failure" appears only when current page has ≥ 1 failed session; on click, scrolls the matching row into view and momentarily highlights it (`animation: row-flash 600ms`).
+  - Accessibility: chips are `role="radiogroup"`; search input has `aria-label="Search memory by task title or intent"`.
+  - Edge cases: empty filter result shows "No sessions match your filters" inside the existing empty-state slot; clearing filters restores full list.
+  - Dark mode must be respected (use the same CSS variables as B-002).
+- **Must not do**: add a server-side `GET /memory/sessions?q=` endpoint (future Sprint 3+ item). Do not touch `memory-api-client.ts` signatures.
+- **Exit criteria**:
+  - `pnpm -r typecheck` passes.
+  - `pnpm --filter @tabrix/extension test` passes with ≥ 8 new tests across a new `tests/memory-filter.test.ts` file:
+    1. `all` chip shows everything.
+    2. Selecting `failed` hides others.
+    3. Multi-chip selection works (running + completed).
+    4. Search matches title case-insensitively.
+    5. Search matches intent when title doesn't.
+    6. Empty search string is a no-op.
+    7. `jumpToLastFailure()` returns the correct id.
+    8. Clearing both filters restores full list without refetch.
+  - Sidepanel bundle size delta ≤ +6 kB JS, ≤ +3 kB CSS vs. post-B-003 baseline (17.59 / 16.13).
+  - Manual browser check (user-side): filtering works on a live session list; "jump to last failure" scrolls and highlights.
+
+### B-007 · Infra: CI bundle-size gate for `sidepanel.js`
+
+- **Stage**: — · **Layer**: X · **KPI**: 更稳
+- **Owner**: Claude · **Size**: S · **Status**: `planned`
+- **Dependencies**: **B-006 merged** (so the threshold reflects the real post-B-006 size)
+- **Branch**: `chore/b-007-bundle-size-gate`
+- **Scope**:
+  - Add a small Node script `scripts/check-bundle-size.mjs` that reads `app/chrome-extension/.output/**/sidepanel.js` (or whatever the WXT build emits) and fails with a non-zero exit code + a clear message if the gzipped size exceeds the threshold. Warns (exit 0) between the "soft" and "hard" thresholds.
+  - Thresholds pinned via constants at the top of the script:
+    - Hard fail: **40 kB raw** (not gzipped — simpler to compare against the WXT output).
+    - Soft warn: **25 kB raw**.
+    - CSS is not gated in this sprint (future item).
+  - Wire into `package.json` as `"size:check": "node ./scripts/check-bundle-size.mjs"` at the root.
+  - Add a CI step AFTER the build step in the existing CI workflow (keep the rule "do not touch CI beyond what's directly needed" — this is the minimum edit).
+- **Exit criteria**:
+  - Script runs cleanly locally (`pnpm run size:check` after `pnpm run build`).
+  - Threshold is documented in `AGENTS.md` "Default expectations" (add a one-line rule 21).
+  - Post-B-006 size plus recorded delta is documented in this backlog entry under "Landed".
+
+### B-008 · Docs: Extension testing conventions
+
+- **Stage**: — · **Layer**: X · **KPI**: 更稳
+- **Owner**: Claude · **Size**: S · **Status**: `planned`
+- **Dependencies**: can start after either B-005 or B-006; final pass AFTER both (capture fresh lessons)
+- **Branch**: `docs/b-008-extension-testing-conventions`
+- **Scope**:
+  - New file `docs/EXTENSION_TESTING_CONVENTIONS.md` covering:
+    1. `fetch` + `AbortController` mocking pattern (the B-003 fix: always reject with `AbortError` on `signal.aborted`).
+    2. `chrome.storage.local.get` callback-vs-promise pattern (the `isThenable` guard introduced in B-002).
+    3. When to use Vitest `vi.mock` vs. `vi.spyOn` for global APIs.
+    4. The "do not import `describe.skip` / `it.todo`" reminder (Jest/Vitest globals).
+    5. A small template test file header (common setup) linked from this doc.
+  - Add a `docs/README.md`-level reference so the doc is discoverable (update the "Reading order" list in `AGENTS.md` default expectations if such a list exists; if not, skip).
+- **Must not do**: enforce the conventions retroactively in this sprint (retro-enforcement is a separate Sprint 3+ candidate).
+- **Exit criteria**:
+  - File exists and is referenced from `AGENTS.md`.
+  - `pnpm run docs:check` passes (the existing docs linter).
+
+### B-009 · Codex fast task · add "schema-cite rule" to AGENTS.md + backlog template
+
+- **Stage**: — · **Layer**: X · **KPI**: 懂用户 (process)
+- **Owner**: **Codex fast** · **Size**: S · **Status**: `planned`
+- **Dependencies**: none
+- **Branch**: `chore/b-009-agents-schema-cite-rule`
+- **Shape (re-tests the "draft-only" Codex handoff protocol from `AGENTS.md`)**:
+  - Codex edits files in place under `workspace-write`; its "finish" step is `git diff --stat`, NOT `git commit`. Claude is the one who stages + commits + merges, after reviewing the diff.
+- **Scope (allow-list of files Codex may touch)**:
+  1. `AGENTS.md` — add rule 21 (bundle-size gate reference) and rule 22 (schema-cite rule: every `B-NNN` touching Memory / Knowledge / Experience must cite the actual repository file + line of the schema it builds on, before implementation starts). Numbering must follow current max.
+  2. `docs/PRODUCT_BACKLOG.md` — flip B-009 `Status: planned` → `Status: review` and add a one-line landed note.
+- **Must not do**: anything outside the 2 files above; add new imports anywhere; touch CI; renumber existing AGENTS rules.
+- **Exit criteria**:
+  - `pnpm -r typecheck` passes.
+  - `git diff --stat` shows exactly 2 files changed.
+  - Claude manually commits with message `docs(agents): add schema-cite rule + bundle-size gate reference (B-009)` after verification.
 
 ## Sprint 3+ — backlog pool (unordered, pulled into a sprint during review)
 
@@ -163,3 +303,4 @@ Tentative themes (final call made during Sprint 1 review):
 
 - 2026-04-20 — Sprint 1 seeded: Stage 3e Memory Run History UI. Initial commit.
 - 2026-04-20 — Sprint 1 closed same day: B-001 / B-002 / B-003 / B-004 all `done`. Retro at `docs/SPRINT_1_RETRO.md`. `AGENTS.md` Codex Delegation Rules updated with sandbox lesson from B-004.
+- 2026-04-20 — Sprint 2 locked: B-005 (Experience schema seed) / B-006 (Memory filter/search) / B-007 (CI bundle gate) / B-008 (testing conventions doc) / B-009 (Codex fast — schema-cite rule). Themes: Stage 3b seed + Stage 3e polish + Sprint 1 retro action items.
