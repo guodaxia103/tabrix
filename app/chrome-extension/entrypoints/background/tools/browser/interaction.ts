@@ -269,22 +269,38 @@ function stripHash(url: string): string {
 }
 
 /**
- * B-023: register a one-shot `chrome.tabs.onCreated` listener scoped to the
- * origin window and report whether a new tab was created within the window.
+ * B-023: observe new-tab creation for the lifetime of a single click
+ * interaction, then keep the listener alive for a tiny drain window so we do
+ * not miss a late-delivered `chrome.tabs.onCreated` event right after the page
+ * helper returns.
  *
  * We deliberately avoid a long-lived `chrome.webNavigation` subscriber here —
  * one-shot listener + explicit removal keeps the blast radius tiny.
+ *
+ * Exported for direct unit-testing from `tests/click-contract.test.ts`.
  */
-function observeNewTabOnce(
+export function observeNewTabUntil(
   originWindowId: number | undefined,
-  windowMs: number,
+  interactionPromise: Promise<unknown>,
+  drainMs = 75,
 ): Promise<ClickBrowserSignals> {
   return new Promise((resolve) => {
     let newTabOpened = false;
+    let settled = false;
     const listener = (tab: chrome.tabs.Tab) => {
       if (originWindowId == null || tab.windowId === originWindowId) {
         newTabOpened = true;
       }
+    };
+    const finalize = () => {
+      if (settled) return;
+      settled = true;
+      try {
+        chrome.tabs.onCreated.removeListener(listener);
+      } catch {
+        // ignore
+      }
+      resolve({ newTabOpened });
     };
     try {
       chrome.tabs.onCreated.addListener(listener);
@@ -292,17 +308,10 @@ function observeNewTabOnce(
       resolve({ newTabOpened: false });
       return;
     }
-    setTimeout(
-      () => {
-        try {
-          chrome.tabs.onCreated.removeListener(listener);
-        } catch {
-          // ignore
-        }
-        resolve({ newTabOpened });
-      },
-      Math.max(0, windowMs),
-    );
+    const scheduleFinalize = () => {
+      setTimeout(finalize, Math.max(0, drainMs));
+    };
+    void interactionPromise.then(scheduleFinalize, scheduleFinalize);
   });
 }
 
@@ -551,19 +560,11 @@ class ClickTool extends BaseBrowserToolExecutor {
         markNextDownloadAsInteractive(tab.id);
       }
 
-      // B-023: start browser-level observation IN PARALLEL with the
-      // click dispatch so we don't miss a `chrome.tabs.onCreated` firing
-      // during the page-local verification window. The window must at
-      // least cover the page-local window (400ms) to stay consistent
-      // with `click-helper.js`.
-      const NEW_TAB_OBSERVE_WINDOW_MS = Math.max(
-        400,
-        waitForNavigation ? Number(timeout) || 400 : 400,
-      );
-      const browserSignalsPromise = observeNewTabOnce(tab.windowId, NEW_TAB_OBSERVE_WINDOW_MS);
-
-      // Send click message to content script
-      const result = await this.sendMessageToTab(
+      // B-023: arm browser-level observation before dispatch, but keep it alive
+      // until the page-local helper has finished its own verification window.
+      // This prevents a slow `_blank` click from being downgraded to
+      // `no_observed_change` just because the background observer stopped first.
+      const resultPromise = this.sendMessageToTab(
         tab.id,
         {
           action: TOOL_MESSAGE_TYPES.CLICK_ELEMENT,
@@ -581,6 +582,10 @@ class ClickTool extends BaseBrowserToolExecutor {
         },
         frameId,
       );
+      const browserSignalsPromise = observeNewTabUntil(tab.windowId, resultPromise);
+
+      // Send click message to content script
+      const result = await resultPromise;
 
       if (result?.interceptedDownload && result?.downloadUrl) {
         const downloadResult = await handleDownloadTool.execute({

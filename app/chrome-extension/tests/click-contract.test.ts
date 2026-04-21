@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   mergeClickSignals,
+  observeNewTabUntil,
   type ClickPageSignals,
 } from '@/entrypoints/background/tools/browser/interaction';
 
@@ -221,6 +222,72 @@ describe('mergeClickSignals (pure function)', () => {
     );
     expect(merged.observedOutcome).toBe('focus_changed');
     expect(merged.success).toBe(true);
+  });
+});
+
+describe('observeNewTabUntil', () => {
+  let createdListeners: Array<(tab: chrome.tabs.Tab) => void> = [];
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    createdListeners = [];
+    chrome.tabs.onCreated.addListener = vi.fn((listener: (tab: chrome.tabs.Tab) => void) => {
+      createdListeners.push(listener);
+    }) as any;
+    chrome.tabs.onCreated.removeListener = vi.fn((listener: (tab: chrome.tabs.Tab) => void) => {
+      createdListeners = createdListeners.filter((entry) => entry !== listener);
+    }) as any;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps the listener armed until the interaction promise settles, even past the old fixed window', async () => {
+    let resolveInteraction!: () => void;
+    const interactionPromise = new Promise<void>((resolve) => {
+      resolveInteraction = resolve;
+    });
+    const observedPromise = observeNewTabUntil(7, interactionPromise, 50);
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(createdListeners).toHaveLength(1);
+
+    createdListeners[0]!({ windowId: 7 } as chrome.tabs.Tab);
+    resolveInteraction();
+    await Promise.resolve();
+    expect(createdListeners).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(50);
+    await expect(observedPromise).resolves.toEqual({ newTabOpened: true });
+    expect(createdListeners).toHaveLength(0);
+  });
+
+  it('captures a late onCreated event during the post-result drain window', async () => {
+    const interactionPromise = Promise.resolve();
+    const observedPromise = observeNewTabUntil(9, interactionPromise, 50);
+
+    await Promise.resolve();
+    expect(createdListeners).toHaveLength(1);
+
+    createdListeners[0]!({ windowId: 9 } as chrome.tabs.Tab);
+
+    await vi.advanceTimersByTimeAsync(50);
+    await expect(observedPromise).resolves.toEqual({ newTabOpened: true });
+    expect(createdListeners).toHaveLength(0);
+  });
+
+  it('ignores tabs created in a different window', async () => {
+    const interactionPromise = Promise.resolve();
+    const observedPromise = observeNewTabUntil(3, interactionPromise, 20);
+
+    await Promise.resolve();
+    expect(createdListeners).toHaveLength(1);
+
+    createdListeners[0]!({ windowId: 4 } as chrome.tabs.Tab);
+
+    await vi.advanceTimersByTimeAsync(20);
+    await expect(observedPromise).resolves.toEqual({ newTabOpened: false });
   });
 });
 

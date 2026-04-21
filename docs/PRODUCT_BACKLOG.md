@@ -420,16 +420,18 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
 - **Dependencies**: B-005 (Experience schema landed); optionally references B-010 purposes when the step's `pageRole` has an authored UI map
 - **Branch**: `feat/b-012-experience-action-path-aggregator`
 - **Schema cite**:
-  - Writes to `experience_action_paths` — see `app/native-server/src/memory/db/schema.ts` §`EXPERIENCE_CREATE_TABLES_SQL` (landed in B-005, commit `3770201`). Fields used: `action_path_id` (uuid), `page_role`, `intent_signature`, `step_sequence` (JSON array of `{toolName, status, historyRef}`), `success_count`, `failure_count`, `last_used_at`, `created_at`, `updated_at`.
-  - Reads from Memory — see `app/native-server/src/memory/db/schema.ts` §`MEMORY_CREATE_TABLES_SQL` for `execution_sessions`, `tasks`, `execution_steps`. No new columns; strictly read-only on Memory.
-  - **Idempotency**: the aggregator is a pure projection — same Memory state → same Experience state. Re-running it over the same sessions must not double-increment `success_count` / `failure_count`. The session-level "aggregated_at" marker lives on `execution_sessions` (add via `ALTER TABLE IF NOT EXISTS ADD COLUMN` migration in the same PR) so we can replay only un-aggregated sessions.
+  - Writes to `experience_action_paths` — see `app/native-server/src/memory/db/schema.ts` §`EXPERIENCE_CREATE_TABLES_SQL` (landed in B-005, commit `3770201`). Fields used: `action_path_id` (deterministic id for the `(page_role, intent_signature)` bucket in v1), `page_role`, `intent_signature`, `step_sequence` (JSON array of `{toolName, status, historyRef}`), `success_count`, `failure_count`, `last_used_at`, `created_at`, `updated_at`.
+  - Reads from Memory — see `app/native-server/src/memory/db/schema.ts` §`MEMORY_CREATE_TABLES_SQL` for `memory_sessions`, `memory_tasks`, `memory_steps`, `memory_page_snapshots`, and `memory_actions`. In v1: `memory_sessions` + `memory_tasks` define the terminal-session / intent boundary, `memory_steps` provides ordered step backbone + `artifact_refs`, `memory_page_snapshots` provides the latest session `page_role`, and `memory_actions` stays available for action-level enrichment without becoming a hard dependency for the first write path.
+  - **Idempotency**: the aggregator is a pure projection — same Memory state → same Experience state. Re-running it over the same sessions must not double-increment `success_count` / `failure_count`. The session-level `aggregated_at` marker lives on `memory_sessions` (same PR adds `aggregated_at TEXT` via a guarded migration; SQLite does not support `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`) so replay can scan only terminal sessions that have not been projected yet.
 - **Scope**: see `docs/MKEP_STAGE_3_PLUS_ROADMAP.md §4.2`. Minimal first cut:
-  - Walk `execution_sessions WHERE status = 'completed' AND aggregated_at IS NULL`, in `created_at` order.
-  - Group each session's steps by `task_id` and compute a single `intent_signature` from `task.intent` (hash + light normalization).
-  - Emit or upsert one `experience_action_paths` row per `(page_role, intent_signature)`; increment `success_count` for `status = 'completed'` sessions, `failure_count` for `failed / aborted`.
+  - Walk `memory_sessions WHERE status IN ('completed', 'failed', 'aborted') AND aggregated_at IS NULL`, in `started_at` order.
+  - Join each session to `memory_tasks` on `task_id` and compute a single `intent_signature` from `memory_tasks.intent` (hash + light normalization).
+  - Build `step_sequence` from `memory_steps` in `step_index` order; for each step, keep `{toolName, status, historyRef}` where `historyRef` is the first `artifact_ref` when present, else `null`.
+  - Resolve `page_role` from the latest `memory_page_snapshots` row in the same session; fallback to `'unknown'` when the session never emitted a page snapshot.
+  - Emit or upsert one `experience_action_paths` row per `(page_role, intent_signature)` bucket; increment `success_count` for `status = 'completed'`, increment `failure_count` for `status IN ('failed', 'aborted')`, and update `step_sequence` / `last_used_at` / `updated_at` from the latest observed terminal session.
   - Mark the session `aggregated_at = now()` so the next run skips it.
   - Expose as an internal-only function; **no MCP tool** yet (that's B-013).
-- **Must not do**: expose an MCP tool; change Memory schema except for the `aggregated_at` column; write to `experience_locator_prefs` (deferred to a separate item); read UI Map rules in the first cut (reserve for a follow-up).
+- **Must not do**: expose an MCP tool; change Memory schema except for the `aggregated_at` column on `memory_sessions`; write to `experience_locator_prefs` (deferred to a separate item); make `memory_actions` mandatory for v1 path aggregation; read UI Map rules in the first cut (reserve for a follow-up).
 - **Exit criteria**:
   - Jest tests cover: empty Memory (no-op); single completed session → exactly 1 Experience row; replay is idempotent; failed session increments `failure_count`.
   - `pnpm --filter @tabrix/tabrix test` green.
