@@ -224,19 +224,9 @@ export const STORAGE_KEYS = {
   NATIVE_SERVER_PORT: 'nativeServerPort',
   NATIVE_AUTO_CONNECT_ENABLED: 'nativeAutoConnectEnabled',
   PENDING_EXTENSION_RELOAD_CALLBACK: 'pendingExtensionReloadCallback',
-  SEMANTIC_MODEL: 'selectedModel',
   USER_PREFERENCES: 'userPreferences',
-  VECTOR_INDEX: 'vectorIndex',
   USERSCRIPTS: 'userscripts',
   USERSCRIPTS_DISABLED: 'userscripts_disabled',
-  // Record & Replay storage keys
-  RR_FLOWS: 'rr_flows',
-  RR_RUNS: 'rr_runs',
-  RR_PUBLISHED: 'rr_published_flows',
-  RR_SCHEDULES: 'rr_schedules',
-  RR_TRIGGERS: 'rr_triggers',
-  // Persistent recording state (guards resume across navigations/service worker restarts)
-  RR_RECORDING_STATE: 'rr_recording_state',
 } as const;
 
 // Notification Configuration

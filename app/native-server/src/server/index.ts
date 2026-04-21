@@ -26,12 +26,6 @@ import { randomUUID } from 'node:crypto';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { createMcpServer } from '../mcp/mcp-server';
 import { __bridgeLaunchInternals } from '../mcp/register-tools';
-import { AgentStreamManager } from '../agent/stream-manager';
-import { AgentChatService } from '../agent/chat-service';
-import { CodexEngine } from '../agent/engines/codex';
-import { ClaudeEngine } from '../agent/engines/claude';
-import { closeDb } from '../agent/db';
-import { registerAgentRoutes } from './routes';
 import { sessionManager } from '../execution/session-manager';
 import { SessionRegistry, type ConnectedClient, type TransportsSnapshot } from './session-registry';
 import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from './bridge-state';
@@ -187,17 +181,10 @@ export class Server {
   private sessions = new SessionRegistry();
   private listeningPort: number | null = null;
   private bridgeState = bridgeRuntimeState;
-  private agentStreamManager: AgentStreamManager;
-  private agentChatService: AgentChatService;
 
   constructor() {
     this.fastify = Fastify({ logger: SERVER_CONFIG.LOGGER_ENABLED });
     bridgeCommandChannel.attach(this.fastify.server);
-    this.agentStreamManager = new AgentStreamManager();
-    this.agentChatService = new AgentChatService({
-      engines: [new CodexEngine(), new ClaudeEngine()],
-      streamManager: this.agentStreamManager,
-    });
     this.setupPlugins();
     this.setupRoutes();
   }
@@ -301,12 +288,6 @@ export class Server {
 
     // Extension communication
     this.setupExtensionRoutes();
-
-    // Agent routes (delegated to separate module)
-    registerAgentRoutes(this.fastify, {
-      streamManager: this.agentStreamManager,
-      chatService: this.agentChatService,
-    });
 
     // MCP routes
     this.setupMcpRoutes();
@@ -873,7 +854,6 @@ export class Server {
     try {
       await this.sessions.closeAll();
       await this.fastify.close();
-      closeDb();
       this.listeningPort = null;
       this.isRunning = false;
       this.bridgeState.stopWatching();
@@ -883,7 +863,6 @@ export class Server {
     } catch (err) {
       this.listeningPort = null;
       this.isRunning = false;
-      closeDb();
       this.bridgeState.stopWatching();
       this.bridgeState.reset();
       this.clearNativeHost();

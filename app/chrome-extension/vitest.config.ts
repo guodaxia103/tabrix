@@ -10,10 +10,6 @@ export default defineConfig({
       // Match WXT's path aliases from .wxt/tsconfig.json
       '@': rootDir,
       '~': rootDir,
-      // Mock hnswlib-wasm-static to avoid native module issues in tests
-      'hnswlib-wasm-static': `${rootDir}/tests/__mocks__/hnswlib-wasm-static.ts`,
-      // Mock transformers to avoid pulling in sharp/native runtime dependencies in unit tests
-      '@xenova/transformers': `${rootDir}/tests/__mocks__/transformers.ts`,
     },
   },
   test: {
@@ -36,11 +32,8 @@ export default defineConfig({
     },
     onConsoleLog(log) {
       const expectedNoiseMarkers = [
-        '[AgentServer] SSE error:',
-        '[AgentServer] Reconnecting in',
         'Failed to connect to native host',
         'Native connection disconnected',
-        '[RecordingSession] Unknown step type',
         '[NativeHost]',
         '[Recovery]',
       ];

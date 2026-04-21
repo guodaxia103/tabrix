@@ -7,11 +7,6 @@ vi.mock('@/entrypoints/background/tools', () => ({
   handleCallTool: vi.fn(),
 }));
 
-vi.mock('@/entrypoints/background/record-replay/flow-store', () => ({
-  listPublished: vi.fn().mockResolvedValue([]),
-  getFlow: vi.fn().mockResolvedValue(null),
-}));
-
 vi.mock('@/entrypoints/background/keepalive-manager', () => ({
   acquireKeepalive: vi.fn(() => vi.fn()),
 }));

@@ -25,22 +25,36 @@ This matrix is the public source of truth for capability classification.
 
 ## Current Capability Matrix
 
-| Capability Area                                                                            | Tier           | Why It Matters                                                      |
-| ------------------------------------------------------------------------------------------ | -------------- | ------------------------------------------------------------------- |
-| Real Chrome execution via extension                                                        | `GA`           | Core product value and main differentiator                          |
-| MCP transport via `stdio`                                                                  | `GA`           | Tier-1 assistant integration path                                   |
-| MCP transport via `Streamable HTTP`                                                        | `GA`           | Tier-1 remote and local service path                                |
-| Browser tool execution (`read`, `navigate`, `click`, `fill`, screenshots, network helpers) | `GA`           | Core daily use capability                                           |
-| Runtime diagnostics (`status`, `doctor`, `smoke`, `report`)                                | `GA`           | Required for trust, support, and operations                         |
-| Remote access with token-based control                                                     | `Beta`         | High strategic value, but still needs continued hardening           |
-| Record-replay v3 execution core                                                            | `Beta`         | Important reuse direction, but not yet the main onboarding surface  |
-| Visual editor                                                                              | `Beta`         | Useful product surface, but not the center of current positioning   |
-| Multi-client compatibility guidance                                                        | `Beta`         | Important for adoption, but should not outrun core reliability      |
-| Experience reuse / locator fallback / memory-like recovery helpers                         | `Experimental` | Strong future direction, but not yet a default public promise       |
-| Workflow UI as a default product surface                                                   | `Experimental` | Code exists, but should not define the public story today           |
-| Agent / sidepanel assistant surface                                                        | `Experimental` | Present in code, not the main public product promise                |
-| Local semantic indexing / vector-heavy AI features                                         | `Experimental` | Technically interesting but not a primary public positioning pillar |
-| Internal review systems, acceptance evidence, nightly reports, PM execution docs           | `Internal`     | Governance material, not public product surface                     |
+| Capability Area                                                                            | Tier           | Why It Matters                                                  |
+| ------------------------------------------------------------------------------------------ | -------------- | --------------------------------------------------------------- |
+| Real Chrome execution via extension                                                        | `GA`           | Core product value and main differentiator                      |
+| MCP transport via `stdio`                                                                  | `GA`           | Tier-1 assistant integration path                               |
+| MCP transport via `Streamable HTTP`                                                        | `GA`           | Tier-1 remote and local service path                            |
+| Browser tool execution (`read`, `navigate`, `click`, `fill`, screenshots, network helpers) | `GA`           | Core daily use capability                                       |
+| Runtime diagnostics (`status`, `doctor`, `smoke`, `report`)                                | `GA`           | Required for trust, support, and operations                     |
+| Remote access with token-based control                                                     | `Beta`         | High strategic value, but still needs continued hardening       |
+| Policy risk-tier gating (P0–P3, explicit opt-in for P3)                                    | `Beta`         | MKEP Policy layer guardrail for assistant-driven sessions       |
+| Knowledge Registry (GitHub site profile + HVO classifier, data-ified)                      | `Beta`         | MKEP Knowledge layer seed for registry-first page understanding |
+| Memory persistence (Session / Task / Step / PageSnapshot / Action in SQLite)               | `Beta`         | MKEP Memory layer; survives SW / native-server restarts         |
+| Multi-client compatibility guidance                                                        | `Beta`         | Important for adoption, but should not outrun core reliability  |
+| Sidepanel Memory / Knowledge / Experience tabs (placeholders)                              | `Experimental` | Stage 3x viewers for the MKEP data layers                       |
+| Experience reuse / locator fallback / memory-like recovery helpers                         | `Experimental` | Strong future direction, but not yet a default public promise   |
+| Internal review systems, acceptance evidence, nightly reports, PM execution docs           | `Internal`     | Governance material, not public product surface                 |
+
+### Removed surfaces (no longer part of the public product story)
+
+The following surfaces were intentionally removed in the MKEP pruning
+pass (see `docs/PRODUCT_PRUNING_PLAN.md` and the `Unreleased` section of
+`CHANGELOG.md`). They are archived in git history and may reappear in a
+different form once Stage 3+ lands.
+
+| Capability Area                                                                     | Status (since Unreleased) | Replacement / Follow-up                                                                                            |
+| ----------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Smart Assistant (sidepanel AgentChat + Quick Panel + Codex/Claude engines)          | Removed                   | Upstream MCP clients (Codex, Claude, Cursor, Cline) drive Tabrix directly                                          |
+| Element Picker MCP tool (`element_picker`) and Element Marker management UI         | Removed                   | Superseded by MKEP Knowledge UIMap (Stage 3d)                                                                      |
+| Visual Editor (`web-editor-v2`)                                                     | Removed                   | Out of scope for MKEP execution layer                                                                              |
+| Record-Replay v2 / v3 workflow engine, builder, and `run_flow` / `list_published_*` | Removed                   | Superseded by MKEP Experience layer (Stage 4) — design not yet frozen                                              |
+| Local semantic engine + ONNX WASM workers + `search_tabs_content`                   | Removed                   | Will be re-introduced only behind a dedicated offscreen entry if and when Knowledge / Memory semantic search ships |
 
 ## Public Story We Should Keep Repeating
 
@@ -74,3 +88,5 @@ When choosing what to build next:
 - `PROJECT_STRUCTURE.md`
 - `TESTING.md`
 - `PLATFORM_SUPPORT.md`
+- `PRODUCT_PRUNING_PLAN.md` — the executed pruning pass aligned with MKEP
+- `MKEP_STAGE_3_PLUS_ROADMAP.md` — where the removed surfaces' strategic value migrates to

@@ -18,7 +18,7 @@ import path from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 import type Database from 'better-sqlite3';
 
-import { getAgentDataDir } from '../../agent/storage';
+import { getTabrixDataDir } from '../../shared/data-dirs';
 import { MEMORY_CREATE_TABLES_SQL } from './schema';
 
 export type SqliteDatabase = Database.Database;
@@ -40,7 +40,7 @@ export function resolveMemoryDbPath(options?: MemoryDbOptions): string {
   if (envPath && envPath.trim()) {
     return path.resolve(envPath.trim());
   }
-  return path.join(getAgentDataDir(), 'memory.db');
+  return path.join(getTabrixDataDir(), 'memory.db');
 }
 
 const SQLITE_BINDING_ERROR_PATTERNS = [
