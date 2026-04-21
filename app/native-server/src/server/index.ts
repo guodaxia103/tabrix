@@ -39,6 +39,7 @@ import {
   describeBridgeRecoveryGuidance,
   type BridgeRecoveryGuidance,
 } from '../scripts/bridge-recovery-guidance';
+import { registerMemoryRoutes } from './memory-routes';
 
 // Compatibility guard:
 // @hono/node-server may call socket.destroySoon() while draining incoming requests.
@@ -288,6 +289,9 @@ export class Server {
 
     // Extension communication
     this.setupExtensionRoutes();
+
+    // MKEP Memory read routes (Stage 3e · B-001)
+    registerMemoryRoutes(this.fastify);
 
     // MCP routes
     this.setupMcpRoutes();
