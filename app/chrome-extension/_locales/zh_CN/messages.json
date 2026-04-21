@@ -783,10 +783,6 @@
     "message": "断开此客户端",
     "description": "自动同步键: popupDisconnectClientTitle"
   },
-  "popupEnableWebEditor": {
-    "message": "开启页面编辑模式",
-    "description": "自动同步键: popupEnableWebEditor"
-  },
   "popupEnablingRemote": {
     "message": "正在开启远程访问…",
     "description": "自动同步键: popupEnablingRemote"

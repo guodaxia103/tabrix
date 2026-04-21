@@ -250,13 +250,6 @@
             >
               <StopIcon />
             </button>
-            <button
-              class="rr-icon-btn rr-icon-btn-edit has-tooltip"
-              @click="toggleWebEditor"
-              :data-tooltip="getMessage('popupEnableWebEditor')"
-            >
-              <EditIcon />
-            </button>
           </div>
         </div>
 
@@ -625,7 +618,6 @@ import {
   StopIcon,
   WorkflowIcon,
   RefreshIcon,
-  EditIcon,
 } from './components/icons';
 
 // AgentChat theme - 从preload中获取，保持与sidepanel一致
@@ -1326,14 +1318,6 @@ function openWorkflowSidepanel() {
 // Open sidepanel for agent chat
 function openAgentSidepanel() {
   openSidepanelAndClose('agent-chat');
-}
-
-async function toggleWebEditor() {
-  try {
-    await chrome.runtime.sendMessage({ type: BACKGROUND_MESSAGE_TYPES.WEB_EDITOR_TOGGLE });
-  } catch (error) {
-    console.warn('Failed to toggle web editor mode:', error);
-  }
 }
 
 async function openWelcomePage() {

@@ -34,7 +34,7 @@ describe('context-menu utils', () => {
     createMock.mockImplementation((_props, callback) => {
       Object.defineProperty(globalThis.chrome.runtime, 'lastError', {
         configurable: true,
-        get: () => ({ message: 'Cannot create item with duplicate id web_editor_toggle' }),
+        get: () => ({ message: 'Cannot create item with duplicate id sample_menu_item' }),
       });
       callback?.();
       Object.defineProperty(globalThis.chrome.runtime, 'lastError', {
@@ -43,14 +43,14 @@ describe('context-menu utils', () => {
       });
     });
 
-    await ensureContextMenuItem('web_editor_toggle', {
+    await ensureContextMenuItem('sample_menu_item', {
       title: 'Toggle',
       contexts: ['all'],
     });
 
     expect(createMock).toHaveBeenCalledTimes(1);
     expect(updateMock).toHaveBeenCalledWith(
-      'web_editor_toggle',
+      'sample_menu_item',
       { title: 'Toggle', contexts: ['all'] },
       expect.any(Function),
     );
@@ -60,7 +60,7 @@ describe('context-menu utils', () => {
     removeMock.mockImplementation((_id, callback) => {
       Object.defineProperty(globalThis.chrome.runtime, 'lastError', {
         configurable: true,
-        get: () => ({ message: 'Cannot find menu item with id element_marker_mark' }),
+        get: () => ({ message: 'Cannot find menu item with id sample_menu_item' }),
       });
       callback?.();
       Object.defineProperty(globalThis.chrome.runtime, 'lastError', {
@@ -69,7 +69,7 @@ describe('context-menu utils', () => {
       });
     });
 
-    await expect(removeContextMenu('element_marker_mark')).resolves.toBeUndefined();
+    await expect(removeContextMenu('sample_menu_item')).resolves.toBeUndefined();
     expect(removeMock).toHaveBeenCalledTimes(1);
   });
 });

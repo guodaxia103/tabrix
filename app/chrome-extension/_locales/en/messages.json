@@ -783,10 +783,6 @@
     "message": "Disconnect this client",
     "description": "Auto-synced key: popupDisconnectClientTitle"
   },
-  "popupEnableWebEditor": {
-    "message": "Enable Web Editor mode",
-    "description": "Auto-synced key: popupEnableWebEditor"
-  },
   "popupEnablingRemote": {
     "message": "Enabling remote access...",
     "description": "Auto-synced key: popupEnablingRemote"

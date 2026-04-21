@@ -176,7 +176,6 @@ const fallbackMessages: Record<string, string> = {
   popupRemoteConfigHint: 'Enable Remote Access to view MCP configuration for remote clients.',
   popupQuickToolsTitle: 'Quick Tools',
   popupRecordComingSoon: 'Recording feature is under development',
-  popupEnableWebEditor: 'Enable Web Editor mode',
   popupManagementEntrancesTitle: 'Management',
   popupAgentAssistantTitle: 'AI Assistant',
   popupAgentAssistantDesc: 'AI Agent chat and tasks',

@@ -6,8 +6,6 @@ import {
 import { initStorageManagerListener } from './storage-manager';
 import { cleanupModelCache } from '@/utils/semantic-similarity-engine';
 import { initRecordReplayListeners } from './record-replay';
-import { initWebEditorListeners } from './web-editor';
-
 // Record-Replay V3 (feature flag)
 import { bootstrapV3 } from './record-replay-v3/bootstrap';
 
@@ -49,9 +47,6 @@ export default defineBackground(() => {
         console.error('[RR-V3] Bootstrap failed:', error);
       });
   }
-
-  // Web editor: toggle edit-mode overlay
-  initWebEditorListeners();
 
   // Conditionally initialize semantic similarity engine if model cache exists
   initializeSemanticEngineIfCached()
