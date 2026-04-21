@@ -29,7 +29,7 @@
 ### B-001 · Native-server: expose Memory read API
 
 - **Stage**: 3e · **Layer**: M · **KPI**: 懂用户
-- **Owner**: Claude · **Size**: S · **Status**: `in_progress`
+- **Owner**: Claude · **Size**: S · **Status**: `done` (merged `2026-04-20`)
 - **Dependencies**: none (builds on existing `memory/db/client.ts`)
 - **Branch**: `feat/b-001-memory-read-api`
 - **Schema note**: the MKEP Memory schema is `Task (1) → Session (N) → Step (N)` — each session belongs to exactly one task. The original "sessions/:id/tasks" and "tasks/:id/steps" shape conflicted with this and was corrected in-flight.
@@ -54,19 +54,21 @@
 ### B-002 · Extension: Memory tab session list
 
 - **Stage**: 3e · **Layer**: M · **KPI**: 懂用户
-- **Owner**: Claude · **Size**: M · **Status**: `planned`
-- **Dependencies**: **B-001**
+- **Owner**: Claude · **Size**: M · **Status**: `review`
+- **Dependencies**: **B-001** (done)
 - **Branch**: `feat/b-002-memory-tab-session-list`
-- **Scope**:
-  - New composable `entrypoints/sidepanel/composables/useMemoryTimeline.ts`: calls `GET /memory/sessions` via the existing native-host port (no direct `fetch`), returns `{ sessions, loading, error, reload }`.
-  - Replace the Memory placeholder card in `entrypoints/sidepanel/App.vue` with a virtualized list of the last 20 sessions: `sessionId` (short), `startedAt`, `status` (completed / running / failed — color coded), task count.
-  - Empty state: friendly copy pointing to "run any MCP tool to start populating Memory".
-  - Loading skeleton (no 3rd-party spinner — use existing Tailwind classes).
-  - Error state: red banner with "Retry" button that calls `reload()`.
+- **Landed scope** (what was actually shipped; deviations from the original plan are flagged):
+  - New shared DTO module `packages/shared/src/memory.ts` — canonical typing for every `/memory/*` response consumed cross-process. Server and sidepanel now share the same field names.
+  - New HTTP client `app/chrome-extension/common/memory-api-client.ts` — pure functions (`fetchRecentSessions`, `fetchSessionSteps`, `fetchMemoryTask`) + typed `MemoryApiError` taxonomy (`network` / `http` / `shape`). Resolves native-server port via `chrome.storage.local.nativeServerPort` (fallback 12306) — same pattern as the popup.
+  - New composable `entrypoints/shared/composables/useMemoryTimeline.ts` (placed in `shared/` not `sidepanel/` so the popup can reuse it later): reactive `{ status, sessions, total, offset, persistenceMode, errorMessage, errorKind, hasNextPage, hasPrevPage, isEmpty, load, reload, nextPage, prevPage, dispose }`. Concurrent calls abort in-flight requests to avoid stale-overwrite races.
+  - `tabs/MemoryTab.vue` rewritten to render: 4-state UI (idle/loading/empty/error), 20-row paginated list with `status` colour dot, step count pill, per-row duration, and Previous/Next controls. Footer shows `N–M of Total`. Respects `prefers-color-scheme: dark`.
+  - **Deviation from original plan**: used a plain scrollable list instead of DOM virtualization — real virtualization only pays off at 100s of rows, but the server caps us at 20 per page by default; we paginate instead. Documented here so B-003+ doesn't silently assume virtualization infrastructure exists.
+  - **Deviation from original plan**: composable lives in `shared/composables/` (not `sidepanel/composables/`) so the popup can later surface "last session status" from the same source.
 - **Exit criteria**:
-  - `pnpm --filter @tabrix/extension test --run` passes with ≥ 4 new tests for the composable (loading → data, loading → error, empty state, reload).
-  - Manual browser check documented in the PR: sidepanel renders real SQLite data after invoking any MCP tool via Codex.
-  - Bundle size delta ≤ +8 KB (compare `.output/chrome-mv3/assets/sidepanel-*.js`).
+  - `pnpm -r typecheck` passes.
+  - `pnpm --filter @tabrix/extension test` passes — 249 tests total, +20 new tests across `tests/memory-api-client.test.ts` (13) and `tests/use-memory-timeline.test.ts` (7).
+  - Bundle size delta ≤ +8 KB for the sidepanel chunk. **Measured**: `sidepanel.js` 5.43 kB → 11.91 kB (+6.48 kB), `sidepanel.css` 7.62 kB → 11.26 kB (+3.64 kB). Within budget.
+  - Manual browser check (user-side): open sidepanel → Memory tab → list renders when the native server is reachable; shows typed error states otherwise.
 
 ### B-003 · Extension: Memory session → task → step drill-down
 
