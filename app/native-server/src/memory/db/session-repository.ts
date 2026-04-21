@@ -113,8 +113,8 @@ export class SessionRepository {
    *
    * @param limit  max rows to return, clamped to `[1, SESSION_SUMMARY_LIMIT_MAX]`
    * @param offset rows to skip, clamped to `[0, +∞)`
-   * @remarks read-only; paginate with `limit ≤ 500` to keep sidepanel
-   * renders < 50 ms on a 10k-row DB.
+   * @returns SessionSummary[] (never null; may be empty).
+   * @remarks read-only; paginate with limit ≤ 500 to keep sidepanel renders < 50 ms.
    */
   public listRecent(limit: number, offset: number): SessionSummary[] {
     const safeLimit = Math.min(
@@ -149,6 +149,9 @@ export class SessionRepository {
   /**
    * Read-only: total number of sessions in the DB. Used to render
    * pagination controls in the sidepanel Memory tab.
+   *
+   * @returns total row count as a non-negative integer.
+   * @remarks read-only; paginate with limit ≤ 500 to keep sidepanel renders < 50 ms.
    */
   public countAll(): number {
     const row = this.countAllStmt.get() as { total: number } | undefined;

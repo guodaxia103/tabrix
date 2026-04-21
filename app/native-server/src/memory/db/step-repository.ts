@@ -65,6 +65,14 @@ export class StepRepository {
     });
   }
 
+  /**
+   * Read-only: return every step of one session in insertion order
+   * (SQL ORDER BY `step_index ASC`).
+   *
+   * @param sessionId the session whose steps should be listed.
+   * @returns ExecutionStep[] (empty when the session has no steps or does not exist).
+   * @remarks read-only; paginate with limit ≤ 500 to keep sidepanel renders < 50 ms.
+   */
   public listBySession(sessionId: string): ExecutionStep[] {
     return (this.listBySessionStmt.all(sessionId) as StepRow[]).map(rowToStep);
   }

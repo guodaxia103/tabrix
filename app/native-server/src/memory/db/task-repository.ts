@@ -30,6 +30,13 @@ export class TaskRepository {
     this.insertStmt.run(taskToRow(task));
   }
 
+  /**
+   * Read-only: fetch a single task by id.
+   *
+   * @param taskId id of the task to look up.
+   * @returns Task | undefined when no row matches.
+   * @remarks read-only; paginate with limit ≤ 500 to keep sidepanel renders < 50 ms.
+   */
   public get(taskId: string): Task | undefined {
     const row = this.getStmt.get(taskId) as TaskRow | undefined;
     return row ? rowToTask(row) : undefined;
