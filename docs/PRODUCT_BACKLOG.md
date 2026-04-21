@@ -317,8 +317,9 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
 
 1. **B-010** (UI Map schema + GitHub seed + lookup) — first because B-012's aggregator design is cleaner once the `(siteId, pageRole, purpose)` key space exists.
 2. **B-021** (CSS bundle gate) — smallest item; keeps momentum and satisfies Sprint 2 retro §7 action.
-3. **B-012** (Experience aggregator) — the big one; comes after B-010 so the aggregator's write-path can key off `purpose` strings if needed (even though the minimal B-012 may not use them yet).
-4. **B-022** (Codex fast — drop "rule N" wording) — last, low-risk, exercises the draft-only protocol for a third consecutive sprint.
+3. **B-023** (click contract hotfix) — pulled in mid-sprint on 2026-04-20 after the GA-facing `chrome_click_element` false-success P1 surfaced. Sequenced before B-012 because B-012's aggregator consumes `step.status` values, and right now the extension can emit `status='completed'` for clicks that did not actually change anything — aggregating over those rows would poison the Experience layer's `success_count`.
+4. **B-012** (Experience aggregator) — the big one; comes after B-010 so the aggregator's write-path can key off `purpose` strings if needed (even though the minimal B-012 may not use them yet).
+5. **B-022** (Codex fast — drop "rule N" wording) — last, low-risk, exercises the draft-only protocol for a third consecutive sprint.
 
 ### B-010 · Extension: `KnowledgeUIMapRule` schema + GitHub seed + read-only lookup
 
@@ -362,6 +363,56 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
   - `pnpm -r typecheck` green.
   - CI run on the PR passes.
 - **Landed**: `scripts/check-bundle-size.mjs` refactored from single-target to multi-target (TARGETS array). `AGENTS.md` Operational Guardrails updated with a two-row threshold table. Measured bundles on this branch: **JS 20.51 kB** (under 25 soft · under 40 hard ✓), **CSS 17.81 kB** (under 20 soft · under 22 hard ✓). Script discovered that WXT emits CSS into `.output/chrome-mv3/assets/` not `chunks/` — the TARGETS array carries a per-entry `subdir` to handle both. No sidepanel source, CI workflow, or JS thresholds touched.
+
+### B-023 · GA reliability hotfix · verified click outcome contract for `chrome_click_element`
+
+_Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** an MKEP / Experience / Knowledge increment — it is a tool-layer correctness fix that the whole MKEP stack sits on top of. Execution spec: `docs/CLICK_CONTRACT_REPAIR_V1.md`._
+
+- **Stage**: N/A (GA reliability hotfix) · **Layer**: X (tool-layer contract, not a Memory / Knowledge / Experience / Policy increment) · **KPI**: 更准 · 更稳 (stops "click happened" from being serialized as "action succeeded")
+- **Owner**: Claude · **Size**: M · **Status**: `in_progress`
+- **Dependencies**: none — sits strictly upstream of B-012. B-012 reads `step.status`; if this hotfix does not land first, B-012 will aggregate over poisoned success rows.
+- **Branch**: `fix/b-023-click-contract-v1`
+- **Schema cite** _(per the schema-cite rule added in B-009)_:
+  - Public tool response today — see `app/chrome-extension/entrypoints/background/tools/browser/interaction.ts:452-466` (the regular-click return path): currently `JSON.stringify({ success, message, elementInfo, navigationOccurred, clickMethod })` with `success` unconditionally `true` whenever the content-script message resolves without `error`. This is the false-success defect.
+  - Content-script signal source — see `app/chrome-extension/inject-scripts/click-helper.js:320-325` (the `clickElement` return): currently `{ success: true, message, elementInfo, navigationOccurred }`, where `navigationOccurred` is true only when `beforeunload` fired. This conflates "full-page unload happened" with "click produced an outcome"; SPA route changes, hash changes, dialogs, menus, toggles, and no-op clicks are all invisible here.
+  - Target-shape reference: `docs/CLICK_CONTRACT_REPAIR_V1.md §"Required Contract Change"` (the `{success, dispatchSucceeded, observedOutcome, verification:{…}}` JSON block). B-023 lands a faithful subset of that shape.
+  - **New / modified fields** (added to the public tool response; existing fields preserved for one-release compat):
+    - `dispatchSucceeded: boolean` — did `click-helper.js` find a target and dispatch the click path?
+    - `observedOutcome: ClickObservedOutcome` (string enum; see below) — the merged verdict from page-local + browser-level signals.
+    - `verification: { navigationOccurred, urlChanged, newTabOpened, domChanged, stateChanged, focusChanged }` — raw evidence, booleans only; callers can build their own verdict if they disagree with ours.
+    - `success: boolean` — **redefined**. True iff `observedOutcome !== 'no_observed_change'` and `observedOutcome !== 'verification_unavailable'`. It is **never** true purely because the content-script promise resolved.
+    - `navigationOccurred: boolean` — kept as a one-release compat field; equals `verification.navigationOccurred`. A future sprint (B-024+, not this one) deprecates it.
+  - **`ClickObservedOutcome` enum (v1, frozen):** `cross_document_navigation` · `spa_route_change` · `hash_change` · `new_tab_opened` · `dialog_opened` · `menu_opened` · `state_toggled` · `selection_changed` · `dom_changed` · `focus_changed` · `download_intercepted` · `no_observed_change` · `verification_unavailable`. Lives in a new shared module `packages/shared/src/click.ts` so the native-server post-processor and future MCP consumers can import it without duplicating the union.
+  - **Idempotency**: the click-helper protocol is request/response only — no state persisted in the extension. Background-layer `chrome.tabs.onCreated` correlation is a one-shot listener with explicit removal inside the verification window; no long-lived subscriber. Adding the new response fields is strictly additive — existing callers that only read `success` will see strictly fewer false positives and no new false negatives on the currently-green download-intercept path.
+- **Scope**:
+  - Add `packages/shared/src/click.ts` exporting `ClickObservedOutcome`, `ClickVerification`, `ClickToolResult`; re-export from `packages/shared/src/index.ts`.
+  - Rewrite `app/chrome-extension/inject-scripts/click-helper.js` to emit raw signals (no verdict): `{ dispatchSucceeded, beforeUnloadFired, urlBefore, urlAfter, hashBefore, hashAfter, targetStateDelta, focusChanged, domAddedDialog, domAddedMenu, domChanged, elementInfo }`. Keep existing targeting / visibility / scroll logic unchanged — this is a contract fix, not a targeting fix.
+  - In `app/chrome-extension/entrypoints/background/tools/browser/interaction.ts`: add a pure `mergeClickSignals()` function that turns raw page-local signals + `chrome.tabs.onCreated`-derived `newTabOpened` into `{ observedOutcome, verification, success, dispatchSucceeded }`; serialize per new contract. Keep the existing `intercepted-download` fast-path response shape exactly as-is (compat — existing `click-download-intercept.test.ts` must stay green with zero edits).
+  - Add `app/chrome-extension/tests/click-contract.test.ts` with:
+    1. Contract regression — asserts the forbidden combo `{success:true, navigationOccurred:false, observedOutcome:'no_observed_change'}` is unreachable.
+    2. No-op click → `observedOutcome='no_observed_change'`, `success=false`.
+    3. `beforeunload` fires → `cross_document_navigation`, `success=true`.
+    4. Target `aria-expanded` flips false→true → `state_toggled`, `success=true`.
+    5. `location.href` changes (same host, different path, no unload) → `spa_route_change`.
+    6. Only `location.hash` changes → `hash_change`.
+    7. A `[role="dialog"]` appears in DOM after click → `dialog_opened`.
+- **Must not do**:
+  - Do not add GitHub-family (or any site-family) selector heuristics — Non-goal per `docs/CLICK_CONTRACT_REPAIR_V1.md §"Non-Goals"`.
+  - Do not touch `fill-helper.js` or `fillTool` — scope is click only.
+  - Do not change the `intercepted-download` response shape — existing regression test (`click-download-intercept.test.ts`) must stay green with zero edits.
+  - Do not introduce a `chrome.webNavigation` global listener — a one-shot `chrome.tabs.onCreated` with explicit removal is enough for v1.
+  - Do not extract `click-verification.ts` as a separate background module in v1 — keep merging logic as a pure function inside `interaction.ts` until a second caller (fill, hover) exists.
+  - Do not delete the `navigationOccurred` field; it stays as a one-release compat field.
+  - Do not declare B-023 done based on source inspection alone — unit tests must run green locally.
+  - Do not run a real-browser validation inside the Codex/Claude sandbox (MV3 extensions cannot be driven from the sandbox on Windows); the task summary must explicitly state real-browser validation is deferred.
+- **Exit criteria**:
+  - `packages/shared` builds clean: `pnpm -C packages/shared build`.
+  - Extension builds clean: `pnpm -C app/chrome-extension build`.
+  - `pnpm --filter @tabrix/extension test` green — the existing 288 tests all stay green, plus the ≥ 7 new B-023 tests in `click-contract.test.ts`, plus the existing `click-helper-targeting.test.ts` tests stay green with zero edits.
+  - `pnpm -r typecheck` green.
+  - `pnpm run size:check` green — JS bundle must stay under 40 kB hard / 25 kB soft.
+  - `pnpm run docs:check` green.
+  - Task summary includes: (1) the before/after contract diff, (2) which outcomes are detected, (3) which tests ran, (4) explicit statement that real-browser validation was **not** run and why, (5) what remains unsupported (selection_changed, focus_changed detected-but-not-tested; `chrome.webNavigation` aggregation deferred; generic replay deferred).
 
 ### B-012 · Native-server: Experience action-path aggregator (reads Memory, writes Experience)
 
@@ -443,3 +494,4 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
 - 2026-04-20 — Sprint 2 closed same day: all 5 items `done`. B-009 successfully re-tested the Codex "draft-only" handoff protocol — Codex completed the 2-file edit, Claude verified + committed. Retro at `docs/SPRINT_2_RETRO.md`. `AGENTS.md` gained an Operational Guardrails section covering bundle-size gate and schema-cite rule.
 - 2026-04-20 — Sprint 3 locked: B-010 (Knowledge UI Map schema + GitHub seed) / B-021 (CSS bundle gate) / B-012 (Experience action-path aggregator) / B-022 (Codex fast — drop rule-N numbering). Themes: Stage 3a Knowledge seed + Stage 3b first write path + Sprint 2 retro §7 follow-ups. B-021 and B-022 added to the pool as part of this lock.
 - 2026-04-20 — Sprint 3 · B-021 done: `scripts/check-bundle-size.mjs` extended to gate `sidepanel-*.css` (soft 20 kB / hard 22 kB) alongside the existing `sidepanel-*.js` gate (unchanged, soft 25 / hard 40). `AGENTS.md` Operational Guardrails updated with a two-row threshold table. Baselines: JS ≈ 20.5 kB, CSS ≈ 17.8 kB.
+- 2026-04-20 — Sprint 3 mid-sprint adjustment: **B-023** (click contract hotfix) pulled in as a P1 GA reliability item. Sequenced between B-021 and B-012 — see the B-023 entry for why ordering matters (B-012 reads `step.status`, which is currently polluted by the false-success defect). Execution spec `docs/CLICK_CONTRACT_REPAIR_V1.md` committed alongside the backlog update so the contract is reviewable independently of the code change. Sprint 3 scope is now 5 items (B-010 / B-021 / B-023 / B-012 / B-022); no item was dropped to make room — Sprint 3 is deliberately accepting the overrun because the hotfix cannot wait for Sprint 4.
