@@ -11,6 +11,12 @@ import { TIMEOUTS, ERROR_MESSAGES } from '@/common/constants';
 import { handleDownloadTool, markNextDownloadAsInteractive } from './download';
 import { prearmDialogHandling } from './dialog-prearm';
 import { type CandidateActionInput, resolveCandidateActionTarget } from './candidate-action';
+import {
+  type ClickVerifierContext,
+  type ClickVerifierResult,
+  isVerifierContextRequested,
+  runClickVerifier,
+} from './click-verifier';
 
 interface Coordinates {
   x: number;
@@ -34,6 +40,12 @@ interface ClickToolParams {
   allowDownloadClick?: boolean;
   tabId?: number; // target existing tab id
   windowId?: number; // when no tabId, pick active tab from this window
+  // B-024 (Click V2 · verifier hook v1): internal-only opt-in for
+  // family-aware post-click verification. Not exposed on the public MCP
+  // input schema in v1 (brief §6 "request-side shape can stay internal");
+  // intended to be wired from internal helpers / tests until a public
+  // contract is settled.
+  verifierContext?: ClickVerifierContext;
 }
 
 interface InteractionSchemeGuard {
@@ -458,6 +470,10 @@ class ClickTool extends BaseBrowserToolExecutor {
         return createUnsupportedTabResponse('click', tab, schemeGuard);
       }
 
+      // B-024: snapshot the pre-click URL so the verifier can report
+      // `postClickState.beforeUrl` without chasing tab.url after navigation.
+      const beforeUrl = typeof tab.url === 'string' ? tab.url : null;
+
       const resolvedTarget = resolveCandidateActionTarget({
         explicitRef: args.ref,
         explicitSelector: selector,
@@ -660,24 +676,69 @@ class ClickTool extends BaseBrowserToolExecutor {
 
       const merged = mergeClickSignals(dispatchSucceeded, pageSignals, browserSignals);
 
+      // B-024: optional family-aware verifier. Runs at most one compact
+      // readback. `success` collapses to false if the verifier was
+      // requested and did not pass — otherwise the generic contract from
+      // B-023 is preserved as-is.
+      let postClickState: {
+        beforeUrl: string | null;
+        afterUrl: string | null;
+        pageRoleAfter: string | null;
+        verifierPassed: boolean;
+        verifierReason: string;
+      } | null = null;
+      let finalSuccess = merged.success;
+      if (isVerifierContextRequested(args.verifierContext)) {
+        let verifierResult: ClickVerifierResult | null = null;
+        if (merged.dispatchSucceeded) {
+          verifierResult = await runClickVerifier(tab.id, args.verifierContext!, beforeUrl);
+        }
+        if (verifierResult) {
+          postClickState = {
+            beforeUrl: verifierResult.beforeUrl,
+            afterUrl: verifierResult.afterUrl,
+            pageRoleAfter: verifierResult.pageRoleAfter,
+            verifierPassed: verifierResult.passed,
+            verifierReason: verifierResult.reason,
+          };
+          if (!verifierResult.passed) {
+            finalSuccess = false;
+          }
+        } else {
+          postClickState = {
+            beforeUrl,
+            afterUrl: null,
+            pageRoleAfter: null,
+            verifierPassed: false,
+            verifierReason: merged.dispatchSucceeded
+              ? 'verifier_unavailable'
+              : 'verifier_skipped_dispatch_failed',
+          };
+          finalSuccess = false;
+        }
+      }
+
       return {
         content: [
           {
             type: 'text',
             text: JSON.stringify({
-              success: merged.success,
+              success: finalSuccess,
               dispatchSucceeded: merged.dispatchSucceeded,
               observedOutcome: merged.observedOutcome,
               verification: merged.verification,
               // One-release compat field; equals verification.navigationOccurred.
               navigationOccurred: merged.verification.navigationOccurred,
-              message: merged.success
+              message: finalSuccess
                 ? `Click observed outcome: ${merged.observedOutcome}`
                 : merged.observedOutcome === 'no_observed_change'
                   ? 'Click was dispatched but no observable outcome was detected within the verification window'
-                  : `Click dispatched; outcome unverified (${merged.observedOutcome})`,
+                  : postClickState && !postClickState.verifierPassed
+                    ? `Click dispatched but verifier rejected the outcome (${postClickState.verifierReason})`
+                    : `Click dispatched; outcome unverified (${merged.observedOutcome})`,
               elementInfo: result?.elementInfo,
               clickMethod,
+              ...(postClickState ? { postClickState } : {}),
             }),
           },
         ],
