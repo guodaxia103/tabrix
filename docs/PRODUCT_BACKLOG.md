@@ -323,7 +323,7 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
 ### B-010 · Extension: `KnowledgeUIMapRule` schema + GitHub seed + read-only lookup
 
 - **Stage**: 3a · **Layer**: K · **KPI**: 更准 · 更稳 (stable purpose key space makes retries converge)
-- **Owner**: Claude · **Size**: M · **Status**: `in_progress`
+- **Owner**: Claude · **Size**: M · **Status**: `done` (merged 2026-04-20, commit `87673f5`)
 - **Dependencies**: none (extends the existing Stage 1/2 `KnowledgeSeeds` shape without touching consumers)
 - **Branch**: `feat/b-010-knowledge-uimap-github-seed`
 - **Schema cite** _(per the schema-cite rule added in B-009)_:
@@ -344,6 +344,7 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
   - `pnpm --filter @tabrix/extension test` green (273 prior + ~15 new B-010 tests).
   - Knowledge Stage 1/2 existing tests (`knowledge-registry.test.ts`, `knowledge-lookup.test.ts`, `knowledge-object-classification.test.ts`) all still green with zero edits.
   - `git diff --stat` contains only knowledge layer files + the new test + backlog update.
+- **Landed**: 5 files changed, 578 insertions, 1 deletion. Extension tests 273 → 288 (+15 B-010). All 288 green. `pnpm -r typecheck` + `pnpm run docs:check` both clean. Native-server regression check: 176 passed / 24 skipped (no change). No touch to `read_page` contract, `candidate-action.ts`, native-server schema, CI, or sidepanel UI — per the Must-not-do list.
 
 ### B-021 · Infra: extend `check-bundle-size.mjs` to gate `sidepanel-*.css`
 
