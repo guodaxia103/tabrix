@@ -9,7 +9,12 @@ It is intended for:
 - Contributors working on the public codebase
 - Release, security, and compliance readers
 
-Internal product-management, governance, audit, and gate-maintenance materials are **not** kept here. They are maintained separately by the project maintainers outside this repository and are not required for contributing against the public surface.
+This repository keeps two kinds of docs:
+
+- **public product and integration docs** for users and contributors
+- a **small set of repo-internal governance docs** that contributors must follow in order to change the product safely
+
+Sensitive maintainer-only materials still live outside this repository.
 
 ## Entry Points
 
@@ -58,16 +63,16 @@ Internal product-management, governance, audit, and gate-maintenance materials a
 - [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — contributor workflow
 - [`../CHANGELOG.md`](../CHANGELOG.md) — versioned user-visible changes
 
-## Internal Documents (Not Here)
+## Maintainer-Only Materials (Outside Repo)
 
-The following categories are maintained outside this public repository by the project maintainers:
+The following categories are maintained outside this repository by the project maintainers:
 
-- Internal product-management artifacts (PRD, positioning, roadmap sequencing)
-- Internal governance (tool layering, AI contributor rules, Skills catalog, ownership map)
-- Internal acceptance and gate materials (release readiness, audit gate, GA baseline gates)
-- Internal runbooks for non-public scenarios
+- private product-positioning and commercial sequencing materials that are not part of the open-source working contract
+- private governance and audit materials that contain maintainer-only process or approval state
+- private acceptance evidence and gate-maintenance artifacts
+- private runbooks for non-public scenarios
 
-None of these materials are required for contributing against the public surface. If you need access to internal materials, contact the project owner directly.
+By contrast, `PRD.md`, `TASK_ROADMAP.md`, `PRODUCT_BACKLOG.md`, and `AGENTS.md` are intentionally kept in-repo because contributors need them to understand the current product and execution rules.
 
 ## Language Policy
 
@@ -87,4 +92,4 @@ None of these materials are required for contributing against the public surface
 
 ## Public Source of Truth
 
-For public-facing documentation, this directory is the source of truth. Anything else (internal governance, audit, roadmap sequencing, acceptance evidence, gate maintenance) is managed by the project maintainers outside this repository and is not part of the public contract.
+For public-facing documentation, this directory is the source of truth. Some repo-internal governance docs also live here because they define the contribution contract for this open-source codebase. Sensitive maintainer-only governance, audit evidence, and private acceptance materials stay outside the repository.

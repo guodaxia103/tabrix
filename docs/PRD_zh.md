@@ -194,7 +194,7 @@ Tabrix 是一个四层学习闭环，架在工具面和传输层之上。
 
 **职责**：把 Memory 投影成**可复用的 action path 和 locator 偏好** —— "上次在这个页面、这个 intent 下，什么成了。"
 
-**当前成熟度**：约 10% —— schema 已落地（`experience_action_paths` / `experience_locator_prefs`，`B-005`）。**聚合器还没开始写**；`B-012` 正在 Sprint 3 进行中。
+**当前成熟度**：约 10% —— schema 已落地（`experience_action_paths` / `experience_locator_prefs`，`B-005`）。**聚合器还没开始写**；`B-012` 已排入 Sprint 3，但尚未开工。
 
 **目标态**：上游 LLM 调 `experience_suggest_plan(intent, pageRole?)`，Tabrix 返回那个 `(pageRole, intent)` 桶里最成功的 action path，配五级 locator 回退。**这个 plan 只是原语**，上游 LLM 决定采不采纳。
 
@@ -434,7 +434,7 @@ Wave 1（近期可并行，互不阻塞）
   3f · Policy capability opt-in 枚举            （B-016 pool）
 
 Wave 2（依赖 Wave 1 至少 Beta）
-  3b · Experience action-path replay            （B-005 schema done，B-012 in progress，B-013 next）
+  3b · Experience action-path replay            （B-005 schema done，B-012 planned，B-013 next）
   3c · Recovery Watchdog 统一化                 （B-014 pool）
 
 Wave 3（战略价值集中兑现）

@@ -171,6 +171,15 @@ export function evaluateClickVerifier(
   }
 
   if (rule.acceptLeftRepoHome) {
+    if (pageRoleAfter == null) {
+      return {
+        passed: false,
+        reason: `${key}:page_understanding_unavailable`,
+        beforeUrl,
+        afterUrl,
+        pageRoleAfter,
+      };
+    }
     if (pageRoleAfter === 'repo_home') {
       return {
         passed: false,

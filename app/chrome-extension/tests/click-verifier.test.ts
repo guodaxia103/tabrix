@@ -158,6 +158,21 @@ describe('evaluateClickVerifier (pure)', () => {
     expect(result.pageRoleAfter).not.toBe('repo_home');
   });
 
+  it('pull_requests: incomplete page understanding fails closed', () => {
+    const result = evaluateClickVerifier(
+      { family: 'github', verifierKey: 'github.repo_nav.pull_requests' },
+      'https://github.com/octocat/hello',
+      {
+        url: 'https://github.com/octocat/hello/pulls',
+        title: 'Pull requests · octocat/hello',
+        bodyText: null,
+      },
+    );
+    expect(result.passed).toBe(false);
+    expect(result.reason).toBe('github.repo_nav.pull_requests:page_understanding_unavailable');
+    expect(result.pageRoleAfter).toBeNull();
+  });
+
   it('pull_requests: feeding repo-home text directly reproduces still_on_repo_home branch', () => {
     // The GitHub family adapter returns `repo_home` only for the root
     // repo path `/owner/repo`. We cannot reach that pageRole through a
@@ -292,6 +307,29 @@ describe('runClickVerifier (IO wrapper)', () => {
     expect(result).not.toBeNull();
     expect(result!.passed).toBe(false);
     expect(result!.afterUrl).toBe('https://github.com/octocat/hello/issues');
+    expect(result!.pageRoleAfter).toBeNull();
+  });
+
+  it('pull_requests: scripting failure does not pass via URL-only fallback', async () => {
+    mockChrome.tabs.get.mockResolvedValueOnce({
+      id: 1,
+      url: 'https://github.com/octocat/hello/pulls',
+      title: 'Pull requests · octocat/hello',
+    } as chrome.tabs.Tab);
+    mockChrome.scripting!.executeScript.mockRejectedValueOnce(new Error('no permission'));
+
+    const promise = runClickVerifier(
+      1,
+      { verifierKey: 'github.repo_nav.pull_requests' },
+      'https://github.com/octocat/hello',
+    );
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).not.toBeNull();
+    expect(result!.passed).toBe(false);
+    expect(result!.reason).toBe('github.repo_nav.pull_requests:page_understanding_unavailable');
+    expect(result!.afterUrl).toBe('https://github.com/octocat/hello/pulls');
     expect(result!.pageRoleAfter).toBeNull();
   });
 

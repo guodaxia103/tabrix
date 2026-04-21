@@ -192,7 +192,7 @@ Tabrix is a four-layer learning loop sitting on top of a tool surface and a tran
 
 **Role**: projection of Memory into _reusable action paths and locator preferences_ — "what worked last time on this page, for this intent."
 
-**Current maturity**: ~10% — schema landed (`experience_action_paths` / `experience_locator_prefs` tables, `B-005`). **No aggregator writes rows yet**; `B-012` is in progress in Sprint 3.
+**Current maturity**: ~10% — schema landed (`experience_action_paths` / `experience_locator_prefs` tables, `B-005`). **No aggregator writes rows yet**; `B-012` is planned in Sprint 3.
 
 **Target**: upstream LLM asks `experience_suggest_plan(intent, pageRole?)` → Tabrix returns the most successful action path for that `(pageRole, intent)` bucket, with five-tier locator fallback. The plan is a **primitive** — the upstream LLM decides whether to adopt it.
 
@@ -432,7 +432,7 @@ Wave 1 (near-term, parallelizable)
   3f · Policy capability opt-in enum             (B-016 pool)
 
 Wave 2 (depends on Wave 1)
-  3b · Experience action-path replay             (B-005 schema done, B-012 in progress, B-013 next)
+  3b · Experience action-path replay             (B-005 schema done, B-012 planned, B-013 next)
   3c · Recovery Watchdog consolidation           (B-014 pool)
 
 Wave 3 (strategic payoff)
