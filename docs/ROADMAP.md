@@ -50,6 +50,9 @@ In public terms, this is about making Tabrix easier to trust, easier to install,
 Once the main connection path is stable, the next major product upgrades are:
 
 - structured page snapshots instead of long noisy page text by default
+- MKEP Memory-backed run history (Session / Task / Step viewers in the sidepanel)
+- MKEP Knowledge expansion beyond the GitHub seed (URL catalogue, menu / region / API knowledge for additional sites)
+- MKEP Policy risk-tier gating for every P3-classified tool, with an explicit opt-in flow exposed via MCP
 - stronger real-browser MCP E2E coverage and fixture-based regression testing
 - browser auto-launch and recovery when an assistant calls Tabrix and Chrome is not ready
 - better locator stability through fingerprinting, fallback chains, and more deterministic targeting
@@ -60,12 +63,15 @@ These upgrades matter because they improve success rate, reduce token cost, and 
 
 Longer-term public directions:
 
-- URL Experience Memory for repeated website tasks
+- MKEP Experience reuse: per-site reusable recipes that let repeated tasks skip redundant page reads
+- community sharing / import / export of Experience packs
 - replay artifacts for failed flows and nightly regression diagnosis
 - safer team collaboration and multi-operator browser workflows
 - richer higher-level automation layers built on top of the stable MCP execution path
 
 These directions are strategically important, but they should not outrun the current reliability foundation.
+
+For the full technical plan, see `docs/MKEP_STAGE_3_PLUS_ROADMAP.md`.
 
 ## What We Will Not Prioritize First
 

@@ -1,8 +1,6 @@
 import { createApp } from 'vue';
 import { NativeMessageType } from '@tabrix/shared';
 import './style.css';
-// 引入AgentChat主题样式
-import '../sidepanel/styles/agent-chat.css';
 import { preloadAgentTheme } from '../shared/composables/usePopupTheme';
 import App from './App.vue';
 

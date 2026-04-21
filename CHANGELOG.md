@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed (BREAKING — product surface pruning aligned with MKEP)
+
+This release executes `docs/PRODUCT_PRUNING_PLAN.md` and removes five
+non-MKEP product surfaces from the extension and native server. All
+removals are intentional and make room for the MKEP Stage 3+ work
+(Memory / Knowledge / Experience viewers).
+
+- **Smart Assistant stack** (Agent + Quick Panel + Element Picker):
+  - `app/native-server/src/agent/**` (19 files / 217 KB),
+    `server/routes/agent.ts`, `AgentStreamManager`, `ClaudeEngine`,
+    `CodexEngine`.
+  - Chrome extension: sidepanel `AgentChat.vue` + `agent/` + `agent-chat/`
+    - `composables/useAgent*.ts` + `styles/agent-chat.css`;
+      `background/quick-panel/`, `shared/quick-panel/`, `common/agent-models.ts`;
+      `entrypoints/quick-panel.content.ts`, `entrypoints/element-picker.content.ts`,
+      `background/tools/browser/element-picker.ts`, `shared/element-picker/`,
+      `inject-scripts/element-picker.js`.
+  - Shared package: `packages/shared/src/agent-types.ts` and its re-export.
+  - Native-server tests for `/agent/engines` were rewritten to assert the
+    Bearer flow via `/mcp` initialize only.
+- **Workflow / Record-Replay stack**:
+  - `background/record-replay/` (RR-V2, ~71 files / 439 KB) and
+    `background/record-replay-v3/` (RR-V3, ~63 files / 363 KB) except
+    `offscreen-keepalive.ts`, which was relocated to
+    `background/keepalive/offscreen-keepalive.ts` for MV3 SW keepalive.
+  - MCP tools `run_flow` and `list_published_flows` and their schemas.
+  - `entrypoints/builder/**` (node builder UI), `popup/components/builder/**`,
+    and the popup "Quick Tools" / workflow card.
+  - Sidepanel `workflows/**`, `rr-v3/**`, `SidepanelNavigator.vue`, and
+    `composables/useWorkflows*`.
+  - Shared package: `rr-graph.ts`, `step-types.ts`, `node-spec.ts`,
+    `node-spec-registry.ts`, `node-specs-builtin.ts` and all RR tests
+    (`tests/record-replay*`, `tests/rr-*`).
+- **Local model / semantic engine**:
+  - `utils/semantic-similarity-engine.ts`, `simd-math-engine.ts`,
+    `content-indexer.ts`, `vector-database.ts`, `model-cache-manager.ts`.
+  - `background/semantic-similarity.ts`, `background/storage-manager.ts`,
+    `background/tools/browser/vector-search.ts` and the MCP tool
+    `search_tabs_content` schema.
+  - Popup `LocalModelPage.vue`, `ModelCacheManagement.vue`, `ConfirmDialog.vue`.
+  - ONNX Runtime WASM assets: `app/chrome-extension/workers/` (~32 MB) and
+    `public/libs/ort.min.js`.
+  - Dependencies: `@xenova/transformers`, `hnswlib-wasm-static`, `@vue-flow/*`,
+    `elkjs`. Offscreen document now hosts only GIF encoder + keepalive.
+  - Manifest: dropped `/models/*` and `/workers/*` from
+    `web_accessible_resources`, dropped `wasm-unsafe-eval` from CSP.
+- **Element Marker management**:
+  - `background/element-marker/**`, `inject-scripts/element-marker.js`,
+    `common/element-marker-types.ts`, popup `ElementMarkerManagement.vue`,
+    icon `MarkerIcon.vue`. `chrome_read_page`'s `markedElements` field
+    is preserved as an empty array for contract stability.
+- **Visual Editor (`web-editor-v2`)**:
+  - `entrypoints/web-editor-v2/**` (61 files / 1,286 KB),
+    `entrypoints/web-editor-v2.ts`, `background/web-editor/**`,
+    `common/web-editor-types.ts`, `inject-scripts/web-editor.js`,
+    `tests/web-editor-v2/**`, popup `EditIcon.vue`, `toggle_web_editor`
+    shortcut binding.
+
+**Sidepanel UI rebuild** (`feat(sidepanel): rebuild UI with MKEP ...`):
+the old three tabs (`workflows / agent-chat / element-markers`) were
+replaced with three "Coming in Stage 3x" placeholder tabs — Memory,
+Knowledge, Experience — each linking to
+`docs/MKEP_STAGE_3_PLUS_ROADMAP.md`.
+
+**Data-dir helpers relocation**:
+`getAgentDataDir / getDatabasePath / getDefaultWorkspaceDir /
+getDefaultProjectRoot` moved from `native-server/src/agent/storage.ts`
+to `native-server/src/shared/data-dirs.ts` (env vars unchanged so
+existing installations keep using `~/.chrome-mcp-agent/`).
+
+**MCP-level breaking changes** for upstream AI clients:
+
+- `search_tabs_content` is no longer registered.
+- `run_flow` and `list_published_flows` are no longer registered.
+- `element_picker` is no longer registered.
+
+Policy Phase 0's risk-tier coverage matrix and Knowledge Registry Stage
+1/2 are unaffected.
+
 ### Fixed
 
 - **CI**: `better-sqlite3` native binding (`node-v127-linux-x64`) was

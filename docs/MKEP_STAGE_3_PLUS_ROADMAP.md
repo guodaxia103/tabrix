@@ -1,9 +1,15 @@
 # MKEP Stage 3+ 路线图（产品愿景 + 竞品借鉴融合稿）
 
-> 文档版本：v0.2 · 2026-04-21（v0.1 合并用户产品愿景与 API Knowledge / Context Strategy 两条新维度）
-> 起草：项目组（Claude 作为总负责人；14 个竞品调研由 Codex CLI 并行完成并经抽查核验）
-> 关联文档：`docs/MKEP_CURRENT_VS_TARGET.md`（Week 2 gap 分析）· `docs/KNOWLEDGE_STAGE_1.md` · `docs/KNOWLEDGE_STAGE_2.md` · `docs/MEMORY_PHASE_0.md`（0.1/0.2/0.3）· `docs/POLICY_PHASE_0.md`
-> 目的：把"已完成的 MKEP 阶段 + 产品愿景四性目标 + `E:\projects\AI\codex\competitor\` 下 14 个开源项目的实证借鉴"汇成一份 Stage 3+ 执行计划，作为后续 `feat/*` 分支的派生依据。
+> 文档版本：v0.3 · 2026-04-20 更新（v0.2 的基础上叠加「产品表面精简已落地」事实；v0.1 合并用户产品愿景与 API Knowledge / Context Strategy 两条新维度）
+>
+> v0.3 差量：
+>
+> - 产品表面精简（`chore/remove-non-mkep-surfaces` 分支）已执行，P2 智能助手 / P5 工作流栈 / P6 本地模型 / P7 元素标注 / P8 Visual Editor 全部从 `main` 下线，详情见 `docs/PRODUCT_PRUNING_PLAN.md` 和 `CHANGELOG.md` 的 `Unreleased`。
+> - Sidepanel 已重建为 Memory / Knowledge / Experience 三个空占位 tab，Stage 3d / 3e / 3f / 3g 的落地位置已就位——所有 Stage 3+ 的 UI 任务可以直接在新的骨架上铺开。
+> - `packages/shared` 的 public API 已收敛到 `{ constants, types, tools, labels, bridge-ws, read-page-contract }`，任何后续 Stage 工作都应以这 6 个模块为稳定边界。
+>   起草：项目组（Claude 作为总负责人；14 个竞品调研由 Codex CLI 并行完成并经抽查核验）
+>   关联文档：`docs/MKEP_CURRENT_VS_TARGET.md`（Week 2 gap 分析）· `docs/KNOWLEDGE_STAGE_1.md` · `docs/KNOWLEDGE_STAGE_2.md` · `docs/MEMORY_PHASE_0.md`（0.1/0.2/0.3）· `docs/POLICY_PHASE_0.md`
+>   目的：把"已完成的 MKEP 阶段 + 产品愿景四性目标 + `E:\projects\AI\codex\competitor\` 下 14 个开源项目的实证借鉴"汇成一份 Stage 3+ 执行计划，作为后续 `feat/*` 分支的派生依据。
 
 ---
 

@@ -2,8 +2,6 @@
 import { ref } from 'vue';
 import { LINKS, NATIVE_HOST } from '@/common/constants';
 
-import '../sidepanel/styles/agent-chat.css';
-
 const COMMANDS = {
   npmInstall: 'npm install -g tabrix@latest',
   pnpmInstall: 'pnpm add -g tabrix@latest',
