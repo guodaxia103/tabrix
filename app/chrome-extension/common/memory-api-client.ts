@@ -19,6 +19,7 @@
  */
 
 import type {
+  MemoryExecutionStep,
   MemoryReadSuccess,
   MemorySessionStepsResponseData,
   MemorySessionsResponseData,
@@ -211,6 +212,72 @@ function isThenable(value: unknown): value is Promise<Record<string, unknown>> {
     value !== null &&
     typeof (value as { then?: unknown }).then === 'function'
   );
+}
+
+/**
+ * Prefix that identifies a Memory "historyRef" inside the `artifactRefs`
+ * array of a step. See `app/native-server/src/memory/page-snapshot-service.ts`
+ * (`buildHistoryRef`) for the canonical producer.
+ */
+export const MEMORY_HISTORY_REF_PREFIX = 'memory://';
+
+/**
+ * Return the first `memory://…` entry from a step's `artifactRefs`.
+ *
+ * A step can carry multiple artifacts (e.g. `artifact://read_page/...`
+ * alongside a `memory://snapshot/<uuid>`). The sidepanel only exposes
+ * the *memory*-scheme ref because that's what re-resolves through the
+ * MCP `getPageSnapshot` lookup — the `artifact://` kind is internal.
+ *
+ * Returns `null` when no memory ref is present; callers use that to
+ * disable the "Copy historyRef" button rather than silently copying
+ * an empty string.
+ */
+export function extractHistoryRef(step: Pick<MemoryExecutionStep, 'artifactRefs'>): string | null {
+  if (!step?.artifactRefs || !Array.isArray(step.artifactRefs)) return null;
+  for (const ref of step.artifactRefs) {
+    if (typeof ref === 'string' && ref.startsWith(MEMORY_HISTORY_REF_PREFIX)) {
+      return ref;
+    }
+  }
+  return null;
+}
+
+/**
+ * Best-effort copy to the system clipboard.
+ *
+ * We prefer `navigator.clipboard.writeText` because it works inside
+ * the extension sidepanel origin without requiring a user gesture
+ * on Chromium. Falls back to a hidden textarea + `document.execCommand`
+ * when the async clipboard API is unavailable (older Chromium builds
+ * or restricted iframes). Returns `true` on success, `false` on any
+ * failure — callers surface that as UI feedback.
+ */
+export async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through to execCommand fallback
+  }
+  try {
+    if (typeof document === 'undefined') return false;
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 function clampInt(n: number, min: number, max: number): number {
