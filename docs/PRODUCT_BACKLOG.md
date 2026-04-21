@@ -369,7 +369,7 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
 _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** an MKEP / Experience / Knowledge increment — it is a tool-layer correctness fix that the whole MKEP stack sits on top of. Execution spec: `docs/CLICK_CONTRACT_REPAIR_V1.md`._
 
 - **Stage**: N/A (GA reliability hotfix) · **Layer**: X (tool-layer contract, not a Memory / Knowledge / Experience / Policy increment) · **KPI**: 更准 · 更稳 (stops "click happened" from being serialized as "action succeeded")
-- **Owner**: Claude · **Size**: M · **Status**: `in_progress`
+- **Owner**: Claude · **Size**: M · **Status**: `done` (merged 2026-04-20)
 - **Dependencies**: none — sits strictly upstream of B-012. B-012 reads `step.status`; if this hotfix does not land first, B-012 will aggregate over poisoned success rows.
 - **Branch**: `fix/b-023-click-contract-v1`
 - **Schema cite** _(per the schema-cite rule added in B-009)_:
@@ -413,8 +413,7 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
   - `pnpm run size:check` green — JS bundle must stay under 40 kB hard / 25 kB soft.
   - `pnpm run docs:check` green.
   - Task summary includes: (1) the before/after contract diff, (2) which outcomes are detected, (3) which tests ran, (4) explicit statement that real-browser validation was **not** run and why, (5) what remains unsupported (selection_changed, focus_changed detected-but-not-tested; `chrome.webNavigation` aggregation deferred; generic replay deferred).
-
-### B-012 · Native-server: Experience action-path aggregator (reads Memory, writes Experience)
+- **Landed**: 5 files changed, 858 insertions, 35 deletions. Extension tests 288 → 304 (+16 B-023: 13 `mergeClickSignals` pure-function tests + 3 jsdom end-to-end signal tests). All 304 green. `pnpm -r typecheck`, `pnpm run size:check`, `pnpm run docs:check` all clean. Legacy click tests (`click-helper-targeting.test.ts`, `click-download-intercept.test.ts`) stayed green with **zero edits** — the `intercepted-download` fast-path response shape was deliberately not unified into the new contract this sprint. Real-browser validation was **not** run inside the sandbox (MV3 extensions cannot be driven from the Windows sandbox); explicit follow-up item on the Sprint 3 retro.
 
 - **Stage**: 3b · **Layer**: E · **KPI**: 省 token · 更快 (reusable path priors reduce planning retries)
 - **Owner**: Claude · **Size**: L · **Status**: `planned`
@@ -494,4 +493,5 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
 - 2026-04-20 — Sprint 2 closed same day: all 5 items `done`. B-009 successfully re-tested the Codex "draft-only" handoff protocol — Codex completed the 2-file edit, Claude verified + committed. Retro at `docs/SPRINT_2_RETRO.md`. `AGENTS.md` gained an Operational Guardrails section covering bundle-size gate and schema-cite rule.
 - 2026-04-20 — Sprint 3 locked: B-010 (Knowledge UI Map schema + GitHub seed) / B-021 (CSS bundle gate) / B-012 (Experience action-path aggregator) / B-022 (Codex fast — drop rule-N numbering). Themes: Stage 3a Knowledge seed + Stage 3b first write path + Sprint 2 retro §7 follow-ups. B-021 and B-022 added to the pool as part of this lock.
 - 2026-04-20 — Sprint 3 · B-021 done: `scripts/check-bundle-size.mjs` extended to gate `sidepanel-*.css` (soft 20 kB / hard 22 kB) alongside the existing `sidepanel-*.js` gate (unchanged, soft 25 / hard 40). `AGENTS.md` Operational Guardrails updated with a two-row threshold table. Baselines: JS ≈ 20.5 kB, CSS ≈ 17.8 kB.
+- 2026-04-20 — Sprint 3 · B-023 done: `chrome_click_element` tool response now exposes `dispatchSucceeded` / `observedOutcome` / `verification` alongside `success`, and `success` is no longer synonymous with "the content-script promise resolved". 13-value `ClickObservedOutcome` enum landed in `packages/shared/src/click.ts`. The forbidden combo `{success:true, navigationOccurred:false, observedOutcome:'no_observed_change'}` is now unreachable (contract regression test asserts this). Real-browser validation deferred to a follow-up that runs outside the sandbox.
 - 2026-04-20 — Sprint 3 mid-sprint adjustment: **B-023** (click contract hotfix) pulled in as a P1 GA reliability item. Sequenced between B-021 and B-012 — see the B-023 entry for why ordering matters (B-012 reads `step.status`, which is currently polluted by the false-success defect). Execution spec `docs/CLICK_CONTRACT_REPAIR_V1.md` committed alongside the backlog update so the contract is reviewable independently of the code change. Sprint 3 scope is now 5 items (B-010 / B-021 / B-023 / B-012 / B-022); no item was dropped to make room — Sprint 3 is deliberately accepting the overrun because the hotfix cannot wait for Sprint 4.
