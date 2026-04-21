@@ -797,14 +797,6 @@
     "message": "<局域网IP>",
     "description": "自动同步键: popupLanIpPlaceholder"
   },
-  "popupLocalModelDesc": {
-    "message": "语义引擎与模型管理",
-    "description": "自动同步键: popupLocalModelDesc"
-  },
-  "popupLocalModelTitle": {
-    "message": "本地模型",
-    "description": "自动同步键: popupLocalModelTitle"
-  },
   "popupLocalTab": {
     "message": "本机",
     "description": "自动同步键: popupLocalTab"

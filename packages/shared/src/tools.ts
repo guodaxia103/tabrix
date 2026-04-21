@@ -28,7 +28,6 @@ export interface TabrixToolPolicyAnnotations {
 export const TOOL_NAMES = {
   BROWSER: {
     GET_WINDOWS_AND_TABS: 'get_windows_and_tabs',
-    SEARCH_TABS_CONTENT: 'search_tabs_content',
     NAVIGATE: 'chrome_navigate',
     SCREENSHOT: 'chrome_screenshot',
     CLOSE_TABS: 'chrome_close_tabs',
@@ -1027,21 +1026,6 @@ export const TOOL_SCHEMAS: Tool[] = [
     },
   },
   // {
-  //   name: TOOL_NAMES.BROWSER.SEARCH_TABS_CONTENT,
-  //   description:
-  //     'search for related content from the currently open tab and return the corresponding web pages.',
-  //   inputSchema: {
-  //     type: 'object',
-  //     properties: {
-  //       query: {
-  //         type: 'string',
-  //         description: 'the query to search for related content.',
-  //       },
-  //     },
-  //     required: ['query'],
-  //   },
-  // },
-  // {
   //   name: TOOL_NAMES.BROWSER.INJECT_SCRIPT,
   //   description:
   //     'inject the user-specified content script into the webpage. By default, inject into the currently active tab',
@@ -1784,7 +1768,6 @@ export const TOOL_SCHEMAS: Tool[] = [
 export const TOOL_RISK_TIERS: Readonly<Record<string, TabrixRiskTier>> = Object.freeze({
   // ---- P0: read-only observations ----
   [TOOL_NAMES.BROWSER.GET_WINDOWS_AND_TABS]: 'P0',
-  [TOOL_NAMES.BROWSER.SEARCH_TABS_CONTENT]: 'P0',
   [TOOL_NAMES.BROWSER.SCREENSHOT]: 'P0',
   [TOOL_NAMES.BROWSER.WEB_FETCHER]: 'P0',
   [TOOL_NAMES.BROWSER.REQUEST_ELEMENT_SELECTION]: 'P0',

@@ -175,8 +175,6 @@ const fallbackMessages: Record<string, string> = {
   popupNetworkLanLabel: 'LAN:',
   popupRemoteConfigHint: 'Enable Remote Access to view MCP configuration for remote clients.',
   popupManagementEntrancesTitle: 'Management',
-  popupLocalModelTitle: 'Local Models',
-  popupLocalModelDesc: 'Semantic engine and model management',
   popupTokenManagementTitle: 'Token Management',
   popupTokenManagementDesc: 'Remote auth, refresh and validity',
   popupTroubleshootingGuideTitle: 'Troubleshooting Guide',

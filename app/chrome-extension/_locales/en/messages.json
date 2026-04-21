@@ -797,14 +797,6 @@
     "message": "<LAN_IP>",
     "description": "Auto-synced key: popupLanIpPlaceholder"
   },
-  "popupLocalModelDesc": {
-    "message": "Semantic engine and model management",
-    "description": "Auto-synced key: popupLocalModelDesc"
-  },
-  "popupLocalModelTitle": {
-    "message": "Local Models",
-    "description": "Auto-synced key: popupLocalModelTitle"
-  },
   "popupLocalTab": {
     "message": "Local",
     "description": "Auto-synced key: popupLocalTab"
