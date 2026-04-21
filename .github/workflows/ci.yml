@@ -64,5 +64,11 @@ jobs:
       - name: Core tests
         run: pnpm run test:core
 
+      - name: Build extension (for bundle-size check)
+        run: pnpm --filter @tabrix/extension build
+
+      - name: Sidepanel bundle-size gate
+        run: pnpm run size:check
+
       - name: Production audit (high)
         run: pnpm run audit

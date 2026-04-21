@@ -161,6 +161,20 @@ This repository uses Codex CLI in `fast` mode as an execution helper for Claude,
   2. **Full autopilot**: `codex exec --dangerously-bypass-approvals-and-sandbox` inside a throw-away worktree, where Codex may commit; only use when the task is self-contained and the worktree is disposable.
 - If Codex stops with a sandbox error mid-task, revert any whitespace-only / line-ending changes (`git checkout -- <files>`) before Claude resumes manually — otherwise the diff review becomes noisy.
 
+## Operational Guardrails
+
+These are cross-cutting size / performance / schema rules that every AI agent (Claude, Codex, future others) must respect. They are enforced by CI in `.github/workflows/ci.yml`.
+
+### Sidepanel bundle-size gate (added in B-007)
+
+- Script: `scripts/check-bundle-size.mjs`, wired as `pnpm run size:check` and run in CI after the extension build step.
+- Targets: the latest `app/chrome-extension/.output/chrome-mv3/chunks/sidepanel-*.js` emitted by WXT.
+- Thresholds (raw, not gzipped — easier to eyeball against the WXT build report):
+  - **Hard** — 40 kB. CI fails.
+  - **Soft** — 25 kB. CI warns but does not fail. Investigate before the hard limit lands.
+- Post-B-006 baseline: `sidepanel-*.js` ≈ 20.5 kB. If you add a feature that pushes the bundle above the soft threshold, either split the feature behind a dynamic import or raise the threshold **in the same reviewed commit** as the feature — never in a separate "oops" follow-up.
+- CSS is not gated yet. A future backlog item may extend the script to cover `sidepanel-*.css`.
+
 ## Public Source Of Truth
 
 For this public repository, treat `docs/` (English-only) plus the root-level `README.md`, `README_zh.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, and `AGENTS.md` as the public source of truth. Do not recreate internal PM systems, private review docs, nightly reports, or acceptance evidence inside the public tree.

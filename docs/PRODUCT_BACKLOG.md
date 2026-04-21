@@ -227,7 +227,7 @@
 ### B-007 · Infra: CI bundle-size gate for `sidepanel.js`
 
 - **Stage**: — · **Layer**: X · **KPI**: 更稳
-- **Owner**: Claude · **Size**: S · **Status**: `planned`
+- **Owner**: Claude · **Size**: S · **Status**: `review`
 - **Dependencies**: **B-006 merged** (so the threshold reflects the real post-B-006 size)
 - **Branch**: `chore/b-007-bundle-size-gate`
 - **Scope**:
@@ -242,6 +242,13 @@
   - Script runs cleanly locally (`pnpm run size:check` after `pnpm run build`).
   - Threshold is documented in `AGENTS.md` "Default expectations" (add a one-line rule 21).
   - Post-B-006 size plus recorded delta is documented in this backlog entry under "Landed".
+- **Landed scope (2026-04-20)**:
+  - New script `scripts/check-bundle-size.mjs` — ESM, Node-only, no new deps. Resolves the most recently-mtime'd `sidepanel-*.js` under `app/chrome-extension/.output/chrome-mv3/chunks/`, prints `sidepanel bundle: <path> — <size>`, hard-fails (`exit 1`) above 40 kB, warns (`exit 0`) above 25 kB, errors (`exit 2`) when the build artefact is missing.
+  - New root script `size:check` in `package.json`.
+  - CI update: `.github/workflows/ci.yml` now runs `pnpm --filter @tabrix/extension build` followed by `pnpm run size:check` immediately before the production audit. Minimal diff — no other CI re-ordering.
+  - `AGENTS.md` gets a new "Operational Guardrails" section documenting the thresholds, the post-B-006 baseline (**sidepanel-\*.js ≈ 20.5 kB**), and the rule that raising the threshold must land in the same reviewed commit as the feature that needed it.
+  - **Local run**: `pnpm run size:check` reports `sidepanel-BFu4rnQa.js — 20.51 kB (soft 25.00 kB, hard 40.00 kB)` · exit 0.
+  - **Deviation from brief**: CSS gating is explicitly out — documented as "CSS is not gated yet. A future backlog item may extend the script". Matches the brief's "CSS is not gated in this sprint".
 
 ### B-008 · Docs: Extension testing conventions
 

@@ -48,6 +48,7 @@
     "t4:post-submit": "node ./scripts/t4-post-submit-tracker.mjs",
     "release:check": "node ./scripts/check-release-readiness.mjs",
     "release:check:ci": "node ./scripts/check-release-readiness.mjs --allow-missing-notes",
+    "size:check": "node ./scripts/check-bundle-size.mjs",
     "ci:check": "pnpm run i18n:check && pnpm run docs:check && pnpm run typecheck && pnpm run test:core && pnpm run audit",
     "prepare": "husky"
   },
