@@ -1,14 +1,16 @@
 /**
- * `useMemoryTimeline` — Sidepanel Memory tab data source (Stage 3e · B-002).
+ * `useMemoryTimeline` — Sidepanel Memory tab data source
+ * (Stage 3e · B-002 list · B-003 drill-down).
  *
- * Wraps `fetchRecentSessions` with reactive state so the Memory tab can
- * render a recent-sessions list without owning any fetch/cancellation
- * plumbing. This composable is the **only** Memory data source the
- * sidepanel should use; direct calls to the HTTP client are reserved
- * for unit tests.
+ * Wraps `fetchRecentSessions` and `fetchSessionSteps` with reactive
+ * state so the Memory tab can render a recent-sessions list **and**
+ * drill into a single session's steps without owning any fetch /
+ * cancellation / cache plumbing. This composable is the **only**
+ * Memory data source the sidepanel should use; direct calls to the
+ * HTTP client are reserved for unit tests.
  *
- * State machine
- * -------------
+ * State machine (sessions list)
+ * -----------------------------
  * - Initial: `status === 'idle'`, `sessions === []`.
  * - Call `load()` → `status === 'loading'`. On success: `ready`, on
  *   failure: `error` with typed `errorKind`.
@@ -18,24 +20,60 @@
  *   `load()`; `nextPage()` / `prevPage()` drive that off the current
  *   state and are idempotent at page boundaries.
  *
+ * Drill-down (steps)
+ * ------------------
+ * - `expandedSessionId` holds at most one session id; the UI renders
+ *   its steps inline under the row.
+ * - `toggleExpansion(id)` expands the row and lazily fetches its
+ *   steps the first time; a second toggle collapses without
+ *   re-fetching (steps stay cached for the page lifetime).
+ * - `getStepsSlot(id)` returns a reactive slot — `{ status, steps,
+ *   errorKind, errorMessage }` — which the UI switches on. Slots
+ *   always exist (idle default) so templates can bind without
+ *   guards.
+ * - `reloadSteps(id)` force-refetches a single session (e.g. a retry
+ *   button on an error slot).
+ *
  * Cancellation
  * ------------
- * Every `load()` creates a fresh `AbortController`. A subsequent call
- * or `dispose()` aborts the in-flight request, which lets us avoid
- * the classic "stale response overwrites a newer one" race without
- * needing a request id counter.
+ * - The sessions fetch uses one `AbortController`. Each `load()`
+ *   aborts the previous in-flight request so a stale response can
+ *   never overwrite a newer one.
+ * - Each session's step fetch uses its own `AbortController` keyed
+ *   by `sessionId`. Collapsing / re-toggling the same row aborts
+ *   the old fetch before issuing the new one.
  */
 
-import { computed, ref, type ComputedRef, type Ref } from 'vue';
-import type { MemoryPersistenceMode, MemorySessionSummary } from '@tabrix/shared';
+import { computed, reactive, ref, type ComputedRef, type Ref } from 'vue';
+import type {
+  MemoryExecutionStep,
+  MemoryPersistenceMode,
+  MemorySessionSummary,
+} from '@tabrix/shared';
 import {
   DEFAULT_SESSIONS_PAGE_SIZE,
   MemoryApiError,
   type MemoryApiErrorKind,
   fetchRecentSessions,
+  fetchSessionSteps,
 } from '../../../common/memory-api-client';
 
 export type MemoryTimelineStatus = 'idle' | 'loading' | 'ready' | 'error';
+export type MemoryStepsStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+/**
+ * One entry in the per-session steps cache. Every session id the UI
+ * has ever touched gets a slot, which simplifies `v-if` logic in
+ * templates (the slot is always defined, only its status changes).
+ */
+export interface MemoryStepsSlot {
+  status: MemoryStepsStatus;
+  steps: MemoryExecutionStep[];
+  persistenceMode: MemoryPersistenceMode | null;
+  errorKind: MemoryApiErrorKind | null;
+  errorMessage: string | null;
+  loadedAt: number | null;
+}
 
 export interface UseMemoryTimelineOptions {
   /** Page size for `load()`. Defaults to 20 (one sidepanel viewport). */
@@ -59,10 +97,15 @@ export interface UseMemoryTimelineApi {
   readonly hasNextPage: ComputedRef<boolean>;
   readonly hasPrevPage: ComputedRef<boolean>;
   readonly isEmpty: ComputedRef<boolean>;
+  readonly expandedSessionId: Ref<string | null>;
+  readonly stepsBySession: Readonly<Record<string, MemoryStepsSlot>>;
   load(options?: { offset?: number }): Promise<void>;
   reload(): Promise<void>;
   nextPage(): Promise<void>;
   prevPage(): Promise<void>;
+  toggleExpansion(sessionId: string): Promise<void>;
+  reloadSteps(sessionId: string): Promise<void>;
+  getStepsSlot(sessionId: string): MemoryStepsSlot;
   dispose(): void;
 }
 
@@ -80,7 +123,11 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
   const errorKind = ref<MemoryApiErrorKind | null>(null);
   const lastLoadedAt = ref<number | null>(null);
 
-  let inflight: AbortController | null = null;
+  const expandedSessionId = ref<string | null>(null);
+  const stepsBySession = reactive<Record<string, MemoryStepsSlot>>({});
+
+  let sessionsInflight: AbortController | null = null;
+  const stepsInflight = new Map<string, AbortController>();
 
   const hasNextPage = computed(() => offset.value + sessions.value.length < total.value);
   const hasPrevPage = computed(() => offset.value > 0);
@@ -89,9 +136,9 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
   );
 
   async function load(opts: { offset?: number } = {}): Promise<void> {
-    inflight?.abort();
+    sessionsInflight?.abort();
     const controller = new AbortController();
-    inflight = controller;
+    sessionsInflight = controller;
 
     const nextOffset = Math.max(0, Math.floor(opts.offset ?? offset.value));
     status.value = 'loading';
@@ -104,8 +151,7 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
         offset: nextOffset,
         signal: controller.signal,
       });
-      // Guard: if a newer call started after us, skip the commit.
-      if (inflight !== controller) return;
+      if (sessionsInflight !== controller) return;
 
       sessions.value = data.sessions;
       total.value = data.total;
@@ -114,9 +160,7 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
       lastLoadedAt.value = clock();
       status.value = 'ready';
     } catch (error) {
-      if (inflight !== controller) return;
-      // Abort is a normal control-flow signal, not an error worth
-      // surfacing to the UI — keep state untouched.
+      if (sessionsInflight !== controller) return;
       if (isAbortError(error)) return;
 
       const err = toMemoryApiError(error);
@@ -124,8 +168,8 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
       errorKind.value = err.kind;
       status.value = 'error';
     } finally {
-      if (inflight === controller) {
-        inflight = null;
+      if (sessionsInflight === controller) {
+        sessionsInflight = null;
       }
     }
   }
@@ -144,9 +188,87 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
     await load({ offset: Math.max(0, offset.value - pageSize.value) });
   }
 
+  function ensureSlot(sessionId: string): MemoryStepsSlot {
+    if (!stepsBySession[sessionId]) {
+      stepsBySession[sessionId] = {
+        status: 'idle',
+        steps: [],
+        persistenceMode: null,
+        errorKind: null,
+        errorMessage: null,
+        loadedAt: null,
+      };
+    }
+    // Always read back through the reactive container so the returned
+    // object is the stable reactive proxy Vue caches — not the plain
+    // object we just assigned (those are two different references).
+    return stepsBySession[sessionId];
+  }
+
+  function getStepsSlot(sessionId: string): MemoryStepsSlot {
+    return ensureSlot(sessionId);
+  }
+
+  async function loadSteps(sessionId: string, opts: { force?: boolean } = {}): Promise<void> {
+    const slot = ensureSlot(sessionId);
+    // Skip if we already have fresh data and the caller isn't forcing
+    // a refetch. The sidepanel shouldn't reissue fetches just because
+    // a row toggles open/close.
+    if (!opts.force && slot.status === 'ready') return;
+
+    stepsInflight.get(sessionId)?.abort();
+    const controller = new AbortController();
+    stepsInflight.set(sessionId, controller);
+
+    slot.status = 'loading';
+    slot.errorMessage = null;
+    slot.errorKind = null;
+
+    try {
+      const data = await fetchSessionSteps(sessionId, { signal: controller.signal });
+      if (stepsInflight.get(sessionId) !== controller) return;
+
+      slot.steps = data.steps;
+      slot.persistenceMode = data.persistenceMode;
+      slot.loadedAt = clock();
+      slot.status = 'ready';
+    } catch (error) {
+      if (stepsInflight.get(sessionId) !== controller) return;
+      if (isAbortError(error)) return;
+
+      const err = toMemoryApiError(error);
+      slot.errorMessage = err.message;
+      slot.errorKind = err.kind;
+      slot.status = 'error';
+    } finally {
+      if (stepsInflight.get(sessionId) === controller) {
+        stepsInflight.delete(sessionId);
+      }
+    }
+  }
+
+  async function toggleExpansion(sessionId: string): Promise<void> {
+    if (!sessionId) return;
+    if (expandedSessionId.value === sessionId) {
+      expandedSessionId.value = null;
+      stepsInflight.get(sessionId)?.abort();
+      stepsInflight.delete(sessionId);
+      return;
+    }
+    expandedSessionId.value = sessionId;
+    await loadSteps(sessionId);
+  }
+
+  async function reloadSteps(sessionId: string): Promise<void> {
+    await loadSteps(sessionId, { force: true });
+  }
+
   function dispose(): void {
-    inflight?.abort();
-    inflight = null;
+    sessionsInflight?.abort();
+    sessionsInflight = null;
+    for (const c of stepsInflight.values()) c.abort();
+    stepsInflight.clear();
+    expandedSessionId.value = null;
   }
 
   return {
@@ -162,10 +284,15 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
     hasNextPage,
     hasPrevPage,
     isEmpty,
+    expandedSessionId,
+    stepsBySession,
     load,
     reload,
     nextPage,
     prevPage,
+    toggleExpansion,
+    reloadSteps,
+    getStepsSlot,
     dispose,
   };
 }
