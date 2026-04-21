@@ -20,6 +20,55 @@
       </p>
     </header>
 
+    <!-- Filter chips + search + jump-to-last-failure (B-006) -->
+    <div
+      v-if="timeline.sessions.value.length > 0 || timeline.hasActiveFilters.value"
+      class="memory-filters"
+    >
+      <div class="memory-chips" role="radiogroup" aria-label="Filter sessions by status">
+        <button
+          type="button"
+          class="memory-chip"
+          :class="{ 'memory-chip--active': timeline.statusFilter.value.size === 0 }"
+          role="radio"
+          :aria-checked="timeline.statusFilter.value.size === 0"
+          @click="timeline.clearFilters()"
+        >
+          All
+        </button>
+        <button
+          v-for="chip in MEMORY_STATUS_CHIPS"
+          :key="chip"
+          type="button"
+          class="memory-chip"
+          :class="[
+            `memory-chip--${chip}`,
+            { 'memory-chip--active': timeline.statusFilter.value.has(chip) },
+          ]"
+          role="radio"
+          :aria-checked="timeline.statusFilter.value.has(chip)"
+          @click="timeline.toggleStatusChip(chip)"
+        >
+          {{ chipLabel(chip) }}
+        </button>
+      </div>
+      <input
+        v-model="searchModel"
+        type="search"
+        class="memory-search"
+        aria-label="Search memory by task title or intent"
+        placeholder="Search title or intent…"
+      />
+      <button
+        v-if="timeline.lastFailedSessionId.value"
+        type="button"
+        class="memory-jump"
+        @click="handleJumpToLastFailure"
+      >
+        ↓ Jump to last failure
+      </button>
+    </div>
+
     <!-- Loading: initial fetch, no prior data to show -->
     <div
       v-if="timeline.status.value === 'loading' && timeline.sessions.value.length === 0"
@@ -58,7 +107,7 @@
       <button type="button" class="memory-refresh" @click="handleRefresh">Retry</button>
     </div>
 
-    <!-- Empty -->
+    <!-- Empty (no sessions at all) -->
     <div v-else-if="timeline.isEmpty.value" class="memory-state memory-state--empty">
       <h3 class="memory-state__heading">No sessions yet</h3>
       <p class="memory-state__detail">
@@ -68,10 +117,30 @@
       </p>
     </div>
 
+    <!-- Empty (filters hide all rows on the current page) -->
+    <div
+      v-else-if="timeline.filteredSessions.value.length === 0"
+      class="memory-state memory-state--empty"
+    >
+      <h3 class="memory-state__heading">No sessions match your filters</h3>
+      <p class="memory-state__detail">
+        Try clearing the status chip or search input. If you're looking for older data, use the
+        pager at the bottom.
+      </p>
+      <button type="button" class="memory-refresh" @click="timeline.clearFilters()">
+        Clear filters
+      </button>
+    </div>
+
     <!-- Ready -->
     <template v-else>
-      <ol class="memory-list" aria-label="Recent sessions">
-        <li v-for="row in timeline.sessions.value" :key="row.sessionId" class="memory-row">
+      <ol ref="listEl" class="memory-list" aria-label="Recent sessions">
+        <li
+          v-for="row in timeline.filteredSessions.value"
+          :key="row.sessionId"
+          class="memory-row"
+          :data-session-id="row.sessionId"
+        >
           <button
             type="button"
             class="memory-row__toggle"
@@ -151,12 +220,22 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, nextTick } from 'vue';
 import type { MemorySessionSummary } from '@tabrix/shared';
-import { useMemoryTimeline } from '../../shared/composables/useMemoryTimeline';
+import {
+  useMemoryTimeline,
+  MEMORY_STATUS_CHIPS,
+  type MemoryStatusChip,
+} from '../../shared/composables/useMemoryTimeline';
 import MemorySessionSteps from './MemorySessionSteps.vue';
 
 const timeline = useMemoryTimeline();
+const listEl = ref<HTMLElement | null>(null);
+
+const searchModel = computed<string>({
+  get: () => timeline.searchQuery.value,
+  set: (v: string) => (timeline.searchQuery.value = v),
+});
 
 onMounted(() => {
   void timeline.load();
@@ -170,12 +249,45 @@ function handleRefresh(): void {
   void timeline.reload();
 }
 
+function chipLabel(chip: MemoryStatusChip): string {
+  switch (chip) {
+    case 'running':
+      return 'Running';
+    case 'completed':
+      return 'Completed';
+    case 'failed':
+      return 'Failed';
+    case 'aborted':
+      return 'Canceled';
+    default:
+      return chip;
+  }
+}
+
+async function handleJumpToLastFailure(): Promise<void> {
+  const id = timeline.jumpToLastFailure();
+  if (!id || !listEl.value) return;
+  // Row may have just been rendered (filter state change); wait for DOM.
+  await nextTick();
+  const row = listEl.value.querySelector<HTMLElement>(`[data-session-id="${id}"]`);
+  if (!row) return;
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.classList.remove('memory-row--flash');
+  // Force reflow so re-adding the class retriggers the animation.
+  void row.offsetWidth;
+  row.classList.add('memory-row--flash');
+  window.setTimeout(() => row.classList.remove('memory-row--flash'), 900);
+}
+
 const pagerLabel = computed(() => {
   const count = timeline.sessions.value.length;
   if (count === 0) return '0 results';
   const start = timeline.offset.value + 1;
   const end = timeline.offset.value + count;
-  return `${start}–${end} of ${timeline.total.value}`;
+  const visible = timeline.filteredSessions.value.length;
+  const filterBadge =
+    timeline.hasActiveFilters.value && visible !== count ? ` (showing ${visible})` : '';
+  return `${start}–${end} of ${timeline.total.value}${filterBadge}`;
 });
 
 function formatTimestamp(iso: string): string {
@@ -284,6 +396,96 @@ function formatDuration(row: MemorySessionSummary): string | null {
   font-size: 13px;
 }
 
+.memory-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 10px;
+}
+
+.memory-chips {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.memory-chip {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.memory-chip:hover {
+  background: #f3f4f6;
+}
+
+.memory-chip--active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.memory-chip--active.memory-chip--failed {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.memory-chip--active.memory-chip--completed {
+  background: #16a34a;
+  border-color: #16a34a;
+}
+
+.memory-chip--active.memory-chip--aborted {
+  background: #6b7280;
+  border-color: #6b7280;
+}
+
+.memory-search {
+  flex: 1 1 180px;
+  min-width: 140px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #1f2937;
+  background: #ffffff;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.memory-search:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.memory-jump {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.memory-jump:hover {
+  background: #fee2e2;
+}
+
 .memory-list {
   list-style: none;
   margin: 0;
@@ -291,6 +493,21 @@ function formatDuration(row: MemorySessionSummary): string | null {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+@keyframes memory-row-flash {
+  0% {
+    background-color: rgba(251, 191, 36, 0.4);
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.7);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  }
+}
+
+.memory-row--flash {
+  animation: memory-row-flash 900ms ease-out;
 }
 
 .memory-row {
@@ -476,6 +693,31 @@ function formatDuration(row: MemorySessionSummary): string | null {
   }
   .memory-state--error strong {
     color: #fca5a5;
+  }
+  .memory-chip {
+    background: #1f2937;
+    border-color: #374151;
+    color: #d1d5db;
+  }
+  .memory-chip:hover {
+    background: #374151;
+  }
+  .memory-search {
+    background: #111827;
+    border-color: #374151;
+    color: #e5e7eb;
+  }
+  .memory-search:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+  }
+  .memory-jump {
+    background: #3f1d1d;
+    border-color: #7f1d1d;
+    color: #fca5a5;
+  }
+  .memory-jump:hover {
+    background: #4c1d1d;
   }
 }
 </style>

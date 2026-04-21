@@ -48,6 +48,7 @@ import { computed, reactive, ref, type ComputedRef, type Ref } from 'vue';
 import type {
   MemoryExecutionStep,
   MemoryPersistenceMode,
+  MemorySessionStatus,
   MemorySessionSummary,
 } from '@tabrix/shared';
 import {
@@ -60,6 +61,27 @@ import {
 
 export type MemoryTimelineStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type MemoryStepsStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+/**
+ * Status-filter chips shown on the Memory tab (B-006). "running" is a
+ * UX-level group that matches both raw DB statuses `running` and
+ * `starting` (starting is transient and users don't distinguish). The
+ * other three chips map 1:1 to the underlying `MemorySessionStatus`.
+ */
+export type MemoryStatusChip = 'running' | 'completed' | 'failed' | 'aborted';
+
+export const MEMORY_STATUS_CHIPS: readonly MemoryStatusChip[] = [
+  'running',
+  'completed',
+  'failed',
+  'aborted',
+] as const;
+
+/** Expand a chip into the set of DB statuses it matches. */
+export function chipToStatuses(chip: MemoryStatusChip): MemorySessionStatus[] {
+  if (chip === 'running') return ['running', 'starting'];
+  return [chip];
+}
 
 /**
  * One entry in the per-session steps cache. Every session id the UI
@@ -99,6 +121,30 @@ export interface UseMemoryTimelineApi {
   readonly isEmpty: ComputedRef<boolean>;
   readonly expandedSessionId: Ref<string | null>;
   readonly stepsBySession: Readonly<Record<string, MemoryStepsSlot>>;
+  /**
+   * Active status-chip selections (B-006). Empty set is interpreted as
+   * "all". Mutating `.value` directly is fine; prefer `toggleStatusChip`
+   * / `clearFilters` for chip-row UX.
+   */
+  readonly statusFilter: Ref<Set<MemoryStatusChip>>;
+  /** Trimmed + lowercased search token; empty string means no search. */
+  readonly searchQuery: Ref<string>;
+  /**
+   * `sessions` reduced by `statusFilter` and `searchQuery`. Client-side
+   * only — the server still paginates the underlying list 20 at a time.
+   */
+  readonly filteredSessions: ComputedRef<MemorySessionSummary[]>;
+  /**
+   * `true` when any filter is active (chip selected OR non-empty
+   * search). Drives the empty-state copy ("No sessions match your
+   * filters") vs the plain empty state.
+   */
+  readonly hasActiveFilters: ComputedRef<boolean>;
+  /**
+   * The session id of the most-recent failed session on the current
+   * page (after `statusFilter` / `searchQuery` are applied), or `null`.
+   */
+  readonly lastFailedSessionId: ComputedRef<string | null>;
   load(options?: { offset?: number }): Promise<void>;
   reload(): Promise<void>;
   nextPage(): Promise<void>;
@@ -106,6 +152,16 @@ export interface UseMemoryTimelineApi {
   toggleExpansion(sessionId: string): Promise<void>;
   reloadSteps(sessionId: string): Promise<void>;
   getStepsSlot(sessionId: string): MemoryStepsSlot;
+  /**
+   * Toggle membership of a single chip (no network call; local only).
+   * Passing the same chip twice clears it, matching the UX of a
+   * multi-select chip row.
+   */
+  toggleStatusChip(chip: MemoryStatusChip): void;
+  /** Clear both the status filter and search query in one call. */
+  clearFilters(): void;
+  /** Pure convenience — returns the same id as `lastFailedSessionId`. */
+  jumpToLastFailure(): string | null;
   dispose(): void;
 }
 
@@ -126,6 +182,9 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
   const expandedSessionId = ref<string | null>(null);
   const stepsBySession = reactive<Record<string, MemoryStepsSlot>>({});
 
+  const statusFilter = ref<Set<MemoryStatusChip>>(new Set());
+  const searchQuery = ref<string>('');
+
   let sessionsInflight: AbortController | null = null;
   const stepsInflight = new Map<string, AbortController>();
 
@@ -134,6 +193,40 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
   const isEmpty = computed(
     () => status.value === 'ready' && sessions.value.length === 0 && offset.value === 0,
   );
+
+  const hasActiveFilters = computed(
+    () => statusFilter.value.size > 0 || searchQuery.value.trim().length > 0,
+  );
+
+  const filteredSessions = computed<MemorySessionSummary[]>(() => {
+    const chips = statusFilter.value;
+    const allowedStatuses = new Set<MemorySessionStatus>();
+    if (chips.size > 0) {
+      for (const chip of chips) {
+        for (const s of chipToStatuses(chip)) allowedStatuses.add(s);
+      }
+    }
+    const needle = searchQuery.value.trim().toLowerCase();
+
+    return sessions.value.filter((s) => {
+      if (allowedStatuses.size > 0 && !allowedStatuses.has(s.status)) return false;
+      if (needle) {
+        const title = (s.taskTitle ?? '').toLowerCase();
+        const intent = (s.taskIntent ?? '').toLowerCase();
+        if (!title.includes(needle) && !intent.includes(needle)) return false;
+      }
+      return true;
+    });
+  });
+
+  const lastFailedSessionId = computed<string | null>(() => {
+    // `sessions` is ordered `started_at DESC` by the server; the first
+    // failed row in the filtered list is therefore the most-recent.
+    for (const s of filteredSessions.value) {
+      if (s.status === 'failed') return s.sessionId;
+    }
+    return null;
+  });
 
   async function load(opts: { offset?: number } = {}): Promise<void> {
     sessionsInflight?.abort();
@@ -263,6 +356,24 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
     await loadSteps(sessionId, { force: true });
   }
 
+  function toggleStatusChip(chip: MemoryStatusChip): void {
+    // Clone so the returned Ref value changes identity and triggers
+    // dependent computeds reliably across Vue versions.
+    const next = new Set(statusFilter.value);
+    if (next.has(chip)) next.delete(chip);
+    else next.add(chip);
+    statusFilter.value = next;
+  }
+
+  function clearFilters(): void {
+    if (statusFilter.value.size > 0) statusFilter.value = new Set();
+    if (searchQuery.value !== '') searchQuery.value = '';
+  }
+
+  function jumpToLastFailure(): string | null {
+    return lastFailedSessionId.value;
+  }
+
   function dispose(): void {
     sessionsInflight?.abort();
     sessionsInflight = null;
@@ -286,6 +397,11 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
     isEmpty,
     expandedSessionId,
     stepsBySession,
+    statusFilter,
+    searchQuery,
+    filteredSessions,
+    hasActiveFilters,
+    lastFailedSessionId,
     load,
     reload,
     nextPage,
@@ -293,6 +409,9 @@ export function useMemoryTimeline(options: UseMemoryTimelineOptions = {}): UseMe
     toggleExpansion,
     reloadSteps,
     getStepsSlot,
+    toggleStatusChip,
+    clearFilters,
+    jumpToLastFailure,
     dispose,
   };
 }
