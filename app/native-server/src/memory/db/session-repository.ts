@@ -38,6 +38,24 @@ interface SessionSummaryRow extends SessionRow {
   step_count: number;
 }
 
+export interface PendingAggregationSession {
+  sessionId: string;
+  taskId: string;
+  taskIntent: string;
+  status: Extract<ExecutionSessionStatus, 'completed' | 'failed' | 'aborted'>;
+  startedAt: string;
+  endedAt?: string;
+}
+
+interface PendingAggregationSessionRow {
+  session_id: string;
+  task_id: string;
+  task_intent: string;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+}
+
 /**
  * Upper bound on `limit` accepted by {@link SessionRepository.listRecent}.
  * Keeps sidepanel first-paint under ~50 ms even on a 10k-row DB and
@@ -52,6 +70,8 @@ export class SessionRepository {
   private readonly listStmt;
   private readonly listRecentWithTaskStmt;
   private readonly countAllStmt;
+  private readonly listPendingAggregationStmt;
+  private readonly markAggregatedStmt;
   private readonly clearStmt;
 
   constructor(private readonly db: SqliteDatabase) {
@@ -80,6 +100,25 @@ export class SessionRepository {
          LIMIT @limit OFFSET @offset`,
     );
     this.countAllStmt = db.prepare('SELECT COUNT(*) AS total FROM memory_sessions');
+    this.listPendingAggregationStmt = db.prepare(
+      `SELECT s.session_id,
+              s.task_id,
+              t.intent AS task_intent,
+              s.status,
+              s.started_at,
+              s.ended_at
+         FROM memory_sessions s
+         JOIN memory_tasks t ON t.task_id = s.task_id
+        WHERE s.status IN ('completed', 'failed', 'aborted')
+          AND s.aggregated_at IS NULL
+        ORDER BY s.started_at ASC, s.session_id ASC`,
+    );
+    this.markAggregatedStmt = db.prepare(
+      `UPDATE memory_sessions
+          SET aggregated_at = @aggregated_at
+        WHERE session_id = @session_id
+          AND aggregated_at IS NULL`,
+    );
     this.clearStmt = db.prepare('DELETE FROM memory_sessions');
   }
 
@@ -156,6 +195,35 @@ export class SessionRepository {
   public countAll(): number {
     const row = this.countAllStmt.get() as { total: number } | undefined;
     return Number(row?.total ?? 0);
+  }
+
+  /**
+   * Read-only: return terminal sessions that have not been projected
+   * into Experience yet (`aggregated_at IS NULL`).
+   */
+  public listPendingAggregationSessions(): PendingAggregationSession[] {
+    const rows = this.listPendingAggregationStmt.all() as PendingAggregationSessionRow[];
+    return rows.map((row) => ({
+      sessionId: row.session_id,
+      taskId: row.task_id,
+      taskIntent: row.task_intent,
+      status: row.status as PendingAggregationSession['status'],
+      startedAt: row.started_at,
+      endedAt: row.ended_at ?? undefined,
+    }));
+  }
+
+  /**
+   * Mark one session as projected into Experience.
+   *
+   * @returns number of rows updated (0 means already marked by another run).
+   */
+  public markAggregated(sessionId: string, aggregatedAt: string): number {
+    const result = this.markAggregatedStmt.run({
+      session_id: sessionId,
+      aggregated_at: aggregatedAt,
+    });
+    return Number(result.changes ?? 0);
   }
 
   public clear(): void {

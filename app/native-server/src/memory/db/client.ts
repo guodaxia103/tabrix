@@ -95,6 +95,26 @@ export interface OpenMemoryDbResult {
   persistenceMode: 'disk' | 'memory';
 }
 
+interface TableInfoRow {
+  name: string;
+}
+
+function hasColumn(db: SqliteDatabase, table: string, column: string): boolean {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as TableInfoRow[];
+  return rows.some((row) => row.name === column);
+}
+
+/**
+ * Guarded migration for B-012:
+ * old DBs created before Sprint 3 lack `memory_sessions.aggregated_at`.
+ * SQLite does not support `ADD COLUMN IF NOT EXISTS`, so we probe first.
+ */
+function ensureSessionAggregatedAtColumn(db: SqliteDatabase): void {
+  if (!hasColumn(db, 'memory_sessions', 'aggregated_at')) {
+    db.exec('ALTER TABLE memory_sessions ADD COLUMN aggregated_at TEXT');
+  }
+}
+
 /**
  * Open (or create) the Memory DB. Caller owns the returned handle and
  * must call `.close()` when done. Re-throws a
@@ -111,6 +131,7 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   }
   db.pragma('foreign_keys = ON');
   db.exec(MEMORY_CREATE_TABLES_SQL);
+  ensureSessionAggregatedAtColumn(db);
   db.exec(EXPERIENCE_CREATE_TABLES_SQL);
 
   return {

@@ -131,6 +131,7 @@ export class PageSnapshotRepository {
   private readonly getStmt;
   private readonly listByStepStmt;
   private readonly findLatestInSessionForTabStmt;
+  private readonly findLatestPageRoleForSessionStmt;
   private readonly clearStmt;
 
   constructor(private readonly db: SqliteDatabase) {
@@ -166,6 +167,16 @@ export class PageSnapshotRepository {
        ORDER BY s.captured_at DESC
        LIMIT 1`,
     );
+    this.findLatestPageRoleForSessionStmt = db.prepare(
+      `SELECT s.page_role
+         FROM memory_page_snapshots s
+         JOIN memory_steps st ON st.step_id = s.step_id
+        WHERE st.session_id = @session_id
+          AND s.page_role IS NOT NULL
+          AND s.page_role <> ''
+        ORDER BY s.captured_at DESC, s.snapshot_id DESC
+        LIMIT 1`,
+    );
     this.clearStmt = db.prepare('DELETE FROM memory_page_snapshots');
   }
 
@@ -199,6 +210,17 @@ export class PageSnapshotRepository {
       before_iso: params.beforeIso,
     }) as PageSnapshotRow | undefined;
     return row ? rowToSnapshot(row) : undefined;
+  }
+
+  /**
+   * Find the latest non-empty `page_role` seen inside one session.
+   */
+  public findLatestPageRoleForSession(sessionId: string): string | undefined {
+    const row = this.findLatestPageRoleForSessionStmt.get({ session_id: sessionId }) as
+      | { page_role: string | null }
+      | undefined;
+    if (!row?.page_role) return undefined;
+    return row.page_role;
   }
 
   public clear(): void {

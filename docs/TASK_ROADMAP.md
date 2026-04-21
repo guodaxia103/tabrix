@@ -43,7 +43,7 @@ Wave 1 — near-term, parallelizable. Starts unblocked.
   Stage 3f · Policy capability opt-in enum            [B-016 pool]
 
 Wave 2 — needs Wave 1 to be at least Beta.
-  Stage 3b · Experience action-path replay            [B-005 schema done, B-012 planned, B-013 next]
+  Stage 3b · Experience action-path replay            [B-005 schema done, B-012 done, B-013 next]
   Stage 3c · Recovery Watchdog consolidation          [B-014 pool]
 
 Wave 3 — strategic payoff; needs Waves 1+2.
@@ -118,12 +118,12 @@ Wave 5 — long horizon, no dates.
 - **Layer**: `E` (+ reads `M`)
 - **KPI**: `省 token` · `更快` · `懂用户`
 - **Priority**: `P0` · **Size**: `L` · **Dependencies**: `Stage 3a`
-- **Status**: **schema done, aggregator planned** — `B-005` (schema) done in Sprint 2; `B-012` (aggregator) is planned for Sprint 3; `B-013` (MCP tools) pool.
+- **Status**: **schema done, aggregator done; MCP tools next** — `B-005` (schema) done in Sprint 2; `B-012` (aggregator) landed in Sprint 3; `B-013` (MCP tools) remains in pool.
 
 ### Scope
 
 1. Schema: `experience_action_paths(page_role, intent_signature, step_sequence, success_count, failure_count, last_used_at, …)` + `experience_locator_prefs(page_role, element_purpose, preferred_selector_kind, preferred_selector, hit_count, …)`. Done in `B-005`.
-2. **Aggregator** (`B-012`, planned): will walk `memory_sessions` where `status ∈ {completed, failed, aborted}` AND `aggregated_at IS NULL`; join `memory_tasks` for intent; read `memory_steps` for ordered step sequence; and project into `experience_action_paths`. Idempotent re-runs must not double-count.
+2. **Aggregator** (`B-012`, done): walks `memory_sessions` where `status ∈ {completed, failed, aborted}` AND `aggregated_at IS NULL`; joins `memory_tasks` for intent; reads `memory_steps` for ordered step sequence; and projects into `experience_action_paths`. Idempotent re-runs do not double-count.
 3. `memory_sessions.aggregated_at` column added via guarded migration (SQLite lacks `IF NOT EXISTS` on `ADD COLUMN`).
 4. MCP tools (`B-013`, next): `experience_suggest_plan(intent, pageRole?) → ActionPath | null`, `experience_replay(intent, variables) → plan`, `experience_score_step(stepId, result)`.
 5. Five-tier locator fallback at replay time: `exact ref → stable hash → xpath → ax name → attribute`, reordered by Experience statistics.
@@ -145,14 +145,14 @@ Wave 5 — long horizon, no dates.
 ### Linked `B-*`
 
 - ✅ `B-005` — Experience schema seed (done).
-- ⬜ `B-012` — Experience action-path aggregator (planned).
+- ✅ `B-012` — Experience action-path aggregator (done).
 - ⬜ `B-013` — `experience_suggest_plan` / `experience_replay` / `experience_score_step` MCP tools.
 
 ### Notes for incoming AI
 
 - Tabrix is **execution layer, not Agent** (PRD §1, P4). `experience_suggest_plan` returns a plan — the upstream LLM decides to adopt or not. Do not add "auto-pick the plan" logic in Tabrix.
-- `intent_signature` normalization is the hidden hard part: "list issues in repo X" and "show issues from repo X" must hash to the same bucket. Start with lowercase + stem + remove stopwords; revisit if buckets leak.
-- The `step_sequence` JSON is `{ toolName, argTemplate, status, historyRef }` — preserve `historyRef` so replay can re-fetch the same page snapshot.
+- `intent_signature` normalization is the hidden hard part: "list issues in repo X" and "show issues from repo X" must hash to the same bucket. Current v1 is intentionally light (lowercase + trim + collapse spaces); revisit only when bucket quality evidence requires it.
+- The `step_sequence` JSON in B-012 v1 is `{ toolName, status, historyRef }` — preserve `historyRef` so replay can re-fetch the same page snapshot.
 
 ---
 
@@ -744,11 +744,11 @@ Before adding any MCP tool / background listener / sidepanel tab / shared type, 
 
 (Live snapshot — update at each sprint review; authoritative copy is in [`PRODUCT_BACKLOG.md`](./PRODUCT_BACKLOG.md).)
 
-| Sprint         | State               | Items                                                                   |
-| -------------- | ------------------- | ----------------------------------------------------------------------- |
-| Sprint 1 (W17) | `closed 2026-04-20` | `B-001..B-004` all done.                                                |
-| Sprint 2 (W18) | `closed 2026-04-20` | `B-005..B-009` all done.                                                |
-| Sprint 3 (W19) | **active**          | `B-010 done · B-021 done · B-023 done · B-012 planned · B-022 planned`. |
+| Sprint         | State               | Items                                                                |
+| -------------- | ------------------- | -------------------------------------------------------------------- |
+| Sprint 1 (W17) | `closed 2026-04-20` | `B-001..B-004` all done.                                             |
+| Sprint 2 (W18) | `closed 2026-04-20` | `B-005..B-009` all done.                                             |
+| Sprint 3 (W19) | **active**          | `B-010 done · B-021 done · B-023 done · B-012 done · B-022 planned`. |
 
 ### Next sprint candidates (Sprint 4, seeded from pool)
 

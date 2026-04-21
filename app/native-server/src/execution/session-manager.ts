@@ -20,6 +20,7 @@ import {
 } from '../memory/db';
 import { PageSnapshotService } from '../memory/page-snapshot-service';
 import { ActionService } from '../memory/action-service';
+import { ExperienceAggregator, ExperienceRepository } from '../memory/experience';
 
 export interface CreateTaskInput {
   taskType: string;
@@ -73,6 +74,7 @@ interface Repos {
   step: StepRepository;
   pageSnapshot: PageSnapshotRepository;
   action: ActionRepository;
+  experience: ExperienceRepository;
 }
 
 interface StorageInit {
@@ -81,6 +83,7 @@ interface StorageInit {
   persistenceMode: SessionPersistenceMode;
   pageSnapshots: PageSnapshotService | null;
   actions: ActionService | null;
+  experienceAggregator: ExperienceAggregator | null;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -103,6 +106,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       persistenceMode: 'off',
       pageSnapshots: null,
       actions: null,
+      experienceAggregator: null,
     };
   }
 
@@ -111,12 +115,14 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
     const opened = openMemoryDb({ dbPath });
     const pageSnapshotRepo = new PageSnapshotRepository(opened.db);
     const actionRepo = new ActionRepository(opened.db);
+    const experienceRepo = new ExperienceRepository(opened.db);
     const repos: Repos = {
       task: new TaskRepository(opened.db),
       session: new SessionRepository(opened.db),
       step: new StepRepository(opened.db),
       pageSnapshot: pageSnapshotRepo,
       action: actionRepo,
+      experience: experienceRepo,
     };
     return {
       repos,
@@ -124,6 +130,13 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       persistenceMode: opened.persistenceMode,
       pageSnapshots: new PageSnapshotService(pageSnapshotRepo),
       actions: new ActionService(actionRepo, pageSnapshotRepo),
+      experienceAggregator: new ExperienceAggregator(
+        opened.db,
+        repos.session,
+        repos.step,
+        pageSnapshotRepo,
+        experienceRepo,
+      ),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -135,6 +148,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       persistenceMode: 'off',
       pageSnapshots: null,
       actions: null,
+      experienceAggregator: null,
     };
   }
 }
@@ -147,6 +161,7 @@ export class SessionManager {
   private readonly persistenceMode: SessionPersistenceMode;
   private readonly pageSnapshotService: PageSnapshotService | null;
   private readonly actionService: ActionService | null;
+  private readonly experienceAggregator: ExperienceAggregator | null;
 
   constructor(options?: SessionManagerOptions) {
     const init = initStorage(options);
@@ -155,6 +170,7 @@ export class SessionManager {
     this.persistenceMode = init.persistenceMode;
     this.pageSnapshotService = init.pageSnapshots;
     this.actionService = init.actions;
+    this.experienceAggregator = init.experienceAggregator;
     if (this.repos) this.hydrateFromDb(this.repos);
   }
 
@@ -308,6 +324,13 @@ export class SessionManager {
     };
 
     this.updateTaskStatus(session.taskId, taskStatusMap[session.status]);
+    try {
+      this.experienceAggregator?.projectPendingSessions();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      console.warn(`[tabrix/experience] aggregation failed: ${message}`);
+    }
     return session;
   }
 
@@ -393,6 +416,7 @@ export class SessionManager {
       this.repos.step.clear();
       this.repos.session.clear();
       this.repos.task.clear();
+      this.repos.experience.clear();
     }
     this.tasks.clear();
     this.sessions.clear();

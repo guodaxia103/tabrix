@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { openMemoryDb } from '../db/client';
 import { EXPERIENCE_ACTION_PATHS_TABLE, EXPERIENCE_LOCATOR_PREFS_TABLE } from './index';
 
@@ -96,7 +99,7 @@ describe('Experience schema seed (B-005)', () => {
     }
   });
 
-  it('seeds both tables as empty (Sprint 2: no writer exists yet)', () => {
+  it('seeds both tables as empty on a fresh DB', () => {
     const { db, close } = fresh();
     try {
       const actionPaths = db
@@ -109,6 +112,63 @@ describe('Experience schema seed (B-005)', () => {
       expect(locatorPrefs.total).toBe(0);
     } finally {
       close();
+    }
+  });
+
+  it('B-012 migration: adds memory_sessions.aggregated_at on legacy DBs and remains idempotent', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tabrix-memory-legacy-'));
+    const dbPath = join(dir, 'memory.db');
+    try {
+      const openLegacy = require('better-sqlite3') as (filename: string) => {
+        exec: (sql: string) => void;
+        close: () => void;
+      };
+      const legacyDb = openLegacy(dbPath);
+      legacyDb.exec(`
+        CREATE TABLE memory_tasks (
+          task_id TEXT PRIMARY KEY,
+          task_type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          intent TEXT NOT NULL,
+          origin TEXT NOT NULL,
+          owner TEXT,
+          project_id TEXT,
+          labels TEXT NOT NULL DEFAULT '[]',
+          status TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE memory_sessions (
+          session_id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL REFERENCES memory_tasks(task_id) ON DELETE CASCADE,
+          transport TEXT NOT NULL,
+          client_name TEXT NOT NULL,
+          workspace_context TEXT,
+          browser_context TEXT,
+          summary TEXT,
+          status TEXT NOT NULL,
+          started_at TEXT NOT NULL,
+          ended_at TEXT
+        );
+      `);
+      legacyDb.close();
+
+      const reopened = openMemoryDb({ dbPath });
+      try {
+        const columns = reopened.db.prepare('PRAGMA table_info(memory_sessions)').all() as {
+          name: string;
+        }[];
+        expect(columns.some((column) => column.name === 'aggregated_at')).toBe(true);
+      } finally {
+        reopened.db.close();
+      }
+
+      expect(() => {
+        const secondOpen = openMemoryDb({ dbPath });
+        secondOpen.db.close();
+      }).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

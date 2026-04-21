@@ -192,20 +192,19 @@ Tabrix is a four-layer learning loop sitting on top of a tool surface and a tran
 
 **Role**: projection of Memory into _reusable action paths and locator preferences_ — "what worked last time on this page, for this intent."
 
-**Current maturity**: ~10% — schema landed (`experience_action_paths` / `experience_locator_prefs` tables, `B-005`). **No aggregator writes rows yet**; `B-012` is planned in Sprint 3.
+**Current maturity**: ~25% — schema landed (`experience_action_paths` / `experience_locator_prefs`, `B-005`) and the first write path landed in Sprint 3 (`B-012`): terminal Memory sessions are projected into `experience_action_paths` with idempotent replay guards.
 
 **Target**: upstream LLM asks `experience_suggest_plan(intent, pageRole?)` → Tabrix returns the most successful action path for that `(pageRole, intent)` bucket, with five-tier locator fallback. The plan is a **primitive** — the upstream LLM decides whether to adopt it.
 
 **Gaps vs. target**:
 
-- No aggregator yet (B-012, Sprint 3).
 - No MCP tool (`experience_suggest_plan` / `experience_replay` / `experience_score_step`) yet — Stage 3b continuation (`B-013`, Sprint 4+).
 - No import/export (Stage 4a — `B-020`).
 
 **Code touchpoints**:
 
 - `app/native-server/src/memory/db/schema.ts` — `EXPERIENCE_CREATE_TABLES_SQL`.
-- `app/native-server/src/memory/experience/` — placeholder module (schema only).
+- `app/native-server/src/memory/experience/` — `experience-aggregator.ts` + `experience-repository.ts` (`B-012` first write path).
 - `app/chrome-extension/entrypoints/sidepanel/tabs/ExperienceTab.vue` — placeholder UI.
 
 ### 5.4 Policy
@@ -432,7 +431,7 @@ Wave 1 (near-term, parallelizable)
   3f · Policy capability opt-in enum             (B-016 pool)
 
 Wave 2 (depends on Wave 1)
-  3b · Experience action-path replay             (B-005 schema done, B-012 planned, B-013 next)
+  3b · Experience action-path replay             (B-005 schema done, B-012 done, B-013 next)
   3c · Recovery Watchdog consolidation           (B-014 pool)
 
 Wave 3 (strategic payoff)

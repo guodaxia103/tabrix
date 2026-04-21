@@ -303,7 +303,7 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
 
 1. `GITHUB_KNOWLEDGE_SEEDS.uiMapRules` exists in `app/chrome-extension/entrypoints/background/knowledge/seeds/github.ts` with the first five `(pageRole, purpose)` pairs — `repo_home.open_issues_tab`, `repo_home.open_actions_tab`, `issues_list.new_issue_cta`, `issues_list.search_input`, `actions_list.filter_input` — and a `lookup/resolve-ui-map.ts` helper that turns a `(siteId, pageRole, purpose)` triple into the compiled rule.
 2. `scripts/check-bundle-size.mjs` now also gates the latest `sidepanel-*.css` bundle (post-B-006 baseline is 18.24 kB; hard threshold 22 kB, soft 20 kB — same 40/25 shape as the JS gate, just smaller numbers).
-3. `experience_action_paths` contains real rows for the first time — written by a new aggregator that walks Memory sessions whose status is `completed`, groups consecutive steps by `(pageRole, intent_signature)`, and upserts the resulting action path + success/failure counters. No MCP tool surface yet (that's B-013, Sprint 4+).
+3. `experience_action_paths` contains real rows for the first time — written by a new aggregator that walks terminal Memory sessions, buckets by `(page_role, intent_signature)`, and upserts action-path rows + success/failure counters idempotently. No MCP tool surface yet (that's B-013, Sprint 4+).
 4. `docs/PRODUCT_BACKLOG.md` B-NNN template no longer tells authors to "append rule N" — it tells them to "add a new subsection titled …", fixing the drift discovered during Sprint 2 B-007.
 
 **Out of scope for Sprint 3**:
@@ -415,8 +415,10 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
   - Task summary includes: (1) the before/after contract diff, (2) which outcomes are detected, (3) which tests ran, (4) explicit statement that real-browser validation was **not** run and why, (5) what remains unsupported (selection_changed, focus_changed detected-but-not-tested; `chrome.webNavigation` aggregation deferred; generic replay deferred).
 - **Landed**: 5 files changed, 858 insertions, 35 deletions. Extension tests 288 → 304 (+16 B-023: 13 `mergeClickSignals` pure-function tests + 3 jsdom end-to-end signal tests). All 304 green. `pnpm -r typecheck`, `pnpm run size:check`, `pnpm run docs:check` all clean. Legacy click tests (`click-helper-targeting.test.ts`, `click-download-intercept.test.ts`) stayed green with **zero edits** — the `intercepted-download` fast-path response shape was deliberately not unified into the new contract this sprint. Real-browser validation was **not** run inside the sandbox (MV3 extensions cannot be driven from the Windows sandbox); explicit follow-up item on the Sprint 3 retro.
 
+### B-012 · Native-server: Experience action-path aggregator (v1)
+
 - **Stage**: 3b · **Layer**: E · **KPI**: 省 token · 更快 (reusable path priors reduce planning retries)
-- **Owner**: Claude · **Size**: L · **Status**: `planned`
+- **Owner**: Claude · **Size**: L · **Status**: `done` (landed 2026-04-21)
 - **Dependencies**: B-005 (Experience schema landed); optionally references B-010 purposes when the step's `pageRole` has an authored UI map
 - **Branch**: `feat/b-012-experience-action-path-aggregator`
 - **Schema cite**:
@@ -435,7 +437,8 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
 - **Exit criteria**:
   - Jest tests cover: empty Memory (no-op); single completed session → exactly 1 Experience row; replay is idempotent; failed session increments `failure_count`.
   - `pnpm --filter @tabrix/tabrix test` green.
-  - A one-paragraph note appended to `docs/MKEP_STAGE_3_PLUS_ROADMAP.md §4.2` confirming Stage 3b's first write path is live.
+  - `pnpm -r typecheck` and `pnpm run docs:check` green.
+- **Landed**: `memory_sessions.aggregated_at` shipped with guarded migration (new install + legacy upgrade path), `ExperienceAggregator` + `ExperienceRepository` project terminal sessions into `experience_action_paths` using `(page_role, intent_signature)` buckets, and session-level `aggregated_at` markers enforce idempotent replay. Scope constraints held: no new MCP tool, no writes to `experience_locator_prefs`. Validation: `pnpm --filter @tabrix/tabrix test`, `pnpm -r typecheck`, `pnpm run docs:check` all green.
 
 ### B-022 · Codex fast task · drop "rule N" numbering convention from backlog template wording
 
@@ -500,3 +503,4 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
 - 2026-04-20 — Sprint 3 · B-021 done: `scripts/check-bundle-size.mjs` extended to gate `sidepanel-*.css` (soft 20 kB / hard 22 kB) alongside the existing `sidepanel-*.js` gate (unchanged, soft 25 / hard 40). `AGENTS.md` Operational Guardrails updated with a two-row threshold table. Baselines: JS ≈ 20.5 kB, CSS ≈ 17.8 kB.
 - 2026-04-20 — Sprint 3 · B-023 done: `chrome_click_element` tool response now exposes `dispatchSucceeded` / `observedOutcome` / `verification` alongside `success`, and `success` is no longer synonymous with "the content-script promise resolved". 13-value `ClickObservedOutcome` enum landed in `packages/shared/src/click.ts`. The forbidden combo `{success:true, navigationOccurred:false, observedOutcome:'no_observed_change'}` is now unreachable (contract regression test asserts this). Real-browser validation deferred to a follow-up that runs outside the sandbox.
 - 2026-04-20 — Sprint 3 mid-sprint adjustment: **B-023** (click contract hotfix) pulled in as a P1 GA reliability item. Sequenced between B-021 and B-012 — see the B-023 entry for why ordering matters (B-012 reads `step.status`, which is currently polluted by the false-success defect). Execution spec `docs/CLICK_CONTRACT_REPAIR_V1.md` committed alongside the backlog update so the contract is reviewable independently of the code change. Sprint 3 scope is now 5 items (B-010 / B-021 / B-023 / B-012 / B-022); no item was dropped to make room — Sprint 3 is deliberately accepting the overrun because the hotfix cannot wait for Sprint 4.
+- 2026-04-21 — Sprint 3 · B-012 done: native-server now projects terminal Memory sessions into `experience_action_paths` with an idempotent session marker (`memory_sessions.aggregated_at`). Landed modules: `experience-aggregator.ts` + `experience-repository.ts`; covered by native-server aggregator/migration tests. No MCP tool surface was added, and `experience_locator_prefs` remains untouched (deferred to follow-up items).

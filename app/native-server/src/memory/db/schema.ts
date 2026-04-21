@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS memory_sessions (
   summary           TEXT,
   status            TEXT NOT NULL,
   started_at        TEXT NOT NULL,
-  ended_at          TEXT
+  ended_at          TEXT,
+  aggregated_at     TEXT
 );
 
 CREATE INDEX IF NOT EXISTS memory_sessions_task_id_idx    ON memory_sessions(task_id);
@@ -157,19 +158,11 @@ CREATE INDEX IF NOT EXISTS memory_actions_captured_at_idx ON memory_actions(capt
 `;
 
 /**
- * Stage 3b seed (Sprint 2, B-005): empty Experience tables.
- *
- * Intentionally **no repository class, no INSERT/UPDATE code** in this
- * sprint — the aggregator that populates these tables (reading Memory,
- * writing Experience) is scheduled for Sprint 3+ (B-012). Shipping the
- * schema early means the aggregator can land as a pure writer-side PR
- * without a migration coupled in.
+ * Stage 3b Experience schema (seeded in B-005, first writer in B-012).
  *
  * Co-located in the same `memory.db` file as Memory: Experience is a
- * derived view of Memory data, and keeping them in one DB simplifies
- * cross-table reads in the aggregator without a JOIN-across-files hack.
- * If we ever need to scale Experience out, the only thing that changes
- * is this constant.
+ * derived view of Memory data, and keeping them in one DB keeps
+ * projection reads/writes local to one SQLite handle.
  *
  * Same idempotency rules as Memory: every `CREATE … IF NOT EXISTS`.
  */

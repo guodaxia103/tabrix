@@ -236,6 +236,50 @@ describe('SessionRepository', () => {
       }
     });
   });
+
+  describe('pending aggregation (B-012)', () => {
+    it('lists terminal unaggregated sessions and marks them exactly once', () => {
+      const { sessionRepo, close } = bootstrap();
+      try {
+        sessionRepo.insert(
+          sessionFixture({
+            sessionId: 's-running',
+            status: 'running',
+            startedAt: '2026-04-20T00:00:01.000Z',
+          }),
+        );
+        sessionRepo.insert(
+          sessionFixture({
+            sessionId: 's-completed',
+            status: 'completed',
+            startedAt: '2026-04-20T00:00:02.000Z',
+            endedAt: '2026-04-20T00:00:03.000Z',
+          }),
+        );
+        sessionRepo.insert(
+          sessionFixture({
+            sessionId: 's-failed',
+            status: 'failed',
+            startedAt: '2026-04-20T00:00:04.000Z',
+            endedAt: '2026-04-20T00:00:05.000Z',
+          }),
+        );
+
+        const pending = sessionRepo.listPendingAggregationSessions();
+        expect(pending.map((row) => row.sessionId)).toEqual(['s-completed', 's-failed']);
+
+        const firstMark = sessionRepo.markAggregated('s-completed', '2026-04-21T00:00:00.000Z');
+        const secondMark = sessionRepo.markAggregated('s-completed', '2026-04-21T00:00:01.000Z');
+        expect(firstMark).toBe(1);
+        expect(secondMark).toBe(0);
+
+        const remaining = sessionRepo.listPendingAggregationSessions();
+        expect(remaining.map((row) => row.sessionId)).toEqual(['s-failed']);
+      } finally {
+        close();
+      }
+    });
+  });
 });
 
 describe.skip('SessionRepository.listRecent (integration · B-004 placeholder)', () => {
