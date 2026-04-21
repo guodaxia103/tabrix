@@ -92,7 +92,7 @@
 ### B-004 · Codex fast task · Add JSDoc + it.todo skeleton for B-001 repo methods
 
 - **Stage**: 3e · **Layer**: M · **KPI**: —
-- **Owner**: **Codex fast** · **Size**: S · **Status**: `planned`
+- **Owner**: **Codex fast** (attempted) → **Claude** (landed) · **Size**: S · **Status**: `review`
 - **Dependencies**: **B-001** merged to main
 - **Branch**: `chore/b-004-memory-repo-jsdoc`
 - **Scope (tight, per `AGENTS.md` Codex rules)**:
@@ -111,6 +111,8 @@
   - `pnpm -r typecheck` passes.
   - `pnpm --filter @tabrix/tabrix test` passes (new `it.todo`s do not count as failures).
   - Diff is contained in the 3 JSDoc blocks + 3 test files; Claude reviews and pushes.
+- **Landed 2026-04-20 (Codex fast attempted, Claude finished)**: JSDoc on 4 read methods (`SessionRepository.listRecent`, `SessionRepository.countAll`, `StepRepository.listBySession`, `TaskRepository.get`) + 24 `it.todo` placeholders across `session-repository.test.ts`, `step-repository.test.ts`, `task-repository.test.ts`.
+- **Codex delegation post-mortem**: the `codex exec` run (fast mode, `workspace-write` sandbox) stopped before any substantive edit because the Windows sandbox denied writes to `.git/index.lock`, so it could not honour the "commit-or-stop" contract in this prompt. Only LF→CRLF line-ending noise landed; reverted. Claude completed the task manually. Action for Sprint 2: either (a) invoke Codex with `--dangerously-bypass-approvals-and-sandbox` inside a clean worktree where `.git` is writable, or (b) keep the constraint and relax "must commit" to "must stage + write handoff note"; pick one and update `AGENTS.md` Codex Delegation Rules accordingly.
 
 ## Sprint 2 (2026-W18) — placeholders to be confirmed after Sprint 1 review
 

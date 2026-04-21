@@ -99,3 +99,14 @@ describe('TaskRepository', () => {
     }
   });
 });
+
+describe.skip('TaskRepository.get (integration · B-004 placeholder)', () => {
+  it.todo('returns empty array on virgin db');
+  it.todo('respects limit');
+  it.todo('respects offset');
+  it.todo('orders by startedAt desc');
+  it.todo('does not leak unrelated sessions when filtering by id');
+  it.todo('throws typed error on malformed id');
+  it.todo('handles 10k-row pagination consistency');
+  it.todo('respects better-sqlite3 transaction boundary');
+});
