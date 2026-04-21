@@ -4,3 +4,4 @@ export * from './tools';
 export * from './labels';
 export * from './bridge-ws';
 export * from './read-page-contract';
+export * from './memory';
