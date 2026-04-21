@@ -153,6 +153,14 @@ This repository uses Codex CLI in `fast` mode as an execution helper for Claude,
 - Codex runs the task and returns: exit status of each verification command, the list of files changed, and any decision point it hit where the brief was ambiguous.
 - Claude reviews the diff, runs the same verification locally, and is the one who commits and pushes.
 
+### Operational sandbox (lesson from B-004)
+
+- On Windows, `codex exec --sandbox workspace-write` denies writes to `.git/` (observed 2026-04-20 during B-004: `Unable to create .git/index.lock: Permission denied`, only line-ending noise landed). Do NOT ask Codex to `git add` / `git commit` under that sandbox.
+- Acceptable Codex invocation shapes going forward:
+  1. **Draft-only**: Codex edits files in place under `workspace-write`; Claude is responsible for `git add` / `git commit` / `git push`. Update the prompt so the "finish" step is `git diff --stat` (not `git commit`).
+  2. **Full autopilot**: `codex exec --dangerously-bypass-approvals-and-sandbox` inside a throw-away worktree, where Codex may commit; only use when the task is self-contained and the worktree is disposable.
+- If Codex stops with a sandbox error mid-task, revert any whitespace-only / line-ending changes (`git checkout -- <files>`) before Claude resumes manually — otherwise the diff review becomes noisy.
+
 ## Public Source Of Truth
 
 For this public repository, treat `docs/` (English-only) plus the root-level `README.md`, `README_zh.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, and `AGENTS.md` as the public source of truth. Do not recreate internal PM systems, private review docs, nightly reports, or acceptance evidence inside the public tree.

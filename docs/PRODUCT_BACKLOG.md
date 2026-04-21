@@ -18,7 +18,7 @@
 | **Size**   | `S` ≤ 0.5 day · `M` 0.5–1.5 day · `L` 1.5–3 days · `XL` > 3 days (split before scheduling)      |
 | **Status** | `planned` / `in_progress` / `review` / `done` / `blocked`                                       |
 
-## Current Sprint — Sprint 1 (2026-W17, 2026-04-20 → 2026-04-26)
+## Previous Sprint — Sprint 1 (2026-W17, 2026-04-20 → 2026-04-26) — **CLOSED 2026-04-20**
 
 **Theme**: Stage 3e · light up the Sidepanel Memory tab with real SQLite run history.
 
@@ -26,10 +26,12 @@
 
 **Out of scope for Sprint 1**: Experience aggregation, API Knowledge capture, pageRole-indexed recipes. Those are Sprint 2+.
 
+**Outcome**: all four items (B-001 / B-002 / B-003 / B-004) shipped and merged on 2026-04-20 — see `docs/SPRINT_1_RETRO.md` for metrics, deviations, and action items carried into Sprint 2.
+
 ### B-001 · Native-server: expose Memory read API
 
 - **Stage**: 3e · **Layer**: M · **KPI**: 懂用户
-- **Owner**: Claude · **Size**: S · **Status**: `done` (merged `2026-04-20`)
+- **Owner**: Claude · **Size**: S · **Status**: `done` (merged 2026-04-20, commit `1e18087`)
 - **Dependencies**: none (builds on existing `memory/db/client.ts`)
 - **Branch**: `feat/b-001-memory-read-api`
 - **Schema note**: the MKEP Memory schema is `Task (1) → Session (N) → Step (N)` — each session belongs to exactly one task. The original "sessions/:id/tasks" and "tasks/:id/steps" shape conflicted with this and was corrected in-flight.
@@ -54,7 +56,7 @@
 ### B-002 · Extension: Memory tab session list
 
 - **Stage**: 3e · **Layer**: M · **KPI**: 懂用户
-- **Owner**: Claude · **Size**: M · **Status**: `review`
+- **Owner**: Claude · **Size**: M · **Status**: `done` (merged 2026-04-20, commit `be8dc2d`)
 - **Dependencies**: **B-001** (done)
 - **Branch**: `feat/b-002-memory-tab-session-list`
 - **Landed scope** (what was actually shipped; deviations from the original plan are flagged):
@@ -73,7 +75,7 @@
 ### B-003 · Extension: Memory session → step drill-down
 
 - **Stage**: 3e · **Layer**: M · **KPI**: 懂用户
-- **Owner**: Claude · **Size**: L · **Status**: `review`
+- **Owner**: Claude · **Size**: L · **Status**: `done` (merged 2026-04-20, commit `2efef71`)
 - **Dependencies**: **B-001**, **B-002** (both done)
 - **Branch**: `feat/b-003-memory-drilldown`
 - **Schema note**: under the corrected `Task (1) → Session (N) → Step (N)` schema there is no "session → task" drill-down to do — each session already belongs to exactly one task, whose title/intent is embedded in the session row. The original "session → task → step" 3-level spec collapses to "session → step" with the task acting as context. Documented here so future sprints do not re-open the wrong drill-down shape.
@@ -92,7 +94,7 @@
 ### B-004 · Codex fast task · Add JSDoc + it.todo skeleton for B-001 repo methods
 
 - **Stage**: 3e · **Layer**: M · **KPI**: —
-- **Owner**: **Codex fast** (attempted) → **Claude** (landed) · **Size**: S · **Status**: `review`
+- **Owner**: **Codex fast** (attempted) → **Claude** (landed) · **Size**: S · **Status**: `done` (merged 2026-04-20, commit `ada3b12`)
 - **Dependencies**: **B-001** merged to main
 - **Branch**: `chore/b-004-memory-repo-jsdoc`
 - **Scope (tight, per `AGENTS.md` Codex rules)**:
@@ -160,3 +162,4 @@ Tentative themes (final call made during Sprint 1 review):
 ## Changelog (of this file)
 
 - 2026-04-20 — Sprint 1 seeded: Stage 3e Memory Run History UI. Initial commit.
+- 2026-04-20 — Sprint 1 closed same day: B-001 / B-002 / B-003 / B-004 all `done`. Retro at `docs/SPRINT_1_RETRO.md`. `AGENTS.md` Codex Delegation Rules updated with sandbox lesson from B-004.
