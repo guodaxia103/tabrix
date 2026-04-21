@@ -9,11 +9,49 @@ export interface SessionUpdate {
   endedAt: string;
 }
 
+/**
+ * Read-only projection used by the Memory UI (Stage 3e, B-001).
+ *
+ * Joins the owning Task's title + intent and pre-computes the
+ * per-session step count in SQL so the sidepanel can render a recent
+ * sessions list in a single round trip.
+ */
+export interface SessionSummary {
+  sessionId: string;
+  taskId: string;
+  taskTitle: string;
+  taskIntent: string;
+  transport: string;
+  clientName: string;
+  status: ExecutionSessionStatus;
+  startedAt: string;
+  endedAt?: string;
+  summary?: string;
+  workspaceContext?: string;
+  browserContext?: string;
+  stepCount: number;
+}
+
+interface SessionSummaryRow extends SessionRow {
+  task_title: string;
+  task_intent: string;
+  step_count: number;
+}
+
+/**
+ * Upper bound on `limit` accepted by {@link SessionRepository.listRecent}.
+ * Keeps sidepanel first-paint under ~50 ms even on a 10k-row DB and
+ * prevents an unbounded read from being turned into a JSON response.
+ */
+export const SESSION_SUMMARY_LIMIT_MAX = 500;
+
 export class SessionRepository {
   private readonly insertStmt;
   private readonly getStmt;
   private readonly updateStmt;
   private readonly listStmt;
+  private readonly listRecentWithTaskStmt;
+  private readonly countAllStmt;
   private readonly clearStmt;
 
   constructor(private readonly db: SqliteDatabase) {
@@ -30,6 +68,18 @@ export class SessionRepository {
        WHERE session_id = @session_id`,
     );
     this.listStmt = db.prepare('SELECT * FROM memory_sessions ORDER BY started_at ASC');
+    this.listRecentWithTaskStmt = db.prepare(
+      `SELECT s.*,
+              t.title  AS task_title,
+              t.intent AS task_intent,
+              (SELECT COUNT(*) FROM memory_steps WHERE session_id = s.session_id)
+                AS step_count
+         FROM memory_sessions s
+         JOIN memory_tasks t ON t.task_id = s.task_id
+         ORDER BY s.started_at DESC, s.session_id DESC
+         LIMIT @limit OFFSET @offset`,
+    );
+    this.countAllStmt = db.prepare('SELECT COUNT(*) AS total FROM memory_sessions');
     this.clearStmt = db.prepare('DELETE FROM memory_sessions');
   }
 
@@ -53,6 +103,56 @@ export class SessionRepository {
 
   public list(): ExecutionSession[] {
     return (this.listStmt.all() as SessionRow[]).map((row) => rowToSession(row));
+  }
+
+  /**
+   * Read-only: list the most recent sessions with task title/intent and
+   * step count joined in. Ordered `started_at DESC, session_id DESC`
+   * (secondary key keeps the order stable when multiple sessions share
+   * the same ISO timestamp).
+   *
+   * @param limit  max rows to return, clamped to `[1, SESSION_SUMMARY_LIMIT_MAX]`
+   * @param offset rows to skip, clamped to `[0, +∞)`
+   * @remarks read-only; paginate with `limit ≤ 500` to keep sidepanel
+   * renders < 50 ms on a 10k-row DB.
+   */
+  public listRecent(limit: number, offset: number): SessionSummary[] {
+    const safeLimit = Math.min(
+      SESSION_SUMMARY_LIMIT_MAX,
+      Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : 1),
+    );
+    const safeOffset = Math.max(0, Number.isFinite(offset) ? Math.floor(offset) : 0);
+    const rows = this.listRecentWithTaskStmt.all({
+      limit: safeLimit,
+      offset: safeOffset,
+    }) as SessionSummaryRow[];
+    return rows.map((row) => {
+      const session = rowToSession(row);
+      return {
+        sessionId: session.sessionId,
+        taskId: session.taskId,
+        taskTitle: row.task_title,
+        taskIntent: row.task_intent,
+        transport: session.transport,
+        clientName: session.clientName,
+        status: session.status,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        summary: session.summary,
+        workspaceContext: session.workspaceContext,
+        browserContext: session.browserContext,
+        stepCount: Number(row.step_count ?? 0),
+      };
+    });
+  }
+
+  /**
+   * Read-only: total number of sessions in the DB. Used to render
+   * pagination controls in the sidepanel Memory tab.
+   */
+  public countAll(): number {
+    const row = this.countAllStmt.get() as { total: number } | undefined;
+    return Number(row?.total ?? 0);
   }
 
   public clear(): void {

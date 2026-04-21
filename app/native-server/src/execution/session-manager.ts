@@ -15,6 +15,7 @@ import {
   SessionRepository,
   StepRepository,
   TaskRepository,
+  type SessionSummary,
   type SqliteDatabase,
 } from '../memory/db';
 import { PageSnapshotService } from '../memory/page-snapshot-service';
@@ -332,6 +333,47 @@ export class SessionManager {
 
   public listSessions(): ExecutionSession[] {
     return Array.from(this.sessions.values());
+  }
+
+  /**
+   * Stage 3e / B-001 read API. Returns the most recent sessions with
+   * task title + intent + step count pre-joined, for the sidepanel
+   * Memory tab. Returns `[]` when persistence is off (the UI treats an
+   * empty response the same way as "no sessions yet" and surfaces a
+   * neutral message).
+   */
+  public listRecentSessionSummaries(limit: number, offset: number): SessionSummary[] {
+    if (!this.repos) return [];
+    return this.repos.session.listRecent(limit, offset);
+  }
+
+  /**
+   * Stage 3e / B-001 read API. Returns total session count to drive
+   * pagination. Returns 0 when persistence is off.
+   */
+  public countAllSessions(): number {
+    if (!this.repos) return 0;
+    return this.repos.session.countAll();
+  }
+
+  /**
+   * Stage 3e / B-001 read API. Returns chronologically-ordered steps
+   * for the given session, read from SQLite. Empty array when the
+   * session does not exist or persistence is off.
+   */
+  public getStepsForSession(sessionId: string): ExecutionStep[] {
+    if (!this.repos) return [];
+    return this.repos.step.listBySession(sessionId);
+  }
+
+  /**
+   * Stage 3e / B-001 read API. Returns a Task row by id, or `null`
+   * when the task is unknown or persistence is off. Intentionally
+   * non-throwing so the HTTP route can surface a clean 404.
+   */
+  public getTaskOrNull(taskId: string): Task | null {
+    if (!this.repos) return null;
+    return this.repos.task.get(taskId) ?? null;
   }
 
   public getPersistenceStatus(): {

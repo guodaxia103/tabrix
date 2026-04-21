@@ -1,16 +1,19 @@
 import { openMemoryDb } from './client';
-import { SessionRepository } from './session-repository';
+import { SessionRepository, SESSION_SUMMARY_LIMIT_MAX } from './session-repository';
+import { StepRepository } from './step-repository';
 import { TaskRepository } from './task-repository';
-import type { ExecutionSession, Task } from '../../execution/types';
+import type { ExecutionSession, ExecutionStep, Task } from '../../execution/types';
 
 function bootstrap(): {
   taskRepo: TaskRepository;
   sessionRepo: SessionRepository;
+  stepRepo: StepRepository;
   close: () => void;
 } {
   const { db } = openMemoryDb({ dbPath: ':memory:' });
   const taskRepo = new TaskRepository(db);
   const sessionRepo = new SessionRepository(db);
+  const stepRepo = new StepRepository(db);
 
   const parent: Task = {
     taskId: 'task-parent',
@@ -25,7 +28,25 @@ function bootstrap(): {
   };
   taskRepo.insert(parent);
 
-  return { taskRepo, sessionRepo, close: () => db.close() };
+  return { taskRepo, sessionRepo, stepRepo, close: () => db.close() };
+}
+
+function stepFixture(overrides: Partial<ExecutionStep> = {}): ExecutionStep {
+  return {
+    stepId: overrides.stepId ?? 'step-1',
+    sessionId: overrides.sessionId ?? 'session-1',
+    index: overrides.index ?? 1,
+    toolName: overrides.toolName ?? 'chrome_read_page',
+    stepType: overrides.stepType ?? 'tool_call',
+    status: overrides.status ?? 'completed',
+    inputSummary: overrides.inputSummary,
+    resultSummary: overrides.resultSummary,
+    errorCode: overrides.errorCode,
+    errorSummary: overrides.errorSummary,
+    artifactRefs: overrides.artifactRefs ?? [],
+    startedAt: overrides.startedAt ?? '2026-04-20T00:00:05.000Z',
+    endedAt: overrides.endedAt,
+  };
 }
 
 function sessionFixture(overrides: Partial<ExecutionSession> = {}): ExecutionSession {
@@ -117,5 +138,102 @@ describe('SessionRepository', () => {
     } finally {
       close();
     }
+  });
+
+  describe('listRecent (B-001 read API)', () => {
+    it('returns an empty array on a virgin DB', () => {
+      const { sessionRepo, close } = bootstrap();
+      try {
+        expect(sessionRepo.listRecent(20, 0)).toEqual([]);
+        expect(sessionRepo.countAll()).toBe(0);
+      } finally {
+        close();
+      }
+    });
+
+    it('orders by startedAt DESC, inlines task title + intent + stepCount', () => {
+      const { sessionRepo, stepRepo, close } = bootstrap();
+      try {
+        sessionRepo.insert(
+          sessionFixture({ sessionId: 's-old', startedAt: '2026-04-20T00:00:01.000Z' }),
+        );
+        sessionRepo.insert(
+          sessionFixture({ sessionId: 's-new', startedAt: '2026-04-20T00:00:10.000Z' }),
+        );
+
+        stepRepo.insert(stepFixture({ stepId: 'step-a', sessionId: 's-new', index: 1 }));
+        stepRepo.insert(stepFixture({ stepId: 'step-b', sessionId: 's-new', index: 2 }));
+        stepRepo.insert(stepFixture({ stepId: 'step-c', sessionId: 's-old', index: 1 }));
+
+        const summaries = sessionRepo.listRecent(20, 0);
+        expect(summaries).toHaveLength(2);
+        expect(summaries[0]).toMatchObject({
+          sessionId: 's-new',
+          taskId: 'task-parent',
+          taskTitle: 'parent',
+          taskIntent: 'parent intent',
+          stepCount: 2,
+        });
+        expect(summaries[1]).toMatchObject({
+          sessionId: 's-old',
+          stepCount: 1,
+        });
+      } finally {
+        close();
+      }
+    });
+
+    it('respects limit and offset (pagination)', () => {
+      const { sessionRepo, close } = bootstrap();
+      try {
+        for (let i = 0; i < 5; i += 1) {
+          sessionRepo.insert(
+            sessionFixture({
+              sessionId: `s-${i}`,
+              startedAt: `2026-04-20T00:00:${String(i).padStart(2, '0')}.000Z`,
+            }),
+          );
+        }
+        const page1 = sessionRepo.listRecent(2, 0).map((s) => s.sessionId);
+        const page2 = sessionRepo.listRecent(2, 2).map((s) => s.sessionId);
+        const page3 = sessionRepo.listRecent(2, 4).map((s) => s.sessionId);
+        expect(page1).toEqual(['s-4', 's-3']);
+        expect(page2).toEqual(['s-2', 's-1']);
+        expect(page3).toEqual(['s-0']);
+        expect(sessionRepo.countAll()).toBe(5);
+      } finally {
+        close();
+      }
+    });
+
+    it('clamps limit to SESSION_SUMMARY_LIMIT_MAX and coerces bad input', () => {
+      const { sessionRepo, close } = bootstrap();
+      try {
+        sessionRepo.insert(sessionFixture({ sessionId: 's-1' }));
+        const clamped = sessionRepo.listRecent(10_000, 0);
+        expect(clamped).toHaveLength(1);
+        // Negative / NaN limit falls back to at least 1 row per the docstring.
+        const coerced = sessionRepo.listRecent(-5, -10);
+        expect(coerced).toHaveLength(1);
+        // Sanity check the bound is what consumers think it is.
+        expect(SESSION_SUMMARY_LIMIT_MAX).toBe(500);
+      } finally {
+        close();
+      }
+    });
+
+    it('keeps ordering stable when two sessions share the same startedAt', () => {
+      const { sessionRepo, close } = bootstrap();
+      try {
+        const sameTs = '2026-04-20T00:00:05.000Z';
+        sessionRepo.insert(sessionFixture({ sessionId: 's-a', startedAt: sameTs }));
+        sessionRepo.insert(sessionFixture({ sessionId: 's-b', startedAt: sameTs }));
+        const summaries = sessionRepo.listRecent(10, 0).map((s) => s.sessionId);
+        // Secondary key is session_id DESC, so 'b' precedes 'a'.
+        expect(summaries).toEqual(['s-b', 's-a']);
+      } finally {
+        close();
+      }
+    });
   });
 });
