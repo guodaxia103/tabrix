@@ -257,13 +257,6 @@
             >
               <EditIcon />
             </button>
-            <button
-              class="rr-icon-btn rr-icon-btn-marker has-tooltip"
-              @click="toggleElementMarker"
-              :data-tooltip="getMessage('popupEnableElementMarker')"
-            >
-              <MarkerIcon />
-            </button>
           </div>
         </div>
 
@@ -314,41 +307,6 @@
                   <span class="coming-soon-badge">Coming Soon</span>
                 </span>
                 <span class="entry-desc">{{ getMessage('popupWorkflowManagementDesc') }}</span>
-              </div>
-              <svg
-                class="entry-arrow"
-                viewBox="0 0 24 24"
-                width="16"
-                height="16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-            <button class="entry-item" @click="openElementMarkerSidepanel">
-              <div class="entry-icon marker">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                  />
-                </svg>
-              </div>
-              <div class="entry-content">
-                <span class="entry-title">{{
-                  getMessage('popupElementMarkerManagementTitle')
-                }}</span>
-                <span class="entry-desc">{{ getMessage('popupElementMarkerManagementDesc') }}</span>
               </div>
               <svg
                 class="entry-arrow"
@@ -668,7 +626,6 @@ import {
   WorkflowIcon,
   RefreshIcon,
   EditIcon,
-  MarkerIcon,
 } from './components/icons';
 
 // AgentChat theme - 从preload中获取，保持与sidepanel一致
@@ -1366,11 +1323,6 @@ function openWorkflowSidepanel() {
   showComingSoonToast(getMessage('popupWorkflowManagementTitle'));
 }
 
-// Open sidepanel for element marker management
-function openElementMarkerSidepanel() {
-  openSidepanelAndClose('element-markers');
-}
-
 // Open sidepanel for agent chat
 function openAgentSidepanel() {
   openSidepanelAndClose('agent-chat');
@@ -1381,25 +1333,6 @@ async function toggleWebEditor() {
     await chrome.runtime.sendMessage({ type: BACKGROUND_MESSAGE_TYPES.WEB_EDITOR_TOGGLE });
   } catch (error) {
     console.warn('Failed to toggle web editor mode:', error);
-  }
-}
-
-async function toggleElementMarker() {
-  try {
-    // 获取当前活动tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) {
-      console.warn('Cannot get current tab');
-      return;
-    }
-
-    // 向background发送消息，启动元素标注
-    await chrome.runtime.sendMessage({
-      type: BACKGROUND_MESSAGE_TYPES.ELEMENT_MARKER_START,
-      tabId: tab.id,
-    });
-  } catch (error) {
-    console.warn('Failed to start element marker:', error);
   }
 }
 

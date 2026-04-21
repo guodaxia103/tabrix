@@ -17,7 +17,6 @@ import {
 } from '@tabrix/shared';
 import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import { ERROR_MESSAGES } from '@/common/constants';
-import { listMarkersForUrl } from '@/entrypoints/background/element-marker/element-marker-storage';
 import { buildTaskProtocol } from './read-page-task-protocol';
 import { inferPageUnderstanding, type PageRole } from './read-page-understanding';
 
@@ -735,10 +734,8 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       if (!tab.id)
         return createErrorResponse(ERROR_MESSAGES.TAB_NOT_FOUND + ': Active tab has no ID');
 
-      // Load any user-marked elements for this URL (priority hints)
       const currentUrl = String(tab.url || '');
       const currentTitle = String(tab.title || '');
-      const userMarkers = currentUrl ? await listMarkersForUrl(currentUrl) : [];
       const schemeGuard = inferSchemeGuard(currentUrl);
 
       if (!schemeGuard.supportedForContentScript) {
@@ -845,15 +842,11 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       // Skip sparse heuristics when user explicitly controls output
       const isSparse = !userControlled && lines < 10 && refCount < 3;
 
-      // Build user-marked elements for inclusion
-      const markedElements = userMarkers.map((m) => ({
-        name: m.name,
-        selector: m.selector,
-        selectorType: m.selectorType || 'css',
-        urlMatch: { type: m.matchType, origin: m.origin, path: m.path },
-        source: 'marker',
-        priority: 'highest',
-      }));
+      // User markers have been removed with the Element Marker surface
+      // (MKEP pruning §P7). Keep the field on the payload as an empty
+      // array to preserve the outbound contract that downstream consumers
+      // (telemetry, prompt builder) still reference.
+      const markedElements: any[] = [];
 
       // Helper to convert elements array to pageContent format
       const formatElementsAsPageContent = (elements: any[]): string => {
@@ -966,19 +959,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         });
 
         if (fallback && fallback.success && Array.isArray(fallback.elements)) {
-          const limited = fallback.elements.slice(0, 150);
-          // Merge user markers at the front, de-duplicated by selector
-          const markerEls = userMarkers.map((m) => ({
-            type: 'marker',
-            selector: m.selector,
-            text: m.name,
-            selectorType: m.selectorType || 'css',
-            isInteractive: true,
-            source: 'marker',
-            priority: 'highest',
-          }));
-          const seen = new Set(markerEls.map((e) => e.selector));
-          const merged = [...markerEls, ...limited.filter((e: any) => !seen.has(e.selector))];
+          const merged = fallback.elements.slice(0, 150);
 
           basePayload.fallbackUsed = true;
           basePayload.fallbackSource = 'get_interactive_elements';

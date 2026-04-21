@@ -6,7 +6,6 @@ import {
 import { initStorageManagerListener } from './storage-manager';
 import { cleanupModelCache } from '@/utils/semantic-similarity-engine';
 import { initRecordReplayListeners } from './record-replay';
-import { initElementMarkerListeners } from './element-marker';
 import { initWebEditorListeners } from './web-editor';
 
 // Record-Replay V3 (feature flag)
@@ -51,8 +50,6 @@ export default defineBackground(() => {
       });
   }
 
-  // Element marker: context menu + CRUD listeners
-  initElementMarkerListeners();
   // Web editor: toggle edit-mode overlay
   initWebEditorListeners();
 

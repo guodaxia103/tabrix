@@ -783,18 +783,6 @@
     "message": "Disconnect this client",
     "description": "Auto-synced key: popupDisconnectClientTitle"
   },
-  "popupElementMarkerManagementDesc": {
-    "message": "Manage page element markers",
-    "description": "Auto-synced key: popupElementMarkerManagementDesc"
-  },
-  "popupElementMarkerManagementTitle": {
-    "message": "Element Marker Management",
-    "description": "Auto-synced key: popupElementMarkerManagementTitle"
-  },
-  "popupEnableElementMarker": {
-    "message": "Enable element marker",
-    "description": "Auto-synced key: popupEnableElementMarker"
-  },
   "popupEnableWebEditor": {
     "message": "Enable Web Editor mode",
     "description": "Auto-synced key: popupEnableWebEditor"

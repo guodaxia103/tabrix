@@ -48,17 +48,6 @@ export const BACKGROUND_MESSAGE_TYPES = {
   RR_SCHEDULE_FLOW: 'rr_schedule_flow',
   RR_UNSCHEDULE_FLOW: 'rr_unschedule_flow',
   RR_LIST_SCHEDULES: 'rr_list_schedules',
-  // Element marker management
-  ELEMENT_MARKER_LIST_ALL: 'element_marker_list_all',
-  ELEMENT_MARKER_LIST_FOR_URL: 'element_marker_list_for_url',
-  ELEMENT_MARKER_SAVE: 'element_marker_save',
-  ELEMENT_MARKER_UPDATE: 'element_marker_update',
-  ELEMENT_MARKER_DELETE: 'element_marker_delete',
-  ELEMENT_MARKER_VALIDATE: 'element_marker_validate',
-  ELEMENT_MARKER_START: 'element_marker_start_from_popup',
-  // Element picker (human-in-the-loop element selection)
-  ELEMENT_PICKER_UI_EVENT: 'element_picker_ui_event',
-  ELEMENT_PICKER_FRAME_EVENT: 'element_picker_frame_event',
   // Web editor (in-page visual editing)
   WEB_EDITOR_TOGGLE: 'web_editor_toggle',
   WEB_EDITOR_APPLY: 'web_editor_apply',
@@ -155,8 +144,6 @@ export const TOOL_MESSAGE_TYPES = {
   DOM_TRIGGER_FIRED: 'dom_trigger_fired',
   // Record & Replay overlay: variable collection
   COLLECT_VARIABLES: 'collectVariables',
-  // Element marker overlay control (content-side)
-  ELEMENT_MARKER_START: 'element_marker_start',
 } as const;
 
 // Type unions for type safety

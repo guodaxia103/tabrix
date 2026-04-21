@@ -783,18 +783,6 @@
     "message": "断开此客户端",
     "description": "自动同步键: popupDisconnectClientTitle"
   },
-  "popupElementMarkerManagementDesc": {
-    "message": "管理页面元素标注",
-    "description": "自动同步键: popupElementMarkerManagementDesc"
-  },
-  "popupElementMarkerManagementTitle": {
-    "message": "元素标注管理",
-    "description": "自动同步键: popupElementMarkerManagementTitle"
-  },
-  "popupEnableElementMarker": {
-    "message": "开启元素标注",
-    "description": "自动同步键: popupEnableElementMarker"
-  },
   "popupEnableWebEditor": {
     "message": "开启页面编辑模式",
     "description": "自动同步键: popupEnableWebEditor"
