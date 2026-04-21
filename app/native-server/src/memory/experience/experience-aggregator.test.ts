@@ -196,6 +196,30 @@ describe('ExperienceAggregator (B-012 v1)', () => {
     }
   });
 
+  it('C2: aborted sessions increment failure_count', () => {
+    const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+      bootstrap();
+    try {
+      insertTask(taskRepo, { intent: 'monitor runs' });
+      insertSession(sessionRepo, { sessionId: 's-aborted', status: 'aborted' });
+      insertStep(stepRepo, { stepId: 'aborted-step', sessionId: 's-aborted', index: 1 });
+      insertSnapshot(snapshotRepo, {
+        snapshotId: 'snap-aborted',
+        stepId: 'aborted-step',
+        pageRole: 'actions_list',
+        capturedAt: '2026-04-20T00:00:01.800Z',
+      });
+
+      aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+      const rows = experienceRepo.listActionPaths();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].successCount).toBe(0);
+      expect(rows[0].failureCount).toBe(1);
+    } finally {
+      close();
+    }
+  });
+
   it('D: replay is idempotent and writes aggregated_at marker', () => {
     const { db, taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
       bootstrap();
