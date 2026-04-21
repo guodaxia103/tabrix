@@ -18,7 +18,10 @@ Before changing code or docs, every AI assistant should read the public reposito
 3. [docs/PRODUCT_SURFACE_MATRIX.md](./docs/PRODUCT_SURFACE_MATRIX.md)
 4. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 5. [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md)
-6. [CONTRIBUTING.md](./CONTRIBUTING.md)
+6. [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md)
+7. [docs/PRODUCT_BACKLOG.md](./docs/PRODUCT_BACKLOG.md)
+8. [docs/PRODUCT_PRUNING_PLAN.md](./docs/PRODUCT_PRUNING_PLAN.md)
+9. [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 Then continue with the smallest relevant task-specific reading set below.
 
@@ -46,6 +49,42 @@ Read:
 - [docs/QUICKSTART.md](./docs/QUICKSTART.md)
 - [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)
 
+### MKEP Memory-layer tasks (SQLite / SessionManager / post-processor / sidepanel Memory tab)
+
+Read:
+
+- [docs/MEMORY_PHASE_0.md](./docs/MEMORY_PHASE_0.md) / [MEMORY_PHASE_0_2.md](./docs/MEMORY_PHASE_0_2.md) / [MEMORY_PHASE_0_3.md](./docs/MEMORY_PHASE_0_3.md)
+- [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) §4 Stage 3e / 3i
+
+Touchpoints: `app/native-server/src/memory/**`, `app/chrome-extension/entrypoints/sidepanel/**` (Memory tab).
+
+### MKEP Knowledge-layer tasks (registry / seeds / HVO classifier / UI map)
+
+Read:
+
+- [docs/KNOWLEDGE_STAGE_1.md](./docs/KNOWLEDGE_STAGE_1.md)
+- [docs/KNOWLEDGE_STAGE_2.md](./docs/KNOWLEDGE_STAGE_2.md)
+- [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) §4 Stage 3a / 3g / 3h
+
+Touchpoints: `app/chrome-extension/entrypoints/background/knowledge/**`, `app/chrome-extension/entrypoints/background/tools/browser/read-page*`.
+
+### MKEP Experience-layer tasks (action-path replay / recipes / shared deck)
+
+Read:
+
+- [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) §4 Stage 3b / 4a
+
+Note: Experience tables do not yet exist in code. New schemas must be added under `app/native-server/src/memory/db/` and cross-linked from an `experience/` module, not reintroduced as a new SQLite file.
+
+### MKEP Policy-layer tasks (risk-tier gating / capability opt-in)
+
+Read:
+
+- [docs/POLICY_PHASE_0.md](./docs/POLICY_PHASE_0.md)
+- [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) §4 Stage 3f
+
+Touchpoints: `app/native-server/src/policy/**`, `packages/shared/src/tools.ts` (`TOOL_RISK_TIERS` + `requiresExplicitOptIn`).
+
 ### Release, security, and third-party reuse tasks
 
 Read:
@@ -54,6 +93,65 @@ Read:
 - [docs/TESTING.md](./docs/TESTING.md)
 - [docs/PLATFORM_SUPPORT.md](./docs/PLATFORM_SUPPORT.md)
 - [SECURITY.md](./SECURITY.md)
+
+## MKEP Code Map (post-pruning)
+
+Use this map when you need to locate where a layer lives. If a task does not fit any of the four layers cleanly, stop and surface the mismatch instead of inventing a new home.
+
+| Layer          | Native server                                                      | Chrome extension                                                    | Shared                                                              |
+| -------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Memory**     | `app/native-server/src/memory/**` (SQLite, SessionManager, post-processor) | Sidepanel Memory tab (placeholder, Stage 3e target)                 | –                                                                   |
+| **Knowledge**  | –                                                                  | `app/chrome-extension/entrypoints/background/knowledge/**` (seeds, registry, lookup) | –                                                                   |
+| **Experience** | _not yet scaffolded — will live under `src/memory/experience/`_    | Sidepanel Experience tab (placeholder, Stage 3b target)             | –                                                                   |
+| **Policy**     | `app/native-server/src/policy/**`                                  | Sidepanel Policy surface (future)                                   | `packages/shared/src/tools.ts` (`TOOL_RISK_TIERS`, `requiresExplicitOptIn`) |
+
+Cross-cutting helpers:
+
+- `app/native-server/src/shared/data-dirs.ts` — `~/.chrome-mcp-agent/` resolver used by Memory.
+- `app/chrome-extension/entrypoints/background/keepalive/` — MV3 SW keepalive (Offscreen Document + Port heartbeat). Do not reopen the old RR-V3 path.
+- `packages/shared/src/` public API boundary: `constants`, `types`, `tools`, `labels`, `bridge-ws`, `read-page-contract`. **Any new cross-process type goes here, and nowhere else.**
+
+## Removed Surfaces — Must Not Be Reintroduced
+
+The following product surfaces were removed as part of `docs/PRODUCT_PRUNING_PLAN.md` and **must not be reintroduced** without an explicit governance decision from the repository owner:
+
+- Smart Assistant / Quick Panel / Agent Chat in the sidepanel (Codex / Claude / Cursor / Cline are the intended upstream drivers — Tabrix does not embed its own assistant UI).
+- Record & Replay v2 / v3 engine, builder UI, `run_flow` / `list_published_flows` MCP tools.
+- Local semantic engine / ONNX WASM workers / `search_tabs_content` MCP tool / `@xenova/transformers` / `hnswlib-wasm-static` / `@vue-flow/*` / `elkjs`.
+- Element Marker management, `element_picker` MCP tool.
+- Visual Editor (`web-editor-v2`).
+
+If a task seems to require any of these surfaces, stop and ask. The strategic value of the removed surfaces has been remapped to MKEP Stage 3+ (see §4 of `docs/MKEP_STAGE_3_PLUS_ROADMAP.md`).
+
+## Codex CLI Delegation Rules (tight-bound)
+
+This repository uses Codex CLI in `fast` mode as an execution helper for Claude, not as an independent decision-maker. When Claude dispatches a subtask to Codex, the boundary is as follows.
+
+### Codex **may** do (mechanical tasks)
+
+1. Rename a symbol / file repo-wide with explicit search-and-replace rules.
+2. Migrate imports after a module move when source and target paths are both given.
+3. Add JSDoc / TSDoc blocks to an explicit list of functions.
+4. Add `it.todo` test-skeleton scaffolding for an explicit list of methods.
+5. Delete files that are listed by path (dead-code removal after Claude has mapped references).
+6. Run existing lint / format / typecheck / test scripts and report the output verbatim.
+7. Apply a diff that Claude drafted in prose but did not commit yet.
+
+### Codex **must not** do
+
+1. Choose between two architectural approaches. If two designs are on the table, stop and return to Claude.
+2. Change a public contract: MCP tool schema (`packages/shared/src/tools.ts`), `read_page` HVO contract (`read-page-contract.ts`), HTTP route shape, or a cross-process message type.
+3. Add a new `TOOL_NAMES` entry, a new risk tier, or a new `requiresExplicitOptIn` flag — these are Policy-layer decisions.
+4. Change the Memory / Knowledge / Experience SQLite schema.
+5. Touch CI (`.github/workflows/**`) or commitlint rules.
+6. Touch dependency versions or the lockfile beyond what a previous Claude-authored migration already dictates.
+7. Decide whether a removed surface should come back. Always escalate.
+
+### Hand-off protocol
+
+- Claude writes the task in a prose brief pointing at one `B-XXX` backlog item, with: (a) files Codex may touch, (b) files Codex must not touch, (c) explicit acceptance criteria, (d) the verification commands to run at the end.
+- Codex runs the task and returns: exit status of each verification command, the list of files changed, and any decision point it hit where the brief was ambiguous.
+- Claude reviews the diff, runs the same verification locally, and is the one who commits and pushes.
 
 ## Public Source Of Truth
 
@@ -77,9 +175,11 @@ Default expectations:
 12. End each task with a clear status summary: what changed, what was verified, what was not verified, and what risks remain.
 13. If a CI or platform failure is caused by a retired upstream endpoint or broken external integration, do not stop at "ignore the error"; restore a real verification path before treating the issue as resolved.
 14. When extension code changes, the default local acceptance loop is: `pnpm -C app/chrome-extension build` -> `pnpm run extension:reload` -> real browser validation. Do not claim browser-side verification if the unpacked extension has not been reloaded.
-15. Architecture-review trigger: after every 3 consecutive `feat:` / `fix:` commits on the same subsystem, stop adding more feat/fix and run a short architecture-debt checkpoint before continuing. Deliver: (a) a listing of any site-specific / domain-specific names that leaked into a core layer, (b) a listing of any files that grew past the project's maintainability budget for that subsystem, (c) an explicit decision to either open a `refactor:` task or to record an accepted debt item. Do not silently skip this checkpoint — if no debt is found, state that explicitly in the task summary.
+15. Architecture-review trigger: after every 3 consecutive `feat:` / `fix:` commits on the same MKEP layer (Memory / Knowledge / Experience / Policy), stop adding more feat/fix and run a short architecture-debt checkpoint before continuing. Deliver: (a) a listing of any site-specific / domain-specific names that leaked into a core layer, (b) a listing of any files that grew past the project's maintainability budget for that subsystem, (c) a listing of any new cross-layer import that violates the MKEP layering in the code-map table above, (d) an explicit decision to either open a `refactor:` task or to record an accepted debt item. Do not silently skip this checkpoint — if no debt is found, state that explicitly in the task summary.
 16. When editing `app/chrome-extension/entrypoints/background/tools/browser/read-page-understanding-core.ts` or any other file that the repository's architectural-review policy tags "core neutral", the change MUST NOT introduce site-specific vocabulary (e.g. Chinese/English anchors belonging to a single product, hostnames, or family-specific role literals). Such logic belongs in a `*-<family>.ts` adapter. The neutrality invariant is protected by `tests/read-page-understanding-core-neutrality.test.ts`; do not weaken or skip that test to unblock a change.
 17. Public / private test split. Any test or fixture that reproduces a specific real-world site's URL, DOM content, brand-named accessibility tree, or login-state flow (e.g. Douyin / BOSS / private-console vendors) belongs in the sibling `tabrix-private-tests` repository, not in this repo. In this public repo only the declared GA baseline (currently: GitHub) may appear in `app/**/tests/**` as realistic fixture data. Generic login, footer, dashboard, and accessibility-tree fixtures must use neutral wording and MUST NOT embed a specific vendor brand as flavoring. Exception: guardrail tests that list brand words as forbidden tokens (e.g. `tests/read-page-understanding-core-neutrality.test.ts`) may contain those words because their purpose is to assert absence, not reproduce a scenario.
 18. Documentation placement. Public English docs go under `docs/`. Chinese-language public material belongs only in root `README_zh.md` and this file. Internal governance, audit, gate maintenance, PRD, roadmap sequencing, and acceptance evidence are maintained outside this public repository by the project maintainers. Do not reintroduce deleted internal documents into `docs/` without an explicit governance decision.
+19. Removed-surface invariant. Before adding any MCP tool, background listener, popup entry, sidepanel tab, or shared type, check it against the "Removed Surfaces" list above. If the change looks like it would reintroduce a removed surface in any form — including under a different name — stop and surface the question instead of implementing it.
+20. Backlog invariant. Every non-trivial feature or refactor commit must map to a `B-XXX` ID from `docs/PRODUCT_BACKLOG.md`, or explain in the commit body why no backlog item applies. If the backlog has no room for the task, propose a new `B-XXX` entry in the same change instead of coding first.
 
 If a task conflicts with these rules, stop and surface the tradeoff instead of guessing.
