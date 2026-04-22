@@ -47,7 +47,7 @@ Wave 2 —— 需 Wave 1 至少 Beta。
   Stage 3c · Recovery Watchdog 统一                [B-014 pool]
 
 Wave 3 —— 战略兑现，依赖 Wave 1+2。
-  Stage 3h · Context Strategy Selector             [B-018 pool]  ← K1 最大杠杆（规划侧）
+  Stage 3h · Context Strategy Selector             [B-018 v1 slice done]  ← K1 最大杠杆（规划侧）；v1 = 规则版选择器，完整 Stage 3h 仍在 pool
   Stage 3e · Run History UI                        [B-001..B-006 Sprint 1+2 已落地]
   Stage 3i · Memory Insights 表                    [B-019 pool]
 
@@ -387,7 +387,7 @@ Wave 5 —— 远期，无具体时间。
 - **层**：`K` + `E`
 - **KPI**：`省 token`（**最大**）· `更快` · `懂用户`
 - **优先级**：`P0` · **规模**：`L` · **依赖**：`Stage 3a` + `Stage 3b` + `Stage 3d` + `Stage 3g` 都至少 Beta
-- **状态**：pool —— `B-018`。
+- **状态**：v1 最小切片 2026-04-22 落地 —— `B-018`（规则版 selector 作为 native `tabrix_choose_context` 接入；详见 `docs/B_018_CONTEXT_SELECTOR_V1.md`）。完整 Stage 3h DoD（决策表、telemetry、多站点）仍在 pool。
 
 ### 范围
 
@@ -436,7 +436,7 @@ Wave 5 —— 远期，无具体时间。
 
 ### 关联 `B-*`
 
-- ⬜ `B-018` —— `tabrix_choose_context` + seed 决策表。
+- 🟡 `B-018` —— `tabrix_choose_context` v1 最小切片落地（规则版选择器，GitHub-first，三策略）；seed 决策表 + 多站点仍未做。详见 `docs/B_018_CONTEXT_SELECTOR_V1.md`。
 
 ### 给接手 AI 的提示
 

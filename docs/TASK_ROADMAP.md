@@ -47,7 +47,7 @@ Wave 2 — needs Wave 1 to be at least Beta.
   Stage 3c · Recovery Watchdog consolidation          [B-014 pool]
 
 Wave 3 — strategic payoff; needs Waves 1+2.
-  Stage 3h · Context Strategy Selector                [B-018 pool]       ← biggest K1 lever (planning side)
+  Stage 3h · Context Strategy Selector                [B-018 v1 slice done]  ← biggest K1 lever (planning side); v1 = rule-based selector, full Stage 3h DoD still open
   Stage 3e · Run History UI                           [B-001..B-006 DONE; Sprint 1+2]
   Stage 3i · Memory Insights table                    [B-019 pool]
 
@@ -387,7 +387,7 @@ Wave 5 — long horizon, no dates.
 - **Layer**: `K` + `E`
 - **KPI**: `省 token` (largest) · `更快` · `懂用户`
 - **Priority**: `P0` · **Size**: `L` · **Dependencies**: `Stage 3a` + `Stage 3b` + `Stage 3d` + `Stage 3g` all at least `Beta`
-- **Status**: pool — `B-018`.
+- **Status**: v1 minimal slice landed 2026-04-22 — `B-018` (rule-based selector wired as native `tabrix_choose_context`; details in `docs/B_018_CONTEXT_SELECTOR_V1.md`). Full Stage 3h DoD (decision table, telemetry, multi-site) still pool.
 
 ### Scope
 
@@ -436,7 +436,7 @@ Wave 5 — long horizon, no dates.
 
 ### Linked `B-*`
 
-- ⬜ `B-018` — `tabrix_choose_context` + seed decision table.
+- 🟡 `B-018` — `tabrix_choose_context` v1 minimal slice landed (rule-based selector, GitHub-first, three strategies). Seed decision table + multi-site coverage still open. See `docs/B_018_CONTEXT_SELECTOR_V1.md`.
 
 ### Notes for incoming AI
 
