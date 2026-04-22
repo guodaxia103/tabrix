@@ -83,6 +83,12 @@ export const TOOL_NAMES = {
    */
   CONTEXT: {
     CHOOSE: 'tabrix_choose_context',
+    /**
+     * V23-04 / B-018 v1.5 outcome write-back. Pure-INSERT P0 tool that
+     * lets the upstream caller close the loop on "did the strategy
+     * `tabrix_choose_context` returned actually save us a `read_page`?".
+     */
+    RECORD_OUTCOME: 'tabrix_choose_context_record_outcome',
   },
 };
 
@@ -1849,6 +1855,34 @@ export const TOOL_SCHEMAS: Tool[] = [
       required: ['intent'],
     },
   },
+  {
+    name: TOOL_NAMES.CONTEXT.RECORD_OUTCOME,
+    description:
+      "V23-04 / B-018 v1.5 outcome write-back for `tabrix_choose_context`. Closes the loop on whether the suggested strategy actually saved a `chrome_read_page` round-trip. Pure-INSERT P0: appends one telemetry row keyed by `decisionId` and never reads, mutates, or replays anything else. `outcome` is one of `'reuse'` (acted on the suggestion), `'fallback'` (had to fall back to `chrome_read_page` anyway), `'completed'` (the whole task completed on top of the suggestion), `'retried'` (re-issued `tabrix_choose_context`). Returns `{ status: 'unknown_decision' }` when the id has no matching row so the caller can distinguish a lost decision from a permission / transport error.",
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        decisionId: {
+          type: 'string',
+          description:
+            'Opaque decision id returned by a prior `tabrix_choose_context` call (`result.decisionId`). UUIDv4-shaped string; rejected when missing / empty / over 128 chars.',
+          minLength: 1,
+          maxLength: 128,
+        },
+        outcome: {
+          type: 'string',
+          description:
+            'Closed outcome label: `reuse` | `fallback` | `completed` | `retried`. Anything else is rejected so aggregation in `release:choose-context-stats` stays deterministic.',
+          enum: ['reuse', 'fallback', 'completed', 'retried'],
+        },
+      },
+      required: ['decisionId', 'outcome'],
+    },
+  },
 ];
 
 /**
@@ -1918,6 +1952,10 @@ export const TOOL_RISK_TIERS: Readonly<Record<string, TabrixRiskTier>> = Object.
 
   // ---- MKEP Context selector (read-only SELECT against native SQLite) ----
   [TOOL_NAMES.CONTEXT.CHOOSE]: 'P0',
+  // V23-04 / B-018 v1.5: pure-INSERT outcome write-back. P0 because
+  // it appends one telemetry row keyed by `decisionId`, never replays,
+  // and is gated by the same Memory persistence check the chooser uses.
+  [TOOL_NAMES.CONTEXT.RECORD_OUTCOME]: 'P0',
 });
 
 /**

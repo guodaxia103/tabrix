@@ -130,6 +130,17 @@ v2.3.0 主线的 `V23-03` 包首次落地了 `read_page(render='markdown')` 与 
 - **测试**：`tests/read-page-render-markdown.test.ts` 钉死五条契约（标题/对象/可交互元素渲染、`ref`/`targetRef` 不泄漏、空快照语义、bullet 数量硬上限、markdown artifact ref 的确定性）。`tests/read-page-l2-source-routing.test.ts` 钉死四条 routing 契约（默认 `markdownRef = null`、显式 `markdownArtifactRef` 才打开 routing、防御性地不从 `artifactRefs` 自动发现 markdown、`defaultAccess` 仅在 `mode='full'` 时切换）。
 - **未变更**：稳定 `targetRef` 派生、per-tab snapshot registry、click 桥、所有现有 JSON 输出字段。从不传 `render` 的上游调用方看到的就是 v1 的 payload。
 
+### V23-04 / B-018 v1.5 —— choose_context 决策遥测 + outcome 回写 + markdown 分支已落地（2026-04-22）
+
+`V23-04` 包把 `tabrix_choose_context` 从 v1 的无状态选择器升级为 v1.5 的闭环表面，可以回答"刚才挑的策略到底有没有省下一次 `read_page`"，同时 v1 默认行为完全保留。
+
+- **遥测表**（DDL 在 `app/native-server/src/memory/db/schema.ts`，幂等 `CREATE IF NOT EXISTS`）：`tabrix_choose_context_decisions`（每次 `status='ok'` 的选择写一行：`decision_id` / `intent_signature` / `page_role` / `site_family` / `strategy` / `fallback_strategy` / `created_at`）+ `tabrix_choose_context_outcomes`（每次 outcome 回写一行，FK 回到 decisions）。`intent_signature` 沿用 B-013 已经在 Experience 查询里用的归一化形式；**永远不存** 原始 `intent` 字符串。
+- **决策回写**：`runTabrixChooseContext` 在遥测被注入时追加一条 decision 行，并在 `TabrixChooseContextResult` 上新增不透明的 `decisionId` 字段。遥测写失败（磁盘满 / DB 锁住等）只会让 `decisionId` 缺失，**绝不**冒泡成 tool error —— 选择器表面在持久化生病时仍然和 v1 一样可用。
+- **Outcome 回写工具**：新 MCP 工具 `tabrix_choose_context_record_outcome`（P0、纯 INSERT、native-handled）。输入 `{decisionId, outcome}`，outcome ∈ `{reuse, fallback, completed, retried}`（封闭集合，`tools.ts` 的 JSON schema 已经在客户端校验，server 端 runner 仍重复校验，因为 MCP host 不可信）。返回三种结构化状态：`ok`（写入成功）、`invalid_input`（参数畸形，`isError: true`）、`unknown_decision`（参数合法但找不到对应 decision —— 调用方据此区分"决策丢了"和"权限不足"）。`choose-context.test.ts` 钉死 P0 风险等级。
+- **Markdown 阅读分支**：`read_page_markdown` 加入 `ContextStrategyName`。选择器在 (a) 没 experience 命中、(b) 没可用 knowledge 目录、(c) `siteFamily === 'github'`、(d) `pageRole` 在新增的手工白名单 `MARKDOWN_FRIENDLY_PAGE_ROLES` 里时，才路由到这个策略（白名单当下生效的是 `repo_home`；`issue_detail` / `pull_request_detail` / `discussion_detail` / `wiki` / `release_notes` / `commit_detail` 已预先列好，等 understanding 层的 pageRole 发射器跟上后会自动启用）。白名单之外仍然是 v1 的 `read_page_required`，纯 JSON 调用方零行为变化。Markdown 仍然只是**阅读表面** —— JSON HVO / candidateActions / `targetRef` 仍是执行真相（B-015 / V23-03 不变式）。
+- **发版证据**：`pnpm run release:choose-context-stats`（`scripts/release-choose-context-stats.mjs`）—— 只读脚本，从遥测表里聚合策略分布与 outcome 比例。它会拒绝在 V23-04 之前的旧 DB 上工作，避免报告里悄悄写"0 行"其实是表都还没建。支持 `--since <ISO>` / `--json` / `--db <file>`，适合 v2.3.0 打 tag 之前手工跑一次。
+- **测试**：`choose-context.test.ts` 新增 21 条用例（markdown 分支路由、telemetry decisionId 暴露、telemetry 写失败的隔离、outcome runner 输入校验、unknown_decision 分支、outcome 写失败的隔离）；`memory/telemetry/choose-context-telemetry.test.ts` 用真实 `:memory:` SQLite 跑 8 条仓库级用例（PK 冲突、空字段、聚合、`since` 过滤）。Strategy-set 守卫测试扩展到枚举 v1.5 的四个名字，以后再加策略仍需要显式编辑这里。
+
 ### 给接手 AI 的提示
 
 - **核心中立性不变式**由 `tests/read-page-understanding-core-neutrality.test.ts` 守护 —— `read-page-understanding-core.ts` 里不能出现 GitHub 字面量。弄挂这个测试 = 阻塞。

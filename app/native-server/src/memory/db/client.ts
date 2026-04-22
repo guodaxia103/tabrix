@@ -20,6 +20,7 @@ import type Database from 'better-sqlite3';
 
 import { getTabrixDataDir } from '../../shared/data-dirs';
 import {
+  CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL,
   EXPERIENCE_CREATE_TABLES_SQL,
   KNOWLEDGE_CREATE_TABLES_SQL,
   MEMORY_CREATE_TABLES_SQL,
@@ -142,6 +143,12 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   // capability state so writes from a freshly-enabled capability do
   // not race a missing table; gating happens at the writer.
   db.exec(KNOWLEDGE_CREATE_TABLES_SQL);
+  // V23-04 / B-018 v1.5: Telemetry tables for the chooser. Same idempotent
+  // CREATE IF NOT EXISTS pattern; old DBs from before V23-04 pick up the
+  // tables on next open without a migration. Writers respect the same
+  // Memory persistence gate the rest of the native server uses, so a DB
+  // running with persistence='off' will not accumulate telemetry rows.
+  db.exec(CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL);
 
   return {
     db,

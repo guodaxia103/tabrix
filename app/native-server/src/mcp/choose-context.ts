@@ -11,21 +11,32 @@
  *    is easy to wire from `native-tool-handlers.ts` without crowding
  *    the dispatcher with chooser logic.
  *
- * NO side-effects of any kind: this module never writes to the DB,
- * never calls the bridge, never reads `process.env` directly. Tests
- * inject every dependency via `chooseContextStrategy` or the runner's
- * `deps` argument.
+ * Side-effect surface (V23-04 / B-018 v1.5): the only IO this module
+ * does is the optional telemetry write-back through
+ * `ChooseContextTelemetryRepository`. The chooser still never calls
+ * the bridge and never reads `process.env` directly; tests inject the
+ * telemetry repo plus every other dependency via `chooseContextStrategy`
+ * or the runner's `deps` argument.
+ *
+ * `runTabrixChooseContextRecordOutcome` is the matching write-back
+ * runner used by `tabrix_choose_context_record_outcome`. It validates
+ * input, looks up the decision row, appends one outcome row, and
+ * returns `unknown_decision` when the id is well-formed but missing.
  */
 
+import { randomUUID } from 'node:crypto';
 import {
   EXPERIENCE_HIT_MIN_SUCCESS_RATE,
   EXPERIENCE_LOOKUP_LIMIT,
   KNOWLEDGE_LIGHT_SAMPLE_LIMIT,
+  MARKDOWN_FRIENDLY_PAGE_ROLES,
   MAX_TABRIX_CHOOSE_CONTEXT_INTENT_CHARS,
   MAX_TABRIX_CHOOSE_CONTEXT_PAGE_ROLE_CHARS,
   type ContextStrategyName,
   type TabrixChooseContextArtifact,
   type TabrixChooseContextInput,
+  type TabrixChooseContextOutcome,
+  type TabrixChooseContextRecordOutcomeResult,
   type TabrixChooseContextResult,
   type TabrixContextSiteFamily,
 } from '@tabrix/shared';
@@ -35,6 +46,7 @@ import { normalizeIntentSignature } from '../memory/experience/experience-aggreg
 import type { KnowledgeApiRepository } from '../memory/knowledge/knowledge-api-repository';
 import type { ExperienceQueryService } from '../memory/experience';
 import type { ExperienceActionPathRow } from '../memory/experience/experience-repository';
+import type { ChooseContextTelemetryRepository } from '../memory/telemetry/choose-context-telemetry';
 
 export class TabrixChooseContextInputError extends Error {
   public readonly code: 'TABRIX_CHOOSE_CONTEXT_BAD_INPUT';
@@ -263,6 +275,47 @@ export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecisi
     };
   }
 
+  // V23-04 / B-018 v1.5: text-heavy GitHub reading branch.
+  //
+  // When (a) no experience hit, (b) no usable api_knowledge match,
+  // (c) the resolved siteFamily is `'github'`, and (d) the pageRole
+  // is on the hand-curated `MARKDOWN_FRIENDLY_PAGE_ROLES` whitelist,
+  // we route to `read_page_markdown` (B-015 / V23-03). This is a
+  // *reading* surface — the JSON HVOs / candidateActions /
+  // `targetRef` stay the execution truth. The chooser only signals
+  // that the markdown projection is the cheaper way to read this
+  // page; the caller is still expected to fall back to
+  // `read_page_required` if it has to act on the result.
+  //
+  // We deliberately gate on `siteFamily === 'github'` rather than on
+  // pageRole alone because the whitelist tokens
+  // (`issue_detail`, `pull_request_detail`, `wiki`, …) are GitHub-specific
+  // labels emitted by `read-page-understanding-github.ts`. Routing
+  // markdown for a non-GitHub site that happens to share a pageRole
+  // string would mis-route a page whose understanding layer has not
+  // been audited yet.
+  if (
+    facts.siteFamily === 'github' &&
+    facts.pageRole &&
+    MARKDOWN_FRIENDLY_PAGE_ROLES.includes(facts.pageRole)
+  ) {
+    return {
+      strategy: 'read_page_markdown',
+      fallbackStrategy: 'read_page_required',
+      reasoning:
+        `no experience match and no usable api_knowledge; ` +
+        `pageRole='${facts.pageRole}' is on the markdown-friendly GitHub whitelist — ` +
+        `prefer read_page(render='markdown') as a reading surface, fall back to read_page (json) for execution.`,
+      artifacts: [
+        {
+          kind: 'read_page',
+          ref: `markdown:${facts.pageRole}`,
+          summary: `Use chrome_read_page(render='markdown') for this ${facts.pageRole} page.`,
+        },
+      ],
+    };
+  }
+
   return {
     strategy: 'read_page_required',
     reasoning: 'no experience match and no usable api_knowledge — fall back to read_page (json)',
@@ -305,6 +358,20 @@ export interface RunTabrixChooseContextDeps {
   experience: Pick<ExperienceQueryService, 'suggestActionPaths'> | null;
   knowledgeApi: Pick<KnowledgeApiRepository, 'listBySite' | 'countAll'> | null;
   capabilityEnv: CapabilityEnv;
+  /**
+   * V23-04 / B-018 v1.5 — telemetry write-back. `null` means
+   * "telemetry disabled" (persistence off, or the wiring opted out
+   * for a particular caller). The chooser still returns a usable
+   * result; it just omits `decisionId` so the caller knows there is
+   * no row to point `tabrix_choose_context_record_outcome` at.
+   */
+  telemetry?: ChooseContextTelemetryRepository | null;
+  /**
+   * Test seam for deterministic ids / clocks. Defaults to
+   * `randomUUID` and `() => new Date().toISOString()`.
+   */
+  newDecisionId?: () => string;
+  now?: () => string;
 }
 
 /**
@@ -391,6 +458,38 @@ export function runTabrixChooseContext(
     knowledgeCatalog,
   });
 
+  // V23-04 / B-018 v1.5 — telemetry write-back. We attempt to record
+  // the decision ONLY when telemetry is wired and we have a usable
+  // result to record. Failures here MUST NOT poison the chooser
+  // result: a SQLite write that throws (disk full, locked DB, …)
+  // becomes a missing `decisionId` field, not a tool error. The
+  // caller treats "no decisionId" the same as "telemetry off".
+  let decisionId: string | undefined;
+  if (deps.telemetry) {
+    const newId = deps.newDecisionId ?? randomUUID;
+    const now = deps.now ?? (() => new Date().toISOString());
+    const candidateId = newId();
+    try {
+      deps.telemetry.recordDecision({
+        decisionId: candidateId,
+        intentSignature,
+        pageRole: input.pageRole ?? null,
+        siteFamily: siteFamily ?? null,
+        strategy: decision.strategy,
+        fallbackStrategy: decision.fallbackStrategy ?? null,
+        createdAt: now(),
+      });
+      decisionId = candidateId;
+    } catch (error) {
+      // Same swallow-and-warn pattern as other Memory writes
+      // (`PageSnapshotService` etc.). The chooser surface is
+      // user-facing; telemetry breakage must not break the user-facing
+      // call.
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[tabrix/choose-context] telemetry recordDecision failed: ${message}`);
+    }
+  }
+
   return {
     status: 'ok',
     strategy: decision.strategy,
@@ -402,5 +501,153 @@ export function runTabrixChooseContext(
       pageRole: input.pageRole,
       siteFamily,
     },
+    decisionId,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// V23-04 / B-018 v1.5 — `tabrix_choose_context_record_outcome`
+// ---------------------------------------------------------------------------
+
+const OUTCOME_VALUES: readonly TabrixChooseContextOutcome[] = [
+  'reuse',
+  'fallback',
+  'completed',
+  'retried',
+];
+
+const MAX_DECISION_ID_CHARS = 128;
+
+function isOutcome(value: unknown): value is TabrixChooseContextOutcome {
+  return typeof value === 'string' && (OUTCOME_VALUES as readonly string[]).includes(value);
+}
+
+interface ParsedRecordOutcomeInput {
+  decisionId: string;
+  outcome: TabrixChooseContextOutcome;
+}
+
+/**
+ * Validate raw MCP arguments for `tabrix_choose_context_record_outcome`.
+ * Mirrors the strictness of `parseTabrixChooseContextInput`:
+ *   - missing / non-string `decisionId` → invalid_input
+ *   - empty / over-cap `decisionId` → invalid_input
+ *   - missing / out-of-set `outcome` → invalid_input
+ * The schema in `tools.ts` already enforces most of this client-side,
+ * but the runner duplicates the checks because the MCP host is
+ * untrusted.
+ */
+function parseRecordOutcomeInput(rawArgs: unknown): ParsedRecordOutcomeInput {
+  if (rawArgs === null || rawArgs === undefined) {
+    throw new TabrixChooseContextInputError('missing arguments object');
+  }
+  if (typeof rawArgs !== 'object' || Array.isArray(rawArgs)) {
+    throw new TabrixChooseContextInputError('arguments must be an object');
+  }
+  const args = rawArgs as Record<string, unknown>;
+
+  const rawDecisionId = readString(args, 'decisionId');
+  if (rawDecisionId === undefined) {
+    throw new TabrixChooseContextInputError("'decisionId' is required");
+  }
+  const decisionId = rawDecisionId.trim();
+  if (decisionId.length === 0) {
+    throw new TabrixChooseContextInputError("'decisionId' must be a non-empty string");
+  }
+  if (decisionId.length > MAX_DECISION_ID_CHARS) {
+    throw new TabrixChooseContextInputError(`'decisionId' exceeds ${MAX_DECISION_ID_CHARS} chars`);
+  }
+
+  const rawOutcome = args.outcome;
+  if (!isOutcome(rawOutcome)) {
+    throw new TabrixChooseContextInputError(
+      "'outcome' must be one of: reuse | fallback | completed | retried",
+    );
+  }
+
+  return { decisionId, outcome: rawOutcome };
+}
+
+export interface RunTabrixChooseContextRecordOutcomeDeps {
+  telemetry: ChooseContextTelemetryRepository | null;
+  now?: () => string;
+}
+
+/**
+ * Outcome write-back orchestrator. Always returns a structured
+ * `TabrixChooseContextRecordOutcomeResult`:
+ *   - `'invalid_input'` for malformed args (input type or value)
+ *   - `'unknown_decision'` for valid args whose decisionId we don't
+ *     have a row for (telemetry off / decision pruned / id typo)
+ *   - `'ok'` after a successful append
+ *
+ * The handler in `native-tool-handlers.ts` maps `'invalid_input'`
+ * to `isError: true` so the MCP host can surface it; `'unknown_decision'`
+ * is NOT an error — it is a legitimate "telemetry lost" status the
+ * caller can branch on.
+ */
+export function runTabrixChooseContextRecordOutcome(
+  rawArgs: unknown,
+  deps: RunTabrixChooseContextRecordOutcomeDeps,
+): TabrixChooseContextRecordOutcomeResult {
+  let parsed: ParsedRecordOutcomeInput;
+  try {
+    parsed = parseRecordOutcomeInput(rawArgs);
+  } catch (error) {
+    if (error instanceof TabrixChooseContextInputError) {
+      return {
+        status: 'invalid_input',
+        error: { code: error.code, message: error.message },
+      };
+    }
+    throw error;
+  }
+
+  if (!deps.telemetry) {
+    // Telemetry off: every previously-issued decisionId is by
+    // definition unknown because we never persisted it. We treat this
+    // as `unknown_decision` (not invalid_input) so the caller branches
+    // the same way as "decision id we forgot about".
+    return {
+      status: 'unknown_decision',
+      decisionId: parsed.decisionId,
+      outcome: parsed.outcome,
+    };
+  }
+
+  const now = deps.now ?? (() => new Date().toISOString());
+  let result;
+  try {
+    result = deps.telemetry.recordOutcome({
+      decisionId: parsed.decisionId,
+      outcome: parsed.outcome,
+      recordedAt: now(),
+    });
+  } catch (error) {
+    // Same swallow-and-warn discipline as the chooser: telemetry
+    // breakage MUST NOT escalate to a tool error. We surface
+    // `unknown_decision` so the caller does not retry forever and the
+    // failure is visible in the warning log.
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[tabrix/choose-context] telemetry recordOutcome failed: ${message}`);
+    return {
+      status: 'unknown_decision',
+      decisionId: parsed.decisionId,
+      outcome: parsed.outcome,
+    };
+  }
+
+  if (result.status === 'unknown_decision') {
+    return {
+      status: 'unknown_decision',
+      decisionId: parsed.decisionId,
+      outcome: parsed.outcome,
+    };
+  }
+
+  return {
+    status: 'ok',
+    decisionId: parsed.decisionId,
+    outcome: parsed.outcome,
   };
 }

@@ -54,8 +54,49 @@ export type TabrixContextSiteFamily = 'github';
 /**
  * Closed v1 strategy set. Adding a new value here is itself a v2 design
  * decision — never silently widen this in a feature branch.
+ *
+ * V23-04 / B-018 v1.5: `read_page_markdown` joins the set as the
+ * "GitHub text-heavy reading" branch. It points the caller at
+ * `chrome_read_page(render='markdown')` (B-015 / V23-03), which is a
+ * READING surface — the JSON HVOs / candidateActions / `targetRef`
+ * stay the execution truth. The chooser only picks this branch when
+ * (a) no experience hit, (b) no usable knowledge catalog, and
+ * (c) `pageRole` is in a small known-text whitelist (see
+ * `MARKDOWN_FRIENDLY_PAGE_ROLES`). Outside that whitelist the chooser
+ * still returns `read_page_required` so JSON-only callers see no
+ * behavior change.
  */
-export type ContextStrategyName = 'experience_reuse' | 'knowledge_light' | 'read_page_required';
+export type ContextStrategyName =
+  | 'experience_reuse'
+  | 'knowledge_light'
+  | 'read_page_markdown'
+  | 'read_page_required';
+
+/**
+ * V23-04 / B-018 v1.5 — small, hand-curated set of `pageRole` values
+ * for which the chooser will route the no-experience / no-knowledge
+ * fallback to `read_page_markdown` instead of `read_page_required`.
+ *
+ * Why a hand-curated set: today only a handful of GitHub pageRoles are
+ * reliably emitted by `read-page-understanding-github.ts`, and only a
+ * subset of those are "long-form reading" pages where Markdown beats
+ * the JSON snapshot for token cost. Forward-compatible tokens
+ * (`issue_detail`, `pull_request_detail`, `discussion_detail`, `wiki`,
+ * `release_notes`, `commit_detail`) are pre-listed so when the
+ * understanding layer starts emitting them, the routing flips on
+ * automatically without another shared-contract change.
+ *
+ * Anything outside this list keeps the v1 fallback (`read_page_required`).
+ */
+export const MARKDOWN_FRIENDLY_PAGE_ROLES: readonly string[] = Object.freeze([
+  'repo_home',
+  'issue_detail',
+  'pull_request_detail',
+  'discussion_detail',
+  'wiki',
+  'release_notes',
+  'commit_detail',
+]);
 
 /**
  * Validated public input. Built from raw MCP args by
@@ -124,5 +165,51 @@ export interface TabrixChooseContextResult {
   /** Always a list when `status === 'ok'`; possibly empty. */
   artifacts?: TabrixChooseContextArtifact[];
   resolved?: TabrixChooseContextResolved;
+  error?: TabrixChooseContextErrorBody;
+  /**
+   * V23-04 / B-018 v1.5 — opaque decision id (UUIDv4). Present when
+   * `status === 'ok'` AND a telemetry row was successfully written.
+   * Absent when telemetry is disabled / failed (the chooser still
+   * succeeds; outcome write-back simply has nothing to point at).
+   *
+   * Upstream callers MAY persist this id and pass it back to
+   * `tabrix_choose_context_record_outcome` to close the loop on
+   * "did this strategy actually save us a `read_page` round-trip?".
+   * The id has no semantics beyond being a primary key; do NOT parse it.
+   */
+  decisionId?: string;
+}
+
+/**
+ * V23-04 / B-018 v1.5 — closed outcome label set for the chooser
+ * write-back loop. `reuse` means the suggested strategy was acted on
+ * AND saved a `read_page`; `fallback` means the caller had to fall
+ * back to `read_page` anyway; `completed` means the whole task
+ * completed successfully on top of the suggested strategy; `retried`
+ * means the caller went back and re-issued `tabrix_choose_context`
+ * (signalling the first decision wasn't useful).
+ *
+ * Closed on purpose so the outcome aggregation in
+ * `release:choose-context-stats` can keep its grouping deterministic.
+ */
+export type TabrixChooseContextOutcome = 'reuse' | 'fallback' | 'completed' | 'retried';
+
+/** Validated public input for `tabrix_choose_context_record_outcome`. */
+export interface TabrixChooseContextRecordOutcomeInput {
+  decisionId: string;
+  outcome: TabrixChooseContextOutcome;
+}
+
+/**
+ * Public response for `tabrix_choose_context_record_outcome`.
+ * `status: 'invalid_input'` carries only `error`. `status: 'unknown_decision'`
+ * means the decision id was well-formed but no telemetry row matched;
+ * the caller should treat that as "decision lost" rather than "permission
+ * denied" or a transport error.
+ */
+export interface TabrixChooseContextRecordOutcomeResult {
+  status: 'ok' | 'invalid_input' | 'unknown_decision';
+  decisionId?: string;
+  outcome?: TabrixChooseContextOutcome;
   error?: TabrixChooseContextErrorBody;
 }

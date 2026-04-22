@@ -19,7 +19,9 @@ import {
   parseTabrixChooseContextInput,
   resolveSiteFamily,
   runTabrixChooseContext,
+  runTabrixChooseContextRecordOutcome,
 } from './choose-context';
+import type { ChooseContextTelemetryRepository } from '../memory/telemetry/choose-context-telemetry';
 import type { ExperienceQueryService } from '../memory/experience';
 import type { KnowledgeApiRepository } from '../memory/knowledge/knowledge-api-repository';
 import type { ExperienceActionPathRow } from '../memory/experience/experience-repository';
@@ -160,16 +162,26 @@ describe('resolveSiteFamily', () => {
 });
 
 describe('chooseContextStrategy (pure)', () => {
-  it('strategy set is exactly the three v1 names — guards against silent additions', () => {
+  it('strategy set is exactly the four v1.5 names — guards against silent additions', () => {
     // Doc §8 success criterion #2: enumerate the strategy set so a future
     // PR that bolts on `api_only` or `experience_replay` MUST also touch
     // this guard test (and, by extension, the design doc).
+    //
+    // V23-04 / B-018 v1.5: `read_page_markdown` joined the set as the
+    // GitHub text-heavy reading branch (B-015 / V23-03). Any further
+    // additions still need an explicit edit here.
     const allowed: ContextStrategyName[] = [
       'experience_reuse',
       'knowledge_light',
+      'read_page_markdown',
       'read_page_required',
     ];
-    expect(allowed.sort()).toEqual(['experience_reuse', 'knowledge_light', 'read_page_required']);
+    expect(allowed.sort()).toEqual([
+      'experience_reuse',
+      'knowledge_light',
+      'read_page_markdown',
+      'read_page_required',
+    ]);
   });
 
   it('returns experience_reuse when an experience hit is provided', () => {
@@ -222,6 +234,74 @@ describe('chooseContextStrategy (pure)', () => {
       knowledgeCatalog: { site: 'api.github.com', totalEndpoints: 0, sampleSignatures: [] },
     });
     expect(decision.strategy).toBe('read_page_required');
+  });
+
+  // -------------------------------------------------------------------------
+  // V23-04 / B-018 v1.5 — markdown reading branch
+  // -------------------------------------------------------------------------
+
+  it('routes to read_page_markdown for whitelisted GitHub pageRoles when no other asset hits', () => {
+    const decision = chooseContextStrategy({
+      intentSignature: 'read repo overview',
+      siteFamily: 'github',
+      pageRole: 'repo_home',
+    });
+    expect(decision.strategy).toBe('read_page_markdown');
+    expect(decision.fallbackStrategy).toBe('read_page_required');
+    expect(decision.artifacts).toEqual([
+      expect.objectContaining({ kind: 'read_page', ref: 'markdown:repo_home' }),
+    ]);
+    expect(decision.reasoning).toMatch(/markdown-friendly GitHub whitelist/);
+  });
+
+  it('does NOT route to markdown for an unknown GitHub pageRole', () => {
+    const decision = chooseContextStrategy({
+      intentSignature: 'do something',
+      siteFamily: 'github',
+      pageRole: 'mystery_role',
+    });
+    expect(decision.strategy).toBe('read_page_required');
+  });
+
+  it('does NOT route to markdown for non-GitHub site even with a whitelist token', () => {
+    // The whitelist is GitHub-specific; routing markdown for a
+    // non-GitHub host whose understanding layer happens to emit
+    // `repo_home` would be a silent mis-routing.
+    const decision = chooseContextStrategy({
+      intentSignature: 'read overview',
+      siteFamily: undefined,
+      pageRole: 'repo_home',
+    });
+    expect(decision.strategy).toBe('read_page_required');
+  });
+
+  it('experience_reuse still wins over the markdown branch', () => {
+    const decision = chooseContextStrategy({
+      intentSignature: 'open issues',
+      siteFamily: 'github',
+      pageRole: 'issue_detail',
+      experienceHit: {
+        actionPathId: 'ap-1',
+        successRate: 0.9,
+        successCount: 9,
+        failureCount: 1,
+      },
+    });
+    expect(decision.strategy).toBe('experience_reuse');
+  });
+
+  it('knowledge_light still wins over the markdown branch', () => {
+    const decision = chooseContextStrategy({
+      intentSignature: 'list issues',
+      siteFamily: 'github',
+      pageRole: 'issue_detail',
+      knowledgeCatalog: {
+        site: 'api.github.com',
+        totalEndpoints: 1,
+        sampleSignatures: ['GET api.github.com/repos/:owner/:repo/issues'],
+      },
+    });
+    expect(decision.strategy).toBe('knowledge_light');
   });
 });
 
@@ -377,5 +457,220 @@ describe('B-018 v1 risk tier wiring', () => {
     // Sanity: doc §6 lists the only knob; if someone bumps it in code
     // they must also bump the doc + the success-rate test fixture.
     expect(EXPERIENCE_HIT_MIN_SUCCESS_RATE).toBe(0.5);
+  });
+
+  it('tabrix_choose_context_record_outcome is registered as P0 (pure-INSERT)', () => {
+    // V23-04 / B-018 v1.5: write-back is intentionally P0 because it
+    // appends one telemetry row keyed by `decisionId` and never
+    // mutates anything else. Lifting it to P1+ would require the
+    // owner-lane review documented in AGENTS.md §"Tiered Execution Model".
+    expect(TOOL_RISK_TIERS[TOOL_NAMES.CONTEXT.RECORD_OUTCOME]).toBe('P0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// V23-04 / B-018 v1.5 — telemetry write-back
+// ---------------------------------------------------------------------------
+
+interface FakeTelemetry {
+  repo: ChooseContextTelemetryRepository;
+  decisions: Array<Parameters<ChooseContextTelemetryRepository['recordDecision']>[0]>;
+  outcomes: Array<Parameters<ChooseContextTelemetryRepository['recordOutcome']>[0]>;
+  knownDecisionIds: Set<string>;
+}
+
+function fakeTelemetry(initialDecisionIds: string[] = []): FakeTelemetry {
+  const decisions: FakeTelemetry['decisions'] = [];
+  const outcomes: FakeTelemetry['outcomes'] = [];
+  const knownDecisionIds = new Set(initialDecisionIds);
+  const repo = {
+    recordDecision(input: FakeTelemetry['decisions'][number]) {
+      decisions.push(input);
+      knownDecisionIds.add(input.decisionId);
+    },
+    recordOutcome(input: FakeTelemetry['outcomes'][number]) {
+      if (!knownDecisionIds.has(input.decisionId)) {
+        return { status: 'unknown_decision' as const };
+      }
+      outcomes.push(input);
+      return { status: 'ok' as const, outcomeId: 'oc-fake' };
+    },
+    findDecision: jest.fn(),
+    aggregateStrategies: jest.fn().mockReturnValue([]),
+    clear: jest.fn(),
+  } as unknown as ChooseContextTelemetryRepository;
+  return { repo, decisions, outcomes, knownDecisionIds };
+}
+
+describe('runTabrixChooseContext telemetry (V23-04)', () => {
+  it('records a decision row and surfaces decisionId when telemetry is wired', () => {
+    const { service } = fakeExperience([]);
+    const tele = fakeTelemetry();
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'repo_home', siteId: 'github' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: {},
+        telemetry: tele.repo,
+        newDecisionId: () => 'dc-test-1',
+        now: () => '2026-04-22T10:00:00.000Z',
+      },
+    );
+    expect(result.status).toBe('ok');
+    expect(result.decisionId).toBe('dc-test-1');
+    expect(tele.decisions).toEqual([
+      {
+        decisionId: 'dc-test-1',
+        intentSignature: 'open issues',
+        pageRole: 'repo_home',
+        siteFamily: 'github',
+        // No experience hit, no knowledge, but pageRole=repo_home is
+        // on the markdown whitelist for siteFamily=github.
+        strategy: 'read_page_markdown',
+        fallbackStrategy: 'read_page_required',
+        createdAt: '2026-04-22T10:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('omits decisionId when telemetry is not wired', () => {
+    const { service } = fakeExperience([]);
+    const result = runTabrixChooseContext(
+      { intent: 'do something' },
+      { experience: service, knowledgeApi: null, capabilityEnv: {} },
+    );
+    expect(result.status).toBe('ok');
+    expect(result.decisionId).toBeUndefined();
+  });
+
+  it('does NOT record a decision row for invalid_input (chooser stops early)', () => {
+    const tele = fakeTelemetry();
+    const result = runTabrixChooseContext(
+      {},
+      {
+        experience: null,
+        knowledgeApi: null,
+        capabilityEnv: {},
+        telemetry: tele.repo,
+      },
+    );
+    expect(result.status).toBe('invalid_input');
+    expect(tele.decisions).toEqual([]);
+  });
+
+  it('telemetry write failure must not break the chooser (decisionId omitted)', () => {
+    const { service } = fakeExperience([]);
+    const tele = fakeTelemetry();
+    // Simulate disk-full / locked-DB by making recordDecision throw.
+    (tele.repo.recordDecision as unknown as jest.Mock) = jest.fn(() => {
+      throw new Error('SQLITE_BUSY');
+    });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const result = runTabrixChooseContext(
+        { intent: 'do something' },
+        {
+          experience: service,
+          knowledgeApi: null,
+          capabilityEnv: {},
+          telemetry: tele.repo,
+          newDecisionId: () => 'dc-doomed',
+        },
+      );
+      expect(result.status).toBe('ok');
+      expect(result.decisionId).toBeUndefined();
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('runTabrixChooseContextRecordOutcome (V23-04)', () => {
+  it('rejects missing decisionId with invalid_input', () => {
+    const tele = fakeTelemetry();
+    const result = runTabrixChooseContextRecordOutcome(
+      { outcome: 'reuse' },
+      { telemetry: tele.repo },
+    );
+    expect(result.status).toBe('invalid_input');
+    expect(result.error?.code).toBe('TABRIX_CHOOSE_CONTEXT_BAD_INPUT');
+    expect(tele.outcomes).toEqual([]);
+  });
+
+  it('rejects out-of-set outcome with invalid_input', () => {
+    const tele = fakeTelemetry(['dc-1']);
+    const result = runTabrixChooseContextRecordOutcome(
+      { decisionId: 'dc-1', outcome: 'celebrated' },
+      { telemetry: tele.repo },
+    );
+    expect(result.status).toBe('invalid_input');
+    expect(tele.outcomes).toEqual([]);
+  });
+
+  it('rejects oversize decisionId with invalid_input', () => {
+    const tele = fakeTelemetry();
+    const result = runTabrixChooseContextRecordOutcome(
+      { decisionId: 'x'.repeat(200), outcome: 'reuse' },
+      { telemetry: tele.repo },
+    );
+    expect(result.status).toBe('invalid_input');
+  });
+
+  it('returns unknown_decision when telemetry is not wired', () => {
+    const result = runTabrixChooseContextRecordOutcome(
+      { decisionId: 'dc-1', outcome: 'reuse' },
+      { telemetry: null },
+    );
+    expect(result.status).toBe('unknown_decision');
+    expect(result.decisionId).toBe('dc-1');
+    expect(result.outcome).toBe('reuse');
+  });
+
+  it('returns unknown_decision when the id is well-formed but missing', () => {
+    const tele = fakeTelemetry(); // no known ids
+    const result = runTabrixChooseContextRecordOutcome(
+      { decisionId: 'dc-missing', outcome: 'fallback' },
+      { telemetry: tele.repo },
+    );
+    expect(result.status).toBe('unknown_decision');
+    expect(tele.outcomes).toEqual([]);
+  });
+
+  it('appends an outcome row for a known decisionId', () => {
+    const tele = fakeTelemetry(['dc-known']);
+    const result = runTabrixChooseContextRecordOutcome(
+      { decisionId: 'dc-known', outcome: 'reuse' },
+      { telemetry: tele.repo, now: () => '2026-04-22T11:00:00.000Z' },
+    );
+    expect(result.status).toBe('ok');
+    expect(result.decisionId).toBe('dc-known');
+    expect(result.outcome).toBe('reuse');
+    expect(tele.outcomes).toEqual([
+      {
+        decisionId: 'dc-known',
+        outcome: 'reuse',
+        recordedAt: '2026-04-22T11:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('telemetry write failure surfaces as unknown_decision (not invalid_input)', () => {
+    const tele = fakeTelemetry(['dc-known']);
+    (tele.repo.recordOutcome as unknown as jest.Mock) = jest.fn(() => {
+      throw new Error('SQLITE_LOCKED');
+    });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const result = runTabrixChooseContextRecordOutcome(
+        { decisionId: 'dc-known', outcome: 'completed' },
+        { telemetry: tele.repo },
+      );
+      expect(result.status).toBe('unknown_decision');
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

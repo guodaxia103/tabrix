@@ -28,12 +28,15 @@ import {
   buildSuggestPlanResult,
   parseExperienceSuggestPlanInput,
 } from '../memory/experience';
-import { runTabrixChooseContext } from './choose-context';
+import { runTabrixChooseContext, runTabrixChooseContextRecordOutcome } from './choose-context';
 import type { CapabilityEnv } from '../policy/capabilities';
 import type { SessionManager } from '../execution/session-manager';
 
 export interface NativeToolHandlerDeps {
-  sessionManager: Pick<SessionManager, 'experience' | 'getPersistenceStatus' | 'knowledgeApi'>;
+  sessionManager: Pick<
+    SessionManager,
+    'experience' | 'getPersistenceStatus' | 'knowledgeApi' | 'chooseContextTelemetry'
+  >;
   /**
    * Capability allowlist source. Optional so existing handler tests
    * (which only need `sessionManager`) keep compiling; missing means
@@ -109,13 +112,24 @@ const handleTabrixChooseContext: NativeToolHandler = (args, deps) => {
     experience: deps.sessionManager.experience,
     knowledgeApi: deps.sessionManager.knowledgeApi,
     capabilityEnv: deps.capabilityEnv ?? {},
+    telemetry: deps.sessionManager.chooseContextTelemetry,
   });
+  return jsonResult(result, result.status === 'invalid_input');
+};
+
+const handleTabrixChooseContextRecordOutcome: NativeToolHandler = (args, deps) => {
+  const result = runTabrixChooseContextRecordOutcome(args, {
+    telemetry: deps.sessionManager.chooseContextTelemetry,
+  });
+  // Only `invalid_input` is a structural error; `unknown_decision` is
+  // a legitimate response the caller can branch on.
   return jsonResult(result, result.status === 'invalid_input');
 };
 
 const NATIVE_HANDLERS: ReadonlyMap<string, NativeToolHandler> = new Map([
   [TOOL_NAMES.EXPERIENCE.SUGGEST_PLAN, handleExperienceSuggestPlan],
   [TOOL_NAMES.CONTEXT.CHOOSE, handleTabrixChooseContext],
+  [TOOL_NAMES.CONTEXT.RECORD_OUTCOME, handleTabrixChooseContextRecordOutcome],
 ]);
 
 export function getNativeToolHandler(toolName: string): NativeToolHandler | undefined {

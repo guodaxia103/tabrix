@@ -257,3 +257,58 @@ CREATE INDEX IF NOT EXISTS knowledge_api_endpoints_family_idx
 CREATE INDEX IF NOT EXISTS knowledge_api_endpoints_last_seen_at_idx
   ON knowledge_api_endpoints(last_seen_at);
 `;
+
+/**
+ * V23-04 / B-018 v1.5 telemetry schema for `tabrix_choose_context`.
+ *
+ * Two tables, both append-only:
+ *  - `tabrix_choose_context_decisions` — one row per chooser invocation
+ *    that returned `status='ok'`. Captures the resolved bucket
+ *    (intent_signature / pageRole / siteFamily) plus the chosen
+ *    strategy and fallback. Lets us answer "which strategy did the
+ *    chooser pick last week?" without having to replay.
+ *  - `tabrix_choose_context_outcomes` — one row per
+ *    `tabrix_choose_context_record_outcome` call. Pure write-back.
+ *    `decision_id` is a FK back to the decisions table so the
+ *    aggregation script can compute reuse/fallback ratios per
+ *    strategy.
+ *
+ * Both tables are gated by the same Memory persistence check the
+ * rest of the native server uses; when persistence is `'off'` the
+ * tables still exist (idempotent CREATE) but the chooser writer is a
+ * no-op so we never silently grow the file in tests.
+ *
+ * No personally identifying info: `intent_signature` is the same
+ * normalized form as B-013 (already pre-redacted), `page_role` is a
+ * structural label, `site_family` is the closed B-018 enum. We do NOT
+ * store the raw `intent` string to avoid leaking session content into
+ * a long-horizon table.
+ */
+export const CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS tabrix_choose_context_decisions (
+  decision_id        TEXT PRIMARY KEY,
+  intent_signature   TEXT NOT NULL,
+  page_role          TEXT,
+  site_family        TEXT,
+  strategy           TEXT NOT NULL,
+  fallback_strategy  TEXT,
+  created_at         TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS tabrix_choose_context_decisions_strategy_idx
+  ON tabrix_choose_context_decisions(strategy);
+CREATE INDEX IF NOT EXISTS tabrix_choose_context_decisions_created_at_idx
+  ON tabrix_choose_context_decisions(created_at);
+
+CREATE TABLE IF NOT EXISTS tabrix_choose_context_outcomes (
+  outcome_id    TEXT PRIMARY KEY,
+  decision_id   TEXT NOT NULL REFERENCES tabrix_choose_context_decisions(decision_id) ON DELETE CASCADE,
+  outcome       TEXT NOT NULL,
+  recorded_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS tabrix_choose_context_outcomes_decision_id_idx
+  ON tabrix_choose_context_outcomes(decision_id);
+CREATE INDEX IF NOT EXISTS tabrix_choose_context_outcomes_recorded_at_idx
+  ON tabrix_choose_context_outcomes(recorded_at);
+`;

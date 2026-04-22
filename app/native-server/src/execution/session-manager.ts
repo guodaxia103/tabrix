@@ -26,6 +26,7 @@ import {
   ExperienceRepository,
 } from '../memory/experience';
 import { KnowledgeApiRepository } from '../memory/knowledge/knowledge-api-repository';
+import { ChooseContextTelemetryRepository } from '../memory/telemetry/choose-context-telemetry';
 
 export interface CreateTaskInput {
   taskType: string;
@@ -81,6 +82,7 @@ interface Repos {
   action: ActionRepository;
   experience: ExperienceRepository;
   knowledgeApi: KnowledgeApiRepository;
+  chooseContextTelemetry: ChooseContextTelemetryRepository;
 }
 
 interface StorageInit {
@@ -92,6 +94,7 @@ interface StorageInit {
   experienceAggregator: ExperienceAggregator | null;
   experienceQuery: ExperienceQueryService | null;
   knowledgeApi: KnowledgeApiRepository | null;
+  chooseContextTelemetry: ChooseContextTelemetryRepository | null;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -117,6 +120,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       experienceAggregator: null,
       experienceQuery: null,
       knowledgeApi: null,
+      chooseContextTelemetry: null,
     };
   }
 
@@ -127,6 +131,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
     const actionRepo = new ActionRepository(opened.db);
     const experienceRepo = new ExperienceRepository(opened.db);
     const knowledgeApiRepo = new KnowledgeApiRepository(opened.db);
+    const chooseContextTelemetryRepo = new ChooseContextTelemetryRepository(opened.db);
     const repos: Repos = {
       task: new TaskRepository(opened.db),
       session: new SessionRepository(opened.db),
@@ -135,6 +140,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       action: actionRepo,
       experience: experienceRepo,
       knowledgeApi: knowledgeApiRepo,
+      chooseContextTelemetry: chooseContextTelemetryRepo,
     };
     return {
       repos,
@@ -151,6 +157,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       ),
       experienceQuery: new ExperienceQueryService(experienceRepo),
       knowledgeApi: knowledgeApiRepo,
+      chooseContextTelemetry: chooseContextTelemetryRepo,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -165,6 +172,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       experienceAggregator: null,
       experienceQuery: null,
       knowledgeApi: null,
+      chooseContextTelemetry: null,
     };
   }
 }
@@ -180,6 +188,7 @@ export class SessionManager {
   private readonly experienceAggregator: ExperienceAggregator | null;
   private readonly experienceQueryService: ExperienceQueryService | null;
   private readonly knowledgeApiRepo: KnowledgeApiRepository | null;
+  private readonly chooseContextTelemetryRepo: ChooseContextTelemetryRepository | null;
 
   constructor(options?: SessionManagerOptions) {
     const init = initStorage(options);
@@ -191,6 +200,7 @@ export class SessionManager {
     this.experienceAggregator = init.experienceAggregator;
     this.experienceQueryService = init.experienceQuery;
     this.knowledgeApiRepo = init.knowledgeApi;
+    this.chooseContextTelemetryRepo = init.chooseContextTelemetry;
     if (this.repos) this.hydrateFromDb(this.repos);
   }
 
@@ -229,6 +239,17 @@ export class SessionManager {
    */
   public get knowledgeApi(): KnowledgeApiRepository | null {
     return this.knowledgeApiRepo;
+  }
+
+  /**
+   * V23-04 / B-018 v1.5 — telemetry repository for `tabrix_choose_context`
+   * decisions and outcome write-backs. `null` when persistence is off.
+   * Native handlers must treat `null` as "telemetry disabled, skip
+   * the decisionId write-back" — the chooser still returns a usable
+   * result without a `decisionId`.
+   */
+  public get chooseContextTelemetry(): ChooseContextTelemetryRepository | null {
+    return this.chooseContextTelemetryRepo;
   }
 
   private hydrateFromDb(repos: Repos): void {
