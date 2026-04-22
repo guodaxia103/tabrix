@@ -43,7 +43,7 @@ Wave 1 —— 近期可并行，不阻塞。
   Stage 3f · Policy capability opt-in 枚举         [B-016 v1 done] capability allowlist 已落地；v1 只暴露 `api_knowledge`
 
 Wave 2 —— 需 Wave 1 至少 Beta。
-  Stage 3b · Experience action-path replay         [B-005 schema done, B-012 done, B-013 done]
+  Stage 3b · Experience action-path replay         [B-005 schema done, B-012 done, B-013 done, B-EXP-REPLAY-V1 v1 landed (V24-01)]
   Stage 3c · Recovery Watchdog 统一                [B-014 pool]
 
 Wave 3 —— 战略兑现，依赖 Wave 1+2。
@@ -154,14 +154,14 @@ v2.3.0 主线的 `V23-03` 包首次落地了 `read_page(render='markdown')` 与 
 - **层**：`E`（读 `M`）
 - **KPI**：`省 token` · `更快` · `懂用户`
 - **优先级**：`P0` · **规模**：`L` · **依赖**：`Stage 3a`
-- **状态**：**schema 已落、聚合器已落、读侧 MCP 工具已落；写侧 MCP 工具待续** —— `B-005`（schema）Sprint 2 落地；`B-012`（聚合器）+ `B-013` 的只读 `experience_suggest_plan` 已在 Sprint 3 落地；`experience_replay` / `experience_score_step` 仍在 pool（P1，需先做 Policy review）。
+- **状态**：**schema 已落、聚合器已落、读侧 MCP 工具已落；写侧 `experience_replay` v1 已在 v2.4.0 (V24-01) 落地** —— `B-005`（schema）Sprint 2 落地；`B-012`（聚合器）+ `B-013` 的只读 `experience_suggest_plan` 已在 Sprint 3 落地；`experience_replay` v1（bridged、P1、capability-gated、仅 GitHub）2026-04-22 经 V24-01 落地；`experience_score_step` 与候选排序 / fallback ladder 仍在 pool（V24-02 / V24-03）。
 
 ### 范围
 
 1. Schema：`experience_action_paths(page_role, intent_signature, step_sequence, success_count, failure_count, last_used_at, …)` + `experience_locator_prefs(page_role, element_purpose, preferred_selector_kind, preferred_selector, hit_count, …)`。—— `B-005` 落地。
 2. **聚合器**（`B-012`，done）：扫描 `memory_sessions.status ∈ {completed, failed, aborted}` 且 `aggregated_at IS NULL`；join `memory_tasks` 取 intent；按 `step_index` 读 `memory_steps`；投影到 `experience_action_paths`。重复运行不会二次计数。
 3. `memory_sessions.aggregated_at` 列通过 guarded migration 加（SQLite 不支持 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`）。
-4. MCP 工具：`experience_suggest_plan(intent, pageRole?, limit?) → ExperienceActionPathPlan[]` 已在 `B-013` 落地（P0 只读、native-handled，不走扩展桥；按 `success_count` → 净成功数 → 最近使用 → 确定性 ID 排序）。`experience_replay(intent, variables) → plan` 与 `experience_score_step(stepId, result)` 是显式后续项（必须先过 Policy review 再暴露）。
+4. MCP 工具：`experience_suggest_plan(intent, pageRole?, limit?) → ExperienceActionPathPlan[]` 已在 `B-013` 落地（P0 只读、native-handled，不走扩展桥；按 `success_count` → 净成功数 → 最近使用 → 确定性 ID 排序）。`experience_replay(actionPathId, variableSubstitutions, targetTabId, maxSteps) → ExperienceReplayResult` 已在 **V24-01（v2.4.0）** 落地：bridged 工具，`P1` + `requiresExplicitOptIn` + 新 capability `experience_replay`；支持步骤集合限定为 `chrome_click_element` / `chrome_fill_or_select`；变量替换白名单 = `['queryText','targetLabel']`；聚合器对 `experience_replay:<actionPathId>` 类 task intent 走特殊路径，把 success/failure delta 投影回原始 Experience 行。`experience_score_step(stepId, result)` 仍是显式后续项（V24-02；暴露前需先做 Policy review）。
 5. 回放时五级 locator 回退：`exact ref → stable hash → xpath → ax name → attribute`，按 Experience 统计动态重排。
 
 ### 非范围
@@ -183,7 +183,7 @@ v2.3.0 主线的 `V23-03` 包首次落地了 `read_page(render='markdown')` 与 
 - ✅ `B-005` —— Experience schema seed（done）。
 - ✅ `B-012` —— Experience action-path aggregator（done）。
 - ✅ `B-013` —— `experience_suggest_plan` MCP 工具（已落；`experience_replay` / `experience_score_step` 推迟，详见 backlog 中 B-013 的 "Next" 段）。
-- 📝 `B-EXP-REPLAY-V1` —— `experience_replay` v1 owner-lane brief 已落（V23-05，仅文档无代码），见 `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`。实现需先完成 Policy review 中的 7 个 owner-lane 决策（risk tier、capability 名称、变量替换白名单范围等）。
+- ✅ `B-EXP-REPLAY-V1` —— `experience_replay` v1 **已在 v2.4.0 (V24-01, 2026-04-22) 落地**：bridged MCP 工具 + capability gate + 聚合器特殊路径 + chooser 分支。2026-04-23 锁定的 owner 决策按原样落地；详见 `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §10 与 `.claude/handoffs/v2_4_0_v24_01_experience_replay_v1.md`。真实浏览器验收场景（`t5-G-experience-replay`）走 `tabrix-private-tests` 的兄弟 PR。
 
 ### 给接手 AI 的提示
 
@@ -801,7 +801,7 @@ Memory 加 `user_preferences { key, value, sourceSessionId, confidence }` ——
 1. `B-015` 后续项 —— Stage 3d 范围 2 + 3（`memory_page_snapshots.readable_markdown` 懒列 + `agentStep` envelope JSON schema 发布）。`B-015` v1（`render='markdown'` 参数本体）已于 2026-04-22 落地（V23-03），只剩可选的持久化 + envelope 尾巴。
 2. `B-018` v2 —— 在 v1 选择器之上完成 Stage 3h 完整 DoD（现已可消费 `B-011` 的稳定 `targetRef`）。
 3. Stage 3a 后续项 —— `candidate-action.ts` 的 UI Map 消费切换（Stage 3a item 6，`B-011` 留下来的尾巴）。
-4. Stage 3b 写侧后续项 —— `experience_replay` + `experience_score_step`（需要先做 Policy review；目前没有单独 backlog ID）。
+4. Stage 3b 写侧后续项 —— `experience_replay` v1 **已在 v2.4.0 (V24-01) 落地**；`experience_score_step` + 复合会话评分（V24-02）与候选排序 / fallback ladder（V24-03）仍是后续项（需要先做 Policy review；目前没有单独 backlog ID）。
 
 `B-011` v1 已于 2026-04-22 落地（HVO 稳定 `targetRef` 端到端：扩展端产出 `tgt_<10-hex>`，click 桥经 per-tab registry 还原 stable→snapshot ref，真实浏览器黄金链路 `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` 已绿）。
 

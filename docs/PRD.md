@@ -198,7 +198,7 @@ Tabrix is a four-layer learning loop sitting on top of a tool surface and a tran
 
 **Gaps vs. target**:
 
-- Write-side MCP tools (`experience_replay` / `experience_score_step`) not yet exposed — Stage 3b continuation (Sprint 4+, blocked on Policy review for the write/execute path).
+- `experience_replay` v1 **landed in v2.4.0 (V24-01)** — bridged MCP tool re-runs a recorded action path through the existing extension dispatch pipeline; gated by capability `experience_replay` + `requiresExplicitOptIn`, GitHub-only `pageRole`, supported step kinds = `chrome_click_element` / `chrome_fill_or_select`. `experience_score_step` and richer ranked-candidate fallback ladders remain Stage 3b continuation (V24-02 / V24-03).
 - No import/export (Stage 4a — `B-020`).
 
 **Code touchpoints**:
@@ -308,13 +308,13 @@ The authoritative list is `packages/shared/src/tools.ts::TOOL_NAMES.BROWSER`. Th
 
 ### 7.2 Forward-looking tools (planned, named in this PRD)
 
-| Tool                     | Planned in              | Layer                  | Purpose                                                                                                   |
-| ------------------------ | ----------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------- |
-| `tabrix_choose_context`  | Stage 3h (`B-018`)      | Knowledge + Experience | Given `(intent, url?)`, return the minimum-token `ContextBundle` — **largest K1 lever**.                  |
-| `experience_replay`      | Stage 3b (post-`B-013`) | Experience             | Execute a previously-learned action path with variable substitution. Needs Policy review before exposure. |
-| `experience_score_step`  | Stage 3b (post-`B-013`) | Experience             | Let the upstream LLM feed step outcomes back into Memory. Needs Policy review before exposure.            |
-| `knowledge_describe_api` | Stage 3g (`B-017`)      | Knowledge              | List captured `KnowledgeApiEndpoint[]` for a site.                                                        |
-| `knowledge_call_api`     | Stage 3g (`B-017`)      | Knowledge              | Call a site API using the user's logged-in Chrome cookies.                                                |
+| Tool                     | Planned in                    | Layer                  | Purpose                                                                                                                                                                                                                                      |
+| ------------------------ | ----------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tabrix_choose_context`  | Stage 3h (`B-018`)            | Knowledge + Experience | Given `(intent, url?)`, return the minimum-token `ContextBundle` — **largest K1 lever**.                                                                                                                                                     |
+| `experience_replay`      | **landed in v2.4.0 (V24-01)** | Experience             | Re-execute a previously-learned action path with variable substitution. `P1` + `requiresExplicitOptIn` + new capability `experience_replay`; GitHub-only pageRoles; supported step kinds = `chrome_click_element` / `chrome_fill_or_select`. |
+| `experience_score_step`  | Stage 3b (post-`B-013`)       | Experience             | Let the upstream LLM feed step outcomes back into Memory. Needs Policy review before exposure.                                                                                                                                               |
+| `knowledge_describe_api` | Stage 3g (`B-017`)            | Knowledge              | List captured `KnowledgeApiEndpoint[]` for a site.                                                                                                                                                                                           |
+| `knowledge_call_api`     | Stage 3g (`B-017`)            | Knowledge              | Call a site API using the user's logged-in Chrome cookies.                                                                                                                                                                                   |
 
 ### 7.3 Tool-surface invariants
 

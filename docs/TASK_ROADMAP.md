@@ -43,7 +43,7 @@ Wave 1 — near-term, parallelizable. Starts unblocked.
   Stage 3f · Policy capability opt-in enum            [B-016 v1 done]    capability allowlist landed; v1 ships only `api_knowledge`
 
 Wave 2 — needs Wave 1 to be at least Beta.
-  Stage 3b · Experience action-path replay            [B-005 schema done, B-012 done, B-013 done]
+  Stage 3b · Experience action-path replay            [B-005 schema done, B-012 done, B-013 done, B-EXP-REPLAY-V1 v1 landed (V24-01)]
   Stage 3c · Recovery Watchdog consolidation          [B-014 pool]
 
 Wave 3 — strategic payoff; needs Waves 1+2.
@@ -154,14 +154,14 @@ The `V23-04` package extends `tabrix_choose_context` from a stateless v1 chooser
 - **Layer**: `E` (+ reads `M`)
 - **KPI**: `省 token` · `更快` · `懂用户`
 - **Priority**: `P0` · **Size**: `L` · **Dependencies**: `Stage 3a`
-- **Status**: **schema done, aggregator done, read-side MCP tool done; write-side MCP tools next** — `B-005` (schema) done in Sprint 2; `B-012` (aggregator) and `B-013` read-only `experience_suggest_plan` landed in Sprint 3; `experience_replay` / `experience_score_step` remain pool (P1, blocked on Policy review).
+- **Status**: **schema done, aggregator done, read-side MCP tool done; write-side `experience_replay` v1 landed in v2.4.0 (V24-01)** — `B-005` (schema) done in Sprint 2; `B-012` (aggregator) and `B-013` read-only `experience_suggest_plan` landed in Sprint 3; `experience_replay` v1 (bridged, P1, capability-gated, GitHub-only) shipped via V24-01 on 2026-04-22; `experience_score_step` and ranked-candidate fallback ladder remain pool (V24-02 / V24-03).
 
 ### Scope
 
 1. Schema: `experience_action_paths(page_role, intent_signature, step_sequence, success_count, failure_count, last_used_at, …)` + `experience_locator_prefs(page_role, element_purpose, preferred_selector_kind, preferred_selector, hit_count, …)`. Done in `B-005`.
 2. **Aggregator** (`B-012`, done): walks `memory_sessions` where `status ∈ {completed, failed, aborted}` AND `aggregated_at IS NULL`; joins `memory_tasks` for intent; reads `memory_steps` for ordered step sequence; and projects into `experience_action_paths`. Idempotent re-runs do not double-count.
 3. `memory_sessions.aggregated_at` column added via guarded migration (SQLite lacks `IF NOT EXISTS` on `ADD COLUMN`).
-4. MCP tools: `experience_suggest_plan(intent, pageRole?, limit?) → ExperienceActionPathPlan[]` shipped in `B-013` (P0 read-only, native-handled — no extension round-trip; rows ranked by `success_count` then net-success margin then recency). `experience_replay(intent, variables) → plan` and `experience_score_step(stepId, result)` are explicit follow-ups (need Policy review before exposure).
+4. MCP tools: `experience_suggest_plan(intent, pageRole?, limit?) → ExperienceActionPathPlan[]` shipped in `B-013` (P0 read-only, native-handled — no extension round-trip; rows ranked by `success_count` then net-success margin then recency). `experience_replay(actionPathId, variableSubstitutions, targetTabId, maxSteps) → ExperienceReplayResult` shipped in **V24-01 (v2.4.0)** as a bridged tool: `P1` + `requiresExplicitOptIn` + new capability `experience_replay`; supported step kinds restricted to `chrome_click_element` / `chrome_fill_or_select`; substitution whitelist = `['queryText','targetLabel']`; aggregator special-cases `experience_replay:<actionPathId>` task intents and projects success/failure deltas back onto the original Experience row. `experience_score_step(stepId, result)` remains an explicit follow-up (V24-02; needs Policy review before exposure).
 5. Five-tier locator fallback at replay time: `exact ref → stable hash → xpath → ax name → attribute`, reordered by Experience statistics.
 
 ### Non-scope
@@ -183,7 +183,7 @@ The `V23-04` package extends `tabrix_choose_context` from a stateless v1 chooser
 - ✅ `B-005` — Experience schema seed (done).
 - ✅ `B-012` — Experience action-path aggregator (done).
 - ✅ `B-013` — `experience_suggest_plan` MCP tool (done; `experience_replay` / `experience_score_step` deferred — see backlog "Next" block under B-013).
-- 📝 `B-EXP-REPLAY-V1` — `experience_replay` v1 owner-lane brief landed (V23-05, no code), see `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`. Implementation gated on Policy review of 7 open questions (risk tier, capability name, substitution whitelist scope, etc.).
+- ✅ `B-EXP-REPLAY-V1` — `experience_replay` v1 **landed in v2.4.0 (V24-01, 2026-04-22)** via bridged MCP tool + capability gate + aggregator special-case + chooser branch. Owner decisions of 2026-04-23 shipped as-locked; see `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §10 + `.claude/handoffs/v2_4_0_v24_01_experience_replay_v1.md`. Real-browser acceptance scenarios (`t5-G-experience-replay`) ride a sibling PR in `tabrix-private-tests`.
 
 ### Notes for incoming AI
 
@@ -801,7 +801,7 @@ Pick in this order unless something blocks:
 1. `B-015` follow-on — Stage 3d Scope items 2 + 3 (`memory_page_snapshots.readable_markdown` lazy column + `agentStep` envelope JSON schema publish). `B-015` v1 (the `render='markdown'` parameter) landed 2026-04-22 (V23-03); only the optional persistence + envelope tail remains.
 2. `B-018` v2 — full Stage 3h DoD on top of the v1 selector (now also able to consume `B-011` stable `targetRef`).
 3. Stage 3a follow-up — UI Map consumer cutover inside `candidate-action.ts` (Stage 3a item 6, deferred from `B-011`).
-4. Stage 3b write-side follow-up — `experience_replay` + `experience_score_step` (needs Policy review first; not a single backlog ID yet).
+4. Stage 3b write-side follow-up — `experience_replay` v1 **landed in v2.4.0 (V24-01)**; `experience_score_step` + composite session score (V24-02) and ranked-candidate fallback ladder (V24-03) remain follow-ups (needs Policy review first; not a single backlog ID yet).
 
 `B-011` v1 landed 2026-04-22 (stable HVO `targetRef` end-to-end: extension emits `tgt_<10-hex>`, click bridge resolves stable→snapshot ref via per-tab registry, real-browser golden path `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` green).
 

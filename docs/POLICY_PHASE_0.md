@@ -198,6 +198,19 @@ Policy 拒绝时返回的结构化 payload：
 
 ---
 
+## 6.5 Phase 0 增量（v2.4.0 / V24-01）：第一个非 P3 的 `requiresExplicitOptIn` 工具
+
+V24-01 (`experience_replay` v1) 引入了 Phase 0 第一个 **非 P3** 但仍需显式 opt-in 的工具，建立了**"capability-gated visibility"**模式与既有 P3 路径并行：
+
+- **门控机制**：`experience_replay` 的 `riskTier = 'P1'`，但 `annotations.requiresExplicitOptIn = true`。它**不**进入 `P3_EXPLICIT_OPT_IN_TOOLS`（否则会被错误地按 P3 处理），而是登记到 `packages/shared/src/tools.ts` 的 `CAPABILITY_GATED_TOOLS: Map<string, TabrixCapability>` 中，映射到新加入的 capability `'experience_replay'`。
+- **visibility 与 dispatch 都看 capability**：`app/native-server/src/mcp/register-tools.ts` 在 `filterToolsByPolicy` 之后再跑一次 `filterToolsByCapability(parseCapabilityAllowlist(env).enabled)`——`listTools` 与 `callTool` 两条路径都会读这一同一个 capability 集合（来自 `TABRIX_POLICY_CAPABILITIES`，token 形式 `experience_replay,api_knowledge` 或 `all`）。
+- **拒绝码与 P3 区分**：capability 未启用时返回的失败码是 `'capability_off'`（不是 `TABRIX_POLICY_DENIED_P3`）。两个码故意分开，因为运维动作不同——`capability_off` 提示"在启动环境里把 capability 加进 `TABRIX_POLICY_CAPABILITIES`"，`TABRIX_POLICY_DENIED_P3` 提示"在启动环境里设置 `TABRIX_POLICY_ALLOW_P3`"。
+- **被拒绝时不开 Memory session**：与 P3 拒绝路径一致，capability 拒绝在 dispatch 之前发生，不会写入任何 `memory_sessions` / `memory_steps`，避免污染 Experience 聚合。
+
+这一模式为后续 P0/P1/P2 的可选高敏感工具（如未来的 `experience_score_step`、`knowledge_*` 写侧扩展）提供了独立于 P3 通道的可见性 + 调用门控；P3 通道继续承载"无条件高风险"工具。
+
+---
+
 ## 7. Phase 1 预告（不在本篇范围）
 
 Phase 1 会在本篇基础上扩展：
