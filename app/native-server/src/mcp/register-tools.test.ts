@@ -362,6 +362,82 @@ describe('handleToolCall execution wrapper', () => {
     expect(payload.code).toBe('TABRIX_POLICY_DENIED_P3');
   });
 
+  describe('experience_suggest_plan does not pollute Experience (B-013 P1 regression)', () => {
+    // Stub out the dynamic-flow-list extension call only — the native
+    // handler short-circuits the actual tool invocation, so we never
+    // need bridge readiness for the experience_suggest_plan call itself.
+    const stubDynamicFlowList = () => {
+      jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait').mockResolvedValue({
+        status: 'success',
+        items: [],
+      } as never);
+    };
+
+    it('a successful suggest call leaves experience_action_paths empty and marks the session aggregated', async () => {
+      stubDynamicFlowList();
+
+      const result = await handleToolCall('experience_suggest_plan', { intent: 'open issues' });
+      expect(result.isError).toBe(false);
+      const body = JSON.parse(String(result.content[0].text));
+      expect(body.status).toBe('no_match');
+      expect(body.plans).toEqual([]);
+
+      // Memory audit-trail is preserved.
+      const sessions = sessionManager.listSessions();
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].status).toBe('completed');
+      expect(sessions[0].steps).toHaveLength(1);
+      expect(sessions[0].steps[0].toolName).toBe('experience_suggest_plan');
+
+      const experience = sessionManager.experience;
+      expect(experience).not.toBeNull();
+      // No bucket for the meaningful intent the caller asked about.
+      expect(experience!.suggestActionPaths({ intentSignature: 'open issues', limit: 5 })).toEqual(
+        [],
+      );
+      // No self-pollution bucket either (the task-intent string the
+      // wrapper synthesizes for every tool call).
+      expect(
+        experience!.suggestActionPaths({
+          intentSignature: 'run mcp tool experience_suggest_plan',
+          limit: 5,
+        }),
+      ).toEqual([]);
+
+      // Replaying the aggregator must be a no-op — i.e. the skipped
+      // session was actually marked, not stuck in pending.
+      const replay = await handleToolCall('experience_suggest_plan', { intent: 'open issues' });
+      expect(replay.isError).toBe(false);
+      expect(
+        experience!.suggestActionPaths({
+          intentSignature: 'run mcp tool experience_suggest_plan',
+          limit: 5,
+        }),
+      ).toEqual([]);
+    });
+
+    it('a bad-input suggest call also does not pollute Experience', async () => {
+      stubDynamicFlowList();
+
+      const result = await handleToolCall('experience_suggest_plan', {} as never);
+      expect(result.isError).toBe(true);
+
+      const sessions = sessionManager.listSessions();
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].status).toBe('failed');
+      expect(sessions[0].steps[0].toolName).toBe('experience_suggest_plan');
+
+      const experience = sessionManager.experience;
+      expect(experience).not.toBeNull();
+      expect(
+        experience!.suggestActionPaths({
+          intentSignature: 'run mcp tool experience_suggest_plan',
+          limit: 5,
+        }),
+      ).toEqual([]);
+    });
+  });
+
   it('prefers tool_not_available over policy denial when a P3 tool is disabled by MCP_DISABLE_SENSITIVE_TOOLS', async () => {
     markBridgeReady();
     process.env.MCP_DISABLE_SENSITIVE_TOOLS = 'true';

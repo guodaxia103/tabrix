@@ -47,6 +47,30 @@ function toStepSequence(
   }));
 }
 
+/**
+ * Tools whose Memory sessions must NOT be projected into Experience.
+ *
+ * These are read-side native MCP tools that query Experience itself
+ * (B-013). They legitimately produce audit-trail Memory sessions, but
+ * if the aggregator turned each call into an `experience_action_paths`
+ * row we would seed bogus `(pageRole='unknown', intent='run mcp tool
+ * experience_suggest_plan')` buckets every time an upstream agent asks
+ * for suggestions — corrupting the very dataset the suggestions are
+ * read from.
+ *
+ * Sessions whose entire step list belongs to this set are marked
+ * `aggregated_at` (so the pending-aggregation scan does not keep
+ * re-encountering them) but skipped from upsert.
+ */
+const EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS: ReadonlySet<string> = new Set([
+  'experience_suggest_plan',
+]);
+
+function isExcludedFromAggregation(steps: ReturnType<StepRepository['listBySession']>): boolean {
+  if (steps.length === 0) return false;
+  return steps.every((step) => EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS.has(step.toolName));
+}
+
 function toCounterDelta(status: PendingAggregationSession['status']): {
   successDelta: number;
   failureDelta: number;
@@ -103,13 +127,24 @@ export class ExperienceAggregator {
     let projected = 0;
 
     for (const session of pending) {
+      const sessionSteps = this.steps.listBySession(session.sessionId);
+      const markTime = nowIso ?? new Date().toISOString();
+
+      // B-013 P1 fix: read-side Experience MCP tools (e.g.
+      // `experience_suggest_plan`) keep their Memory session for audit
+      // purposes but must not feed back into Experience itself. Mark
+      // them aggregated so the pending-scan moves on, then continue.
+      if (isExcludedFromAggregation(sessionSteps)) {
+        this.sessions.markAggregated(session.sessionId, markTime);
+        continue;
+      }
+
       const intentSignature = normalizeIntentSignature(session.taskIntent);
       const pageRole = this.snapshots.findLatestPageRoleForSession(session.sessionId) ?? 'unknown';
-      const stepSequence = toStepSequence(this.steps.listBySession(session.sessionId));
+      const stepSequence = toStepSequence(sessionSteps);
       const { successDelta, failureDelta } = toCounterDelta(session.status);
       const actionPathId = buildActionPathId(pageRole, intentSignature);
       const sessionLastUsedAt = session.endedAt ?? session.startedAt;
-      const markTime = nowIso ?? new Date().toISOString();
 
       this.upsertAndMarkTxn({
         actionPathId,

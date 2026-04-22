@@ -335,6 +335,70 @@ describe('ExperienceAggregator (B-012 v1)', () => {
     }
   });
 
+  it('H: native read-only Experience tools are skipped (marked aggregated, not projected)', () => {
+    // B-013 P1 regression: `experience_suggest_plan` produces a Memory
+    // session for audit, but must not feed back into Experience itself
+    // (otherwise every suggest call seeds bogus
+    // `(unknown, "run mcp tool experience_suggest_plan")` buckets).
+    const { db, taskRepo, sessionRepo, stepRepo, aggregator, experienceRepo, close } = bootstrap();
+    try {
+      insertTask(taskRepo, {
+        taskId: 'task-suggest',
+        intent: 'Run MCP tool experience_suggest_plan',
+      });
+      insertSession(sessionRepo, {
+        sessionId: 's-suggest',
+        taskId: 'task-suggest',
+        status: 'completed',
+      });
+      insertStep(stepRepo, {
+        stepId: 'suggest-step',
+        sessionId: 's-suggest',
+        index: 1,
+        toolName: 'experience_suggest_plan',
+      });
+
+      // A regular Memory-touching session in the same batch must still
+      // project — the exclusion is per-session, not global.
+      insertTask(taskRepo, { taskId: 'task-real', intent: 'open issues' });
+      insertSession(sessionRepo, {
+        sessionId: 's-real',
+        taskId: 'task-real',
+        status: 'completed',
+      });
+      insertStep(stepRepo, {
+        stepId: 'real-step',
+        sessionId: 's-real',
+        index: 1,
+        toolName: 'chrome_read_page',
+      });
+
+      const result = aggregator.projectPendingSessions('2026-04-22T00:00:00.000Z');
+      expect(result.scanned).toBe(2);
+      expect(result.projected).toBe(1);
+
+      const rows = experienceRepo.listActionPaths();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].intentSignature).toBe('open issues');
+      // Make sure the polluting bucket really is absent.
+      expect(rows.find((row) => row.intentSignature.includes('experience_suggest_plan'))).toBe(
+        undefined,
+      );
+
+      // The skipped session must be marked so it never returns to the
+      // pending-scan; otherwise we would spin on it forever.
+      const marker = db
+        .prepare('SELECT aggregated_at FROM memory_sessions WHERE session_id = ?')
+        .get('s-suggest') as { aggregated_at: string | null } | undefined;
+      expect(marker?.aggregated_at).toBe('2026-04-22T00:00:00.000Z');
+
+      const replay = aggregator.projectPendingSessions('2026-04-22T00:01:00.000Z');
+      expect(replay).toEqual({ scanned: 0, projected: 0 });
+    } finally {
+      close();
+    }
+  });
+
   it('G: historyRef picks the first non-empty artifact ref', () => {
     const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
       bootstrap();
