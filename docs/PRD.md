@@ -177,7 +177,7 @@ Tabrix is a four-layer learning loop sitting on top of a tool surface and a tran
 
 **Gaps vs. target**:
 
-- `read_page` HVO `targetRef` is not yet stable across reloads (Stage 3a — `B-011`).
+- `read_page` HVO `targetRef` v1 stable key landed (Stage 3a — `B-011`, 2026-04-22; `tgt_<10-hex>` derived from pageRole/objectSubType/role/normalizedLabel/hrefPathBucket/ordinal, click bridge resolves through a per-tab registry, T5-F real-browser acceptance green). UI-Map–driven `targetRef` consumer cutover is the v2 follow-up.
 - Locator hints for non-GitHub families still in TS adapters.
 - API Knowledge **v1 landed (Stage 3g — `B-017`, capture-only, GitHub-first, capability-gated)**; the call layer (`knowledge_call_api`) and Sidepanel per-site toggle remain in v2.
 - Only GitHub is properly data-fied; Douyin and Creator Center still TS-first (Stage 4c).
@@ -427,7 +427,7 @@ Full detail, DoD, and `B-*` mapping lives in [`TASK_ROADMAP.md`](./TASK_ROADMAP.
 
 ```
 Wave 1 (near-term, parallelizable)
-  3a · Knowledge UI Map + stable targetRef       (B-010 done; B-011 next)
+  3a · Knowledge UI Map + stable targetRef       (B-010 done; B-011 v1 done — UI-Map consumer cutover deferred to v2)
   3d · read_page(render='markdown')              (B-015 pool)
   3g · API Knowledge (capture v1)                (B-017 v1 done; v2 in pool) ← biggest K1 lever
   3f · Policy capability opt-in enum             (B-016 v1 done)

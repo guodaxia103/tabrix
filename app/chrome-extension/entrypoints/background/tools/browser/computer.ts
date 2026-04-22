@@ -15,6 +15,7 @@ import {
   type ActionType,
 } from './gif-recorder';
 import { type CandidateActionInput, resolveCandidateActionTarget } from './candidate-action';
+import { lookupStableTargetRef } from './stable-target-ref-registry';
 
 type MouseButton = 'left' | 'right' | 'middle';
 
@@ -314,7 +315,20 @@ class ComputerTool extends BaseBrowserToolExecutor {
       explicitSelector: params.selector,
       explicitSelectorType: params.selectorType,
       candidateAction: params.candidateAction,
+      tabId: tab.id,
+      lookupStableTargetRef,
     });
+
+    // B-011: same fail-closed contract as click/fill — never silently route
+    // an unresolved stable targetRef into the content-script ref map.
+    if (resolvedTarget.source === 'unresolved_stable_target_ref') {
+      return createErrorResponse(
+        `${ERROR_MESSAGES.INVALID_PARAMETERS}: candidateAction.targetRef "${
+          resolvedTarget.unresolvedStableTargetRef
+        }" is a stable id (B-011) but no current snapshot of this tab has it. Call chrome_read_page on this tab first, then re-issue the action with the latest targetRef.`,
+      );
+    }
+
     const resolvedRef = resolvedTarget.ref;
     const resolvedSelector = resolvedTarget.selector;
     const resolvedSelectorType = resolvedTarget.selectorType || params.selectorType;

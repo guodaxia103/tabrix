@@ -30,6 +30,7 @@ import {
   githubHighValueObjectAdapter,
   githubObjectLayerAdapter,
 } from './read-page-high-value-objects-github';
+import { annotateStableTargetRefs } from './stable-target-ref';
 
 interface TaskProtocolParams {
   mode: 'compact' | 'normal' | 'full';
@@ -418,9 +419,15 @@ function buildHighValueObjects(
   // alignment boost applies correctly. Reuse `initialContext` inputs untouched.
   const finalContext: ObjectLayerContext = { ...initialContext, taskMode };
   const finalScored = runObjectPipeline(finalContext, inputs);
-  const highValueObjects = rankScoredObjects(finalScored)
+  const ranked = rankScoredObjects(finalScored)
     .slice(0, MAX_HIGH_VALUE_OBJECTS)
     .map((item) => toHighValueObject(item, params));
+
+  // B-011: annotate stable targetRefs after ranking + dedup so ordinals are
+  // computed against the *final* HVO order (visible to upstream callers).
+  // This must happen after `rankScoredObjects` and the slice cap so two
+  // reads of the same page produce the same ordinals per identity tuple.
+  const highValueObjects = annotateStableTargetRefs(ranked, params.pageRole);
 
   return { highValueObjects, taskMode };
 }

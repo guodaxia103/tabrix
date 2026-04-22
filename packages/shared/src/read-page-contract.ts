@@ -167,7 +167,34 @@ export interface ReadPageHighValueObject {
    * picker can match a target by URL instead of fragile label text.
    */
   href?: string;
+  /**
+   * B-011 stable targetRef. Format: `tgt_<10-hex>`, derived deterministically
+   * from `(pageRole | objectSubType | role | normalizedLabel | hrefPathBucket
+   * | ordinal)` so that the same logical DOM object surfaces the same value
+   * across reloads, cosmetic class toggles, and minor list churn.
+   *
+   * Distinct from `id` (which is derived from per-snapshot `ref` and
+   * therefore volatile) and from `ref` (the per-snapshot accessibility-tree
+   * handle). Upstream callers MAY persist this value across turns and feed
+   * it back as `candidateAction.targetRef` on `chrome_click_element` /
+   * `chrome_fill_or_select` / `chrome_computer left_click|fill`. The click
+   * bridge resolves it through an internal per-tab snapshot registry; if the
+   * registry has no mapping (e.g. caller has not re-read the page since the
+   * last navigation), the click bridge fails closed with a clear message
+   * rather than silently aiming at a stale ref.
+   *
+   * Optional: present whenever the snapshot has enough signal to derive a
+   * deterministic key. Older snapshots and degraded snapshots may omit it.
+   */
+  targetRef?: string;
 }
+
+/**
+ * B-011 prefix marking a stable targetRef. Pure constant so the click
+ * bridge can deterministically distinguish stable refs from per-snapshot
+ * refs without parsing or guessing.
+ */
+export const STABLE_TARGET_REF_PREFIX = 'tgt_' as const;
 
 export interface ReadPageTaskLevel0 {
   summary: string;

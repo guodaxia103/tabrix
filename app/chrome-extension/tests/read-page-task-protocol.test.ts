@@ -293,4 +293,77 @@ describe('read_page task protocol', () => {
     const protocol = buildTaskProtocol(params as any);
     expect(protocol.taskMode).toBe(expected);
   });
+
+  // ----- B-011: stable targetRef on HVO ----------------------------------
+  describe('B-011 stable targetRef integration', () => {
+    function buildRepoHomeParams(refSuffix: string) {
+      return createBaseParams({
+        currentUrl: 'https://github.com/example/project',
+        currentTitle: 'example/project',
+        pageRole: 'repo_home',
+        primaryRegion: 'repo_primary_nav',
+        interactiveElements: [
+          { ref: `ref_issues_${refSuffix}`, role: 'link', name: 'Issues' },
+          { ref: `ref_pulls_${refSuffix}`, role: 'link', name: 'Pull requests' },
+          { ref: `ref_actions_${refSuffix}`, role: 'link', name: 'Actions' },
+        ],
+        candidateActions: [
+          {
+            id: `ca_click_ref_issues_${refSuffix}`,
+            actionType: 'click',
+            targetRef: `ref_issues_${refSuffix}`,
+            confidence: 0.72,
+            matchReason: 'interactive clickable candidate from structured snapshot',
+            locatorChain: [{ type: 'aria', value: 'Issues' }],
+          },
+          {
+            id: `ca_click_ref_pulls_${refSuffix}`,
+            actionType: 'click',
+            targetRef: `ref_pulls_${refSuffix}`,
+            confidence: 0.72,
+            matchReason: 'interactive clickable candidate from structured snapshot',
+            locatorChain: [{ type: 'aria', value: 'Pull requests' }],
+          },
+          {
+            id: `ca_click_ref_actions_${refSuffix}`,
+            actionType: 'click',
+            targetRef: `ref_actions_${refSuffix}`,
+            confidence: 0.72,
+            matchReason: 'interactive clickable candidate from structured snapshot',
+            locatorChain: [{ type: 'aria', value: 'Actions' }],
+          },
+        ],
+      });
+    }
+
+    it('emits a tgt_<10-hex> targetRef on every link-bearing HVO', () => {
+      const protocol = buildTaskProtocol(buildRepoHomeParams('a') as any);
+      const top = protocol.highValueObjects.slice(0, 3);
+      for (const obj of top) {
+        expect(obj.targetRef).toMatch(/^tgt_[0-9a-f]{10}$/);
+      }
+    });
+
+    it('keeps targetRef stable across re-reads when only per-snapshot ref values churn', () => {
+      const a = buildTaskProtocol(buildRepoHomeParams('a') as any);
+      const b = buildTaskProtocol(buildRepoHomeParams('b') as any);
+      const issuesA = a.highValueObjects.find((o) => o.label === 'Issues');
+      const issuesB = b.highValueObjects.find((o) => o.label === 'Issues');
+      expect(issuesA?.targetRef).toBeTruthy();
+      expect(issuesA?.targetRef).toBe(issuesB?.targetRef);
+      // Note: the synthesized repo-nav-tab HVO carries no per-snapshot ref
+      // (seed-only path), but the targetRef equality above is the contract
+      // we rely on for cross-reload upstream reuse, not the underlying ref.
+    });
+
+    it('produces distinct targetRefs for distinct logical objects', () => {
+      const protocol = buildTaskProtocol(buildRepoHomeParams('a') as any);
+      const labels = ['Issues', 'Pull requests', 'Actions'];
+      const refs = labels
+        .map((l) => protocol.highValueObjects.find((o) => o.label === l)?.targetRef)
+        .filter((v): v is string => Boolean(v));
+      expect(refs.length).toBe(3);
+      expect(new Set(refs).size).toBe(3);
+    });
+  });
 });

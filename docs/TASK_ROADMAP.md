@@ -37,7 +37,7 @@ When in doubt: **do not expand scope without updating this file first**. Scope c
 
 ```
 Wave 1 — near-term, parallelizable. Starts unblocked.
-  Stage 3a · Knowledge UI Map + stable targetRef      [B-010 done, B-011 next]
+  Stage 3a · Knowledge UI Map + stable targetRef      [B-010 done; B-011 v1 done]
   Stage 3d · read_page(render='markdown')             [B-015 pool]
   Stage 3g · API Knowledge (XHR/fetch capture)        [B-017 v1 done]    ← biggest K1 lever (data side); call-side deferred
   Stage 3f · Policy capability opt-in enum            [B-016 v1 done]    capability allowlist landed; v1 ships only `api_knowledge`
@@ -76,7 +76,7 @@ Wave 5 — long horizon, no dates.
 - **Layer**: `K`
 - **KPI**: `更准` · `更稳` · `省 token`
 - **Priority**: `P0` · **Size**: `M` · **Dependencies**: none
-- **Status**: **partially done** — UI Map schema + GitHub seed + lookup landed in `B-010`. Stable `targetRef` is `B-011`, pending.
+- **Status**: **v1 done** — UI Map schema + GitHub seed + lookup landed in `B-010`; stable `targetRef` v1 landed in `B-011` (extension HVO emits `tgt_<10-hex>`, click bridge resolves stable→snapshot ref via per-tab registry, real-browser golden path acceptance is green). UI Map consumer cutover (item 6) still pending.
 
 ### Scope
 
@@ -84,7 +84,7 @@ Wave 5 — long horizon, no dates.
 2. `compileKnowledgeRegistry` compiles + indexes UI map rules by `(siteId, pageRole, purpose)`; duplicate triples are rejected at compile time. Landed in `B-010`.
 3. `lookup/resolve-ui-map.ts` exposing `lookupUIMapRule` / `listUIMapRulesForPage` / `listUIMapRulesForSite`. Landed in `B-010`.
 4. GitHub seed: the first five purposes — `repo_home.open_issues_tab`, `repo_home.open_actions_tab`, `issues_list.new_issue_cta`, `issues_list.search_input`, `actions_list.filter_input`. Landed in `B-010`.
-5. `read_page` HVO output gains **stable `targetRef`** = `historyRef` + HVO index + `contentHash`, so upstream LLMs can reference the same HVO across reloads. Pending in `B-011`.
+5. `read_page` HVO output gains **stable `targetRef`** so upstream LLMs can reference the same HVO across reloads — landed in `B-011` v1. Final shape is `tgt_<10-hex>` derived from `cyrb53(pageRole | objectSubType | role | normalizedLabel | hrefPathBucket | ordinal)`; the `historyRef + hvoIndex + contentHash` direction in earlier docs proved fragile because `historyRef` was hardcoded `null` and `hvoIndex` drifted with cosmetic list churn. The bridge (`candidate-action.ts` + `interaction.ts` + `computer.ts`) now resolves `candidateAction.targetRef = tgt_*` through a per-tab snapshot registry and fails closed with a clear "re-read first" error when the registry has no mapping (e.g. service-worker eviction or stale targetRef).
 6. `candidate-action.ts` gradually migrates hardcoded locator-priority logic to consult UI Map hints. Pending (scoped behind `KNOWLEDGE_REGISTRY_MODE = on | off | diff`).
 
 ### Non-scope
@@ -103,7 +103,7 @@ Wave 5 — long horizon, no dates.
 ### Linked `B-*`
 
 - ✅ `B-010` — `KnowledgeUIMapRule` schema + GitHub seed + read-only lookup (done).
-- ⬜ `B-011` — `read_page` HVO stable `targetRef` (`historyRef` + HVO index + `contentHash`).
+- ✅ `B-011` v1 — `read_page` HVO stable `targetRef` (`tgt_<10-hex>` from `cyrb53(pageRole|objectSubType|role|normalizedLabel|hrefPathBucket|ordinal)`); click bridge resolves stable→snapshot ref via per-tab registry; real-browser golden path acceptance `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` is green.
 
 ### Notes for incoming AI
 
@@ -761,10 +761,12 @@ Before adding any MCP tool / background listener / sidepanel tab / shared type, 
 
 Pick in this order unless something blocks:
 
-1. `B-011` — Stable `targetRef` (finishes Stage 3a properly).
-2. `B-015` — `read_page(render='markdown')` (Stage 3d, small and high-K1).
-3. `B-018` — `tabrix_choose_context` MCP tool (Stage 3h) — now unblocked by the v1 of `B-016` + `B-017`.
+1. `B-015` — `read_page(render='markdown')` (Stage 3d, small and high-K1).
+2. `B-018` v2 — full Stage 3h DoD on top of the v1 selector (now also able to consume `B-011` stable `targetRef`).
+3. Stage 3a follow-up — UI Map consumer cutover inside `candidate-action.ts` (Stage 3a item 6, deferred from `B-011`).
 4. Stage 3b write-side follow-up — `experience_replay` + `experience_score_step` (needs Policy review first; not a single backlog ID yet).
+
+`B-011` v1 landed 2026-04-22 (stable HVO `targetRef` end-to-end: extension emits `tgt_<10-hex>`, click bridge resolves stable→snapshot ref via per-tab registry, real-browser golden path `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` green).
 
 `B-016` and `B-017` v1 landed 2026-04-22 (capture-only, GitHub-first, capability-gated). v2 work for `B-017` (call layer / JSON-Schema inference / Sidepanel per-site toggle) is intentionally **not** in the next-sprint candidates yet — sequence it after `B-018` proves the read side is actually used.
 

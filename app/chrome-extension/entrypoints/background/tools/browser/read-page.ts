@@ -19,6 +19,11 @@ import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import { ERROR_MESSAGES } from '@/common/constants';
 import { buildTaskProtocol } from './read-page-task-protocol';
 import { inferPageUnderstanding, type PageRole } from './read-page-understanding';
+import { buildHistoryRef } from './stable-target-ref';
+import {
+  recordStableTargetRefSnapshot,
+  type StableTargetRefEntry,
+} from './stable-target-ref-registry';
 
 interface ReadPageStats {
   processed: number;
@@ -536,12 +541,24 @@ function buildExtensionLayer(params: {
     contentSummary: params.contentSummary,
   });
 
+  // B-011: populate `historyRef` with a compact snapshot identifier so
+  // upstream callers can correlate stable HVO `targetRef`s back to the
+  // snapshot they were first seen in. The seed mixes URL host + path,
+  // pageRole and a tiny content fingerprint so two reads of the same
+  // page yield the same historyRef when content is unchanged but
+  // distinct refs after a real navigation. Pure helper, no I/O.
+  const historyRef = buildHistoryRef({
+    url: params.currentUrl,
+    pageRole: params.pageRole,
+    contentSeed: `${params.contentSummary.normalizedLength}|${taskProtocol.highValueObjects.length}`,
+  });
+
   return {
     candidateActions: params.candidateActions,
     pageContext: params.pageContext,
     // T3.2: reserved extension fields (not locked as long-term schema yet).
     frameContext: null,
-    historyRef: null,
+    historyRef,
     memoryHints: [],
     taskMode: taskProtocol.taskMode,
     complexityLevel: taskProtocol.complexityLevel,
@@ -640,6 +657,21 @@ function buildModeOutput(params: {
     interactiveElements,
     pageContext,
   });
+
+  // B-011: feed the per-tab stable-targetRef registry so the click bridge
+  // can translate `tgt_*` from prior turns back into the live per-snapshot
+  // `ref_*` for this exact tab. We do this exactly once per snapshot, after
+  // the extension layer is built but before serializing the response, so
+  // every successful read replaces the previous mapping atomically.
+  if (Array.isArray(extensionLayer.highValueObjects)) {
+    const entries: StableTargetRefEntry[] = [];
+    for (const obj of extensionLayer.highValueObjects) {
+      if (obj.targetRef && obj.ref) {
+        entries.push({ targetRef: obj.targetRef, ref: obj.ref });
+      }
+    }
+    recordStableTargetRefSnapshot(params.tabId, entries);
+  }
 
   const sharedPayload: ReadPageCompactSnapshot = {
     ...stableLayer,

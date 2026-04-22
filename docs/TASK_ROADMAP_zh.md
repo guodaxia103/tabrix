@@ -37,7 +37,7 @@
 
 ```
 Wave 1 —— 近期可并行，不阻塞。
-  Stage 3a · Knowledge UI Map + 稳定 targetRef     [B-010 done; B-011 next]
+  Stage 3a · Knowledge UI Map + 稳定 targetRef     [B-010 done; B-011 v1 done]
   Stage 3d · read_page(render='markdown')          [B-015 pool]
   Stage 3g · API Knowledge（XHR/fetch 捕获）        [B-017 v1 done] ← K1 最大杠杆（数据侧）；call 侧延后
   Stage 3f · Policy capability opt-in 枚举         [B-016 v1 done] capability allowlist 已落地；v1 只暴露 `api_knowledge`
@@ -76,7 +76,7 @@ Wave 5 —— 远期，无具体时间。
 - **层**：`K`
 - **KPI**：`更准` · `更稳` · `省 token`
 - **优先级**：`P0` · **规模**：`M` · **依赖**：无
-- **状态**：**部分完成** —— UI Map schema + GitHub seed + lookup 已在 `B-010` 落地。稳定 `targetRef` 是 `B-011`，待做。
+- **状态**：**v1 完成** —— UI Map schema + GitHub seed + lookup 已在 `B-010` 落地；稳定 `targetRef` v1 已在 `B-011` 落地（扩展端 HVO 直接产出 `tgt_<10-hex>`，click 桥接通过 per-tab registry 把 stable→snapshot ref 还原，真实浏览器黄金链路 `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` 已绿）。UI Map 消费端切换（item 6）仍待做。
 
 ### 范围
 
@@ -84,7 +84,7 @@ Wave 5 —— 远期，无具体时间。
 2. `compileKnowledgeRegistry` 编译 + 按 `(siteId, pageRole, purpose)` 建索引；重复 triple 编译期拒绝。—— `B-010` 落地。
 3. `lookup/resolve-ui-map.ts` 暴露 `lookupUIMapRule` / `listUIMapRulesForPage` / `listUIMapRulesForSite`。—— `B-010` 落地。
 4. GitHub seed：首批 5 个 purpose —— `repo_home.open_issues_tab` / `repo_home.open_actions_tab` / `issues_list.new_issue_cta` / `issues_list.search_input` / `actions_list.filter_input`。—— `B-010` 落地。
-5. `read_page` HVO 输出加**稳定 `targetRef`** = `historyRef` + HVO index + `contentHash`，让上游 LLM 跨重载引用同一个 HVO。—— `B-011` 待做。
+5. `read_page` HVO 输出加**稳定 `targetRef`**，让上游 LLM 跨重载引用同一个 HVO。—— `B-011` v1 落地。最终格式是 `tgt_<10-hex>`，由 `cyrb53(pageRole | objectSubType | role | normalizedLabel | hrefPathBucket | ordinal)` 算出；早期文档里的 `historyRef + hvoIndex + contentHash` 路径在核实阶段被证伪：`historyRef` 之前一直硬编码 `null`，`hvoIndex` 也会随列表轻微抖动而漂移。click 桥（`candidate-action.ts` + `interaction.ts` + `computer.ts`）通过 per-tab snapshot registry 把 `candidateAction.targetRef = tgt_*` 还原为当前 snapshot 的 ref；registry 里查不到（service worker 被回收 / 上游用了过期 targetRef）时立刻 fail-closed 并返回 "请先 chrome_read_page" 的明确提示。
 6. `candidate-action.ts` 渐进迁移硬编码的 locator 优先级到 UI Map lookup。—— 渐进；受 `KNOWLEDGE_REGISTRY_MODE = on | off | diff` 控制。
 
 ### 非范围
@@ -103,7 +103,7 @@ Wave 5 —— 远期，无具体时间。
 ### 关联 `B-*`
 
 - ✅ `B-010` —— `KnowledgeUIMapRule` schema + GitHub seed + 只读 lookup（done）。
-- ⬜ `B-011` —— `read_page` HVO 稳定 `targetRef`（`historyRef` + HVO index + `contentHash`）。
+- ✅ `B-011` v1 —— `read_page` HVO 稳定 `targetRef`（`tgt_<10-hex>`，由 `cyrb53(pageRole|objectSubType|role|normalizedLabel|hrefPathBucket|ordinal)` 算出）；click 桥经 per-tab registry 把 stable→snapshot ref 还原；真实浏览器黄金链路 `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` 已绿。
 
 ### 给接手 AI 的提示
 
@@ -761,10 +761,12 @@ Memory 加 `user_preferences { key, value, sourceSessionId, confidence }` ——
 
 没阻塞的话按这个顺序捡：
 
-1. `B-011` —— 稳定 `targetRef`（把 Stage 3a 真正收掉）。
-2. Stage 3b 写侧后续项 —— `experience_replay` + `experience_score_step`（需要先做 Policy review；目前没有单独 backlog ID）。
-3. `B-015` —— `read_page(render='markdown')`（Stage 3d，小而 K1 大）。
-4. `B-018` —— `tabrix_choose_context` MCP 工具（Stage 3h），现已被 `B-016` + `B-017` v1 解锁。
+1. `B-015` —— `read_page(render='markdown')`（Stage 3d，小而 K1 大）。
+2. `B-018` v2 —— 在 v1 选择器之上完成 Stage 3h 完整 DoD（现已可消费 `B-011` 的稳定 `targetRef`）。
+3. Stage 3a 后续项 —— `candidate-action.ts` 的 UI Map 消费切换（Stage 3a item 6，`B-011` 留下来的尾巴）。
+4. Stage 3b 写侧后续项 —— `experience_replay` + `experience_score_step`（需要先做 Policy review；目前没有单独 backlog ID）。
+
+`B-011` v1 已于 2026-04-22 落地（HVO 稳定 `targetRef` 端到端：扩展端产出 `tgt_<10-hex>`，click 桥经 per-tab registry 还原 stable→snapshot ref，真实浏览器黄金链路 `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` 已绿）。
 
 `B-016` / `B-017` v1 已于 2026-04-22 落地（仅捕获、GitHub-first、受 capability gate 控制）。`B-017` v2（call 层 / JSON-Schema 推断 / Sidepanel 按站 toggle）**暂不**进入下个 sprint 候选 —— 等 `B-018` 把读侧需求验出来再排。
 

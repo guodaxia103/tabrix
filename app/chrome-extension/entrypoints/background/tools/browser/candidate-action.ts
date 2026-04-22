@@ -1,4 +1,8 @@
-import type { ReadPageCandidateAction, ReadPageCandidateActionLocator } from '@tabrix/shared';
+import {
+  STABLE_TARGET_REF_PREFIX,
+  type ReadPageCandidateAction,
+  type ReadPageCandidateActionLocator,
+} from '@tabrix/shared';
 
 export type CandidateActionSelectorType = 'css' | 'xpath';
 
@@ -6,11 +10,26 @@ export type CandidateActionInput = Partial<
   Pick<ReadPageCandidateAction, 'targetRef' | 'locatorChain'>
 >;
 
+/**
+ * Optional B-011 hooks. Kept as a thin functional interface so the click
+ * bridge can pass in a real registry while unit tests pass a stub.
+ *
+ * The contract is intentionally narrow:
+ *   - `tabId` is the tab the resolved click will target. Without it the
+ *     resolver cannot scope the registry lookup.
+ *   - `lookupStableTargetRef(tabId, targetRef)` returns the live per-snapshot
+ *     `ref` for `targetRef`, or `undefined` if there is no current mapping
+ *     (e.g. service worker evicted, page navigated, registry never written).
+ */
 export interface ResolveCandidateActionTargetParams {
   explicitRef?: string;
   explicitSelector?: string;
   explicitSelectorType?: CandidateActionSelectorType;
   candidateAction?: CandidateActionInput;
+  /** Tab the click will execute against. Required for stable-targetRef lookup. */
+  tabId?: number;
+  /** Lookup function injected by the caller. */
+  lookupStableTargetRef?: (tabId: number, targetRef: string) => string | undefined;
 }
 
 export interface ResolvedCandidateActionTarget {
@@ -19,11 +38,20 @@ export interface ResolvedCandidateActionTarget {
   selectorType?: CandidateActionSelectorType;
   source:
     | 'explicit_ref'
+    | 'candidate_stable_target_ref'
     | 'candidate_target_ref'
     | 'explicit_selector'
     | 'candidate_locator_ref'
     | 'candidate_locator_css'
-    | 'none';
+    | 'none'
+    | 'unresolved_stable_target_ref';
+  /**
+   * When `source === 'unresolved_stable_target_ref'` this carries the
+   * literal `tgt_*` value the caller supplied so the click bridge can
+   * surface it in the error message and tell the upstream LLM exactly
+   * what to re-read.
+   */
+  unresolvedStableTargetRef?: string;
 }
 
 function asNonEmptyString(value: unknown): string | undefined {
@@ -45,6 +73,10 @@ function firstLocatorValue(
   return undefined;
 }
 
+function isStableTargetRef(value: string): boolean {
+  return value.startsWith(STABLE_TARGET_REF_PREFIX);
+}
+
 export function resolveCandidateActionTarget(
   params: ResolveCandidateActionTargetParams,
 ): ResolvedCandidateActionTarget {
@@ -58,6 +90,32 @@ export function resolveCandidateActionTarget(
 
   const candidateTargetRef = asNonEmptyString(params.candidateAction?.targetRef);
   if (candidateTargetRef) {
+    // B-011: if the caller hands us a stable targetRef (`tgt_*`) we MUST
+    // route it through the per-tab snapshot registry. The rationale is
+    // that stable targetRefs are NOT valid accessibility-tree handles —
+    // forwarding one straight to the content script would always miss.
+    // Failing closed here also prevents the click bridge from silently
+    // aiming at a stale per-snapshot ref that happens to share a prefix.
+    if (isStableTargetRef(candidateTargetRef)) {
+      const lookup = params.lookupStableTargetRef;
+      const tabId = params.tabId;
+      if (lookup && typeof tabId === 'number') {
+        const resolved = lookup(tabId, candidateTargetRef);
+        if (resolved) {
+          return {
+            ref: resolved,
+            source: 'candidate_stable_target_ref',
+          };
+        }
+      }
+      // Surface the unresolved case explicitly so the bridge can return a
+      // helpful "call chrome_read_page first" error instead of a generic
+      // "ref not found" message from the content-script side.
+      return {
+        source: 'unresolved_stable_target_ref',
+        unresolvedStableTargetRef: candidateTargetRef,
+      };
+    }
     return {
       ref: candidateTargetRef,
       source: 'candidate_target_ref',

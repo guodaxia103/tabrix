@@ -11,6 +11,7 @@ import { TIMEOUTS, ERROR_MESSAGES } from '@/common/constants';
 import { handleDownloadTool, markNextDownloadAsInteractive } from './download';
 import { prearmDialogHandling } from './dialog-prearm';
 import { type CandidateActionInput, resolveCandidateActionTarget } from './candidate-action';
+import { lookupStableTargetRef } from './stable-target-ref-registry';
 import {
   type ClickVerifierContext,
   type ClickVerifierResult,
@@ -479,7 +480,21 @@ class ClickTool extends BaseBrowserToolExecutor {
         explicitSelector: selector,
         explicitSelectorType: selectorType,
         candidateAction: args.candidateAction,
+        tabId: tab.id,
+        lookupStableTargetRef,
       });
+
+      // B-011: when a stable targetRef was supplied but the per-tab
+      // snapshot registry has no live mapping, fail closed with a clear
+      // remediation message. Falling back to the raw `tgt_*` would always
+      // miss in the content script and waste a click.
+      if (resolvedTarget.source === 'unresolved_stable_target_ref') {
+        return createErrorResponse(
+          `${ERROR_MESSAGES.INVALID_PARAMETERS}: candidateAction.targetRef "${
+            resolvedTarget.unresolvedStableTargetRef
+          }" is a stable id (B-011) but no current snapshot of this tab has it. Call chrome_read_page on this tab first, then re-issue the click with the latest targetRef.`,
+        );
+      }
 
       let finalRef = resolvedTarget.ref;
       let finalSelector = resolvedTarget.selector;
@@ -807,7 +822,20 @@ class FillTool extends BaseBrowserToolExecutor {
         explicitSelector: selector,
         explicitSelectorType: selectorType,
         candidateAction: args.candidateAction,
+        tabId: tab.id,
+        lookupStableTargetRef,
       });
+
+      // B-011: same fail-closed rule as clickTool — if the caller passed
+      // a stable targetRef and the registry has nothing for this tab,
+      // tell them exactly how to recover instead of probing the DOM.
+      if (resolvedTarget.source === 'unresolved_stable_target_ref') {
+        return createErrorResponse(
+          `${ERROR_MESSAGES.INVALID_PARAMETERS}: candidateAction.targetRef "${
+            resolvedTarget.unresolvedStableTargetRef
+          }" is a stable id (B-011) but no current snapshot of this tab has it. Call chrome_read_page on this tab first, then re-issue the fill with the latest targetRef.`,
+        );
+      }
 
       let finalRef = resolvedTarget.ref;
       let finalSelector = resolvedTarget.selector;

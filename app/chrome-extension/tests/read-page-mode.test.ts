@@ -36,7 +36,12 @@ function expectCommonSnapshotShape(payload: any, mode: 'compact' | 'normal' | 'f
     refMapCount: expect.any(Number),
   });
   expect(payload.frameContext).toBeNull();
-  expect(payload.historyRef).toBeNull();
+  // B-011: historyRef is now populated with `read://<host>/<role>/<sha8>` whenever
+  // the snapshot has a URL. Degraded paths (e.g. unsupported pages) keep null.
+  if (payload.historyRef !== null) {
+    expect(typeof payload.historyRef).toBe('string');
+    expect(payload.historyRef).toMatch(/^read:\/\/[^/]+\/[^/]+\/[0-9a-f]{8}$/);
+  }
   expect(Array.isArray(payload.memoryHints)).toBe(true);
   expect(payload.taskMode).toEqual(expect.any(String));
   expect(payload.complexityLevel).toEqual(expect.any(String));
