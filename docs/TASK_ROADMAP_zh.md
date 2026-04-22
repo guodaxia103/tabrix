@@ -39,8 +39,8 @@
 Wave 1 —— 近期可并行，不阻塞。
   Stage 3a · Knowledge UI Map + 稳定 targetRef     [B-010 done; B-011 next]
   Stage 3d · read_page(render='markdown')          [B-015 pool]
-  Stage 3g · API Knowledge（XHR/fetch 捕获）        [B-017 pool]  ← K1 最大杠杆（数据侧）
-  Stage 3f · Policy capability opt-in 枚举         [B-016 pool]
+  Stage 3g · API Knowledge（XHR/fetch 捕获）        [B-017 v1 done] ← K1 最大杠杆（数据侧）；call 侧延后
+  Stage 3f · Policy capability opt-in 枚举         [B-016 v1 done] capability allowlist 已落地；v1 只暴露 `api_knowledge`
 
 Wave 2 —— 需 Wave 1 至少 Beta。
   Stage 3b · Experience action-path replay         [B-005 schema done, B-012 done, B-013 done]

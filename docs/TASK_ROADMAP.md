@@ -39,8 +39,8 @@ When in doubt: **do not expand scope without updating this file first**. Scope c
 Wave 1 — near-term, parallelizable. Starts unblocked.
   Stage 3a · Knowledge UI Map + stable targetRef      [B-010 done, B-011 next]
   Stage 3d · read_page(render='markdown')             [B-015 pool]
-  Stage 3g · API Knowledge (XHR/fetch capture)        [B-017 pool]       ← biggest K1 lever (data side)
-  Stage 3f · Policy capability opt-in enum            [B-016 pool]
+  Stage 3g · API Knowledge (XHR/fetch capture)        [B-017 v1 done]    ← biggest K1 lever (data side); call-side deferred
+  Stage 3f · Policy capability opt-in enum            [B-016 v1 done]    capability allowlist landed; v1 ships only `api_knowledge`
 
 Wave 2 — needs Wave 1 to be at least Beta.
   Stage 3b · Experience action-path replay            [B-005 schema done, B-012 done, B-013 done]
