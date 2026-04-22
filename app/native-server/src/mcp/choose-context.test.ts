@@ -162,21 +162,25 @@ describe('resolveSiteFamily', () => {
 });
 
 describe('chooseContextStrategy (pure)', () => {
-  it('strategy set is exactly the four v1.5 names — guards against silent additions', () => {
+  it('strategy set is exactly the v2.4.0 names — guards against silent additions', () => {
     // Doc §8 success criterion #2: enumerate the strategy set so a future
-    // PR that bolts on `api_only` or `experience_replay` MUST also touch
+    // PR that bolts on `api_only` (or any other branch) MUST also touch
     // this guard test (and, by extension, the design doc).
     //
     // V23-04 / B-018 v1.5: `read_page_markdown` joined the set as the
-    // GitHub text-heavy reading branch (B-015 / V23-03). Any further
-    // additions still need an explicit edit here.
+    // GitHub text-heavy reading branch (B-015 / V23-03).
+    // V24-01 / B-EXP-REPLAY-V1: `experience_replay` joined the set as
+    // the dispatched-execution branch for replay-eligible Experience
+    // hits.
     const allowed: ContextStrategyName[] = [
+      'experience_replay',
       'experience_reuse',
       'knowledge_light',
       'read_page_markdown',
       'read_page_required',
     ];
     expect(allowed.sort()).toEqual([
+      'experience_replay',
       'experience_reuse',
       'knowledge_light',
       'read_page_markdown',
@@ -184,7 +188,7 @@ describe('chooseContextStrategy (pure)', () => {
     ]);
   });
 
-  it('returns experience_reuse when an experience hit is provided', () => {
+  it('returns experience_reuse when an experience hit is provided (no replay-eligibility)', () => {
     const decision = chooseContextStrategy({
       intentSignature: 'open issues',
       experienceHit: {
@@ -200,6 +204,43 @@ describe('chooseContextStrategy (pure)', () => {
       expect.objectContaining({ kind: 'experience', ref: 'ap-1' }),
     ]);
     expect(decision.reasoning).toMatch(/experience hit/);
+  });
+
+  // -------------------------------------------------------------------------
+  // V24-01 / B-EXP-REPLAY-V1 — experience_replay routing branch (pure)
+  // -------------------------------------------------------------------------
+
+  it('routes to experience_replay when the hit is replayEligible', () => {
+    const decision = chooseContextStrategy({
+      intentSignature: 'open issues',
+      experienceHit: {
+        actionPathId: 'ap-replay',
+        successRate: 0.9,
+        successCount: 9,
+        failureCount: 1,
+        replayEligible: true,
+      },
+    });
+    expect(decision.strategy).toBe('experience_replay');
+    expect(decision.fallbackStrategy).toBe('experience_reuse');
+    expect(decision.artifacts).toEqual([
+      expect.objectContaining({ kind: 'experience', ref: 'ap-replay' }),
+    ]);
+    expect(decision.reasoning).toMatch(/experience replay/);
+  });
+
+  it('falls back to experience_reuse when the hit is not replay-eligible', () => {
+    const decision = chooseContextStrategy({
+      intentSignature: 'open issues',
+      experienceHit: {
+        actionPathId: 'ap-not-replay',
+        successRate: 0.9,
+        successCount: 9,
+        failureCount: 1,
+        replayEligible: false,
+      },
+    });
+    expect(decision.strategy).toBe('experience_reuse');
   });
 
   it('returns knowledge_light when no experience hit and catalog is non-empty', () => {
@@ -414,6 +455,128 @@ describe('runTabrixChooseContext (orchestrator)', () => {
       { experience: service, knowledgeApi: null, capabilityEnv: {} },
     );
     expect(result.strategy).toBe('read_page_required');
+  });
+
+  // -------------------------------------------------------------------------
+  // V24-01 / B-EXP-REPLAY-V1 — chooser routes replay-eligible hits to
+  // `experience_replay` only when the capability is on AND the row's
+  // pageRole + step-kinds are all in the v1 supported sets.
+  // -------------------------------------------------------------------------
+
+  it('routes to experience_replay when capability + pageRole + step kinds all qualify', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-ok',
+        pageRole: 'issues_list',
+        stepSequence: [
+          { toolName: 'chrome_click_element', status: 'completed', historyRef: null },
+          { toolName: 'chrome_fill_or_select', status: 'completed', historyRef: null },
+        ],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+      },
+    );
+    expect(result.status).toBe('ok');
+    expect(result.strategy).toBe('experience_replay');
+    expect(result.fallbackStrategy).toBe('experience_reuse');
+    expect(result.artifacts?.[0]?.ref).toBe('ap-replay-ok');
+  });
+
+  it('stays on experience_reuse when the experience_replay capability is OFF', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-cap-off',
+        pageRole: 'issues_list',
+        stepSequence: [{ toolName: 'chrome_click_element', status: 'completed', historyRef: null }],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: {}, // capability not enabled
+      },
+    );
+    expect(result.strategy).toBe('experience_reuse');
+    expect(result.fallbackStrategy).toBe('read_page_required');
+  });
+
+  it('stays on experience_reuse when any step kind is outside the v1 supported set', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-bad-step',
+        pageRole: 'issues_list',
+        stepSequence: [
+          { toolName: 'chrome_click_element', status: 'completed', historyRef: null },
+          // Out of replay's v1 supported set:
+          { toolName: 'chrome_navigate', status: 'completed', historyRef: null },
+        ],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+      },
+    );
+    expect(result.strategy).toBe('experience_reuse');
+  });
+
+  it('stays on experience_reuse when the row pageRole is outside the GitHub v1 allowlist', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-bad-role',
+        pageRole: 'mystery_role',
+        stepSequence: [{ toolName: 'chrome_click_element', status: 'completed', historyRef: null }],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+      },
+    );
+    expect(result.strategy).toBe('experience_reuse');
+  });
+
+  it('the "all" capability token enables experience_replay routing', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-all',
+        pageRole: 'issues_list',
+        stepSequence: [{ toolName: 'chrome_click_element', status: 'completed', historyRef: null }],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'all' },
+      },
+    );
+    expect(result.strategy).toBe('experience_replay');
   });
 
   it('reads the experience repo at most once (no write-path side-effect)', () => {

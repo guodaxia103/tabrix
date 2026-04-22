@@ -32,6 +32,8 @@ import {
   MARKDOWN_FRIENDLY_PAGE_ROLES,
   MAX_TABRIX_CHOOSE_CONTEXT_INTENT_CHARS,
   MAX_TABRIX_CHOOSE_CONTEXT_PAGE_ROLE_CHARS,
+  TABRIX_EXPERIENCE_REPLAY_GITHUB_PAGE_ROLES,
+  TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS,
   type ContextStrategyName,
   type TabrixChooseContextArtifact,
   type TabrixChooseContextInput,
@@ -203,6 +205,21 @@ export interface ChooseContextFacts {
     successRate: number;
     successCount: number;
     failureCount: number;
+    /**
+     * V24-01 / B-EXP-REPLAY-V1: when true the chooser routes the
+     * experience hit through the new `experience_replay` strategy
+     * instead of `experience_reuse`. Eligibility is the AND of:
+     *   - the `experience_replay` capability is enabled,
+     *   - the row's `pageRole` is in
+     *     `TABRIX_EXPERIENCE_REPLAY_GITHUB_PAGE_ROLES`,
+     *   - every step's `toolName` is in
+     *     `TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS`,
+     *   - the row's `successRate >= EXPERIENCE_HIT_MIN_SUCCESS_RATE`
+     *     (already true if `experienceHit` exists).
+     * v1 keeps the branch narrow on purpose: ranked-candidates and
+     * fallback ladders are V24-03's job, not this PR's.
+     */
+    replayEligible?: boolean;
   };
   /**
    * Knowledge catalog summary, populated only when the capability gate
@@ -232,6 +249,34 @@ interface StrategyDecision {
 export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecision {
   if (facts.experienceHit) {
     const hit = facts.experienceHit;
+    // V24-01: route the hit to `experience_replay` only when the
+    // capability + step-kind allowlist + GitHub pageRole gates all
+    // pass. The fallback chain is `experience_reuse → read_page_required`
+    // (NOT directly to `read_page_required`); replay's failure mode is
+    // a per-step abort, after which the reusing branch can still try
+    // the recorded plan as plain advice instead of dispatched steps.
+    if (hit.replayEligible) {
+      const reasoning =
+        `experience replay: actionPath=${hit.actionPathId}, ` +
+        `successRate=${hit.successRate.toFixed(2)} ` +
+        `(>= ${EXPERIENCE_HIT_MIN_SUCCESS_RATE.toFixed(2)}); ` +
+        `experience_replay capability enabled; all step kinds + pageRole supported in v1`;
+      return {
+        strategy: 'experience_replay',
+        fallbackStrategy: 'experience_reuse',
+        reasoning,
+        artifacts: [
+          {
+            kind: 'experience',
+            ref: hit.actionPathId,
+            summary:
+              `Experience action path ${hit.actionPathId} ` +
+              `(${hit.successCount} ok / ${hit.failureCount} fail) — replay-eligible`,
+          },
+        ],
+      };
+    }
+
     const reasoning =
       `experience hit: actionPath=${hit.actionPathId}, ` +
       `successRate=${hit.successRate.toFixed(2)} ` +
@@ -332,8 +377,12 @@ export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecisi
  * server-side; we re-derive the rate here because the row carries raw
  * counts, not the projected DTO.
  */
-function pickExperienceHit(rows: ExperienceActionPathRow[]): ChooseContextFacts['experienceHit'] {
+function pickExperienceHit(
+  rows: ExperienceActionPathRow[],
+  options: { replayCapabilityEnabled: boolean },
+): ChooseContextFacts['experienceHit'] {
   let best: ChooseContextFacts['experienceHit'];
+  let bestRow: ExperienceActionPathRow | undefined;
   let bestRate = -1;
   let bestSuccess = -1;
   for (const row of rows) {
@@ -347,11 +396,37 @@ function pickExperienceHit(rows: ExperienceActionPathRow[]): ChooseContextFacts[
         successCount: row.successCount,
         failureCount: row.failureCount,
       };
+      bestRow = row;
       bestRate = rate;
       bestSuccess = row.successCount;
     }
   }
+
+  if (best && bestRow) {
+    best.replayEligible = isReplayEligible(bestRow, options.replayCapabilityEnabled);
+  }
   return best;
+}
+
+/**
+ * V24-01 / Brief §8.1 strategy guard. The chooser may only route a
+ * row to `experience_replay` when:
+ *   1. the operator has opted into the `experience_replay` capability,
+ *   2. the row's `pageRole` is in the v1 GitHub-only allowlist, and
+ *   3. every step's `toolName` is in the v1 supported step-kind set.
+ *
+ * Any other case stays on the existing `experience_reuse` branch — the
+ * recorded plan still advises the upstream LLM, just without
+ * Tabrix-side dispatch.
+ */
+function isReplayEligible(row: ExperienceActionPathRow, capabilityEnabled: boolean): boolean {
+  if (!capabilityEnabled) return false;
+  if (!TABRIX_EXPERIENCE_REPLAY_GITHUB_PAGE_ROLES.has(row.pageRole)) return false;
+  if (row.stepSequence.length === 0) return false;
+  for (const step of row.stepSequence) {
+    if (!TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS.has(step.toolName)) return false;
+  }
+  return true;
 }
 
 export interface RunTabrixChooseContextDeps {
@@ -418,7 +493,9 @@ export function runTabrixChooseContext(
       pageRole: input.pageRole,
       limit: EXPERIENCE_LOOKUP_LIMIT,
     });
-    experienceHit = pickExperienceHit(rows);
+    experienceHit = pickExperienceHit(rows, {
+      replayCapabilityEnabled: isCapabilityEnabled('experience_replay', deps.capabilityEnv),
+    });
   }
 
   let knowledgeCatalog: ChooseContextFacts['knowledgeCatalog'];
