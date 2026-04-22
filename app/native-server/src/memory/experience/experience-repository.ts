@@ -1,9 +1,33 @@
 import type { SqliteDatabase } from '../db';
+import type { TabrixReplayPlaceholder } from '@tabrix/shared';
 
 export interface ExperienceActionPathStep {
   toolName: string;
   status: string;
   historyRef: string | null;
+  /**
+   * V24-01 forward-compat: original step args, captured at aggregation
+   * time. `experience_replay` v1 reads these to replay the step. Today
+   * the aggregator does NOT populate this field (kept narrow to avoid
+   * widening the on-disk JSON shape on existing rows); a future PR
+   * (V24-02 capture path) will start populating it. When absent, the
+   * replay engine fails closed for that step (`step_target_not_found`).
+   */
+  args?: Record<string, unknown>;
+  /**
+   * V24-01 forward-compat: the {@link TabrixReplayPlaceholder} keys
+   * the upstream caller is allowed to substitute into this step's
+   * `args` at replay time. Brief §5 / §10 item 5.
+   *
+   * - Empty or absent → the step is non-templatable; replay uses
+   *   captured `args` verbatim.
+   * - Each placeholder key MUST be present as a top-level key in
+   *   `args` (the engine substitutes `args[key]` from
+   *   `variableSubstitutions[key]`); a declared placeholder without
+   *   a matching `args` key OR a missing `variableSubstitutions[key]`
+   *   is `failed-precondition / template_field_missing`.
+   */
+  templateFields?: TabrixReplayPlaceholder[];
 }
 
 export interface ExperienceActionPathRow {
@@ -48,14 +72,38 @@ function parseStepSequence(raw: string): ExperienceActionPathStep[] {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((item) => item && typeof item === 'object')
-      .map((item) => ({
-        toolName: String((item as { toolName?: unknown }).toolName ?? ''),
-        status: String((item as { status?: unknown }).status ?? ''),
-        historyRef: (() => {
-          const value = (item as { historyRef?: unknown }).historyRef;
-          return typeof value === 'string' && value.length > 0 ? value : null;
-        })(),
-      }));
+      .map((item) => {
+        const obj = item as {
+          toolName?: unknown;
+          status?: unknown;
+          historyRef?: unknown;
+          args?: unknown;
+          templateFields?: unknown;
+        };
+        const out: ExperienceActionPathStep = {
+          toolName: String(obj.toolName ?? ''),
+          status: String(obj.status ?? ''),
+          historyRef:
+            typeof obj.historyRef === 'string' && obj.historyRef.length > 0 ? obj.historyRef : null,
+        };
+        // V24-01 forward-compat: preserve `args` / `templateFields`
+        // when an existing row already carries them. Today the
+        // aggregator does NOT write them; this read-side branch only
+        // matters once a future capture-side PR starts populating them.
+        if (obj.args && typeof obj.args === 'object' && !Array.isArray(obj.args)) {
+          out.args = obj.args as Record<string, unknown>;
+        }
+        if (Array.isArray(obj.templateFields)) {
+          const seen: TabrixReplayPlaceholder[] = [];
+          for (const k of obj.templateFields) {
+            if (k === 'queryText' || k === 'targetLabel') {
+              if (!seen.includes(k)) seen.push(k);
+            }
+          }
+          if (seen.length > 0) out.templateFields = seen;
+        }
+        return out;
+      });
   } catch {
     return [];
   }
@@ -70,6 +118,7 @@ export interface SuggestActionPathsInput {
 export class ExperienceRepository {
   private readonly upsertStmt;
   private readonly listStmt;
+  private readonly findByIdStmt;
   private readonly suggestStmt;
   private readonly suggestForRoleStmt;
   private readonly clearStmt;
@@ -116,6 +165,28 @@ export class ExperienceRepository {
               updated_at
          FROM experience_action_paths
         ORDER BY page_role ASC, intent_signature ASC`,
+    );
+    // V24-01: targeted point-lookup used by:
+    //   1. The aggregator's replay-session special-case
+    //      (`experience-aggregator.ts`) — projects success/failure
+    //      deltas back to the ORIGINAL action-path row instead of
+    //      creating a new bucket keyed by the synthesised
+    //      `experience_replay:` task intent.
+    //   2. The `experience_replay` MCP handler — locates the row to
+    //      replay before opening the Memory session.
+    // SoT: `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §7.
+    this.findByIdStmt = db.prepare(
+      `SELECT action_path_id,
+              page_role,
+              intent_signature,
+              step_sequence,
+              success_count,
+              failure_count,
+              last_used_at,
+              created_at,
+              updated_at
+         FROM experience_action_paths
+        WHERE action_path_id = ?`,
     );
     // Read-only lookup for `experience_suggest_plan` (B-013).
     //
@@ -191,6 +262,25 @@ export class ExperienceRepository {
   public listActionPaths(): ExperienceActionPathRow[] {
     const rows = this.listStmt.all() as ExperienceActionPathDbRow[];
     return rows.map(rowToActionPath);
+  }
+
+  /**
+   * V24-01: targeted point-lookup by `actionPathId`.
+   *
+   * Returns the matching row's full {@link ExperienceActionPathRow}
+   * shape, or `undefined` if no row matches. Single-row query: deletes
+   * between the caller's `actionPathId` capture and this lookup return
+   * `undefined` (NOT throw), so the replay-session aggregator can mark
+   * the orphan replay session aggregated without corrupting unrelated
+   * rows.
+   *
+   * NB: callers MUST treat `undefined` as "stale id" — the brief
+   * (`docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §7) explicitly chooses
+   * mark-aggregated-and-skip over upserting an empty row.
+   */
+  public findActionPathById(actionPathId: string): ExperienceActionPathRow | undefined {
+    const row = this.findByIdStmt.get(actionPathId) as ExperienceActionPathDbRow | undefined;
+    return row ? rowToActionPath(row) : undefined;
   }
 
   /**
