@@ -95,11 +95,12 @@ contract on `ReadPageHighValueObject` continues to be emitted.
 
 ### Stage 3h — Context Strategy Selector (v1 minimal slice)
 
-- **`B-018`** v1 — `tabrix_choose_context(intent, url?, constraints?)` MCP
-  tool wired into the native server with a rule-based selector and three
-  starter strategies (`api_only` / `read_page_json` / `experience_replay`).
-  GitHub-first. Design + scope detail in
-  [`docs/B_018_CONTEXT_SELECTOR_V1.md`](./B_018_CONTEXT_SELECTOR_V1.md).
+- **`B-018`** v1 — `tabrix_choose_context(intent, url?, pageRole?, siteId?)`
+  MCP tool wired into the native server with a rule-based selector and three
+  shipped strategies (`experience_reuse` / `knowledge_light` /
+  `read_page_required`). GitHub-first; `siteId` only honours `github` in v1,
+  and non-GitHub URLs resolve to `read_page_required`. Design + scope detail
+  in [`docs/B_018_CONTEXT_SELECTOR_V1.md`](./B_018_CONTEXT_SELECTOR_V1.md).
   - **Caveat**: this is a v1 _slice_, not the full Stage 3h DoD. The full
     decision table, telemetry-driven self-learning, and multi-site coverage
     are still in pool. The v1 selector is intentionally rule-only (no
