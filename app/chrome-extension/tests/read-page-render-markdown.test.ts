@@ -104,6 +104,45 @@ describe('read_page render=markdown projection', () => {
     expect(md).not.toContain('ref_b_must_not_leak');
   });
 
+  it('strips locator-like labels so execution refs cannot leak through display text', () => {
+    const md = buildMarkdownProjection({
+      url: 'https://github.com/example/project',
+      title: 'example/project',
+      pageRole: 'repo_home',
+      primaryRegion: 'repo_primary_nav',
+      highValueObjects: [
+        {
+          id: 'hvo_1',
+          kind: 'candidate_action',
+          label: 'ref_5',
+          role: 'link',
+          reason: 'candidate action fallback',
+          href: '/example/project',
+        },
+        {
+          id: 'hvo_2',
+          kind: 'interactive_element',
+          label: 'tgt_38bdacc401',
+          role: 'link',
+          reason: 'stable target ref accidentally surfaced as label',
+          href: '/example/project/issues',
+        },
+      ],
+      interactiveElements: [
+        { ref: 'ref_ok', role: 'button', name: 'ref_4' },
+        { ref: 'ref_ok_2', role: 'link', name: 'tgt_1234567890', href: '/issues' },
+      ],
+    });
+
+    expect(md).not.toContain('ref_5');
+    expect(md).not.toContain('ref_4');
+    expect(md).not.toContain('tgt_38bdacc401');
+    expect(md).not.toContain('tgt_1234567890');
+    expect(md).toContain('- link → /example/project');
+    expect(md).toContain('- link → /issues');
+    expect(md).toContain('- button');
+  });
+
   it('returns "" when the snapshot has no projectable signal so callers can detect "markdown unavailable"', () => {
     const md = buildMarkdownProjection({
       url: '',

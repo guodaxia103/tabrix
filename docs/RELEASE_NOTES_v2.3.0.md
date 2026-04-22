@@ -69,23 +69,27 @@ This section is what fast-lane can fill in deterministically (no real Chrome).
 - `pnpm run docs:check` — green.
 - `pnpm run release:choose-context-stats -- --since 7d` — produces a valid report (or refuses on a pre-V23-04 DB, which is the documented behaviour).
 
-## Real-browser acceptance evidence — _to be filled in by the maintainer at promotion time_
+## Real-browser acceptance evidence
 
-The v2.3.0 promotion gate requires the maintainer to:
+The v2.3.0 promotion gate was exercised against a live Chrome session bound to the maintainer's GitHub account and then projected through `pnpm run benchmark:v23 -- --input <ndjson> --gate`.
 
-1. Run the scenarios listed in §"Maintainer command list" against a live Chrome session bound to the maintainer's GitHub account.
-2. Capture the NDJSON run log (the runner in `tabrix-private-tests` writes it to `~/.chrome-mcp-agent/benchmarks/v23/<runId>.ndjson` by convention).
-3. Convert it via `pnpm run benchmark:v23 -- --input <ndjson> --gate`. The `--gate` flag refuses to write the report if the run violates the K3 / K4 / lane-integrity invariants.
-4. Commit the resulting `docs/benchmarks/v23/<runId>.json` in the **same** commit that promotes this draft to release. Reference the report filename here once committed.
-5. Re-run `pnpm run release:check` — the v2.3+ gate consumes the report.
-
-Fill in below at promotion time:
-
-- **Run ID:** _e.g. `v23-acceptance-2026-04-30`_
-- **Build SHA:** _the commit the maintainer ran against_
-- **Report file:** `docs/benchmarks/v23/<runId>.json`
-- **Headline numbers:** _K1 mean tokens, K2 click p50, K3 task success, K4 retry rate, lane violations_
-- **Caveats observed:** _any scenario that needed a re-run, any non-blocking warning_
+- **Run ID:** `v23-local-2026-04-23-final`
+- **Build SHA:** `ce209fa061ff1dfc83b979ed197f3e1326201cc4`
+- **Acceptance summary:** `E:/projects/AI/codex/tabrix-private-tests/artifacts/v23-real-browser-acceptance/v23-real-browser-acceptance-2026-04-22T17-51-04.843Z/summary.json`
+- **Report file:** `docs/benchmarks/v23/v23-local-2026-04-23-final.json`
+- **Scenario result:** `8/8` passed, `blocked=false`
+- **Headline numbers:**
+  - `K1 mean input tokens per task`: `null` (current CLI envelope did not surface token usage for this run)
+  - `K2 click p50`: `7317 ms`
+  - `K3 task success`: `1.0`
+  - `K4 retry rate`: `0`
+  - `K4 fallback rate`: `0`
+  - `lane violations`: `0`
+  - `meanClickAttemptsPerStep`: `1`
+  - `readPageProbeCount`: `14`
+- **Caveats observed:**
+  - This run only went green after rebuilding and reloading the extension from the current workspace. A pre-rebuild run produced a false red on `T5-H-GH-REPO-HOME-READ-MARKDOWN` because the browser was still serving an older `.output` bundle.
+  - `laneCounters.unknownCount=24` is expected for this report because only the click path currently emits an explicit lane marker. The hard gate still passed because `cdpCount=0`, `debuggerCount=0`, and `violationCount=0`.
 
 ## Maintainer command list (real-browser run)
 

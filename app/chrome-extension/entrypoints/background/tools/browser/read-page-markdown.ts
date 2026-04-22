@@ -27,6 +27,7 @@ interface BuildMarkdownProjectionParams {
 
 const MAX_HVO_LINES = 8;
 const MAX_INTERACTIVE_LINES = 16;
+const LOCATOR_LIKE_TEXT_RE = /^(?:ref_[a-z0-9_]+|tgt_[0-9a-f]{10})$/i;
 
 function escapeMarkdown(value: string): string {
   return String(value || '')
@@ -35,21 +36,26 @@ function escapeMarkdown(value: string): string {
     .trim();
 }
 
+function sanitizeReadableText(value: string): string {
+  const escaped = escapeMarkdown(value);
+  return LOCATOR_LIKE_TEXT_RE.test(escaped) ? '' : escaped;
+}
+
 function formatHighValueObjectLine(item: ReadPageHighValueObject): string {
-  const label = escapeMarkdown(item.label);
-  if (!label) return '';
+  const label = sanitizeReadableText(item.label);
   const role = escapeMarkdown(String(item.role || ''));
   const href = escapeMarkdown(String(item.href || ''));
   const parts: string[] = [];
   if (role) parts.push(role);
-  parts.push(`"${label}"`);
+  if (label) parts.push(`"${label}"`);
   if (href) parts.push(`→ ${href}`);
+  if (parts.length === 0) return '';
   return `- ${parts.join(' ')}`;
 }
 
 function formatInteractiveLine(item: ReadPageInteractiveElement): string {
   const role = escapeMarkdown(String(item.role || ''));
-  const name = escapeMarkdown(String(item.name || ''));
+  const name = sanitizeReadableText(String(item.name || ''));
   const href = escapeMarkdown(String(item.href || ''));
   if (!role && !name) return '';
   const head = name ? `${role || 'element'} "${name}"` : role || 'element';
