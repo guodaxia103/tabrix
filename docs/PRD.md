@@ -437,7 +437,7 @@ Wave 2 (depends on Wave 1)
   3c · Recovery Watchdog consolidation           (B-014 pool)
 
 Wave 3 (strategic payoff)
-  3h · Context Strategy Selector                 (B-018 pool) ← biggest K1 lever (planning side)
+  3h · Context Strategy Selector                 (B-018 v1 slice done; full Stage 3h DoD still in pool) ← biggest K1 lever (planning side); v1 = rule-based selector
   3e · Run History UI                            (B-001…B-006 done — finished early)
   3i · Memory Insights table + Sidepanel tab     (B-019 pool)
 

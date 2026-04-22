@@ -3,7 +3,7 @@
 > Living, sprint-granular task list. Single source of truth for "what Claude and Codex work on this week."
 >
 > - Versioning: human-edited; regenerated weekly on Sunday by the active AI assistant.
-> - Reading order: this doc **after** `AGENTS.md` and `docs/MKEP_STAGE_3_PLUS_ROADMAP.md`.
+> - Reading order: this doc **after** `AGENTS.md` and `docs/TASK_ROADMAP.md`.
 > - Every backlog item (`B-NNN`) has: Stage tag, KPI tag, Owner, Size, Dependencies, Branch, Exit Criteria.
 > - If a PR does not reference a `B-NNN` ID (or explain why not), it's out of spec — see `AGENTS.md` rule 20.
 
@@ -425,7 +425,7 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
   - Writes to `experience_action_paths` — see `app/native-server/src/memory/db/schema.ts` §`EXPERIENCE_CREATE_TABLES_SQL` (landed in B-005, commit `3770201`). Fields used: `action_path_id` (deterministic id for the `(page_role, intent_signature)` bucket in v1), `page_role`, `intent_signature`, `step_sequence` (JSON array of `{toolName, status, historyRef}`), `success_count`, `failure_count`, `last_used_at`, `created_at`, `updated_at`.
   - Reads from Memory — see `app/native-server/src/memory/db/schema.ts` §`MEMORY_CREATE_TABLES_SQL` for `memory_sessions`, `memory_tasks`, `memory_steps`, `memory_page_snapshots`, and `memory_actions`. In v1: `memory_sessions` + `memory_tasks` define the terminal-session / intent boundary, `memory_steps` provides ordered step backbone + `artifact_refs`, `memory_page_snapshots` provides the latest session `page_role`, and `memory_actions` stays available for action-level enrichment without becoming a hard dependency for the first write path.
   - **Idempotency**: the aggregator is a pure projection — same Memory state → same Experience state. Re-running it over the same sessions must not double-increment `success_count` / `failure_count`. The session-level `aggregated_at` marker lives on `memory_sessions` (same PR adds `aggregated_at TEXT` via a guarded migration; SQLite does not support `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`) so replay can scan only terminal sessions that have not been projected yet.
-- **Scope**: see `docs/MKEP_STAGE_3_PLUS_ROADMAP.md §4.2`. Minimal first cut:
+- **Scope**: see `docs/TASK_ROADMAP.md` §3 (Stage 3b). Minimal first cut:
   - Walk `memory_sessions WHERE status IN ('completed', 'failed', 'aborted') AND aggregated_at IS NULL`, in `started_at` order.
   - Join each session to `memory_tasks` on `task_id` and compute a single `intent_signature` from `memory_tasks.intent` (hash + light normalization).
   - Build `step_sequence` from `memory_steps` in `step_index` order; for each step, keep `{toolName, status, historyRef}` where `historyRef` is the first `artifact_ref` when present, else `null`.

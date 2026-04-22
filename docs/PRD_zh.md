@@ -439,7 +439,7 @@ Wave 2（依赖 Wave 1 至少 Beta）
   3c · Recovery Watchdog 统一化                 （B-014 pool）
 
 Wave 3（战略价值集中兑现）
-  3h · Context Strategy Selector                （B-018 pool） ← K1 最大杠杆（规划侧）
+  3h · Context Strategy Selector                （B-018 v1 slice done；完整 Stage 3h DoD 仍在 pool） ← K1 最大杠杆（规划侧）；v1 = 规则版选择器
   3e · Run History UI                           （B-001..B-006 提前在 Sprint 1+2 落地）
   3i · Memory Insights 表 + Sidepanel tab       （B-019 pool）
 
