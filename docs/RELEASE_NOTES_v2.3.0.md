@@ -1,0 +1,155 @@
+# Tabrix v2.3.0 Release Notes — DRAFT
+
+> **Status:** **Draft. Not released.** This file is the v2.3.0 release-notes scaffold landed at the end of V23-06 of the v2.3.0 continuous-execution plan. The maintainer will fill in the §"Real-browser acceptance evidence" section after running the commands listed in §"Maintainer command list" against a live Chrome session, then promote this file from draft to release by removing this banner and bumping the workspace version (root + native + extension + shared + wasm-simd) to `2.3.0` in the same commit. **Do not tag `v2.3.0` until that promotion lands.**
+
+Release date: _to be filled in by the maintainer when promoting this draft_.
+
+## Summary
+
+v2.3.0 is the third minor release on the 2.x line. It is the first release whose **release gate is real-browser–anchored**: `pnpm run release:check` now refuses to ship a v2.3.0+ tag without a recent (≤7 days old) `docs/benchmarks/v23/<run>.json` report that passes the K3 / K4 / lane-integrity gate. v2.1 / v2.2 ship-grade behaviour is unchanged — the gate only applies to `2.3.0+`.
+
+The release is backward compatible with v2.2.x. Every new MCP tool is additive and either P0 (read-only) or carries `requiresExplicitOptIn: true`; every new field on existing tools is optional. The only behavioural default change is the V23-04 chooser branch landing the new `read_page_markdown` strategy on a hand-curated GitHub whitelist — outside that whitelist callers see no change.
+
+## Highlights (what's actually new since v2.2.0)
+
+### V23-01 — Execution-Truth Hardening (extension)
+
+- **Click-verifier window alignment**: `chrome.tabs.onCreated` observation window in `app/chrome-extension/entrypoints/background/tools/browser/interaction.ts` is now driven by the exported `CLICK_VERIFIER_SETTLE_DELAY_MS` constant rather than a private timeout, removing the documented timing drift between new-tab observation and click verifier settle delay.
+- **Tabrix-owned lane integrity**: every successful `chrome_click_element` response now carries an explicit `lane: 'tabrix_owned'` marker. The new `evaluateBenchmarkGate` predicate (V23-06) hard-fails the release if any tool call shows up on the `cdp` or `debugger` lane in the run report — silent fallback to the debugger lane is no longer a quiet regression.
+- **Surgical probe reduction**: low-value duplicate `read_page` probes on the GitHub edit/save flow were trimmed; the v2.3.0 benchmark report tracks `readPageProbeCount` as a soft signal so a future regression is visible.
+
+### V23-02 — Stable `targetRef` increment hardening
+
+- New `app/chrome-extension/tests/stable-target-ref-stability.test.ts` exercises three classes of cosmetic DOM mutation (sibling deletion, class change, whitespace-only text change) and one ordinal-collision case against the same HVO; all assert `targetRef` invariants from B-011 v1.
+- `tabrix-private-tests` gains scenario `T5-F-GH-STABLE-TARGETREF-CROSS-RELOAD` (read_page → reload → read_page → assert same `targetRef` resolves through the click bridge). Maintainer must run this scenario as part of v2.3.0 acceptance — see §"Maintainer command list".
+
+### V23-03 / B-015 — `read_page(render='markdown')` + L2 source routing
+
+- `packages/shared/src/read-page-contract.ts` adds the optional `render?: 'json' | 'markdown'` input field (defaulting to `'json'`, no behaviour change for existing callers) plus the new L2 source-routing fields `domJsonRef` / `markdownRef` / `knowledgeRef` so a caller can ask "give me the cheap reading surface" without losing access to the execution truth.
+- The extension's `read-page.ts` now emits an optional `markdown` projection through the new helper `read-page-markdown.ts`. Markdown is intentionally a **reading surface** — HVOs, candidate actions, and `targetRef` continue to live in the JSON branch, and the markdown projection deliberately omits `ref` / `targetRef` values so callers cannot accidentally execute against a markdown view (B-015 invariant from `docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md` §4.3).
+- New tests: `read-page-render-markdown.test.ts`, `read-page-l2-source-routing.test.ts`. `B-015` flips from pool to done.
+
+### V23-04 / B-018 v1.5 — `tabrix_choose_context` telemetry + outcome write-back + markdown branch
+
+- New SQLite tables `tabrix_choose_context_decisions` (one row per `status='ok'` chooser call: `decision_id`, `intent_signature`, `page_role`, `site_family`, `strategy`, `fallback_strategy`, `created_at`) and `tabrix_choose_context_outcomes` (one row per write-back, FK to decisions). Idempotent `CREATE IF NOT EXISTS` — old DBs from before V23-04 pick up the tables on next open without a migration.
+- `runTabrixChooseContext` returns the new opaque `decisionId` field. Telemetry write failures never poison the chooser result (the `decisionId` is simply omitted, treated as "telemetry off").
+- New MCP tool `tabrix_choose_context_record_outcome` (P0, pure-INSERT, native-handled). Closed `outcome` set: `reuse | fallback | completed | retried`. Three structural statuses: `ok | invalid_input | unknown_decision` — caller can distinguish "decision lost" from "permission denied".
+- New strategy `read_page_markdown` joins `ContextStrategyName`. Routed when no experience hit AND no usable knowledge AND `siteFamily === 'github'` AND `pageRole` is on the hand-curated `MARKDOWN_FRIENDLY_PAGE_ROLES` whitelist (today: `repo_home`; pre-listed for forward-compat: `issue_detail`, `pull_request_detail`, `discussion_detail`, `wiki`, `release_notes`, `commit_detail`).
+- New release-evidence script `pnpm run release:choose-context-stats` aggregates strategy distribution and outcome ratios from the telemetry tables.
+
+### V23-05 / `B-EXP-REPLAY-V1` — `experience_replay` v1 owner-lane brief (no implementation)
+
+- New design doc `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` specifies the v1 contract for `experience_replay`: input/output DTOs, proposed risk tier (P1 + `requiresExplicitOptIn` + new `experience_replay` capability), closed failure-code enum, fail-closed step semantics, Memory write-back via the existing `memory_sessions` + `memory_steps` shape, and a 3-layer test matrix (unit + integration + private-repo `T5-G-experience-replay`).
+- **No code lands** in v2.3.0 for `experience_replay`. The brief enumerates 7 owner-lane open questions that gate any future implementation; per `AGENTS.md` §"Tiered Execution Model" they cannot be answered by fast-lane.
+
+### V23-06 — Benchmark framework + release gate
+
+- New benchmark transformer `app/native-server/src/benchmark/v23-benchmark.ts` (pure function, no IO) projects an NDJSON tool-call log into a deterministic v2.3.0 release-evidence report covering K1–K4 plus probe count, lane-integrity counters, mean click attempts per step, and scenario completion. `BENCHMARK_REPORT_VERSION = 1`; bumping is a coordinated change with `release:check`.
+- New CLI wrapper `pnpm run benchmark:v23` reads an NDJSON run produced by the maintainer's real-browser session (or by `tabrix-private-tests` against it), writes `docs/benchmarks/v23/<runId>.json`, and optionally exits non-zero on `--gate` failure.
+- `pnpm run release:check` now enforces a v2.3.0+ gate: a recent (≤7 days old) report under `docs/benchmarks/v23/` is required and the release notes should reference a `benchmarks/v23` path. Older releases (v2.1 / v2.2) are unaffected. The hard numeric thresholds (K3 ≥ 0.85, K4 ≤ 0.10, lane violations = 0) live in `evaluateBenchmarkGate` with documented defaults; a maintainer can tighten them in a follow-up but loosening them requires a documented decision.
+
+## Compatibility
+
+| Surface                                         | Status                                                                                                |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Existing MCP tool input schemas                 | unchanged                                                                                             |
+| Existing MCP tool output schemas                | unchanged for `'json'` callers; `chrome_read_page` may carry an optional `markdown` field when asked  |
+| `TABRIX_POLICY_*` env vars                      | unchanged (no new env var landed in v2.3.0; `experience_replay` capability is brief-only, see V23-05) |
+| SQLite schema (Memory / Knowledge / Experience) | unchanged shapes; two **additive** tables added under `tabrix_choose_context_*`                       |
+| Risk tier registrations                         | one new P0 entry (`tabrix_choose_context_record_outcome`); no existing tier downgraded                |
+| Sidepanel surface                               | unchanged                                                                                             |
+
+## Release verification (CI / unit / integration)
+
+This section is what fast-lane can fill in deterministically (no real Chrome).
+
+- `pnpm -r typecheck` — green (status to be confirmed by the maintainer at promotion time).
+- `pnpm -C app/native-server test:ci` — green; full native-server suite including the new `v23-benchmark.test.ts`, `choose-context-telemetry.test.ts`, V23-04 chooser branches, V23-05 brief is doc-only.
+- `pnpm -C app/chrome-extension test` — green; including the V23-01 lane-integrity tests and V23-02 stable-targetRef-stability tests.
+- `pnpm run docs:check` — green.
+- `pnpm run release:choose-context-stats -- --since 7d` — produces a valid report (or refuses on a pre-V23-04 DB, which is the documented behaviour).
+
+## Real-browser acceptance evidence — _to be filled in by the maintainer at promotion time_
+
+The v2.3.0 promotion gate requires the maintainer to:
+
+1. Run the scenarios listed in §"Maintainer command list" against a live Chrome session bound to the maintainer's GitHub account.
+2. Capture the NDJSON run log (the runner in `tabrix-private-tests` writes it to `~/.chrome-mcp-agent/benchmarks/v23/<runId>.ndjson` by convention).
+3. Convert it via `pnpm run benchmark:v23 -- --input <ndjson> --gate`. The `--gate` flag refuses to write the report if the run violates the K3 / K4 / lane-integrity invariants.
+4. Commit the resulting `docs/benchmarks/v23/<runId>.json` in the **same** commit that promotes this draft to release. Reference the report filename here once committed.
+5. Re-run `pnpm run release:check` — the v2.3+ gate consumes the report.
+
+Fill in below at promotion time:
+
+- **Run ID:** _e.g. `v23-acceptance-2026-04-30`_
+- **Build SHA:** _the commit the maintainer ran against_
+- **Report file:** `docs/benchmarks/v23/<runId>.json`
+- **Headline numbers:** _K1 mean tokens, K2 click p50, K3 task success, K4 retry rate, lane violations_
+- **Caveats observed:** _any scenario that needed a re-run, any non-blocking warning_
+
+## Maintainer command list (real-browser run)
+
+These commands are owner-lane / maintainer-only — fast-lane never invokes them inside this repository (per `AGENTS.md` rule 14 and §"Operational notes: running fast-lane under a restricted CLI sandbox").
+
+```bash
+# 1. Make sure the local extension matches HEAD.
+pnpm install
+pnpm -r --if-present typecheck
+pnpm -C app/native-server build
+pnpm -C app/chrome-extension build
+pnpm run extension:reload
+
+# 2. Start the native MCP server in foreground; leave running.
+pnpm dev:native
+
+# 3. In a second shell, in the sibling tabrix-private-tests checkout,
+#    run the v2.3.0 acceptance scenario set against the running Chrome.
+#    The runner writes ~/.chrome-mcp-agent/benchmarks/v23/<runId>.ndjson
+#    by convention.
+cd ../tabrix-private-tests
+pnpm run acceptance:v2.3.0 -- --runId v23-acceptance-2026-MM-DD
+
+# 4. Back in this repo, project the NDJSON into the release-evidence
+#    JSON report and enforce the K3 / K4 / lane-integrity gate.
+cd -
+pnpm run benchmark:v23 -- \
+  --input ~/.chrome-mcp-agent/benchmarks/v23/v23-acceptance-2026-MM-DD.ndjson \
+  --gate
+
+# 5. Commit the report alongside the promotion of this draft.
+git add docs/benchmarks/v23/v23-acceptance-2026-MM-DD.json docs/RELEASE_NOTES_v2.3.0.md
+git commit -m "release: v2.3.0 — promote draft + benchmark evidence"
+
+# 6. The release gate is now green.
+pnpm run release:check
+```
+
+### Public acceptance scenario list (v2.3.0)
+
+The `tabrix-private-tests` `acceptance:v2.3.0` runner is expected to cover at minimum:
+
+| Family            | Scenario ID                                  | Source                                                                                                        |
+| ----------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Repo navigation   | `T5-A-GH-REPO-NAV-CODE`                      | inherited from v2.2.0 acceptance                                                                              |
+| Repo navigation   | `T5-A-GH-REPO-NAV-ISSUES`                    | inherited from v2.2.0 acceptance                                                                              |
+| Repo navigation   | `T5-A-GH-REPO-NAV-PRS`                       | inherited from v2.2.0 acceptance                                                                              |
+| Repo navigation   | `T5-A-GH-REPO-NAV-ACTIONS`                   | inherited from v2.2.0 acceptance                                                                              |
+| Edit / save       | `T5-D-GH-ISSUE-COMMENT-EDIT-SAVE`            | V23-01 § "edit/save flow probe-reduction"                                                                     |
+| Stable targetRef  | `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP`         | inherited from B-011 v1                                                                                       |
+| Stable targetRef  | `T5-F-GH-STABLE-TARGETREF-CROSS-RELOAD`      | **new in V23-02**                                                                                             |
+| Markdown reading  | `T5-H-GH-REPO-HOME-READ-MARKDOWN`            | **new in V23-03**                                                                                             |
+| Chooser telemetry | `T5-I-GH-CHOOSE-CONTEXT-WRITEBACK-LIFECYCLE` | **new in V23-04** (calls chooser → outcome write-back; verifies `tabrix_choose_context_outcomes` row appears) |
+
+> The exact runner command shape (`pnpm run acceptance:v2.3.0`) lives in `tabrix-private-tests`. Until the maintainer wires that script, the equivalent invocation is "the maintainer runs the existing per-scenario commands in `tabrix-private-tests/scenarios/t5/` plus the two new scenarios in this list, and the `v23-benchmark.mjs` --input is the concatenated NDJSON".
+
+## Versioning policy reminder
+
+- v2.3.0 is a minor bump (PRD-level capabilities added, no API breakage).
+- Promoting this draft to release MUST bump `version` in **all five** `package.json` files in lockstep: root, `app/native-server`, `app/chrome-extension`, `packages/shared`, `packages/wasm-simd`. `release:check` enforces this.
+- Tag format `vX.Y.Z` or `tabrix-vX.Y.Z` (existing convention).
+
+## Known limitations carried into v2.3.0
+
+- `experience_replay` is **not** shipped — only the brief is. Until the maintainer answers the 7 open questions in `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §10, the chooser's `'experience_replay'` strategy remains absent and the K5 metric (`懂用户`) cannot improve beyond what `experience_suggest_plan` already provides.
+- `historyRef` promotion to a true content-hash anchor (carried over from v2.2.0 §B-011 caveat) remains out of scope; B-011 v1 stability does not depend on it.
+- `knowledge_call_api` (B-017 v2) remains absent. The chooser still routes to `knowledge_light` rather than inventing an `api_only` strategy when API Knowledge has rows but no executable call layer exists.

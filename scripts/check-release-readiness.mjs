@@ -153,6 +153,80 @@ if (!fileExists(releaseNotesFile)) {
   }
 }
 
+// V23-06 release gate: v2.3.0+ tags must reference a recent
+// real-browser benchmark report. The check is intentionally light
+// (presence + recency) so the maintainer can iterate on real-browser
+// runs without rebuilding the whole release pipeline. The hard
+// invariants (lane integrity, K3, K4 thresholds) are enforced by
+// `pnpm run benchmark:v23 -- --gate` against the report itself, not
+// repeated here.
+const BENCHMARK_GATE_MIN_MAJOR = 2;
+const BENCHMARK_GATE_MIN_MINOR = 3;
+const BENCHMARK_REPORT_MAX_AGE_DAYS = 7;
+
+function parseSemverPrefix(version) {
+  const match = String(version || '').match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!match) return null;
+  return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) };
+}
+
+function benchmarkGateApplies(version) {
+  const semver = parseSemverPrefix(version);
+  if (!semver) return false;
+  if (semver.major > BENCHMARK_GATE_MIN_MAJOR) return true;
+  if (semver.major < BENCHMARK_GATE_MIN_MAJOR) return false;
+  return semver.minor >= BENCHMARK_GATE_MIN_MINOR;
+}
+
+if (benchmarkGateApplies(nativePkg.version) && !options.allowMissingNotes) {
+  const benchmarkDir = path.join(ROOT, 'docs', 'benchmarks', 'v23');
+  if (!fs.existsSync(benchmarkDir)) {
+    errors.push(
+      `v2.3.0+ release gate: missing benchmark directory ${path.relative(ROOT, benchmarkDir)}. ` +
+        `Run \`pnpm run benchmark:v23 -- --input <run.ndjson> --gate\` first; see docs/RELEASE_NOTES_v${nativePkg.version}.md "Maintainer command list".`,
+    );
+  } else {
+    const reports = fs
+      .readdirSync(benchmarkDir)
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => {
+        const fullPath = path.join(benchmarkDir, name);
+        const stat = fs.statSync(fullPath);
+        return { name, fullPath, mtimeMs: stat.mtimeMs };
+      })
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+    if (reports.length === 0) {
+      errors.push(
+        `v2.3.0+ release gate: no benchmark reports under ${path.relative(ROOT, benchmarkDir)}. ` +
+          `Run \`pnpm run benchmark:v23 -- --input <run.ndjson> --gate\` first.`,
+      );
+    } else {
+      const newest = reports[0];
+      const ageDays = (Date.now() - newest.mtimeMs) / (1000 * 60 * 60 * 24);
+      if (ageDays > BENCHMARK_REPORT_MAX_AGE_DAYS) {
+        errors.push(
+          `v2.3.0+ release gate: newest benchmark report ${newest.name} is ${ageDays.toFixed(1)} days old (max ${BENCHMARK_REPORT_MAX_AGE_DAYS}). ` +
+            `Re-run \`pnpm run benchmark:v23 -- --input <run.ndjson> --gate\`.`,
+        );
+      }
+
+      // Soft assertion: release notes should reference some benchmark
+      // report (commit SHA or filename). We only warn — the hard
+      // numbers gate lives in `benchmark-v23.mjs --gate` itself.
+      if (fileExists(selectedNotesFile)) {
+        const notes = fs.readFileSync(path.join(ROOT, selectedNotesFile), 'utf8');
+        if (!notes.includes('benchmarks/v23')) {
+          warnings.push(
+            `Release notes ${selectedNotesFile} do not reference any \`docs/benchmarks/v23/\` report. ` +
+              `Recommend pointing readers at the specific report committed for this tag.`,
+          );
+        }
+      }
+    }
+  }
+}
+
 if (errors.length > 0) fail(errors);
 
 console.log('release readiness check passed');
