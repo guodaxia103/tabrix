@@ -201,3 +201,59 @@ CREATE INDEX IF NOT EXISTS experience_locator_prefs_role_purpose_idx
 CREATE INDEX IF NOT EXISTS experience_locator_prefs_last_hit_at_idx
   ON experience_locator_prefs(last_hit_at);
 `;
+
+/**
+ * Knowledge schema (B-017, opt-in via TABRIX_POLICY_CAPABILITIES=api_knowledge).
+ *
+ * `knowledge_api_endpoints` is the storage side of "API Knowledge capture
+ * v1": a deduplicated, redaction-only-metadata view of API endpoints that
+ * Tabrix has observed traversing the user's browser tabs while a
+ * `chrome_network_capture` session was active. It exists to power future
+ * "skip the page, ask the API" decisions (B-018+) — never to replay or
+ * call user APIs from the agent side.
+ *
+ * Hard rules baked into the schema:
+ *  - `endpoint_signature` is a *normalized* `<METHOD> <host><path-template>`
+ *    string; no query string, no path-id leakage. `(site, endpoint_signature)`
+ *    is the dedup key (UNIQUE) so re-observing the same endpoint upserts
+ *    sample_count + last_seen_at instead of growing unbounded rows.
+ *  - `request_summary_blob` / `response_summary_blob` are JSON metadata
+ *    only: header *names* (lower-cased), query *keys* (no values), body
+ *    *keys* / shape, response content-type / size, and at most a small
+ *    deterministic excerpt of the response shape. No raw header values,
+ *    no Authorization, no Cookie, no body payloads.
+ *  - `source_*` columns are informational pointers back into Memory; they
+ *    are nullable on purpose so older rows survive Memory rotation.
+ *
+ * Idempotent CREATE: same pattern as `MEMORY_CREATE_TABLES_SQL` and
+ * `EXPERIENCE_CREATE_TABLES_SQL`. Old DBs that pre-date B-017 simply
+ * pick up the new table on next `openMemoryDb()`; no ALTER needed.
+ */
+export const KNOWLEDGE_CREATE_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS knowledge_api_endpoints (
+  endpoint_id            TEXT PRIMARY KEY,
+  site                   TEXT NOT NULL,
+  family                 TEXT NOT NULL,
+  method                 TEXT NOT NULL,
+  url_pattern            TEXT NOT NULL,
+  endpoint_signature     TEXT NOT NULL,
+  semantic_tag           TEXT,
+  status_class           TEXT,
+  request_summary_blob   TEXT NOT NULL,
+  response_summary_blob  TEXT NOT NULL,
+  source_session_id      TEXT,
+  source_step_id         TEXT,
+  source_history_ref     TEXT,
+  sample_count           INTEGER NOT NULL DEFAULT 1,
+  first_seen_at          TEXT NOT NULL,
+  last_seen_at           TEXT NOT NULL,
+  UNIQUE (site, endpoint_signature)
+);
+
+CREATE INDEX IF NOT EXISTS knowledge_api_endpoints_site_idx
+  ON knowledge_api_endpoints(site);
+CREATE INDEX IF NOT EXISTS knowledge_api_endpoints_family_idx
+  ON knowledge_api_endpoints(family);
+CREATE INDEX IF NOT EXISTS knowledge_api_endpoints_last_seen_at_idx
+  ON knowledge_api_endpoints(last_seen_at);
+`;

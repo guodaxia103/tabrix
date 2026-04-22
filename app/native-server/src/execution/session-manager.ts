@@ -25,6 +25,7 @@ import {
   ExperienceQueryService,
   ExperienceRepository,
 } from '../memory/experience';
+import { KnowledgeApiRepository } from '../memory/knowledge/knowledge-api-repository';
 
 export interface CreateTaskInput {
   taskType: string;
@@ -79,6 +80,7 @@ interface Repos {
   pageSnapshot: PageSnapshotRepository;
   action: ActionRepository;
   experience: ExperienceRepository;
+  knowledgeApi: KnowledgeApiRepository;
 }
 
 interface StorageInit {
@@ -89,6 +91,7 @@ interface StorageInit {
   actions: ActionService | null;
   experienceAggregator: ExperienceAggregator | null;
   experienceQuery: ExperienceQueryService | null;
+  knowledgeApi: KnowledgeApiRepository | null;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -113,6 +116,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       actions: null,
       experienceAggregator: null,
       experienceQuery: null,
+      knowledgeApi: null,
     };
   }
 
@@ -122,6 +126,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
     const pageSnapshotRepo = new PageSnapshotRepository(opened.db);
     const actionRepo = new ActionRepository(opened.db);
     const experienceRepo = new ExperienceRepository(opened.db);
+    const knowledgeApiRepo = new KnowledgeApiRepository(opened.db);
     const repos: Repos = {
       task: new TaskRepository(opened.db),
       session: new SessionRepository(opened.db),
@@ -129,6 +134,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       pageSnapshot: pageSnapshotRepo,
       action: actionRepo,
       experience: experienceRepo,
+      knowledgeApi: knowledgeApiRepo,
     };
     return {
       repos,
@@ -144,6 +150,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
         experienceRepo,
       ),
       experienceQuery: new ExperienceQueryService(experienceRepo),
+      knowledgeApi: knowledgeApiRepo,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -157,6 +164,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       actions: null,
       experienceAggregator: null,
       experienceQuery: null,
+      knowledgeApi: null,
     };
   }
 }
@@ -171,6 +179,7 @@ export class SessionManager {
   private readonly actionService: ActionService | null;
   private readonly experienceAggregator: ExperienceAggregator | null;
   private readonly experienceQueryService: ExperienceQueryService | null;
+  private readonly knowledgeApiRepo: KnowledgeApiRepository | null;
 
   constructor(options?: SessionManagerOptions) {
     const init = initStorage(options);
@@ -181,6 +190,7 @@ export class SessionManager {
     this.actionService = init.actions;
     this.experienceAggregator = init.experienceAggregator;
     this.experienceQueryService = init.experienceQuery;
+    this.knowledgeApiRepo = init.knowledgeApi;
     if (this.repos) this.hydrateFromDb(this.repos);
   }
 
@@ -209,6 +219,16 @@ export class SessionManager {
    */
   public get actions(): ActionService | null {
     return this.actionService;
+  }
+
+  /**
+   * B-017 — Knowledge API endpoint repository. Capture writes go through
+   * here from the `chrome_network_capture` post-processor (gated by the
+   * `api_knowledge` capability). `null` when persistence is off, in
+   * which case the post-processor short-circuits.
+   */
+  public get knowledgeApi(): KnowledgeApiRepository | null {
+    return this.knowledgeApiRepo;
   }
 
   private hydrateFromDb(repos: Repos): void {

@@ -19,7 +19,11 @@ import { existsSync, mkdirSync } from 'node:fs';
 import type Database from 'better-sqlite3';
 
 import { getTabrixDataDir } from '../../shared/data-dirs';
-import { EXPERIENCE_CREATE_TABLES_SQL, MEMORY_CREATE_TABLES_SQL } from './schema';
+import {
+  EXPERIENCE_CREATE_TABLES_SQL,
+  KNOWLEDGE_CREATE_TABLES_SQL,
+  MEMORY_CREATE_TABLES_SQL,
+} from './schema';
 
 export type SqliteDatabase = Database.Database;
 
@@ -133,6 +137,11 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   db.exec(MEMORY_CREATE_TABLES_SQL);
   ensureSessionAggregatedAtColumn(db);
   db.exec(EXPERIENCE_CREATE_TABLES_SQL);
+  // B-017: Knowledge tables. Idempotent CREATE IF NOT EXISTS — same
+  // contract as Memory / Experience. The table exists regardless of
+  // capability state so writes from a freshly-enabled capability do
+  // not race a missing table; gating happens at the writer.
+  db.exec(KNOWLEDGE_CREATE_TABLES_SQL);
 
   return {
     db,

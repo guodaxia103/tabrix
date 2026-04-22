@@ -23,8 +23,14 @@
  */
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { TOOL_NAMES } from '@tabrix/shared';
 import type { SessionManager } from '../execution/session-manager';
 import { ACTION_KIND_BY_TOOL } from '../memory/action-service';
+import {
+  deriveKnowledgeFromBundle,
+  type CapturedNetworkBundle,
+} from '../memory/knowledge/api-knowledge-capture';
+import { isCapabilityEnabled } from '../policy/capabilities';
 
 export interface ToolPostProcessorContext {
   toolName: string;
@@ -175,6 +181,71 @@ export const chromeActionPostProcessor: ToolPostProcessor = (ctx) => {
 };
 
 /**
+ * B-017 — chrome_network_capture post-processor.
+ *
+ * Runs only when:
+ *   1. The `api_knowledge` capability is enabled
+ *      (`TABRIX_POLICY_CAPABILITIES=api_knowledge` or `=all`),
+ *   2. Memory persistence is on (KnowledgeApiRepository is wired),
+ *   3. The tool result is a JSON body containing a `requests` array
+ *      (only `action: "stop"` produces this; `action: "start"` is a
+ *      noop here).
+ *
+ * On every successful classification, the redacted endpoint metadata is
+ * upserted into `knowledge_api_endpoints` (dedup by `(site, signature)`).
+ * The MCP response itself is **never mutated** — Knowledge capture is
+ * an invisible side-effect; failures degrade silently like every other
+ * post-processor in this file.
+ */
+export const chromeNetworkCapturePostProcessor: ToolPostProcessor = (ctx) => {
+  const empty: ToolPostProcessorResult = {
+    rawResult: ctx.rawResult,
+    extraArtifactRefs: [],
+  };
+  try {
+    if (!isCapabilityEnabled('api_knowledge', process.env)) return empty;
+    const repo = ctx.sessionManager.knowledgeApi;
+    if (!repo) return empty;
+
+    const first = ctx.rawResult.content?.[0];
+    if (!first || first.type !== 'text' || typeof first.text !== 'string') return empty;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(first.text);
+    } catch {
+      return empty;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return empty;
+    const bundle = parsed as CapturedNetworkBundle;
+    if (!Array.isArray(bundle.requests) || bundle.requests.length === 0) return empty;
+
+    const observedAt = new Date().toISOString();
+    const upserts = deriveKnowledgeFromBundle(bundle, {
+      sessionId: ctx.sessionId ?? null,
+      stepId: ctx.stepId ?? null,
+      observedAt,
+    });
+    for (const input of upserts) {
+      try {
+        repo.upsert(input);
+      } catch (innerError) {
+        const message = innerError instanceof Error ? innerError.message : String(innerError);
+
+        console.warn(
+          `[tabrix/knowledge] api_knowledge upsert failed for ${input.endpointSignature}: ${message}`,
+        );
+      }
+    }
+    return empty;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    console.warn(`[tabrix/knowledge] chrome_network_capture post-processor failed: ${message}`);
+    return empty;
+  }
+};
+
+/**
  * Registry. Keep keys narrow — unrelated tools pay zero cost.
  */
 export const TOOL_POST_PROCESSORS: Partial<Record<string, ToolPostProcessor>> = {
@@ -184,6 +255,10 @@ export const TOOL_POST_PROCESSORS: Partial<Record<string, ToolPostProcessor>> = 
   ...Object.fromEntries(
     Object.keys(ACTION_KIND_BY_TOOL).map((toolName) => [toolName, chromeActionPostProcessor]),
   ),
+  // B-017: API Knowledge capture (capability-gated, no MCP surface
+  // change). Keyed off the canonical tool name so legacy aliases
+  // (`chrome_network_capture_stop`) are intentionally not hooked.
+  [TOOL_NAMES.BROWSER.NETWORK_CAPTURE]: chromeNetworkCapturePostProcessor,
 };
 
 export function runPostProcessor(ctx: ToolPostProcessorContext): ToolPostProcessorResult {

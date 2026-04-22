@@ -1,9 +1,11 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { TOOL_NAMES } from '@tabrix/shared';
 import { SessionManager } from '../execution/session-manager';
 import {
   runPostProcessor,
   chromeReadPagePostProcessor,
   chromeActionPostProcessor,
+  chromeNetworkCapturePostProcessor,
   TOOL_POST_PROCESSORS,
 } from './tool-post-processors';
 
@@ -296,6 +298,230 @@ describe('chromeActionPostProcessor', () => {
       });
       expect(out.rawResult).toBe(raw);
       expect(out.extraArtifactRefs).toEqual([]);
+    } finally {
+      manager.close();
+    }
+  });
+});
+
+/**
+ * B-017 end-to-end — proves the capability gate + redaction contract
+ * actually fires through the post-processor that real `chrome_network_capture`
+ * results flow through.
+ *
+ * The shape we feed `runPostProcessor` here mirrors the JSON body the
+ * extension's `network-capture-debugger.ts` / `network-capture-web-request.ts`
+ * tools serialize when `action: "stop"` returns. We do NOT mock the
+ * post-processor itself — we want the registry → gate → derive → upsert
+ * chain to be the unit under test.
+ */
+describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
+  const SAMPLE_BUNDLE = {
+    requests: [
+      {
+        url: 'https://api.github.com/repos/openai/api-test/issues?state=open&per_page=30',
+        method: 'GET',
+        statusCode: 200,
+        specificRequestHeaders: {
+          Authorization: 'Bearer ghp_SUPERSECRET_token_VALUE_should_never_persist',
+          Cookie: 'session=cookie-payload-PII; tracking=xyz',
+          'User-Agent': 'tabrix-test/1.0',
+          Accept: 'application/json',
+        },
+        specificResponseHeaders: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Set-Cookie': 'session=NEW_VALUE_PII; HttpOnly',
+        },
+        responseBody: JSON.stringify([
+          { id: 1, number: 10, title: 'private-title-PII', user: { login: 'octocat' } },
+        ]),
+      },
+      // A non-github request that must be silently dropped.
+      {
+        url: 'https://example.com/api/things?secret=hunter2',
+        method: 'GET',
+        statusCode: 200,
+        responseBody: '{}',
+      },
+    ],
+  };
+
+  function bootstrap() {
+    const manager = new SessionManager({ dbPath: ':memory:' });
+    const task = manager.createTask({
+      taskType: 'tool-call',
+      title: 't',
+      intent: 'i',
+      origin: 'jest',
+    });
+    const session = manager.startSession({
+      taskId: task.taskId,
+      transport: 'stdio',
+      clientName: 'jest',
+    });
+    const step = manager.startStep({
+      sessionId: session.sessionId,
+      toolName: TOOL_NAMES.BROWSER.NETWORK_CAPTURE,
+    });
+    return { manager, session, step };
+  }
+
+  const ENV_KEY = 'TABRIX_POLICY_CAPABILITIES';
+  let prevEnv: string | undefined;
+  beforeEach(() => {
+    prevEnv = process.env[ENV_KEY];
+  });
+  afterEach(() => {
+    if (prevEnv === undefined) delete process.env[ENV_KEY];
+    else process.env[ENV_KEY] = prevEnv;
+  });
+
+  it('is registered for the canonical NETWORK_CAPTURE tool name', () => {
+    expect(TOOL_POST_PROCESSORS[TOOL_NAMES.BROWSER.NETWORK_CAPTURE]).toBe(
+      chromeNetworkCapturePostProcessor,
+    );
+  });
+
+  it('captures NOTHING when capability gate is closed (default)', () => {
+    delete process.env[ENV_KEY];
+    const { manager, session, step } = bootstrap();
+    try {
+      const raw = wrap(SAMPLE_BUNDLE);
+      const out = runPostProcessor({
+        toolName: TOOL_NAMES.BROWSER.NETWORK_CAPTURE,
+        rawResult: raw,
+        stepId: step.stepId,
+        sessionId: session.sessionId,
+        sessionManager: manager,
+        args: {},
+      });
+      // Result is unchanged (Knowledge capture is invisible side-effect).
+      expect(out.rawResult).toBe(raw);
+      expect(out.extraArtifactRefs).toEqual([]);
+      // And NOTHING landed in the Knowledge table.
+      expect(manager.knowledgeApi!.countAll()).toBe(0);
+    } finally {
+      manager.close();
+    }
+  });
+
+  it('captures GitHub-only rows (with full redaction) when capability is enabled', () => {
+    process.env[ENV_KEY] = 'api_knowledge';
+    const { manager, session, step } = bootstrap();
+    try {
+      const raw = wrap(SAMPLE_BUNDLE);
+      runPostProcessor({
+        toolName: TOOL_NAMES.BROWSER.NETWORK_CAPTURE,
+        rawResult: raw,
+        stepId: step.stepId,
+        sessionId: session.sessionId,
+        sessionManager: manager,
+        args: {},
+      });
+
+      // Exactly one row — example.com was dropped at the classifier.
+      expect(manager.knowledgeApi!.countAll()).toBe(1);
+      const rows = manager.knowledgeApi!.listBySite('api.github.com');
+      expect(rows).toHaveLength(1);
+      const row = rows[0];
+
+      // Useful, redacted shape:
+      expect(row.semanticTag).toBe('github.issues_list');
+      expect(row.urlPattern).toBe('api.github.com/repos/:owner/:repo/issues');
+      expect(row.method).toBe('GET');
+      expect(row.statusClass).toBe('2xx');
+      expect(row.requestSummary.hasAuth).toBe(true);
+      expect(row.requestSummary.hasCookie).toBe(true);
+      expect(row.requestSummary.queryKeys).toEqual(['per_page', 'state']);
+      expect(row.responseSummary.shape).toMatchObject({
+        kind: 'array',
+        itemCount: 1,
+      });
+      expect(row.sourceSessionId).toBe(session.sessionId);
+      expect(row.sourceStepId).toBe(step.stepId);
+
+      // Hard PII guarantee: no raw secret leaked anywhere into the row.
+      const blob = JSON.stringify(row);
+      const FORBIDDEN = [
+        'ghp_SUPERSECRET',
+        'SUPERSECRET',
+        'cookie-payload-PII',
+        'NEW_VALUE_PII',
+        'private-title-PII',
+        'hunter2',
+        'octocat',
+      ];
+      for (const needle of FORBIDDEN) {
+        expect(blob).not.toContain(needle);
+      }
+    } finally {
+      manager.close();
+    }
+  });
+
+  it('does not mutate the MCP response on success (response stays byte-identical)', () => {
+    process.env[ENV_KEY] = 'all';
+    const { manager, session, step } = bootstrap();
+    try {
+      const raw = wrap(SAMPLE_BUNDLE);
+      const originalText = (raw.content as any[])[0].text;
+      const out = runPostProcessor({
+        toolName: TOOL_NAMES.BROWSER.NETWORK_CAPTURE,
+        rawResult: raw,
+        stepId: step.stepId,
+        sessionId: session.sessionId,
+        sessionManager: manager,
+        args: {},
+      });
+      expect(out.rawResult).toBe(raw);
+      expect(out.extraArtifactRefs).toEqual([]);
+      expect((raw.content as any[])[0].text).toBe(originalText);
+    } finally {
+      manager.close();
+    }
+  });
+
+  it('degrades silently on malformed bundle JSON', () => {
+    process.env[ENV_KEY] = 'api_knowledge';
+    const { manager, session, step } = bootstrap();
+    try {
+      const raw: CallToolResult = { content: [{ type: 'text', text: 'not json' }] };
+      const out = runPostProcessor({
+        toolName: TOOL_NAMES.BROWSER.NETWORK_CAPTURE,
+        rawResult: raw,
+        stepId: step.stepId,
+        sessionId: session.sessionId,
+        sessionManager: manager,
+        args: {},
+      });
+      expect(out.rawResult).toBe(raw);
+      expect(manager.knowledgeApi!.countAll()).toBe(0);
+    } finally {
+      manager.close();
+    }
+  });
+
+  it('upsert dedup: re-running the same bundle does not double-count', () => {
+    process.env[ENV_KEY] = 'api_knowledge';
+    const { manager, session, step } = bootstrap();
+    try {
+      const raw = wrap(SAMPLE_BUNDLE);
+      for (let i = 0; i < 3; i++) {
+        runPostProcessor({
+          toolName: TOOL_NAMES.BROWSER.NETWORK_CAPTURE,
+          rawResult: raw,
+          stepId: step.stepId,
+          sessionId: session.sessionId,
+          sessionManager: manager,
+          args: {},
+        });
+      }
+      expect(manager.knowledgeApi!.countAll()).toBe(1);
+      const [row] = manager.knowledgeApi!.listBySite('api.github.com');
+      expect(row.sampleCount).toBe(3);
+      // First-seen provenance sticks to the first observation; even after
+      // 3 hits, sourceSessionId is still the original session.
+      expect(row.sourceSessionId).toBe(session.sessionId);
     } finally {
       manager.close();
     }
