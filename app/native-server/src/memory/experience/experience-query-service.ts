@@ -34,4 +34,14 @@ export class ExperienceQueryService {
       limit: input.limit,
     });
   }
+
+  /**
+   * V24-01: targeted point-lookup by `actionPathId`. Used by the
+   * `experience_replay` MCP handler before opening per-step Memory
+   * rows. Read-only — see {@link ExperienceRepository.findActionPathById}
+   * for stale-id semantics.
+   */
+  public findActionPathById(actionPathId: string): ExperienceActionPathRow | undefined {
+    return this.repository.findActionPathById(actionPathId);
+  }
 }
