@@ -13,11 +13,36 @@ import { prearmDialogHandling } from './dialog-prearm';
 import { type CandidateActionInput, resolveCandidateActionTarget } from './candidate-action';
 import { lookupStableTargetRef } from './stable-target-ref-registry';
 import {
+  CLICK_VERIFIER_SETTLE_DELAY_MS,
   type ClickVerifierContext,
   type ClickVerifierResult,
   isVerifierContextRequested,
   runClickVerifier,
 } from './click-verifier';
+
+/**
+ * V23-01: explicit lane label on every click response. The Tabrix
+ * extension-first execution lane is `tabrix_owned`. If a future code
+ * path ever introduces a CDP / debugger / external-controller fallback,
+ * that path MUST set a different lane value on its response so silent
+ * lane drift is visible to release-evidence consumers (lane-integrity
+ * metrics in V23-06). This is observability, not enforcement.
+ */
+const TABRIX_OWNED_LANE = 'tabrix_owned';
+
+/**
+ * V23-01: the post-dispatch new-tab observation window must cover the
+ * verifier's settle window when a verifier is requested, otherwise a
+ * `_blank` click that opens its tab inside the verifier settle window
+ * will be reported with `verification.newTabOpened === false` even
+ * though the verifier itself detects the URL change. Add a small drain
+ * buffer (50 ms) on top so that the listener does not race the settle
+ * timeout itself.
+ */
+const NEW_TAB_OBSERVE_DRAIN_BASE_MS = 75;
+const NEW_TAB_OBSERVE_DRAIN_VERIFIER_BUFFER_MS = 50;
+export const NEW_TAB_OBSERVE_DRAIN_VERIFIER_MS =
+  CLICK_VERIFIER_SETTLE_DELAY_MS + NEW_TAB_OBSERVE_DRAIN_VERIFIER_BUFFER_MS;
 
 interface Coordinates {
   x: number;
@@ -613,7 +638,16 @@ class ClickTool extends BaseBrowserToolExecutor {
         },
         frameId,
       );
-      const browserSignalsPromise = observeNewTabUntil(tab.windowId, resultPromise);
+      // V23-01: when a family-aware verifier is requested, extend the
+      // browser-level new-tab observation drain so it covers the verifier
+      // settle delay. Without this, a `_blank` click that opened its
+      // tab between the helper-resolve and the verifier readback would
+      // report `verification.newTabOpened === false` even though the
+      // verifier itself saw the URL change.
+      const newTabDrainMs = isVerifierContextRequested(args.verifierContext)
+        ? NEW_TAB_OBSERVE_DRAIN_VERIFIER_MS
+        : NEW_TAB_OBSERVE_DRAIN_BASE_MS;
+      const browserSignalsPromise = observeNewTabUntil(tab.windowId, resultPromise, newTabDrainMs);
 
       // Send click message to content script
       const result = await resultPromise;
@@ -744,6 +778,12 @@ class ClickTool extends BaseBrowserToolExecutor {
               verification: merged.verification,
               // One-release compat field; equals verification.navigationOccurred.
               navigationOccurred: merged.verification.navigationOccurred,
+              // V23-01: explicit lane label. Always `tabrix_owned` for
+              // the extension-first execution path. If a future fallback
+              // route is added, that route MUST emit a different lane
+              // value so silent lane drift is visible to lane-integrity
+              // metrics in V23-06 release evidence.
+              lane: TABRIX_OWNED_LANE,
               message: finalSuccess
                 ? `Click observed outcome: ${merged.observedOutcome}`
                 : merged.observedOutcome === 'no_observed_change'

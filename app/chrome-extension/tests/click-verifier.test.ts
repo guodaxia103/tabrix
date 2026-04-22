@@ -2,12 +2,16 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CLICK_VERIFIER_SETTLE_DELAY_MS,
   evaluateClickVerifier,
   isVerifierContextActive,
   isVerifierContextRequested,
   runClickVerifier,
 } from '@/entrypoints/background/tools/browser/click-verifier';
-import { clickTool } from '@/entrypoints/background/tools/browser/interaction';
+import {
+  clickTool,
+  NEW_TAB_OBSERVE_DRAIN_VERIFIER_MS,
+} from '@/entrypoints/background/tools/browser/interaction';
 
 /**
  * Test strategy for B-024 (Click V2 · verifier hook v1).
@@ -437,5 +441,70 @@ describe('clickTool integration', () => {
       verifierPassed: false,
       verifierReason: 'verifier_key_unknown:github.repo_nav.nope',
     });
+  });
+
+  /**
+   * V23-01: every click response carries an explicit `lane` field so
+   * that lane-integrity metrics can detect a future silent fallback to
+   * a non-Tabrix browser-control path. The extension-first path is
+   * always `tabrix_owned`.
+   */
+  it('emits lane="tabrix_owned" on the click response (V23-01)', async () => {
+    vi.spyOn(clickTool as any, 'tryGetTab').mockResolvedValue({
+      id: 4106,
+      title: 'Repo',
+      url: 'https://github.com/octocat/hello',
+      windowId: 7,
+    });
+    vi.spyOn(clickTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(clickTool as any, 'sendMessageToTab').mockResolvedValue({
+      dispatchSucceeded: true,
+      elementInfo: { tagName: 'A' },
+      signals: {
+        beforeUnloadFired: false,
+        urlBefore: 'https://github.com/octocat/hello',
+        urlAfter: 'https://github.com/octocat/hello',
+        hashBefore: '',
+        hashAfter: '',
+        domChanged: true,
+        domAddedDialog: false,
+        domAddedMenu: false,
+        focusChanged: false,
+        targetStateDelta: null,
+      },
+    });
+
+    const result = await clickTool.execute({
+      tabId: 4106,
+      selector: '#some-button',
+    } as any);
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(result.isError).toBe(false);
+    expect(payload.lane).toBe('tabrix_owned');
+  });
+});
+
+/**
+ * V23-01: window-alignment guard. Before V23-01, the post-dispatch
+ * new-tab observation drained 75 ms after the click-helper resolved,
+ * but the verifier waited another 250 ms on top — leaving a window
+ * where a `_blank` click that opened its tab during the verifier
+ * settle delay would be missed by `verification.newTabOpened` even
+ * though the verifier itself saw the URL change. The fix exposes one
+ * shared constant and consumes it from the click pipeline; this test
+ * just pins the contract so a future refactor cannot silently let the
+ * windows drift apart again.
+ */
+describe('V23-01 window alignment', () => {
+  it('NEW_TAB_OBSERVE_DRAIN_VERIFIER_MS covers the verifier settle delay', () => {
+    expect(NEW_TAB_OBSERVE_DRAIN_VERIFIER_MS).toBeGreaterThanOrEqual(
+      CLICK_VERIFIER_SETTLE_DELAY_MS,
+    );
+  });
+
+  it('CLICK_VERIFIER_SETTLE_DELAY_MS is a positive number', () => {
+    expect(typeof CLICK_VERIFIER_SETTLE_DELAY_MS).toBe('number');
+    expect(CLICK_VERIFIER_SETTLE_DELAY_MS).toBeGreaterThan(0);
   });
 });

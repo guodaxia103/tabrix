@@ -260,8 +260,19 @@ const BODY_SAMPLE_MAX_CHARS = 20_000;
  * The brief says at most ONE compact readback in v1, so we do NOT poll
  * for pageRole convergence here — if this fixed wait is too short for a
  * slow SPA, the verifier fails honestly rather than hiding the cost.
+ *
+ * V23-01: exported so the click pipeline in `interaction.ts` can keep
+ * its `chrome.tabs.onCreated` observation window aligned with the
+ * verifier's settle window. Before V23-01, browser-level new-tab
+ * observation drained 75 ms after the click-helper resolved, but the
+ * verifier then waited another 250 ms — meaning a `_blank` click that
+ * actually opened a new tab inside that 175 ms gap would be observed by
+ * the verifier (URL change) but missed by `observeNewTabUntil`. That
+ * inconsistency made `verification.newTabOpened` falsely false on slow
+ * `_blank` clicks. Now both windows live behind one constant.
  */
-const SETTLE_DELAY_MS = 250;
+export const CLICK_VERIFIER_SETTLE_DELAY_MS = 250;
+const SETTLE_DELAY_MS = CLICK_VERIFIER_SETTLE_DELAY_MS;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
