@@ -43,7 +43,7 @@ Wave 1 — near-term, parallelizable. Starts unblocked.
   Stage 3f · Policy capability opt-in enum            [B-016 pool]
 
 Wave 2 — needs Wave 1 to be at least Beta.
-  Stage 3b · Experience action-path replay            [B-005 schema done, B-012 done, B-013 next]
+  Stage 3b · Experience action-path replay            [B-005 schema done, B-012 done, B-013 done]
   Stage 3c · Recovery Watchdog consolidation          [B-014 pool]
 
 Wave 3 — strategic payoff; needs Waves 1+2.
@@ -118,14 +118,14 @@ Wave 5 — long horizon, no dates.
 - **Layer**: `E` (+ reads `M`)
 - **KPI**: `省 token` · `更快` · `懂用户`
 - **Priority**: `P0` · **Size**: `L` · **Dependencies**: `Stage 3a`
-- **Status**: **schema done, aggregator done; MCP tools next** — `B-005` (schema) done in Sprint 2; `B-012` (aggregator) landed in Sprint 3; `B-013` (MCP tools) remains in pool.
+- **Status**: **schema done, aggregator done, read-side MCP tool done; write-side MCP tools next** — `B-005` (schema) done in Sprint 2; `B-012` (aggregator) and `B-013` read-only `experience_suggest_plan` landed in Sprint 3; `experience_replay` / `experience_score_step` remain pool (P1, blocked on Policy review).
 
 ### Scope
 
 1. Schema: `experience_action_paths(page_role, intent_signature, step_sequence, success_count, failure_count, last_used_at, …)` + `experience_locator_prefs(page_role, element_purpose, preferred_selector_kind, preferred_selector, hit_count, …)`. Done in `B-005`.
 2. **Aggregator** (`B-012`, done): walks `memory_sessions` where `status ∈ {completed, failed, aborted}` AND `aggregated_at IS NULL`; joins `memory_tasks` for intent; reads `memory_steps` for ordered step sequence; and projects into `experience_action_paths`. Idempotent re-runs do not double-count.
 3. `memory_sessions.aggregated_at` column added via guarded migration (SQLite lacks `IF NOT EXISTS` on `ADD COLUMN`).
-4. MCP tools (`B-013`, next): `experience_suggest_plan(intent, pageRole?) → ActionPath | null`, `experience_replay(intent, variables) → plan`, `experience_score_step(stepId, result)`.
+4. MCP tools: `experience_suggest_plan(intent, pageRole?, limit?) → ExperienceActionPathPlan[]` shipped in `B-013` (P0 read-only, native-handled — no extension round-trip; rows ranked by `success_count` then net-success margin then recency). `experience_replay(intent, variables) → plan` and `experience_score_step(stepId, result)` are explicit follow-ups (need Policy review before exposure).
 5. Five-tier locator fallback at replay time: `exact ref → stable hash → xpath → ax name → attribute`, reordered by Experience statistics.
 
 ### Non-scope
@@ -146,7 +146,7 @@ Wave 5 — long horizon, no dates.
 
 - ✅ `B-005` — Experience schema seed (done).
 - ✅ `B-012` — Experience action-path aggregator (done).
-- ⬜ `B-013` — `experience_suggest_plan` / `experience_replay` / `experience_score_step` MCP tools.
+- ✅ `B-013` — `experience_suggest_plan` MCP tool (done; `experience_replay` / `experience_score_step` deferred — see backlog "Next" block under B-013).
 
 ### Notes for incoming AI
 
@@ -744,20 +744,20 @@ Before adding any MCP tool / background listener / sidepanel tab / shared type, 
 
 (Live snapshot — update at each sprint review; authoritative copy is in [`PRODUCT_BACKLOG.md`](./PRODUCT_BACKLOG.md).)
 
-| Sprint         | State               | Items                                                                |
-| -------------- | ------------------- | -------------------------------------------------------------------- |
-| Sprint 1 (W17) | `closed 2026-04-20` | `B-001..B-004` all done.                                             |
-| Sprint 2 (W18) | `closed 2026-04-20` | `B-005..B-009` all done.                                             |
-| Sprint 3 (W19) | **active**          | `B-010 done · B-021 done · B-023 done · B-012 done · B-022 planned`. |
+| Sprint         | State               | Items                                                                             |
+| -------------- | ------------------- | --------------------------------------------------------------------------------- |
+| Sprint 1 (W17) | `closed 2026-04-20` | `B-001..B-004` all done.                                                          |
+| Sprint 2 (W18) | `closed 2026-04-20` | `B-005..B-009` all done.                                                          |
+| Sprint 3 (W19) | **active**          | `B-010 done · B-021 done · B-023 done · B-012 done · B-013 done · B-022 planned`. |
 
 ### Next sprint candidates (Sprint 4, seeded from pool)
 
 Pick in this order unless something blocks:
 
 1. `B-011` — Stable `targetRef` (finishes Stage 3a properly).
-2. `B-013` — `experience_suggest_plan` MCP tool (Stage 3b closes the write + read loop).
-3. `B-015` — `read_page(render='markdown')` (Stage 3d, small and high-K1).
-4. `B-016` — `TabrixCapability` enum (Stage 3f, unblocks Stage 3g).
+2. `B-015` — `read_page(render='markdown')` (Stage 3d, small and high-K1).
+3. `B-016` — `TabrixCapability` enum (Stage 3f, unblocks Stage 3g).
+4. Stage 3b write-side follow-up — `experience_replay` + `experience_score_step` (needs Policy review first; not a single backlog ID yet).
 
 Do not pull `B-017` (API Knowledge) until `B-016` is at least in `review` — API Knowledge depends on the capability framework.
 

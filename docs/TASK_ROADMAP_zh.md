@@ -43,7 +43,7 @@ Wave 1 —— 近期可并行，不阻塞。
   Stage 3f · Policy capability opt-in 枚举         [B-016 pool]
 
 Wave 2 —— 需 Wave 1 至少 Beta。
-  Stage 3b · Experience action-path replay         [B-005 schema done, B-012 done, B-013 next]
+  Stage 3b · Experience action-path replay         [B-005 schema done, B-012 done, B-013 done]
   Stage 3c · Recovery Watchdog 统一                [B-014 pool]
 
 Wave 3 —— 战略兑现，依赖 Wave 1+2。
@@ -118,14 +118,14 @@ Wave 5 —— 远期，无具体时间。
 - **层**：`E`（读 `M`）
 - **KPI**：`省 token` · `更快` · `懂用户`
 - **优先级**：`P0` · **规模**：`L` · **依赖**：`Stage 3a`
-- **状态**：**schema 已落，聚合器已落；MCP 工具待续** —— `B-005`（schema）Sprint 2 落地；`B-012`（聚合器）已在 Sprint 3 落地；`B-013`（MCP 工具）仍在 pool。
+- **状态**：**schema 已落、聚合器已落、读侧 MCP 工具已落；写侧 MCP 工具待续** —— `B-005`（schema）Sprint 2 落地；`B-012`（聚合器）+ `B-013` 的只读 `experience_suggest_plan` 已在 Sprint 3 落地；`experience_replay` / `experience_score_step` 仍在 pool（P1，需先做 Policy review）。
 
 ### 范围
 
 1. Schema：`experience_action_paths(page_role, intent_signature, step_sequence, success_count, failure_count, last_used_at, …)` + `experience_locator_prefs(page_role, element_purpose, preferred_selector_kind, preferred_selector, hit_count, …)`。—— `B-005` 落地。
 2. **聚合器**（`B-012`，done）：扫描 `memory_sessions.status ∈ {completed, failed, aborted}` 且 `aggregated_at IS NULL`；join `memory_tasks` 取 intent；按 `step_index` 读 `memory_steps`；投影到 `experience_action_paths`。重复运行不会二次计数。
 3. `memory_sessions.aggregated_at` 列通过 guarded migration 加（SQLite 不支持 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`）。
-4. MCP 工具（`B-013`，next）：`experience_suggest_plan(intent, pageRole?) → ActionPath | null`、`experience_replay(intent, variables) → plan`、`experience_score_step(stepId, result)`。
+4. MCP 工具：`experience_suggest_plan(intent, pageRole?, limit?) → ExperienceActionPathPlan[]` 已在 `B-013` 落地（P0 只读、native-handled，不走扩展桥；按 `success_count` → 净成功数 → 最近使用 → 确定性 ID 排序）。`experience_replay(intent, variables) → plan` 与 `experience_score_step(stepId, result)` 是显式后续项（必须先过 Policy review 再暴露）。
 5. 回放时五级 locator 回退：`exact ref → stable hash → xpath → ax name → attribute`，按 Experience 统计动态重排。
 
 ### 非范围
@@ -146,7 +146,7 @@ Wave 5 —— 远期，无具体时间。
 
 - ✅ `B-005` —— Experience schema seed（done）。
 - ✅ `B-012` —— Experience action-path aggregator（done）。
-- ⬜ `B-013` —— `experience_suggest_plan` / `experience_replay` / `experience_score_step` MCP 工具。
+- ✅ `B-013` —— `experience_suggest_plan` MCP 工具（已落；`experience_replay` / `experience_score_step` 推迟，详见 backlog 中 B-013 的 "Next" 段）。
 
 ### 给接手 AI 的提示
 
@@ -744,18 +744,18 @@ Memory 加 `user_preferences { key, value, sourceSessionId, confidence }` ——
 
 （动态快照 —— 每个 sprint review 更新；权威副本在 [`PRODUCT_BACKLOG.md`](./PRODUCT_BACKLOG.md)。）
 
-| Sprint          | 状态                | item                                                                  |
-| --------------- | ------------------- | --------------------------------------------------------------------- |
-| Sprint 1（W17） | `closed 2026-04-20` | `B-001..B-004` 全 done。                                              |
-| Sprint 2（W18） | `closed 2026-04-20` | `B-005..B-009` 全 done。                                              |
-| Sprint 3（W19） | **active**          | `B-010 done · B-021 done · B-023 done · B-012 done · B-022 planned`。 |
+| Sprint          | 状态                | item                                                                               |
+| --------------- | ------------------- | ---------------------------------------------------------------------------------- |
+| Sprint 1（W17） | `closed 2026-04-20` | `B-001..B-004` 全 done。                                                           |
+| Sprint 2（W18） | `closed 2026-04-20` | `B-005..B-009` 全 done。                                                           |
+| Sprint 3（W19） | **active**          | `B-010 done · B-021 done · B-023 done · B-012 done · B-013 done · B-022 planned`。 |
 
 ### 下一 Sprint（Sprint 4）候选，从 pool 拉
 
 没阻塞的话按这个顺序捡：
 
 1. `B-011` —— 稳定 `targetRef`（把 Stage 3a 真正收掉）。
-2. `B-013` —— `experience_suggest_plan` MCP 工具（闭环 Stage 3b 的写 + 读）。
+2. Stage 3b 写侧后续项 —— `experience_replay` + `experience_score_step`（需要先做 Policy review；目前没有单独 backlog ID）。
 3. `B-015` —— `read_page(render='markdown')`（Stage 3d，小而 K1 大）。
 4. `B-016` —— `TabrixCapability` 枚举（Stage 3f，解锁 Stage 3g）。
 

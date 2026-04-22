@@ -194,13 +194,13 @@ Tabrix 是一个四层学习闭环，架在工具面和传输层之上。
 
 **职责**：把 Memory 投影成**可复用的 action path 和 locator 偏好** —— "上次在这个页面、这个 intent 下，什么成了。"
 
-**当前成熟度**：约 25% —— schema 已落地（`experience_action_paths` / `experience_locator_prefs`，`B-005`），且 Sprint 3 已落地第一条写路径（`B-012`）：终态 Memory session 会被幂等投影到 `experience_action_paths`。
+**当前成熟度**：约 35% —— schema 已落地（`experience_action_paths` / `experience_locator_prefs`，`B-005`）；Sprint 3 落地了第一条写路径（`B-012`），把终态 Memory session 幂等投影到 `experience_action_paths`；读侧 MCP 工具 `experience_suggest_plan` 已在 `B-013` 落地（P0、native-handled）。
 
-**目标态**：上游 LLM 调 `experience_suggest_plan(intent, pageRole?)`，Tabrix 返回那个 `(pageRole, intent)` 桶里最成功的 action path，配五级 locator 回退。**这个 plan 只是原语**，上游 LLM 决定采不采纳。
+**目标态**：上游 LLM 调 `experience_suggest_plan(intent, pageRole?)`，Tabrix 返回那个 `(pageRole, intent)` 桶里排序后的 action path 列表，配五级 locator 回退。**这个 plan 只是原语**，上游 LLM 决定采不采纳。
 
 **差距**：
 
-- MCP 工具（`experience_suggest_plan` / `experience_replay` / `experience_score_step`）还没（`B-013`，Sprint 4+）；
+- 写侧 MCP 工具（`experience_replay` / `experience_score_step`）还没暴露 —— Stage 3b 后续项（Sprint 4+，写/执行路径需先过 Policy review）；
 - 导入导出还没（Stage 4a 的 `B-020`）。
 
 **代码触点**：
@@ -276,47 +276,47 @@ Tabrix 是一个四层学习闭环，架在工具面和传输层之上。
 
 权威清单：`packages/shared/src/tools.ts::TOOL_NAMES.BROWSER`。本表是**新人入门快照**；如果与代码不一致，**以代码为准**。
 
-| 工具                                                                                         | 风险         | 用途（一句话）                                                  |
-| -------------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------- |
-| `get_windows_and_tabs`                                                                       | P0           | 列出 Chrome 窗口和标签页。                                      |
-| `chrome_read_page`                                                                           | P0           | 结构化页面快照 + HVO（主要读工具）。                            |
-| `chrome_get_interactive_elements`                                                            | P0           | 列出带稳定 ref 的可交互元素。                                   |
-| `chrome_get_web_content`                                                                     | P0           | 纯文本 / markdown 页面内容。                                    |
-| `chrome_screenshot`                                                                          | P0           | 视口 / 元素截图。                                               |
-| `chrome_console`                                                                             | P0           | 读 DevTools console 输出。                                      |
-| `chrome_history`                                                                             | P0           | 查历史（受限）。                                                |
-| `chrome_bookmark_search`                                                                     | P0           | 查书签。                                                        |
-| `chrome_network_capture`                                                                     | P1           | 抓 HAR-style 网络事件。                                         |
-| `chrome_navigate`                                                                            | P1           | 当前 / 新标签导航。                                             |
-| `chrome_switch_tab`                                                                          | P1           | 切换活动标签。                                                  |
-| `chrome_gif_recorder`                                                                        | P1           | 录制当前标签 GIF。                                              |
-| `performance_start_trace` / `_stop` / `_analyze_insight`                                     | P1           | Trace + 轻量 summary。                                          |
-| `chrome_click_element`                                                                       | P2           | 带验证语义的点击（见 `CLICK_CONTRACT_REPAIR_V1.md`，`B-023`）。 |
-| `chrome_fill_or_select`                                                                      | P2           | 填输入框 / 选下拉。                                             |
-| `chrome_keyboard`                                                                            | P2           | 键盘按键分发。                                                  |
-| `chrome_handle_dialog`                                                                       | P2           | 接受 / 关闭原生弹窗。                                           |
-| `chrome_handle_download`                                                                     | P2           | 接受 / 关闭下载。                                               |
-| `chrome_close_tabs`                                                                          | P2           | 关标签。                                                        |
-| `chrome_bookmark_add` / `chrome_bookmark_delete`                                             | P2           | 书签写入。                                                      |
-| `chrome_request_element_selection`                                                           | P2           | 让用户手动选元素（human-in-loop）。                             |
-| `chrome_javascript`                                                                          | P3（opt-in） | 在 content world 跑任意 JS。                                    |
-| `chrome_inject_script`                                                                       | P3（opt-in） | 注入脚本到标签页。                                              |
-| `chrome_send_command_to_inject_script`                                                       | P3（opt-in） | 给注入脚本发命令。                                              |
-| `chrome_userscript`                                                                          | P3（opt-in） | 用户脚本管理。                                                  |
-| `chrome_upload_file`                                                                         | P3（opt-in） | 文件上传。                                                      |
-| `chrome_computer`                                                                            | P3（opt-in） | 坐标级鼠标/键盘输入。                                           |
-| `chrome_network_capture_start` / `_stop` / `_request` / `_debugger_start` / `_debugger_stop` | P3（内部）   | 高级网络 / 调试器 —— 内部用，不默认 listTools。                 |
+| 工具                                                                                         | 风险         | 用途（一句话）                                                                                                                                               |
+| -------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `get_windows_and_tabs`                                                                       | P0           | 列出 Chrome 窗口和标签页。                                                                                                                                   |
+| `chrome_read_page`                                                                           | P0           | 结构化页面快照 + HVO（主要读工具）。                                                                                                                         |
+| `chrome_get_interactive_elements`                                                            | P0           | 列出带稳定 ref 的可交互元素。                                                                                                                                |
+| `chrome_get_web_content`                                                                     | P0           | 纯文本 / markdown 页面内容。                                                                                                                                 |
+| `chrome_screenshot`                                                                          | P0           | 视口 / 元素截图。                                                                                                                                            |
+| `chrome_console`                                                                             | P0           | 读 DevTools console 输出。                                                                                                                                   |
+| `chrome_history`                                                                             | P0           | 查历史（受限）。                                                                                                                                             |
+| `chrome_bookmark_search`                                                                     | P0           | 查书签。                                                                                                                                                     |
+| `chrome_network_capture`                                                                     | P1           | 抓 HAR-style 网络事件。                                                                                                                                      |
+| `chrome_navigate`                                                                            | P1           | 当前 / 新标签导航。                                                                                                                                          |
+| `chrome_switch_tab`                                                                          | P1           | 切换活动标签。                                                                                                                                               |
+| `chrome_gif_recorder`                                                                        | P1           | 录制当前标签 GIF。                                                                                                                                           |
+| `performance_start_trace` / `_stop` / `_analyze_insight`                                     | P1           | Trace + 轻量 summary。                                                                                                                                       |
+| `chrome_click_element`                                                                       | P2           | 带验证语义的点击（见 `CLICK_CONTRACT_REPAIR_V1.md`，`B-023`）。                                                                                              |
+| `chrome_fill_or_select`                                                                      | P2           | 填输入框 / 选下拉。                                                                                                                                          |
+| `chrome_keyboard`                                                                            | P2           | 键盘按键分发。                                                                                                                                               |
+| `chrome_handle_dialog`                                                                       | P2           | 接受 / 关闭原生弹窗。                                                                                                                                        |
+| `chrome_handle_download`                                                                     | P2           | 接受 / 关闭下载。                                                                                                                                            |
+| `chrome_close_tabs`                                                                          | P2           | 关标签。                                                                                                                                                     |
+| `chrome_bookmark_add` / `chrome_bookmark_delete`                                             | P2           | 书签写入。                                                                                                                                                   |
+| `chrome_request_element_selection`                                                           | P2           | 让用户手动选元素（human-in-loop）。                                                                                                                          |
+| `chrome_javascript`                                                                          | P3（opt-in） | 在 content world 跑任意 JS。                                                                                                                                 |
+| `chrome_inject_script`                                                                       | P3（opt-in） | 注入脚本到标签页。                                                                                                                                           |
+| `chrome_send_command_to_inject_script`                                                       | P3（opt-in） | 给注入脚本发命令。                                                                                                                                           |
+| `chrome_userscript`                                                                          | P3（opt-in） | 用户脚本管理。                                                                                                                                               |
+| `chrome_upload_file`                                                                         | P3（opt-in） | 文件上传。                                                                                                                                                   |
+| `chrome_computer`                                                                            | P3（opt-in） | 坐标级鼠标/键盘输入。                                                                                                                                        |
+| `chrome_network_capture_start` / `_stop` / `_request` / `_debugger_start` / `_debugger_stop` | P3（内部）   | 高级网络 / 调试器 —— 内部用，不默认 listTools。                                                                                                              |
+| `experience_suggest_plan`                                                                    | P0           | 给 `(intent, pageRole?)` 返回排序后的只读 action path 列表。Native-handled（不走扩展桥）。Memory 关闭时返回 `status: 'no_match'`（不抛错）。`B-013` 已落地。 |
 
 ### 7.2 规划中工具（本 PRD 点名的未来原语）
 
-| 工具                      | 规划 Stage    | 层                     | 用途                                                                         |
-| ------------------------- | ------------- | ---------------------- | ---------------------------------------------------------------------------- |
-| `tabrix_choose_context`   | 3h（`B-018`） | Knowledge + Experience | 给 `(intent, url?)`，返回最小 token 的 `ContextBundle` —— **最大 K1 杠杆**。 |
-| `experience_suggest_plan` | 3b（`B-013`） | Experience             | 给 `(intent, pageRole?)`，返回最成功的 action path。                         |
-| `experience_replay`       | 3b（`B-013`） | Experience             | 用变量替换执行历史 action path。                                             |
-| `experience_score_step`   | 3b（`B-013`） | Experience             | 让上游 LLM 把步骤结果写回 Memory。                                           |
-| `knowledge_describe_api`  | 3g（`B-017`） | Knowledge              | 列出某站点已捕获的 `KnowledgeApiEndpoint[]`。                                |
-| `knowledge_call_api`      | 3g（`B-017`） | Knowledge              | 用用户真实 Chrome cookie 调用站点 API。                                      |
+| 工具                     | 规划 Stage         | 层                     | 用途                                                                         |
+| ------------------------ | ------------------ | ---------------------- | ---------------------------------------------------------------------------- |
+| `tabrix_choose_context`  | 3h（`B-018`）      | Knowledge + Experience | 给 `(intent, url?)`，返回最小 token 的 `ContextBundle` —— **最大 K1 杠杆**。 |
+| `experience_replay`      | 3b（`B-013` 之后） | Experience             | 用变量替换执行历史 action path。暴露前需先做 Policy review。                 |
+| `experience_score_step`  | 3b（`B-013` 之后） | Experience             | 让上游 LLM 把步骤结果写回 Memory。暴露前需先做 Policy review。               |
+| `knowledge_describe_api` | 3g（`B-017`）      | Knowledge              | 列出某站点已捕获的 `KnowledgeApiEndpoint[]`。                                |
+| `knowledge_call_api`     | 3g（`B-017`）      | Knowledge              | 用用户真实 Chrome cookie 调用站点 API。                                      |
 
 ### 7.3 工具面不变式
 
@@ -433,7 +433,7 @@ Wave 1（近期可并行，互不阻塞）
   3f · Policy capability opt-in 枚举            （B-016 pool）
 
 Wave 2（依赖 Wave 1 至少 Beta）
-  3b · Experience action-path replay            （B-005 schema done，B-012 done，B-013 next）
+  3b · Experience action-path replay            （B-005 schema done，B-012 done，B-013 done —— 写侧 replay/score_step 暂缓）
   3c · Recovery Watchdog 统一化                 （B-014 pool）
 
 Wave 3（战略价值集中兑现）

@@ -440,6 +440,38 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
   - `pnpm -r typecheck` and `pnpm run docs:check` green.
 - **Landed**: `memory_sessions.aggregated_at` shipped with guarded migration (new install + legacy upgrade path), `ExperienceAggregator` + `ExperienceRepository` project terminal sessions into `experience_action_paths` using `(page_role, intent_signature)` buckets, and session-level `aggregated_at` markers enforce idempotent replay. Scope constraints held: no new MCP tool, no writes to `experience_locator_prefs`. Validation: `pnpm --filter @tabrix/tabrix test`, `pnpm -r typecheck`, `pnpm run docs:check` all green.
 
+### B-013 · MCP tool: `experience_suggest_plan` (read-only)
+
+- **Stage**: 3b · **Layer**: E · **KPI**: 省 token · 更准 (upstream LLM reuses prior winning plans instead of re-planning)
+- **Owner**: Claude · **Size**: M · **Status**: `done` (landed 2026-04-22, pulled into Sprint 3 as the read-side companion of B-012)
+- **Dependencies**: **B-012** (aggregator must be writing `experience_action_paths` rows)
+- **Branch**: landed on `main` directly (B-012 stable in-tree; brief is small enough that no feature branch was warranted, same pattern B-024 used)
+- **Public contract**:
+  - New MCP tool `experience_suggest_plan` (Risk tier `P0` — pure SELECT against the local SQLite, no browser side-effects, no network).
+  - Input: `intent: string` (required, ≤ 1024 chars, normalized via the same `normalizeIntentSignature` the B-012 aggregator uses), `pageRole?: string` (optional, ≤ 128 chars), `limit?: integer` (optional, default 1, clamped to `[1, 5]`).
+  - Output: `{ status: 'ok' | 'no_match', plans: ExperienceActionPathPlan[], persistenceMode: 'disk' | 'memory' | 'off' }`. Each plan carries `actionPathId`, `pageRole`, `intentSignature`, `successCount`, `failureCount`, `successRate` (computed server-side), `lastUsedAt?`, and the projected `steps[]`.
+  - When persistence is off (Memory disabled or DB init failed) the tool returns a successful tool call with `status: 'no_match'`, `persistenceMode: 'off'` rather than `isError: true` — upstream agents branch on `persistenceMode`, they don't have to special-case a hard error.
+- **Architecture decision** (single owner-lane decision worth pinning here):
+  - Existing `register-tools.ts` bridges every MCP call to the Chrome extension. `experience_suggest_plan`'s data lives entirely in the native-server's SQLite, so a new lane was added: a `getNativeToolHandler(name)` short-circuit that runs in-process. `sessionManager` step bookkeeping is preserved.
+  - SQL ordering (in `ExperienceRepository.suggestActionPaths`): `success_count DESC, (failure_count - success_count) ASC, last_used_at DESC NULLS LAST, intent_signature ASC, action_path_id ASC` — fully deterministic so unit tests do not depend on SQLite row-storage order.
+- **Scope (what landed)**:
+  - `packages/shared/src/experience.ts` — DTOs (`ExperienceActionPathPlan`, `ExperienceSuggestPlanInput`, `ExperienceSuggestPlanResult`) + caps (`MAX_EXPERIENCE_SUGGEST_PLAN_LIMIT = 5`, intent ≤ 1024, pageRole ≤ 128) shared between native-server and any future consumer.
+  - `packages/shared/src/tools.ts` — `TOOL_NAMES.EXPERIENCE.SUGGEST_PLAN`, full input schema in `TOOL_SCHEMAS`, `TOOL_RISK_TIERS[...] = 'P0'`. `tool-risk-tier-coverage.test.ts` invariants hold automatically.
+  - `app/native-server/src/memory/experience/experience-repository.ts` — added read-only `suggestActionPaths` with two prepared statements (with / without `pageRole` filter).
+  - `app/native-server/src/memory/experience/experience-suggest.ts` — pure `parseExperienceSuggestPlanInput` + `buildSuggestPlanResult`, plus typed `ExperienceSuggestPlanInputError`.
+  - `app/native-server/src/memory/experience/experience-query-service.ts` — read-only façade exposed on `SessionManager.experience` so the MCP handler never sees the mutating repository methods.
+  - `app/native-server/src/mcp/native-tool-handlers.ts` — handler registry; `experience_suggest_plan` is the first entry.
+  - `app/native-server/src/mcp/register-tools.ts` — native handler short-circuit between policy check and the extension bridge.
+- **Must not do (held)**: expose `experience_replay` or `experience_score_step` (deferred — see "next" below); modify any schema; touch the Chrome extension; bypass policy / sessionManager bookkeeping.
+- **Tests**:
+  - `app/native-server/src/memory/experience/experience-suggest.test.ts` — 16 tests across input parsing (missing/blank/wrong-type/long intent, pageRole cap, limit clamping), pure result projection (no_match, successRate, NaN guard), and SQL ordering (no match, success_count ordering, pageRole filter isolation, limit clamp, last_used_at tiebreak).
+  - `app/native-server/src/mcp/native-tool-handlers.test.ts` — 5 tests covering handler registration, bad-input projection, persistence-off graceful fallback, end-to-end with a stub `ExperienceQueryService`, and `no_match` projection.
+- **Validation**: `pnpm -r typecheck` green; `pnpm --filter @tabrix/tabrix test` green (32 suites / 208 passed / 24 skipped — +22 from B-013); `pnpm --filter @tabrix/extension test` green (39 files / 326 tests, unaffected); `pnpm run docs:check` OK; `pnpm run size:check` within budget (no sidepanel changes).
+- **Next (explicitly out of scope for B-013, kept on the roadmap)**:
+  - `experience_replay(intent, variables) → plan` — write/execute path; needs Policy review before exposure.
+  - `experience_score_step(stepId, result)` — Memory write path from upstream agents; needs schema + abuse-vector review.
+  - `experience_locator_prefs` read access — gated on B-012 emitting locator prefs in the first place.
+
 ### B-022 · Codex fast task · drop "rule N" numbering convention from backlog template wording
 
 - **Stage**: N/A (docs carry-over from Sprint 2 retro §7) · **Layer**: X · **KPI**: — (tooling hygiene)
@@ -460,7 +492,6 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
 | ID    | Stage | Layer | Title                                                                                     | Size | Rough dependencies                    |
 | ----- | ----- | ----- | ----------------------------------------------------------------------------------------- | ---- | ------------------------------------- |
 | B-011 | 3a    | K/X   | `read_page` HVO stable `targetRef` (historyRef + hvoIndex + contentHash)                  | M    | B-010                                 |
-| B-013 | 3b    | E     | `experience_suggest_plan` MCP tool                                                        | M    | B-012                                 |
 | B-014 | 3c    | X     | `RecoveryWatchdog` table (consolidate dialog-prearm / interaction / screenshot fallbacks) | L    | none                                  |
 | B-015 | 3d    | X     | `read_page(render='markdown')` parameter + unit tests                                     | M    | none                                  |
 | B-016 | 3f    | P     | `TabrixCapability` enum + `TABRIX_POLICY_CAPABILITIES` env                                | S    | none                                  |
@@ -470,7 +501,7 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
 | B-020 | 4a    | E     | `experience_export` / `experience_import` + PII redact + dry-run                          | M    | B-012 stable                          |
 | B-024 | 3c    | X     | Click V2 · verifier hook v1 (GitHub repo-nav: issues / pull_requests / actions)           | S    | B-023                                 |
 
-> Items `B-010`, `B-012`, `B-021`, `B-022` are pulled into Sprint 3 above; `B-011` stays in the pool and is a candidate for Sprint 4.
+> Items `B-010`, `B-012`, `B-013`, `B-021`, `B-022` are pulled into Sprint 3 above; `B-011` stays in the pool and is a candidate for Sprint 4.
 >
 > **B-024 · Click V2 · verifier hook v1** (landed outside a sprint boundary, 2026-04-21, Claude). Tracking-only entry so AGENTS.md rule 20 stays satisfied. Scope follows `docs/CLICK_V2_EXECUTION_BRIEF_V1.md`: new `click-verifier.ts`, internal `verifierContext` on `ClickToolParams` (not on the public MCP input schema yet — brief §6), public click response gains optional `postClickState` (brief §5: `beforeUrl` / `afterUrl` / `pageRoleAfter` / `verifierPassed` / `verifierReason`), `success` collapses to `false` when a requested verifier fails. Three v1 keys: `github.repo_nav.issues` / `github.repo_nav.pull_requests` / `github.repo_nav.actions`. Tests: `tests/click-verifier.test.ts` covers brief §10 cases 1–5 directly against the pure evaluator plus the IO wrapper. Real-browser acceptance **not** executed in this environment — same MV3 constraint that B-023 documented; follow-up covers workflow-run / workflow-job / security-tab verifiers (brief §13 non-goals for v1).
 >
@@ -504,3 +535,4 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
 - 2026-04-20 — Sprint 3 · B-023 done: `chrome_click_element` tool response now exposes `dispatchSucceeded` / `observedOutcome` / `verification` alongside `success`, and `success` is no longer synonymous with "the content-script promise resolved". 13-value `ClickObservedOutcome` enum landed in `packages/shared/src/click.ts`. The forbidden combo `{success:true, navigationOccurred:false, observedOutcome:'no_observed_change'}` is now unreachable (contract regression test asserts this). Real-browser validation deferred to a follow-up that runs outside the sandbox.
 - 2026-04-20 — Sprint 3 mid-sprint adjustment: **B-023** (click contract hotfix) pulled in as a P1 GA reliability item. Sequenced between B-021 and B-012 — see the B-023 entry for why ordering matters (B-012 reads `step.status`, which is currently polluted by the false-success defect). Execution spec `docs/CLICK_CONTRACT_REPAIR_V1.md` committed alongside the backlog update so the contract is reviewable independently of the code change. Sprint 3 scope is now 5 items (B-010 / B-021 / B-023 / B-012 / B-022); no item was dropped to make room — Sprint 3 is deliberately accepting the overrun because the hotfix cannot wait for Sprint 4.
 - 2026-04-21 — Sprint 3 · B-012 done: native-server now projects terminal Memory sessions into `experience_action_paths` with an idempotent session marker (`memory_sessions.aggregated_at`). Landed modules: `experience-aggregator.ts` + `experience-repository.ts`; covered by native-server aggregator/migration tests. No MCP tool surface was added, and `experience_locator_prefs` remains untouched (deferred to follow-up items).
+- 2026-04-22 — Sprint 3 · B-013 done (read-only half of the Stage 3b write+read loop): `experience_suggest_plan` MCP tool (P0, native-handled, no extension round-trip) returns ranked `ExperienceActionPathPlan[]` for `(intent, pageRole?)` lookups. New routing lane (`getNativeToolHandler` short-circuit in `register-tools.ts`) keeps SQLite-backed tools off the bridge; sessionManager step bookkeeping preserved. Caps: intent ≤ 1024 chars, pageRole ≤ 128, `limit ∈ [1, 5]`. Memory-off → `status: 'no_match'` + `persistenceMode: 'off'` (graceful, not `isError`). Tests: 16 in `experience-suggest.test.ts` + 5 in `native-tool-handlers.test.ts`. `experience_replay` / `experience_score_step` / locator-prefs MCP surface remain explicit non-goals — see B-013 entry "Next" block.

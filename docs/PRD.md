@@ -192,13 +192,13 @@ Tabrix is a four-layer learning loop sitting on top of a tool surface and a tran
 
 **Role**: projection of Memory into _reusable action paths and locator preferences_ — "what worked last time on this page, for this intent."
 
-**Current maturity**: ~25% — schema landed (`experience_action_paths` / `experience_locator_prefs`, `B-005`) and the first write path landed in Sprint 3 (`B-012`): terminal Memory sessions are projected into `experience_action_paths` with idempotent replay guards.
+**Current maturity**: ~35% — schema landed (`experience_action_paths` / `experience_locator_prefs`, `B-005`); aggregator landed in Sprint 3 (`B-012`) projecting terminal Memory sessions into `experience_action_paths` with idempotent replay guards; read-side MCP tool `experience_suggest_plan` landed in `B-013` (P0, native-handled).
 
-**Target**: upstream LLM asks `experience_suggest_plan(intent, pageRole?)` → Tabrix returns the most successful action path for that `(pageRole, intent)` bucket, with five-tier locator fallback. The plan is a **primitive** — the upstream LLM decides whether to adopt it.
+**Target**: upstream LLM asks `experience_suggest_plan(intent, pageRole?)` → Tabrix returns the ranked action paths for that `(pageRole, intent)` bucket, with five-tier locator fallback. The plan is a **primitive** — the upstream LLM decides whether to adopt it.
 
 **Gaps vs. target**:
 
-- No MCP tool (`experience_suggest_plan` / `experience_replay` / `experience_score_step`) yet — Stage 3b continuation (`B-013`, Sprint 4+).
+- Write-side MCP tools (`experience_replay` / `experience_score_step`) not yet exposed — Stage 3b continuation (Sprint 4+, blocked on Policy review for the write/execute path).
 - No import/export (Stage 4a — `B-020`).
 
 **Code touchpoints**:
@@ -274,47 +274,47 @@ This PRD does **not** duplicate the capability tier table. The SoT is [`PRODUCT_
 
 The authoritative list is `packages/shared/src/tools.ts::TOOL_NAMES.BROWSER`. This table is a **snapshot** for onboarding; if it drifts from the code, the code wins.
 
-| Tool                                                                                         | Risk          | Purpose (one line)                                                                 |
-| -------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------- |
-| `get_windows_and_tabs`                                                                       | P0            | List Chrome windows and tabs.                                                      |
-| `chrome_read_page`                                                                           | P0            | Structured page snapshot + HVO (primary reading tool).                             |
-| `chrome_get_interactive_elements`                                                            | P0            | List interactive elements with stable refs.                                        |
-| `chrome_get_web_content`                                                                     | P0            | Plain-text / markdown page content.                                                |
-| `chrome_screenshot`                                                                          | P0            | Capture viewport / element screenshot.                                             |
-| `chrome_console`                                                                             | P0            | Read DevTools console output.                                                      |
-| `chrome_history`                                                                             | P0            | Query browser history (scoped).                                                    |
-| `chrome_bookmark_search`                                                                     | P0            | Query bookmarks.                                                                   |
-| `chrome_network_capture`                                                                     | P1            | Capture HAR-style network events.                                                  |
-| `chrome_navigate`                                                                            | P1            | Navigate the current/new tab.                                                      |
-| `chrome_switch_tab`                                                                          | P1            | Switch active tab.                                                                 |
-| `chrome_gif_recorder`                                                                        | P1            | Record a short GIF of the current tab.                                             |
-| `performance_start_trace` / `performance_stop_trace` / `performance_analyze_insight`         | P1            | Trace + lightweight summary.                                                       |
-| `chrome_click_element`                                                                       | P2            | Click with verified outcome contract (see `CLICK_CONTRACT_REPAIR_V1.md`, `B-023`). |
-| `chrome_fill_or_select`                                                                      | P2            | Fill inputs / select options.                                                      |
-| `chrome_keyboard`                                                                            | P2            | Keyboard key dispatch.                                                             |
-| `chrome_handle_dialog`                                                                       | P2            | Accept / dismiss native dialogs.                                                   |
-| `chrome_handle_download`                                                                     | P2            | Accept / dismiss downloads.                                                        |
-| `chrome_close_tabs`                                                                          | P2            | Close specified tabs.                                                              |
-| `chrome_bookmark_add` / `chrome_bookmark_delete`                                             | P2            | Bookmark write.                                                                    |
-| `chrome_request_element_selection`                                                           | P2            | Ask user to pick an element (human-in-loop).                                       |
-| `chrome_javascript`                                                                          | P3 (opt-in)   | Run arbitrary JS in content world.                                                 |
-| `chrome_inject_script`                                                                       | P3 (opt-in)   | Inject a script into a tab.                                                        |
-| `chrome_send_command_to_inject_script`                                                       | P3 (opt-in)   | Send a command to an injected script.                                              |
-| `chrome_userscript`                                                                          | P3 (opt-in)   | Manage user scripts.                                                               |
-| `chrome_upload_file`                                                                         | P3 (opt-in)   | File upload.                                                                       |
-| `chrome_computer`                                                                            | P3 (opt-in)   | Coordinate-level input (mouse/keyboard).                                           |
-| `chrome_network_capture_start` / `_stop` / `_request` / `_debugger_start` / `_debugger_stop` | P3 (internal) | Advanced network / debugger — internal, not surfaced to `listTools` by default.    |
+| Tool                                                                                         | Risk          | Purpose (one line)                                                                                                                                                   |
+| -------------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_windows_and_tabs`                                                                       | P0            | List Chrome windows and tabs.                                                                                                                                        |
+| `chrome_read_page`                                                                           | P0            | Structured page snapshot + HVO (primary reading tool).                                                                                                               |
+| `chrome_get_interactive_elements`                                                            | P0            | List interactive elements with stable refs.                                                                                                                          |
+| `chrome_get_web_content`                                                                     | P0            | Plain-text / markdown page content.                                                                                                                                  |
+| `chrome_screenshot`                                                                          | P0            | Capture viewport / element screenshot.                                                                                                                               |
+| `chrome_console`                                                                             | P0            | Read DevTools console output.                                                                                                                                        |
+| `chrome_history`                                                                             | P0            | Query browser history (scoped).                                                                                                                                      |
+| `chrome_bookmark_search`                                                                     | P0            | Query bookmarks.                                                                                                                                                     |
+| `chrome_network_capture`                                                                     | P1            | Capture HAR-style network events.                                                                                                                                    |
+| `chrome_navigate`                                                                            | P1            | Navigate the current/new tab.                                                                                                                                        |
+| `chrome_switch_tab`                                                                          | P1            | Switch active tab.                                                                                                                                                   |
+| `chrome_gif_recorder`                                                                        | P1            | Record a short GIF of the current tab.                                                                                                                               |
+| `performance_start_trace` / `performance_stop_trace` / `performance_analyze_insight`         | P1            | Trace + lightweight summary.                                                                                                                                         |
+| `chrome_click_element`                                                                       | P2            | Click with verified outcome contract (see `CLICK_CONTRACT_REPAIR_V1.md`, `B-023`).                                                                                   |
+| `chrome_fill_or_select`                                                                      | P2            | Fill inputs / select options.                                                                                                                                        |
+| `chrome_keyboard`                                                                            | P2            | Keyboard key dispatch.                                                                                                                                               |
+| `chrome_handle_dialog`                                                                       | P2            | Accept / dismiss native dialogs.                                                                                                                                     |
+| `chrome_handle_download`                                                                     | P2            | Accept / dismiss downloads.                                                                                                                                          |
+| `chrome_close_tabs`                                                                          | P2            | Close specified tabs.                                                                                                                                                |
+| `chrome_bookmark_add` / `chrome_bookmark_delete`                                             | P2            | Bookmark write.                                                                                                                                                      |
+| `chrome_request_element_selection`                                                           | P2            | Ask user to pick an element (human-in-loop).                                                                                                                         |
+| `chrome_javascript`                                                                          | P3 (opt-in)   | Run arbitrary JS in content world.                                                                                                                                   |
+| `chrome_inject_script`                                                                       | P3 (opt-in)   | Inject a script into a tab.                                                                                                                                          |
+| `chrome_send_command_to_inject_script`                                                       | P3 (opt-in)   | Send a command to an injected script.                                                                                                                                |
+| `chrome_userscript`                                                                          | P3 (opt-in)   | Manage user scripts.                                                                                                                                                 |
+| `chrome_upload_file`                                                                         | P3 (opt-in)   | File upload.                                                                                                                                                         |
+| `chrome_computer`                                                                            | P3 (opt-in)   | Coordinate-level input (mouse/keyboard).                                                                                                                             |
+| `chrome_network_capture_start` / `_stop` / `_request` / `_debugger_start` / `_debugger_stop` | P3 (internal) | Advanced network / debugger — internal, not surfaced to `listTools` by default.                                                                                      |
+| `experience_suggest_plan`                                                                    | P0            | Read-only ranked action paths for `(intent, pageRole?)`. Native-handled (no extension round-trip). Memory-off → `status: 'no_match'` (graceful). Shipped in `B-013`. |
 
 ### 7.2 Forward-looking tools (planned, named in this PRD)
 
-| Tool                      | Planned in         | Layer                  | Purpose                                                                                  |
-| ------------------------- | ------------------ | ---------------------- | ---------------------------------------------------------------------------------------- |
-| `tabrix_choose_context`   | Stage 3h (`B-018`) | Knowledge + Experience | Given `(intent, url?)`, return the minimum-token `ContextBundle` — **largest K1 lever**. |
-| `experience_suggest_plan` | Stage 3b (`B-013`) | Experience             | Given `(intent, pageRole?)`, return the most successful action path.                     |
-| `experience_replay`       | Stage 3b (`B-013`) | Experience             | Execute a previously-learned action path with variable substitution.                     |
-| `experience_score_step`   | Stage 3b (`B-013`) | Experience             | Let the upstream LLM feed step outcomes back into Memory.                                |
-| `knowledge_describe_api`  | Stage 3g (`B-017`) | Knowledge              | List captured `KnowledgeApiEndpoint[]` for a site.                                       |
-| `knowledge_call_api`      | Stage 3g (`B-017`) | Knowledge              | Call a site API using the user's logged-in Chrome cookies.                               |
+| Tool                     | Planned in              | Layer                  | Purpose                                                                                                   |
+| ------------------------ | ----------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| `tabrix_choose_context`  | Stage 3h (`B-018`)      | Knowledge + Experience | Given `(intent, url?)`, return the minimum-token `ContextBundle` — **largest K1 lever**.                  |
+| `experience_replay`      | Stage 3b (post-`B-013`) | Experience             | Execute a previously-learned action path with variable substitution. Needs Policy review before exposure. |
+| `experience_score_step`  | Stage 3b (post-`B-013`) | Experience             | Let the upstream LLM feed step outcomes back into Memory. Needs Policy review before exposure.            |
+| `knowledge_describe_api` | Stage 3g (`B-017`)      | Knowledge              | List captured `KnowledgeApiEndpoint[]` for a site.                                                        |
+| `knowledge_call_api`     | Stage 3g (`B-017`)      | Knowledge              | Call a site API using the user's logged-in Chrome cookies.                                                |
 
 ### 7.3 Tool-surface invariants
 
@@ -431,7 +431,7 @@ Wave 1 (near-term, parallelizable)
   3f · Policy capability opt-in enum             (B-016 pool)
 
 Wave 2 (depends on Wave 1)
-  3b · Experience action-path replay             (B-005 schema done, B-012 done, B-013 next)
+  3b · Experience action-path replay             (B-005 schema done, B-012 done, B-013 done — write-side replay/score_step deferred)
   3c · Recovery Watchdog consolidation           (B-014 pool)
 
 Wave 3 (strategic payoff)
