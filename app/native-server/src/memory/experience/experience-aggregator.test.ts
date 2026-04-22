@@ -399,6 +399,257 @@ describe('ExperienceAggregator (B-012 v1)', () => {
     }
   });
 
+  // V24-01 (brief §7) — replay sessions compound on the original row.
+  describe('V24-01: experience_replay session special-case (brief §7)', () => {
+    function seedOriginalRow(
+      ctx: ReturnType<typeof bootstrap>,
+      opts: { intent: string; pageRole: string; sessionId?: string; toolName?: string },
+    ): { actionPathId: string; pageRole: string; intentSignature: string } {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo } = ctx;
+      const sessionId = opts.sessionId ?? 'orig-1';
+      insertTask(taskRepo, { taskId: `task-${sessionId}`, intent: opts.intent });
+      insertSession(sessionRepo, {
+        sessionId,
+        taskId: `task-${sessionId}`,
+        status: 'completed',
+      });
+      insertStep(stepRepo, {
+        stepId: `${sessionId}-step-1`,
+        sessionId,
+        index: 1,
+        toolName: opts.toolName ?? 'chrome_click_element',
+      });
+      insertSnapshot(snapshotRepo, {
+        snapshotId: `${sessionId}-snap`,
+        stepId: `${sessionId}-step-1`,
+        pageRole: opts.pageRole,
+        capturedAt: '2026-04-20T00:00:01.500Z',
+      });
+      aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+      const row = experienceRepo.listActionPaths().find((r) => r.pageRole === opts.pageRole);
+      if (!row) throw new Error(`failed to seed original row for ${opts.pageRole}`);
+      return {
+        actionPathId: row.actionPathId,
+        pageRole: row.pageRole,
+        intentSignature: row.intentSignature,
+      };
+    }
+
+    it('compounds a successful replay session onto the original row (no new bucket)', () => {
+      const ctx = bootstrap();
+      try {
+        const { taskRepo, sessionRepo, stepRepo, aggregator, experienceRepo } = ctx;
+        const seeded = seedOriginalRow(ctx, {
+          intent: 'open issues',
+          pageRole: 'issues_list',
+        });
+
+        const beforeRows = experienceRepo.listActionPaths();
+        expect(beforeRows).toHaveLength(1);
+        const before = beforeRows[0];
+        expect(before.successCount).toBe(1);
+        expect(before.failureCount).toBe(0);
+        const originalStepSequence = before.stepSequence;
+
+        // Replay session writes its own audit-trail step row; the
+        // task.intent carries the replay-prefix so the aggregator
+        // detects it.
+        insertTask(taskRepo, {
+          taskId: 'task-replay-ok',
+          intent: `experience_replay:${seeded.actionPathId}`,
+        });
+        insertSession(sessionRepo, {
+          sessionId: 'replay-ok-1',
+          taskId: 'task-replay-ok',
+          status: 'completed',
+          startedAt: '2026-04-22T00:00:01.000Z',
+          endedAt: '2026-04-22T00:00:02.000Z',
+        });
+        insertStep(stepRepo, {
+          stepId: 'replay-ok-step',
+          sessionId: 'replay-ok-1',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+        });
+
+        const result = aggregator.projectPendingSessions('2026-04-22T00:00:03.000Z');
+        expect(result).toEqual({ scanned: 1, projected: 1 });
+
+        const after = experienceRepo.listActionPaths();
+        expect(after).toHaveLength(1);
+        expect(after[0].actionPathId).toBe(seeded.actionPathId);
+        expect(after[0].pageRole).toBe(seeded.pageRole);
+        expect(after[0].intentSignature).toBe(seeded.intentSignature);
+        expect(after[0].successCount).toBe(2);
+        expect(after[0].failureCount).toBe(0);
+        expect(after[0].stepSequence).toEqual(originalStepSequence);
+        expect(after[0].lastUsedAt).toBe('2026-04-22T00:00:02.000Z');
+      } finally {
+        ctx.close();
+      }
+    });
+
+    it('compounds a failed replay session onto the original row as failure_count++', () => {
+      const ctx = bootstrap();
+      try {
+        const { taskRepo, sessionRepo, stepRepo, aggregator, experienceRepo } = ctx;
+        const seeded = seedOriginalRow(ctx, {
+          intent: 'fill issue title',
+          pageRole: 'issue_detail',
+        });
+
+        insertTask(taskRepo, {
+          taskId: 'task-replay-fail',
+          intent: `experience_replay:${seeded.actionPathId}`,
+        });
+        insertSession(sessionRepo, {
+          sessionId: 'replay-fail-1',
+          taskId: 'task-replay-fail',
+          status: 'failed',
+          startedAt: '2026-04-22T00:01:00.000Z',
+          endedAt: '2026-04-22T00:01:01.000Z',
+        });
+        insertStep(stepRepo, {
+          stepId: 'replay-fail-step',
+          sessionId: 'replay-fail-1',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'failed',
+        });
+
+        const result = aggregator.projectPendingSessions('2026-04-22T00:01:02.000Z');
+        expect(result).toEqual({ scanned: 1, projected: 1 });
+
+        const after = experienceRepo.listActionPaths();
+        expect(after).toHaveLength(1);
+        expect(after[0].actionPathId).toBe(seeded.actionPathId);
+        expect(after[0].successCount).toBe(1);
+        expect(after[0].failureCount).toBe(1);
+      } finally {
+        ctx.close();
+      }
+    });
+
+    it('marks aggregated and skips when the referenced actionPathId no longer exists (stale id)', () => {
+      const ctx = bootstrap();
+      try {
+        const { db, taskRepo, sessionRepo, stepRepo, aggregator, experienceRepo } = ctx;
+
+        const staleId = 'action_path_' + 'a'.repeat(64);
+        insertTask(taskRepo, {
+          taskId: 'task-replay-stale',
+          intent: `experience_replay:${staleId}`,
+        });
+        insertSession(sessionRepo, {
+          sessionId: 'replay-stale-1',
+          taskId: 'task-replay-stale',
+          status: 'completed',
+        });
+        insertStep(stepRepo, {
+          stepId: 'replay-stale-step',
+          sessionId: 'replay-stale-1',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+        });
+
+        const result = aggregator.projectPendingSessions('2026-04-22T00:02:00.000Z');
+        expect(result).toEqual({ scanned: 1, projected: 0 });
+        expect(experienceRepo.listActionPaths()).toEqual([]);
+
+        const marker = db
+          .prepare('SELECT aggregated_at FROM memory_sessions WHERE session_id = ?')
+          .get('replay-stale-1') as { aggregated_at: string | null } | undefined;
+        expect(marker?.aggregated_at).toBe('2026-04-22T00:02:00.000Z');
+
+        const second = aggregator.projectPendingSessions('2026-04-22T00:02:01.000Z');
+        expect(second).toEqual({ scanned: 0, projected: 0 });
+      } finally {
+        ctx.close();
+      }
+    });
+
+    it("marks aggregated and skips when the intent is the 'experience_replay:invalid' sentinel", () => {
+      const ctx = bootstrap();
+      try {
+        const { taskRepo, sessionRepo, stepRepo, aggregator, experienceRepo } = ctx;
+
+        insertTask(taskRepo, {
+          taskId: 'task-replay-invalid',
+          intent: 'experience_replay:invalid',
+        });
+        insertSession(sessionRepo, {
+          sessionId: 'replay-invalid-1',
+          taskId: 'task-replay-invalid',
+          status: 'failed',
+        });
+        // Note: invalid-input handler returns BEFORE any step runs, so
+        // there are no audit-trail step rows. The aggregator must
+        // tolerate that and not crash.
+        const result = aggregator.projectPendingSessions('2026-04-22T00:03:00.000Z');
+        expect(result).toEqual({ scanned: 1, projected: 0 });
+        expect(experienceRepo.listActionPaths()).toEqual([]);
+
+        // Add a step too, repeat: still no projection.
+        insertTask(taskRepo, {
+          taskId: 'task-replay-invalid-2',
+          intent: 'experience_replay:invalid',
+        });
+        insertSession(sessionRepo, {
+          sessionId: 'replay-invalid-2',
+          taskId: 'task-replay-invalid-2',
+          status: 'failed',
+        });
+        insertStep(stepRepo, {
+          stepId: 'replay-invalid-2-step',
+          sessionId: 'replay-invalid-2',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'failed',
+        });
+        const second = aggregator.projectPendingSessions('2026-04-22T00:03:01.000Z');
+        expect(second).toEqual({ scanned: 1, projected: 0 });
+        expect(experienceRepo.listActionPaths()).toEqual([]);
+      } finally {
+        ctx.close();
+      }
+    });
+
+    it('non-replay sessions are unaffected by the special-case', () => {
+      const ctx = bootstrap();
+      try {
+        const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo } = ctx;
+        insertTask(taskRepo, { taskId: 'task-normal', intent: 'open profile' });
+        insertSession(sessionRepo, {
+          sessionId: 'normal-1',
+          taskId: 'task-normal',
+          status: 'completed',
+        });
+        insertStep(stepRepo, {
+          stepId: 'normal-step',
+          sessionId: 'normal-1',
+          index: 1,
+          toolName: 'chrome_click_element',
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'normal-snap',
+          stepId: 'normal-step',
+          pageRole: 'repo_home',
+          capturedAt: '2026-04-22T00:04:01.000Z',
+        });
+
+        const result = aggregator.projectPendingSessions('2026-04-22T00:04:02.000Z');
+        expect(result).toEqual({ scanned: 1, projected: 1 });
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].intentSignature).toBe('open profile');
+      } finally {
+        ctx.close();
+      }
+    });
+  });
+
   it('G: historyRef picks the first non-empty artifact ref', () => {
     const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
       bootstrap();

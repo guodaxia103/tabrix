@@ -66,6 +66,21 @@ const EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS: ReadonlySet<string> = new Set([
   'experience_suggest_plan',
 ]);
 
+/**
+ * V24-01 (brief §7): wrapper-owned sessions opened by `experience_replay`
+ * tag their `task.intent` with this prefix followed by the original
+ * `actionPathId` they replayed. The aggregator's special-case keys off
+ * the prefix to compound the success/failure delta back onto the
+ * original `experience_action_paths` row instead of seeding a new
+ * bucket.
+ *
+ * The sentinel suffix `'invalid'` (`experience_replay:invalid`) is
+ * emitted by the handler when input parsing fails before a real id is
+ * resolved; the aggregator treats it the same as a stale id (mark
+ * aggregated, do not insert).
+ */
+const REPLAY_SESSION_TASK_INTENT_PREFIX = 'experience_replay:';
+
 function isExcludedFromAggregation(steps: ReturnType<StepRepository['listBySession']>): boolean {
   if (steps.length === 0) return false;
   return steps.every((step) => EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS.has(step.toolName));
@@ -136,6 +151,46 @@ export class ExperienceAggregator {
       // them aggregated so the pending-scan moves on, then continue.
       if (isExcludedFromAggregation(sessionSteps)) {
         this.sessions.markAggregated(session.sessionId, markTime);
+        continue;
+      }
+
+      // V24-01 (brief §7): replay-session special-case. Sessions whose
+      // task.intent carries the `experience_replay:` prefix re-run an
+      // existing `experience_action_paths` row; their success/failure
+      // delta must compound onto the ORIGINAL row instead of seeding
+      // a new `(pageRole=…, intent='replay')` bucket. The original
+      // `step_sequence` is preserved verbatim — the replayed steps
+      // already live as their own `memory_steps` rows under this
+      // session for audit purposes (brief §7 last paragraph), but the
+      // canonical `step_sequence` on the row stays the recorder-side
+      // truth (otherwise replay would slowly drift the row away from
+      // its original shape).
+      if (session.taskIntent.startsWith(REPLAY_SESSION_TASK_INTENT_PREFIX)) {
+        const replayedActionPathId = session.taskIntent.slice(
+          REPLAY_SESSION_TASK_INTENT_PREFIX.length,
+        );
+        const original = this.experience.findActionPathById(replayedActionPathId);
+        // Stale id (row deleted between replay and aggregator pass)
+        // OR the sentinel `experience_replay:invalid` written by the
+        // handler when input parsing failed: mark aggregated and
+        // skip rather than corrupting unrelated rows.
+        if (!original) {
+          this.sessions.markAggregated(session.sessionId, markTime);
+          continue;
+        }
+        const { successDelta, failureDelta } = toCounterDelta(session.status);
+        this.upsertAndMarkTxn({
+          actionPathId: replayedActionPathId,
+          pageRole: original.pageRole,
+          intentSignature: original.intentSignature,
+          stepSequence: original.stepSequence,
+          successDelta,
+          failureDelta,
+          lastUsedAt: session.endedAt ?? session.startedAt,
+          nowIso: markTime,
+          sessionId: session.sessionId,
+        });
+        projected += 1;
         continue;
       }
 

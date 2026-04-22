@@ -1,5 +1,8 @@
 import { openMemoryDb } from '../db/client';
+import { PageSnapshotRepository, SessionRepository, StepRepository, TaskRepository } from '../db';
+import type { ExecutionSession, ExecutionStep, Task } from '../../execution/types';
 import {
+  ExperienceAggregator,
   ExperienceRepository,
   ExperienceSuggestPlanInputError,
   buildSuggestPlanResult,
@@ -295,6 +298,136 @@ describe('ExperienceRepository.suggestActionPaths (B-013, SQL)', () => {
       expect(rows.map((r) => r.actionPathId)).toEqual(['ap-new', 'ap-old']);
     } finally {
       close();
+    }
+  });
+});
+
+describe('ExperienceRepository.suggestActionPaths · V24-01 replay-session sanity', () => {
+  // Sanity check: after the aggregator's brief §7 special-case folds
+  // a replay session into the original row, suggest reads back the
+  // compounded counters (no behavior change in suggest itself).
+  function bootstrap() {
+    const { db } = openMemoryDb({ dbPath: ':memory:' });
+    const taskRepo = new TaskRepository(db);
+    const sessionRepo = new SessionRepository(db);
+    const stepRepo = new StepRepository(db);
+    const snapshotRepo = new PageSnapshotRepository(db);
+    const experienceRepo = new ExperienceRepository(db);
+    const aggregator = new ExperienceAggregator(
+      db,
+      sessionRepo,
+      stepRepo,
+      snapshotRepo,
+      experienceRepo,
+    );
+    return { db, taskRepo, sessionRepo, stepRepo, snapshotRepo, experienceRepo, aggregator };
+  }
+
+  function insTask(repo: TaskRepository, overrides: Partial<Task>): void {
+    repo.insert({
+      taskId: overrides.taskId!,
+      taskType: 'browser-action',
+      title: 'task',
+      intent: overrides.intent ?? 'task intent',
+      origin: 'jest',
+      labels: [],
+      status: 'completed',
+      createdAt: '2026-04-20T00:00:00.000Z',
+      updatedAt: '2026-04-20T00:00:00.000Z',
+    });
+  }
+
+  function insSession(
+    repo: SessionRepository,
+    overrides: Partial<ExecutionSession> & { sessionId: string; taskId: string },
+  ): void {
+    repo.insert({
+      sessionId: overrides.sessionId,
+      taskId: overrides.taskId,
+      transport: 'stdio',
+      clientName: 'jest',
+      startedAt: overrides.startedAt ?? '2026-04-20T00:00:01.000Z',
+      endedAt: overrides.endedAt ?? '2026-04-20T00:00:02.000Z',
+      status: overrides.status ?? 'completed',
+      steps: [],
+    });
+  }
+
+  function insStep(
+    repo: StepRepository,
+    overrides: Partial<ExecutionStep> & { stepId: string; sessionId: string },
+  ): void {
+    repo.insert({
+      stepId: overrides.stepId,
+      sessionId: overrides.sessionId,
+      index: overrides.index ?? 1,
+      toolName: overrides.toolName ?? 'chrome_click_element',
+      stepType: 'tool_call',
+      status: overrides.status ?? 'completed',
+      startedAt: '2026-04-20T00:00:01.100Z',
+      endedAt: '2026-04-20T00:00:01.200Z',
+      artifactRefs: overrides.artifactRefs ?? [],
+    });
+  }
+
+  it('suggest returns compounded successCount after a successful replay session is aggregated', () => {
+    const { db, taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo } =
+      bootstrap();
+    try {
+      // 1. Seed an original session → aggregator creates a row with
+      //    successCount=1.
+      insTask(taskRepo, { taskId: 't-orig', intent: 'open issues' });
+      insSession(sessionRepo, { sessionId: 'orig', taskId: 't-orig', status: 'completed' });
+      insStep(stepRepo, { stepId: 'orig-1', sessionId: 'orig', index: 1 });
+      snapshotRepo.insert({
+        snapshotId: 'orig-snap',
+        stepId: 'orig-1',
+        pageRole: 'issues_list',
+        fallbackUsed: false,
+        interactiveCount: 0,
+        candidateActionCount: 0,
+        highValueObjectCount: 0,
+        capturedAt: '2026-04-20T00:00:01.500Z',
+      });
+      aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+
+      const initial = experienceRepo.suggestActionPaths({
+        intentSignature: 'open issues',
+        pageRole: 'issues_list',
+        limit: 1,
+      });
+      expect(initial).toHaveLength(1);
+      expect(initial[0].successCount).toBe(1);
+      const original = initial[0];
+
+      // 2. Replay session referencing original.actionPathId.
+      insTask(taskRepo, {
+        taskId: 't-replay',
+        intent: `experience_replay:${original.actionPathId}`,
+      });
+      insSession(sessionRepo, {
+        sessionId: 'replay',
+        taskId: 't-replay',
+        status: 'completed',
+        startedAt: '2026-04-22T00:00:01.000Z',
+        endedAt: '2026-04-22T00:00:02.000Z',
+      });
+      insStep(stepRepo, { stepId: 'replay-1', sessionId: 'replay', index: 1 });
+      aggregator.projectPendingSessions('2026-04-22T00:00:03.000Z');
+
+      const after = experienceRepo.suggestActionPaths({
+        intentSignature: 'open issues',
+        pageRole: 'issues_list',
+        limit: 1,
+      });
+      expect(after).toHaveLength(1);
+      expect(after[0].actionPathId).toBe(original.actionPathId);
+      expect(after[0].successCount).toBe(2);
+      expect(after[0].failureCount).toBe(0);
+      // step_sequence is preserved verbatim (brief §7).
+      expect(after[0].stepSequence).toEqual(original.stepSequence);
+    } finally {
+      db.close();
     }
   });
 });
