@@ -70,11 +70,19 @@ interface VerifierRule {
   pathRegex: RegExp;
   expectedRole: string | null;
   /**
-   * When true, the rule passes as long as the URL matches AND the page is
-   * no longer on the source role (`repo_home`). Used only for
-   * `pull_requests` where we do not currently emit a stable `pull_requests_list`
-   * role — see brief §7 "If the role for pull requests is not currently
-   * stable, URL + 'left repo_home' is acceptable".
+   * When true, the rule passes only when:
+   *   1. URL matches `pathRegex`, AND
+   *   2. `pageRoleAfter` is non-null AND non-`'unknown'`, AND
+   *   3. `pageRoleAfter` is not `'repo_home'`.
+   *
+   * Used only for `pull_requests`, because the GitHub family adapter
+   * does not currently emit a stable `pull_requests_list` role
+   * (see `read-page-understanding-github.ts` — there is no `/pulls`
+   * branch). The brief §7 "URL + 'left repo_home'" compromise is
+   * intentionally interpreted strictly: a `null` OR `'unknown'`
+   * `pageRoleAfter` is degraded readback, not "left repo_home", and
+   * must fail-closed. As soon as a stable PR role lands, switch this
+   * rule to `expectedRole` and delete `acceptLeftRepoHome`.
    */
   acceptLeftRepoHome?: boolean;
 }
@@ -171,7 +179,26 @@ export function evaluateClickVerifier(
   }
 
   if (rule.acceptLeftRepoHome) {
+    // A3 hardening: this branch is only reachable when the rule has no
+    // `expectedRole` (today only `pull_requests`, because the GitHub
+    // family adapter has no `/pulls` branch yet). The original
+    // "URL + left repo_home" compromise from the click v2 brief was
+    // never meant to accept a `null` OR `'unknown'` page role — both
+    // are signals that page understanding is degenerate, not signals
+    // that we successfully left repo_home. We must fail-closed in
+    // both cases. A future PR that adds a stable `pull_requests_list`
+    // role can drop this rule and switch the verifier to use
+    // `expectedRole` like its `issues` / `actions` siblings.
     if (pageRoleAfter == null) {
+      return {
+        passed: false,
+        reason: `${key}:page_understanding_unavailable`,
+        beforeUrl,
+        afterUrl,
+        pageRoleAfter,
+      };
+    }
+    if (pageRoleAfter === 'unknown') {
       return {
         passed: false,
         reason: `${key}:page_understanding_unavailable`,

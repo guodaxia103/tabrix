@@ -140,10 +140,15 @@ describe('evaluateClickVerifier (pure)', () => {
     expect(result.reason).toBe('github.repo_nav.issues:url_mismatch');
   });
 
-  it('pull_requests: URL match + left repo_home → passed (brief §7 compromise)', () => {
-    // `pull_requests_list` role is not currently emitted by the GitHub
-    // family adapter (read-page-understanding-github.ts has no `/pulls`
-    // branch). Brief §7 authorizes "URL + left repo_home" as v1 acceptance.
+  it('pull_requests: URL match but pageRoleAfter falls back to "unknown" → fails closed (A3 hardening)', () => {
+    // The GitHub family adapter has no `/pulls` branch, so even with
+    // a fully-loaded readback (url + title + bodyText all present)
+    // `inferPageUnderstanding` will report `pageRole: 'unknown'`.
+    // The brief §7 "URL + left repo_home" compromise must NOT accept
+    // an `'unknown'` role as evidence that the page successfully left
+    // repo_home — `'unknown'` is degraded readback, not a navigation
+    // signal. This test pins the fail-closed behaviour so a future
+    // refactor cannot silently re-introduce the false-success path.
     const result = evaluateClickVerifier(
       { family: 'github', verifierKey: 'github.repo_nav.pull_requests' },
       'https://github.com/octocat/hello',
@@ -153,9 +158,35 @@ describe('evaluateClickVerifier (pure)', () => {
         bodyText: 'Open Closed Author Label Projects Milestones Reviews',
       },
     );
+    expect(result.passed).toBe(false);
+    expect(result.reason).toBe('github.repo_nav.pull_requests:page_understanding_unavailable');
+    expect(result.pageRoleAfter).toBe('unknown');
+  });
+
+  it('pull_requests: stable non-degenerate, non-repo_home role → passed (acceptLeftRepoHome happy path)', () => {
+    // Synthetic positive case. The GitHub family adapter has no
+    // `/pulls` branch, so under real production traffic
+    // `inferPageUnderstanding` falls back to `pageRole: 'unknown'`
+    // and the verifier fails closed (covered by the test above). To
+    // prove the verifier code path can still return `passed: true`
+    // when page understanding genuinely resolves to a stable,
+    // non-`repo_home`, non-`'unknown'` role, we feed login-shaped
+    // body text so `inferLoginRequired` deliberately returns
+    // `pageRole: 'login_required'`. As soon as a stable
+    // `pull_requests_list` role lands in the GitHub family adapter,
+    // rewrite this test to use the real role.
+    const result = evaluateClickVerifier(
+      { family: 'github', verifierKey: 'github.repo_nav.pull_requests' },
+      'https://github.com/octocat/hello',
+      {
+        url: 'https://github.com/octocat/hello/pulls',
+        title: 'Login · GitHub',
+        bodyText: 'Login to GitHub. Enter your username and password to continue.',
+      },
+    );
     expect(result.passed).toBe(true);
     expect(result.reason).toBe('github.repo_nav.pull_requests');
-    expect(result.pageRoleAfter).not.toBe('repo_home');
+    expect(result.pageRoleAfter).toBe('login_required');
   });
 
   it('pull_requests: incomplete page understanding fails closed', () => {
@@ -173,15 +204,14 @@ describe('evaluateClickVerifier (pure)', () => {
     expect(result.pageRoleAfter).toBeNull();
   });
 
-  it('pull_requests: feeding repo-home text directly reproduces still_on_repo_home branch', () => {
-    // The GitHub family adapter returns `repo_home` only for the root
-    // repo path `/owner/repo`. We cannot reach that pageRole through a
-    // `/pulls` URL in practice (adapter has no `/pulls` branch, falls
-    // through to `unknown`). But the defensive `acceptLeftRepoHome`
-    // branch is still worth covering — we simulate the adapter going
-    // wrong in the future by feeding a repo_home URL with repo_home
-    // content through the same verifier key. If this ever starts
-    // passing, `acceptLeftRepoHome` has been silently removed.
+  it('pull_requests: repo-home-shaped readback under /pulls URL → fails closed (unknown role)', () => {
+    // Same shape as the A3-hardening test above, but with the body
+    // text that previously made the adapter fall back through the
+    // `'unknown'` branch in a way that used to pass. Now that
+    // `'unknown'` is rejected explicitly, this case must also fail
+    // closed. If the GitHub family adapter ever gains a `/pulls`
+    // branch that emits a stable `pull_requests_list` role, swap the
+    // rule to `expectedRole` and rewrite this test.
     const result = evaluateClickVerifier(
       { family: 'github', verifierKey: 'github.repo_nav.pull_requests' },
       'https://github.com/octocat/hello',
@@ -191,13 +221,9 @@ describe('evaluateClickVerifier (pure)', () => {
         bodyText: GITHUB_REPO_HOME_BODY,
       },
     );
-    // URL matches pathRegex. `pageRoleAfter` falls back to `unknown`
-    // (not `repo_home`) under the current adapter, so the verifier
-    // passes. Assert what we actually see instead of what the defensive
-    // branch would see — the defensive branch is covered by inspection
-    // of the rule table.
-    expect(result.passed).toBe(true);
-    expect(result.pageRoleAfter).not.toBe('repo_home');
+    expect(result.passed).toBe(false);
+    expect(result.reason).toBe('github.repo_nav.pull_requests:page_understanding_unavailable');
+    expect(result.pageRoleAfter).toBe('unknown');
   });
 
   it('unknown verifier key → failed with explicit diagnostic', () => {

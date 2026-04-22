@@ -107,6 +107,105 @@ describe('classifyGitHubFamily / URL normalization', () => {
     expect(result!.urlPattern.startsWith('api.github.com/')).toBe(true);
   });
 
+  describe('collapseUnknownPath identity normalization (A2)', () => {
+    // The unclassified path collapser must NOT echo back per-tenant
+    // identity segments (usernames, org slugs, owner/repo). These would
+    // bloat dedup space and (later) leak identity into Stage 4a
+    // experience export. See `collapseUnknownPath` for the exact rules.
+
+    it('normalizes /users/<name>/... → /users/:user/...', () => {
+      const a = classified({
+        url: 'https://api.github.com/users/octocat/repos',
+        method: 'GET',
+        statusCode: 200,
+      });
+      const b = classified({
+        url: 'https://api.github.com/users/torvalds/repos',
+        method: 'GET',
+        statusCode: 200,
+      });
+      expect(a!.urlPattern).toBe('api.github.com/users/:user/repos');
+      expect(b!.urlPattern).toBe(a!.urlPattern);
+      expect(a!.endpointSignature).toBe(b!.endpointSignature);
+    });
+
+    it('normalizes /orgs/<name>/... → /orgs/:org/...', () => {
+      const result = classified({
+        url: 'https://api.github.com/orgs/openai/teams',
+        method: 'GET',
+        statusCode: 200,
+      });
+      expect(result!.urlPattern).toBe('api.github.com/orgs/:org/teams');
+    });
+
+    it('normalizes unmatched /repos/<owner>/<repo>/... → /repos/:owner/:repo/...', () => {
+      // `/repos/o/r/branches` is not in GITHUB_API_RULES, so it falls
+      // through to collapseUnknownPath. The owner / repo segments
+      // must NOT survive verbatim.
+      const a = classified({
+        url: 'https://api.github.com/repos/foo/bar/branches',
+        method: 'GET',
+        statusCode: 200,
+      });
+      const b = classified({
+        url: 'https://api.github.com/repos/openai/api-test/branches',
+        method: 'GET',
+        statusCode: 200,
+      });
+      expect(a!.semanticTag).toBe('github.unclassified');
+      expect(a!.urlPattern).toBe('api.github.com/repos/:owner/:repo/branches');
+      expect(b!.urlPattern).toBe(a!.urlPattern);
+      expect(a!.endpointSignature).toBe(b!.endpointSignature);
+    });
+
+    it('still collapses numeric ids (no regression)', () => {
+      const result = classified({
+        url: 'https://api.github.com/repos/foo/bar/check-suites/9876543210',
+        method: 'GET',
+        statusCode: 200,
+      });
+      expect(result!.urlPattern).toBe('api.github.com/repos/:owner/:repo/check-suites/:id');
+    });
+
+    it('still collapses long opaque slugs (no regression)', () => {
+      const result = classified({
+        url: 'https://api.github.com/repos/foo/bar/git/blobs/abc1234567890DEFGHIJKLMNOPQR',
+        method: 'GET',
+        statusCode: 200,
+      });
+      expect(result!.urlPattern).toBe('api.github.com/repos/:owner/:repo/git/blobs/:slug');
+    });
+
+    it('keeps dedup signature stable across different identities', () => {
+      const a = classified({
+        url: 'https://api.github.com/users/alice/gists',
+        method: 'GET',
+        statusCode: 200,
+      });
+      const b = classified({
+        url: 'https://api.github.com/users/bob/gists',
+        method: 'GET',
+        statusCode: 200,
+      });
+      const c = classified({
+        url: 'https://api.github.com/users/carol/gists?since=2026-01-01',
+        method: 'GET',
+        statusCode: 200,
+      });
+      expect(a!.endpointSignature).toBe(b!.endpointSignature);
+      expect(a!.endpointSignature).toBe(c!.endpointSignature);
+    });
+
+    it('does not normalize non-identity-prefixed paths beyond numeric/slug rules', () => {
+      const result = classified({
+        url: 'https://api.github.com/notifications',
+        method: 'GET',
+        statusCode: 200,
+      });
+      expect(result!.urlPattern).toBe('api.github.com/notifications');
+    });
+  });
+
   it('produces deterministic signatures (same input → same signature, no time leak)', () => {
     const a = classified({
       url: 'https://api.github.com/repos/x/y/issues?per_page=10',

@@ -23,10 +23,15 @@
  *    `github.com/<owner>/<repo>/...` HTML/AJAX is intentionally out: it
  *    overlaps with page-snapshot logic and adds noise without unlocking
  *    new structured data.
- *  - Semantic tagging covers the four representative endpoint families
- *    that drive the highest-value B-018 decisions: issues list, pulls
- *    list, actions runs list, search/issues. Anything else under
- *    api.github.com is captured as `github.unclassified`.
+ *  - Semantic tagging covers the representative endpoint families
+ *    that drive the highest-value B-018 decisions: issues list +
+ *    detail, pulls list + detail, actions runs list + detail,
+ *    actions workflows list, search/issues, search/repositories, and
+ *    repo metadata. Anything else under api.github.com is captured as
+ *    `github.unclassified` with a path collapsed by
+ *    `collapseUnknownPath` (identity-bearing prefixes are normalized;
+ *    see that function for the exact rules — short un-listed segments
+ *    DO survive on purpose so we keep some structural information).
  */
 
 import type {
@@ -281,18 +286,67 @@ function classifyGitHubFamily(rawUrl: string, method: string): ClassifiedEndpoin
 }
 
 /**
- * Replace numeric path segments with `:id` and large opaque slugs with
- * `:slug`. Never echoes back raw segments — keeps the signature space
- * small even for endpoints we have not classified yet.
+ * Path normalization for `api.github.com` endpoints that did not match
+ * any explicit `GITHUB_API_RULES` template above.
+ *
+ * Goals (in order):
+ *  1. Never persist obvious identity-bearing path segments —
+ *     usernames, org slugs, repo names — into `urlPattern` /
+ *     `endpointSignature`. These are cross-user / cross-tenant
+ *     identifiers that would (a) bloat the dedup space and
+ *     (b) leak per-user identity into a table that other accounts
+ *     might later import (Stage 4a `experience_export`). We collapse
+ *     the known identity-bearing prefixes:
+ *       /users/<name>/...      → /users/:user/...
+ *       /orgs/<name>/...       → /orgs/:org/...
+ *       /repos/<owner>/<repo>/... → /repos/:owner/:repo/...
+ *  2. Numeric segments → `:id` (e.g. issue / run / installation IDs).
+ *  3. Long opaque slugs (> 24 chars, single token) → `:slug`
+ *     (commit SHAs, base64ish handles).
+ *  4. Anything else passes through unchanged. We do NOT try to
+ *     classify every possible GitHub path — endpoints we genuinely
+ *     care about belong in `GITHUB_API_RULES`. This function is the
+ *     "honestly unknown" fallback.
+ *
+ * NOT a general taxonomy framework. If a new identity prefix needs
+ * normalizing, add it explicitly to `IDENTITY_PREFIX_RULES` below.
  */
+const IDENTITY_PREFIX_RULES: ReadonlyArray<{
+  prefix: string;
+  /** how many segments after the prefix are identity placeholders */
+  identitySegmentCount: number;
+  /** placeholder names, applied in order */
+  placeholders: readonly string[];
+}> = [
+  { prefix: 'users', identitySegmentCount: 1, placeholders: [':user'] },
+  { prefix: 'orgs', identitySegmentCount: 1, placeholders: [':org'] },
+  { prefix: 'repos', identitySegmentCount: 2, placeholders: [':owner', ':repo'] },
+];
+
 function collapseUnknownPath(path: string): string {
-  const segments = path.split('/').map((seg) => {
-    if (seg.length === 0) return seg;
-    if (/^\d+$/.test(seg)) return ':id';
-    if (seg.length > 24 && /^[A-Za-z0-9_-]+$/.test(seg)) return ':slug';
-    return seg;
-  });
-  return segments.join('/');
+  const segments = path.split('/');
+  if (segments.length >= 2) {
+    const firstNonEmptyIdx = segments[0] === '' ? 1 : 0;
+    const head = segments[firstNonEmptyIdx];
+    const rule = IDENTITY_PREFIX_RULES.find((r) => r.prefix === head);
+    if (rule) {
+      for (let i = 0; i < rule.identitySegmentCount; i += 1) {
+        const targetIdx = firstNonEmptyIdx + 1 + i;
+        if (targetIdx < segments.length && segments[targetIdx].length > 0) {
+          segments[targetIdx] = rule.placeholders[i];
+        }
+      }
+    }
+  }
+  return segments
+    .map((seg) => {
+      if (seg.length === 0) return seg;
+      if (seg.startsWith(':')) return seg; // already a placeholder
+      if (/^\d+$/.test(seg)) return ':id';
+      if (seg.length > 24 && /^[A-Za-z0-9_-]+$/.test(seg)) return ':slug';
+      return seg;
+    })
+    .join('/');
 }
 
 // ---------------------------------------------------------------------
