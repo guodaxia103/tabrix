@@ -174,7 +174,15 @@ if (!fileExists(releaseNotesFile)) {
 // `benchmark-v23.mjs --gate` invocation reads from the same module.
 const BENCHMARK_REPORT_MAX_AGE_DAYS = 7;
 
-if (benchmarkGateApplies(nativePkg.version) && !options.allowMissingNotes) {
+// `--allow-missing-notes` deliberately does NOT short-circuit this block:
+// it is a release-NOTES escape hatch (handled at the release-notes block
+// above, which falls back to CHANGELOG.md), not a release-GATE escape
+// hatch. Letting it skip the benchmark content gate would re-open the
+// exact bypass V23-06 closed: a tag could ship with a failing benchmark
+// report just by passing `--allow-missing-notes`. The soft warning at
+// the bottom of this block is already self-guarded on `selectedNotesFile`
+// existing, so it stays harmless under `--allow-missing-notes`.
+if (benchmarkGateApplies(nativePkg.version)) {
   const benchmarkDir = path.join(ROOT, 'docs', 'benchmarks', 'v23');
   if (!fs.existsSync(benchmarkDir)) {
     errors.push(
