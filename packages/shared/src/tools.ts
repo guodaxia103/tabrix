@@ -68,6 +68,14 @@ export const TOOL_NAMES = {
     FLOW_RUN: 'record_replay_flow_run',
     LIST_PUBLISHED: 'record_replay_list_published',
   },
+  /**
+   * MKEP Experience layer (Stage 3b). Native-handled tools (no Chrome
+   * extension round-trip) — the native-server reads its own SQLite and
+   * answers directly. See `mcp/native-tool-handlers.ts`.
+   */
+  EXPERIENCE: {
+    SUGGEST_PLAN: 'experience_suggest_plan',
+  },
 };
 
 export const TOOL_SCHEMAS: Tool[] = [
@@ -1752,6 +1760,42 @@ export const TOOL_SCHEMAS: Tool[] = [
       required: ['action'],
     },
   },
+  {
+    name: TOOL_NAMES.EXPERIENCE.SUGGEST_PLAN,
+    description:
+      'Tabrix MKEP Experience (read-only): given an `intent` (free text) and an optional `pageRole`, return the most-successful previously-observed action paths. The native server matches on a normalized intent signature (whitespace-collapsed, lowercased) so callers do not need to canonicalize. Pure SELECT against the local SQLite — no browser side-effects, no network. Returns `status: "no_match"` (with `plans: []`) when no paths match.',
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        intent: {
+          type: 'string',
+          description:
+            'Caller intent in natural language; same shape that drives Memory `tasks.intent`. Trimmed and matched on a normalized signature so casing/whitespace differences hit the same bucket. Empty string is rejected.',
+          minLength: 1,
+          maxLength: 1024,
+        },
+        pageRole: {
+          type: 'string',
+          description:
+            'Optional `pageRole` filter (e.g. `repo_home`, `issues_list`). When provided, only action paths recorded for that role are returned.',
+          maxLength: 128,
+        },
+        limit: {
+          type: 'integer',
+          description:
+            'Maximum number of action paths to return. Defaults to 1; clamped to [1, 5].',
+          minimum: 1,
+          maximum: 5,
+          default: 1,
+        },
+      },
+      required: ['intent'],
+    },
+  },
 ];
 
 /**
@@ -1815,6 +1859,9 @@ export const TOOL_RISK_TIERS: Readonly<Record<string, TabrixRiskTier>> = Object.
   // (Phase 1). For Phase 0 we conservatively tag them P2 so they are not blocked by default.
   [TOOL_NAMES.RECORD_REPLAY.FLOW_RUN]: 'P2',
   [TOOL_NAMES.RECORD_REPLAY.LIST_PUBLISHED]: 'P0',
+
+  // ---- MKEP Experience layer (read-only SELECT against native SQLite) ----
+  [TOOL_NAMES.EXPERIENCE.SUGGEST_PLAN]: 'P0',
 });
 
 /**

@@ -20,7 +20,11 @@ import {
 } from '../memory/db';
 import { PageSnapshotService } from '../memory/page-snapshot-service';
 import { ActionService } from '../memory/action-service';
-import { ExperienceAggregator, ExperienceRepository } from '../memory/experience';
+import {
+  ExperienceAggregator,
+  ExperienceQueryService,
+  ExperienceRepository,
+} from '../memory/experience';
 
 export interface CreateTaskInput {
   taskType: string;
@@ -84,6 +88,7 @@ interface StorageInit {
   pageSnapshots: PageSnapshotService | null;
   actions: ActionService | null;
   experienceAggregator: ExperienceAggregator | null;
+  experienceQuery: ExperienceQueryService | null;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -107,6 +112,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       pageSnapshots: null,
       actions: null,
       experienceAggregator: null,
+      experienceQuery: null,
     };
   }
 
@@ -137,6 +143,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
         pageSnapshotRepo,
         experienceRepo,
       ),
+      experienceQuery: new ExperienceQueryService(experienceRepo),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -149,6 +156,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       pageSnapshots: null,
       actions: null,
       experienceAggregator: null,
+      experienceQuery: null,
     };
   }
 }
@@ -162,6 +170,7 @@ export class SessionManager {
   private readonly pageSnapshotService: PageSnapshotService | null;
   private readonly actionService: ActionService | null;
   private readonly experienceAggregator: ExperienceAggregator | null;
+  private readonly experienceQueryService: ExperienceQueryService | null;
 
   constructor(options?: SessionManagerOptions) {
     const init = initStorage(options);
@@ -171,7 +180,18 @@ export class SessionManager {
     this.pageSnapshotService = init.pageSnapshots;
     this.actionService = init.actions;
     this.experienceAggregator = init.experienceAggregator;
+    this.experienceQueryService = init.experienceQuery;
     if (this.repos) this.hydrateFromDb(this.repos);
+  }
+
+  /**
+   * Stage 3b / B-013 read API. Read-only Experience layer queries.
+   * `null` when persistence is off (or DB init failed). Callers must
+   * treat `null` as "Memory unavailable" and surface
+   * `persistenceMode: 'off'` to the upstream agent.
+   */
+  public get experience(): ExperienceQueryService | null {
+    return this.experienceQueryService;
   }
 
   /**

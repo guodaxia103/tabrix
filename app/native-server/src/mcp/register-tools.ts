@@ -20,6 +20,7 @@ import {
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { runPostProcessor } from './tool-post-processors';
+import { getNativeToolHandler } from './native-tool-handlers';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -952,6 +953,50 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         summary: `Tool ${name} rejected by Tabrix Policy`,
       });
       return result;
+    }
+
+    // Native-handled tools short-circuit the extension round-trip — see
+    // `mcp/native-tool-handlers.ts`. Currently only Experience read-side
+    // queries (B-013) qualify; everything else still goes through the
+    // Chrome extension via `invokeExtensionCommand`.
+    const nativeHandler = getNativeToolHandler(name);
+    if (nativeHandler) {
+      const nativeResult = await nativeHandler(args, { sessionManager });
+      if (nativeResult.isError) {
+        let errorSummary = `Native tool ${name} failed`;
+        const firstContent = nativeResult.content?.[0];
+        if (firstContent && firstContent.type === 'text') {
+          const text = String(firstContent.text ?? '');
+          if (text) {
+            try {
+              const parsed = JSON.parse(text) as { message?: string };
+              if (parsed && typeof parsed.message === 'string') errorSummary = parsed.message;
+            } catch {
+              // Non-JSON error payload — fall back to the generic summary.
+            }
+          }
+        }
+        sessionManager.completeStep(session.sessionId, step.stepId, {
+          status: 'failed',
+          errorCode: 'native_tool_error',
+          errorSummary,
+          resultSummary: `Native tool ${name} failed`,
+        });
+        sessionManager.finishSession(session.sessionId, {
+          status: 'failed',
+          summary: `Native tool ${name} failed`,
+        });
+        return nativeResult;
+      }
+      sessionManager.completeStep(session.sessionId, step.stepId, {
+        status: 'completed',
+        resultSummary: `Native tool ${name} completed`,
+      });
+      sessionManager.finishSession(session.sessionId, {
+        status: 'completed',
+        summary: `Native tool ${name} completed`,
+      });
+      return nativeResult;
     }
 
     // If calling a dynamic flow tool (name starts with flow.), proxy to common flow-run tool

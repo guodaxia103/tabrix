@@ -61,9 +61,17 @@ function parseStepSequence(raw: string): ExperienceActionPathStep[] {
   }
 }
 
+export interface SuggestActionPathsInput {
+  intentSignature: string;
+  pageRole?: string;
+  limit: number;
+}
+
 export class ExperienceRepository {
   private readonly upsertStmt;
   private readonly listStmt;
+  private readonly suggestStmt;
+  private readonly suggestForRoleStmt;
   private readonly clearStmt;
 
   constructor(private readonly db: SqliteDatabase) {
@@ -109,6 +117,60 @@ export class ExperienceRepository {
          FROM experience_action_paths
         ORDER BY page_role ASC, intent_signature ASC`,
     );
+    // Read-only lookup for `experience_suggest_plan` (B-013).
+    //
+    // Sort key invariants:
+    //   1. `success_count DESC` — pick the candidate with the most past wins first.
+    //   2. `(failure_count - success_count) ASC` — among ties, prefer paths whose
+    //      net-success-margin is highest (i.e. fewer failures relative to wins).
+    //   3. `last_used_at DESC NULLS LAST` — fresher paths break further ties.
+    //   4. `intent_signature ASC, action_path_id ASC` — fully deterministic order
+    //      so unit tests do not rely on SQLite's row-storage order.
+    //
+    // Two prepared statements: with and without a `page_role` filter. `?` bind
+    // params are positional so callers cannot accidentally inject a `pageRole`
+    // when none was requested.
+    this.suggestStmt = db.prepare(
+      `SELECT action_path_id,
+              page_role,
+              intent_signature,
+              step_sequence,
+              success_count,
+              failure_count,
+              last_used_at,
+              created_at,
+              updated_at
+         FROM experience_action_paths
+        WHERE intent_signature = ?
+        ORDER BY success_count DESC,
+                 (failure_count - success_count) ASC,
+                 (last_used_at IS NULL) ASC,
+                 last_used_at DESC,
+                 intent_signature ASC,
+                 action_path_id ASC
+        LIMIT ?`,
+    );
+    this.suggestForRoleStmt = db.prepare(
+      `SELECT action_path_id,
+              page_role,
+              intent_signature,
+              step_sequence,
+              success_count,
+              failure_count,
+              last_used_at,
+              created_at,
+              updated_at
+         FROM experience_action_paths
+        WHERE intent_signature = ?
+          AND page_role = ?
+        ORDER BY success_count DESC,
+                 (failure_count - success_count) ASC,
+                 (last_used_at IS NULL) ASC,
+                 last_used_at DESC,
+                 intent_signature ASC,
+                 action_path_id ASC
+        LIMIT ?`,
+    );
     this.clearStmt = db.prepare('DELETE FROM experience_action_paths');
   }
 
@@ -128,20 +190,48 @@ export class ExperienceRepository {
 
   public listActionPaths(): ExperienceActionPathRow[] {
     const rows = this.listStmt.all() as ExperienceActionPathDbRow[];
-    return rows.map((row) => ({
-      actionPathId: row.action_path_id,
-      pageRole: row.page_role,
-      intentSignature: row.intent_signature,
-      stepSequence: parseStepSequence(row.step_sequence),
-      successCount: row.success_count,
-      failureCount: row.failure_count,
-      lastUsedAt: row.last_used_at ?? undefined,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    return rows.map(rowToActionPath);
+  }
+
+  /**
+   * Read-only lookup for `experience_suggest_plan` (B-013).
+   *
+   * Returns up to `input.limit` action paths matching `input.intentSignature`,
+   * optionally constrained to `input.pageRole`. The sort order is defined and
+   * documented on the prepared statements in the constructor.
+   *
+   * `limit` is treated as a hard ceiling and clamped to `[1, +∞)`; callers
+   * are expected to clamp to the public DTO maximum
+   * (`MAX_EXPERIENCE_SUGGEST_PLAN_LIMIT`) before calling.
+   */
+  public suggestActionPaths(input: SuggestActionPathsInput): ExperienceActionPathRow[] {
+    const safeLimit = Math.max(1, Math.floor(input.limit));
+    const rows =
+      input.pageRole !== undefined
+        ? (this.suggestForRoleStmt.all(
+            input.intentSignature,
+            input.pageRole,
+            safeLimit,
+          ) as ExperienceActionPathDbRow[])
+        : (this.suggestStmt.all(input.intentSignature, safeLimit) as ExperienceActionPathDbRow[]);
+    return rows.map(rowToActionPath);
   }
 
   public clear(): void {
     this.clearStmt.run();
   }
+}
+
+function rowToActionPath(row: ExperienceActionPathDbRow): ExperienceActionPathRow {
+  return {
+    actionPathId: row.action_path_id,
+    pageRole: row.page_role,
+    intentSignature: row.intent_signature,
+    stepSequence: parseStepSequence(row.step_sequence),
+    successCount: row.success_count,
+    failureCount: row.failure_count,
+    lastUsedAt: row.last_used_at ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }

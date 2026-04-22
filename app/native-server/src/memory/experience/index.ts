@@ -18,5 +18,12 @@ export {
   ExperienceRepository,
   type ExperienceActionPathRow,
   type ExperienceActionPathStep,
+  type SuggestActionPathsInput,
   type UpsertActionPathInput,
 } from './experience-repository';
+export {
+  ExperienceSuggestPlanInputError,
+  buildSuggestPlanResult,
+  parseExperienceSuggestPlanInput,
+} from './experience-suggest';
+export { ExperienceQueryService } from './experience-query-service';
