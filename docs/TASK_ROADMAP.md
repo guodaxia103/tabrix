@@ -105,11 +105,18 @@ Wave 5 — long horizon, no dates.
 - ✅ `B-010` — `KnowledgeUIMapRule` schema + GitHub seed + read-only lookup (done).
 - ✅ `B-011` v1 — `read_page` HVO stable `targetRef` (`tgt_<10-hex>` from `cyrb53(pageRole|objectSubType|role|normalizedLabel|hrefPathBucket|ordinal)`); click bridge resolves stable→snapshot ref via per-tab registry; real-browser golden path acceptance `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` is green.
 
+### Known limitations (B-011 v1)
+
+These are intentional v1 boundaries — not bugs. They are written here so that B-018 v2 / Stage 3a item 6 / future readers don't assume a stronger contract than what landed.
+
+1. **Stable `targetRef` is only end-to-end executable for ref-backed HVOs.** The per-tab snapshot registry (`stable-target-ref-registry.ts`) only records mappings when an HVO has BOTH a `targetRef` AND a per-snapshot `ref` (see the `obj.targetRef && obj.ref` guard in `read-page.ts` `recordStableTargetRefSnapshot` call). HVOs that are pure synthetic / seed-derived (no DOM anchor) may surface a `tgt_<10-hex>` for stability evidence, but a click bridge call against such a `targetRef` will fail closed (`unresolved_stable_target_ref`) — the upstream caller must pick a ref-backed HVO if it wants to drive interaction. v2 (Stage 3a item 6 / UI Map consumer cutover) is the place to broaden executable coverage.
+2. **`historyRef` is a lightweight snapshot correlation id, not a strong content anchor.** The extension layer fills `historyRef = read://<host>/<pageRoleSlug>/<sha8>` (deterministic per content seed), but the native server's snapshot post-processor unconditionally overwrites the wire-level value to `memory://snapshot/<uuid>` (the SQLite snapshot row id). Upstream MCP clients therefore see a uuid, not a content hash. The B-011 stable `targetRef` does NOT depend on `historyRef` to be stable — its derivation is purely `(pageRole | objectSubType | role | normalizedLabel | hrefPathBucket | ordinal)`. Promoting `historyRef` to a true `contentHash` equivalent (so it can be a second-level anti-drift anchor) is its own follow-up, not part of B-011 v1.
+
 ### Notes for incoming AI
 
 - **Core-neutrality invariant** is guarded by `tests/read-page-understanding-core-neutrality.test.ts` — no GitHub strings in `read-page-understanding-core.ts`. Breaking this test is a blocker.
 - Locator hint kinds are the same four used by `docs/MKEP_CURRENT_VS_TARGET.md:229-242`; do not add a fifth without a roadmap update.
-- `contentHash` in `targetRef` must be stable across cosmetic DOM mutations (e.g. class toggles); hashing the accessible name + role is the starting heuristic.
+- The phrase "`historyRef + hvoIndex + contentHash`" that earlier B-011 design notes used is **superseded** by the actual landed derivation above. Do not reintroduce `hvoIndex` into the key — index drifts with cosmetic list churn (see "Known limitations" #2 for why `historyRef` itself is also not a content hash today).
 
 ---
 

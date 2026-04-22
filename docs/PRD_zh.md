@@ -179,7 +179,7 @@ Tabrix 是一个四层学习闭环，架在工具面和传输层之上。
 
 **差距**：
 
-- `read_page` HVO `targetRef` v1 稳定键已落地（Stage 3a 的 `B-011`，2026-04-22；`tgt_<10-hex>`，由 pageRole/objectSubType/role/normalizedLabel/hrefPathBucket/ordinal 通过 cyrb53 派生，click bridge 通过 per-tab registry 解析，T5-F 真实浏览器验收已绿）；UI-Map 驱动的 `targetRef` 消费切换留给 v2；
+- `read_page` HVO `targetRef` v1 稳定键已落地（Stage 3a 的 `B-011`，2026-04-22；`tgt_<10-hex>`，由 pageRole/objectSubType/role/normalizedLabel/hrefPathBucket/ordinal 通过 cyrb53 派生，click bridge 通过 per-tab registry 解析，T5-F 真实浏览器验收已绿）；有两个 v1 边界：(a) 只有同时带 per-snapshot `ref` 的 HVO 才能通过 click 桥端到端执行 —— 纯 synthetic HVO 会暴露稳定 `tgt_*` 作证据，但对它点击会 fail-closed；(b) `historyRef` 当前只是轻量级快照相关性 ID，不是强内容锚 / 不等价于 `contentHash`。UI-Map 驱动的 `targetRef` 消费切换、以及内容锚版的 `historyRef` 都留给 v2；
 - 非 GitHub 家族的 locator hints 还在 TS adapter 里硬编码；
 - API Knowledge **v1 已落地（Stage 3g 的 `B-017`，仅捕获、GitHub-first、capability gate）**；call 层（`knowledge_call_api`）和 Sidepanel 按站 toggle 留在 v2；
 - 只有 GitHub 真正数据化；抖音 / 创作者中心还在 TS 分支（Stage 4c）。

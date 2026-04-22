@@ -177,7 +177,7 @@ Tabrix is a four-layer learning loop sitting on top of a tool surface and a tran
 
 **Gaps vs. target**:
 
-- `read_page` HVO `targetRef` v1 stable key landed (Stage 3a — `B-011`, 2026-04-22; `tgt_<10-hex>` derived from pageRole/objectSubType/role/normalizedLabel/hrefPathBucket/ordinal, click bridge resolves through a per-tab registry, T5-F real-browser acceptance green). UI-Map–driven `targetRef` consumer cutover is the v2 follow-up.
+- `read_page` HVO `targetRef` v1 stable key landed (Stage 3a — `B-011`, 2026-04-22; `tgt_<10-hex>` derived from pageRole/objectSubType/role/normalizedLabel/hrefPathBucket/ordinal, click bridge resolves through a per-tab registry, T5-F real-browser acceptance green). Two intentional v1 caveats: (a) only HVOs that also carry a per-snapshot `ref` are end-to-end executable through the click bridge — pure synthetic HVOs surface a stable `tgt_*` for evidence but a click against them fails closed; (b) `historyRef` is currently a lightweight snapshot correlation id, not a strong content anchor / `contentHash` equivalent. UI-Map–driven `targetRef` consumer cutover and a content-anchored `historyRef` are both v2 follow-ups.
 - Locator hints for non-GitHub families still in TS adapters.
 - API Knowledge **v1 landed (Stage 3g — `B-017`, capture-only, GitHub-first, capability-gated)**; the call layer (`knowledge_call_api`) and Sidepanel per-site toggle remain in v2.
 - Only GitHub is properly data-fied; Douyin and Creator Center still TS-first (Stage 4c).

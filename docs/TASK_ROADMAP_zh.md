@@ -105,11 +105,18 @@ Wave 5 —— 远期，无具体时间。
 - ✅ `B-010` —— `KnowledgeUIMapRule` schema + GitHub seed + 只读 lookup（done）。
 - ✅ `B-011` v1 —— `read_page` HVO 稳定 `targetRef`（`tgt_<10-hex>`，由 `cyrb53(pageRole|objectSubType|role|normalizedLabel|hrefPathBucket|ordinal)` 算出）；click 桥经 per-tab registry 把 stable→snapshot ref 还原；真实浏览器黄金链路 `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` 已绿。
 
+### 已知边界（B-011 v1）
+
+这些是有意为之的 v1 边界 —— 不是 bug。写在这里是为了让 B-018 v2 / Stage 3a item 6 / 后续接手者别假设比实际更强的契约。
+
+1. **稳定 `targetRef` 只对 ref-backed HVO 真正端到端可执行。** 每 tab 的快照 registry（`stable-target-ref-registry.ts`）只在 HVO 同时具备 `targetRef` 和 per-snapshot `ref` 时才记录映射（见 `read-page.ts` 里 `recordStableTargetRefSnapshot` 调用处的 `obj.targetRef && obj.ref` 守卫）。纯 synthetic / seed 派生的 HVO 即使被打了 `tgt_<10-hex>` 用于稳定性证据，click 桥对它的调用会 fail-closed（`unresolved_stable_target_ref`）—— 上游需要驱动交互时必须挑 ref-backed HVO。把可执行覆盖率扩开是 v2（Stage 3a item 6 / UI Map 消费切换）的事。
+2. **`historyRef` 当前只是轻量级快照相关性 ID，不是强内容锚（不等价于 `contentHash`）。** 扩展层会写 `historyRef = read://<host>/<pageRoleSlug>/<sha8>`（按内容 seed 派生），但 native server 的快照 post-processor 会无条件把 wire 层的值覆盖成 `memory://snapshot/<uuid>`（SQLite 快照行 ID）。所以上游 MCP 客户端看到的是 uuid，不是内容哈希。B-011 的稳定 `targetRef` **不**依赖 `historyRef` 来稳定 —— 它的派生纯粹是 `(pageRole | objectSubType | role | normalizedLabel | hrefPathBucket | ordinal)`。把 `historyRef` 升级成真正的 `contentHash` 等价物（让它能作为二级抗漂锚）是单独的 follow-up，不算在 B-011 v1 内。
+
 ### 给接手 AI 的提示
 
 - **核心中立性不变式**由 `tests/read-page-understanding-core-neutrality.test.ts` 守护 —— `read-page-understanding-core.ts` 里不能出现 GitHub 字面量。弄挂这个测试 = 阻塞。
 - Locator hint 的四个 kind 跟 `docs/MKEP_CURRENT_VS_TARGET.md:229-242` 对齐；不要在没更新路线图的情况下加第五个。
-- `targetRef` 里的 `contentHash` 必须对装饰性 DOM 变化（比如 class 切换）稳定；从 hash `accessible name + role` 起步。
+- 早期 B-011 设计稿里写的 "`historyRef + hvoIndex + contentHash`" 已被实际落地的派生键**替代**。不要再把 `hvoIndex` 塞回组合键 —— index 会随装饰性列表抖动漂移（`historyRef` 自身也还不是内容哈希，原因见上面"已知边界"#2）。
 
 ---
 

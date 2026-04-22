@@ -1,6 +1,6 @@
 {
   "name": "@tabrix/shared",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "author": "guodaxia103",
   "main": "dist/index.js",
   "module": "./dist/index.mjs",
