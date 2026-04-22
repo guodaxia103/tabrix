@@ -49,6 +49,16 @@ interface TaskProtocolParams {
     lineCount: number;
     quality: string;
   };
+  /**
+   * V23-03 / B-015: optional artifact-ref pointing at the Markdown
+   * projection of this snapshot. When present, `L2.markdownRef` will
+   * surface it so upstream planners can route reading traffic to
+   * Markdown without disturbing the JSON execution path.
+   *
+   * Optional and defaults to `null`. The protocol layer never *creates*
+   * the Markdown artifact; that is `read-page.ts`'s responsibility.
+   */
+  markdownArtifactRef?: string | null;
 }
 
 interface TaskProtocolResult {
@@ -482,13 +492,36 @@ function buildLevel1(
 
 function buildLevel2(params: TaskProtocolParams): ReadPageTaskLevel2 {
   const inlineFullSnapshot = params.mode === 'full';
+  // V23-03 §11.5 source routing: pick the first DOM snapshot artifact as
+  // the canonical execution-truth pointer. We deliberately ignore the
+  // 'normal' / 'full' suffix here because both belong to the same DOM
+  // semantic source family; downstream planners do not need to choose
+  // between them. `markdownRef` is only populated when read-page.ts
+  // actually generated the Markdown projection (renderMode='markdown').
+  // `knowledgeRef` stays `null` until B-017 lands a runtime call surface.
+  const domJsonArtifact = params.artifactRefs.find((item) => item.kind === 'dom_snapshot');
+  const domJsonRef = domJsonArtifact?.ref ?? null;
+  const markdownRef =
+    typeof params.markdownArtifactRef === 'string' && params.markdownArtifactRef
+      ? params.markdownArtifactRef
+      : null;
+
+  // Mirror markdownRef into the legacy `expansions` list so callers that
+  // only know the v1 shape can still discover the new source. The
+  // strongly-typed `markdownRef` field is the canonical surface.
+  const expansions = ['interactive_elements', 'candidate_actions', 'dom_snapshot'];
+  if (markdownRef) expansions.push('readable_markdown');
+
   return {
     available: true,
     defaultAccess: inlineFullSnapshot ? 'inline_full_snapshot' : 'artifact_ref',
     detailRefs: params.artifactRefs.map((item) => item.ref),
-    expansions: ['interactive_elements', 'candidate_actions', 'dom_snapshot'],
+    expansions,
     boundary:
       'T5.0 only defines the detail expansion entrypoint. Family-specific deep readers and non-DOM sources remain deferred.',
+    domJsonRef,
+    markdownRef,
+    knowledgeRef: null,
   };
 }
 

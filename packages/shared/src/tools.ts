@@ -260,6 +260,12 @@ export const TOOL_SCHEMAS: Tool[] = [
           description:
             'Output mode for read_page snapshot. compact (default): execution-oriented summary; normal: richer debugging view; full: include complete snapshot details.',
         },
+        render: {
+          type: 'string',
+          enum: ['json', 'markdown'],
+          description:
+            "V23-03/B-015 render mode. 'json' (default) emits the structured DOM-semantic snapshot whose HVOs/candidateActions/targetRef are the click/fill execution truth. 'markdown' adds a low-token Markdown projection (`markdown` field) of the top objects + interactive labels for text-heavy reading; the JSON HVOs/candidateActions/targetRef are still emitted unchanged so locator resolution is unaffected. Per docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md §4.3 Markdown is a READING surface, NOT an execution surface — never use it for click targeting.",
+        },
         depth: {
           type: 'number',
           description:

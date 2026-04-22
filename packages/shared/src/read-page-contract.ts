@@ -8,6 +8,22 @@
 
 export type ReadPageMode = 'compact' | 'normal' | 'full';
 
+/**
+ * V23-03 / B-015: render mode for `read_page`.
+ *
+ * `'json'` (default) is the existing behavior: a structured DOM-semantic
+ * snapshot whose HVOs / candidateActions / `targetRef` are the execution
+ * truth (see `docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md` §4.1).
+ *
+ * `'markdown'` adds a low-token Markdown projection of the same snapshot
+ * for text-heavy reading. The Markdown projection is a READING surface,
+ * NOT an execution surface (§4.3): the JSON HVOs / candidateActions /
+ * `targetRef` are still emitted unchanged so click resolution stays
+ * deterministic. `L2` source routing (`markdownRef`) lets upstream
+ * planners pick the right detail source instead of dumping both.
+ */
+export type ReadPageRenderMode = 'json' | 'markdown';
+
 export type ReadPagePageType =
   | 'web_page'
   | 'extension_page'
@@ -216,6 +232,27 @@ export interface ReadPageTaskLevel2 {
   detailRefs: string[];
   expansions: string[];
   boundary: string;
+  /**
+   * V23-03 explicit source routing (per
+   * `docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md` §11.5). `L2` should
+   * point the caller at the *right* deeper source instead of emitting all
+   * three at once. Each field is optional and may be `null` when the
+   * corresponding source is not currently available for this snapshot.
+   *
+   * - `domJsonRef`   — artifact ref for the structured DOM-semantic
+   *   snapshot. Always populated in v1 because DOM JSON is the execution
+   *   truth (§4.1).
+   * - `markdownRef`  — artifact ref for the Markdown projection. Present
+   *   only when `read_page(render='markdown')` was requested AND a
+   *   markdown projection was successfully generated.
+   * - `knowledgeRef` — placeholder for API Knowledge structured-data
+   *   sources (B-017 / `knowledge_api_endpoints`). Always `null` in v1
+   *   because the runtime call surface does not yet exist; reserved so
+   *   downstream consumers can start coding against the field shape.
+   */
+  domJsonRef?: string | null;
+  markdownRef?: string | null;
+  knowledgeRef?: string | null;
 }
 
 export interface ReadPageExtensionFields {
@@ -231,6 +268,27 @@ export interface ReadPageExtensionFields {
   L0?: ReadPageTaskLevel0;
   L1?: ReadPageTaskLevel1;
   L2?: ReadPageTaskLevel2;
+  /**
+   * V23-03 / B-015: which render mode was requested for this snapshot.
+   * `'json'` is the default and matches the legacy contract. `'markdown'`
+   * means a Markdown projection was opportunistically attached (see
+   * `markdown` below); the JSON HVO/candidateActions/targetRef payload
+   * is still emitted unchanged so execution paths are unaffected.
+   *
+   * Optional so older snapshots that pre-date V23-03 stay valid against
+   * the contract.
+   */
+  renderMode?: ReadPageRenderMode;
+  /**
+   * V23-03 / B-015: optional Markdown projection of the snapshot's
+   * top objects + interactive labels, intended as a *reading surface*
+   * (per `docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md` §4.3).
+   *
+   * MUST NOT be used as the source of truth for click/fill targeting;
+   * `targetRef` / `candidateActions` remain authoritative. Present iff
+   * `renderMode === 'markdown'` AND the projection succeeded.
+   */
+  markdown?: string | null;
 }
 
 export interface ReadPageStableSnapshot {

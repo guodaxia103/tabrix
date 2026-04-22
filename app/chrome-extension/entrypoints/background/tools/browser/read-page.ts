@@ -14,6 +14,7 @@ import {
   type ReadPagePageContext,
   type ReadPagePageType,
   type ReadPagePrimaryRegionConfidence,
+  type ReadPageRenderMode,
 } from '@tabrix/shared';
 import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import { ERROR_MESSAGES } from '@/common/constants';
@@ -24,6 +25,11 @@ import {
   recordStableTargetRefSnapshot,
   type StableTargetRefEntry,
 } from './stable-target-ref-registry';
+import {
+  buildMarkdownArtifactRef,
+  buildMarkdownProjection,
+  MARKDOWN_ARTIFACT_KIND,
+} from './read-page-markdown';
 
 interface ReadPageStats {
   processed: number;
@@ -36,6 +42,7 @@ type PrimaryRegionConfidence = ReadPagePrimaryRegionConfidence;
 interface ReadPageParams {
   filter?: 'interactive'; // when omitted, return all visible elements
   mode?: ReadPageMode; // output verbosity mode, default compact
+  render?: ReadPageRenderMode; // V23-03/B-015 render mode, default 'json'
   depth?: number; // maximum DOM depth to traverse (0 = root only)
   refId?: string; // focus on subtree rooted at this refId
   tabId?: number; // target existing tab id
@@ -410,12 +417,16 @@ function buildInteractiveElements(
   return fallbackNodes.slice(0, limit).map((node) => toInteractiveElement(node));
 }
 
-function buildArtifactRefs(tabId: number): SnapshotArtifactRef[] {
+function buildArtifactRefs(tabId: number, includeMarkdown: boolean): SnapshotArtifactRef[] {
   const safeTabId = Number.isFinite(tabId) ? tabId : 0;
-  return [
+  const refs: SnapshotArtifactRef[] = [
     { kind: 'dom_snapshot', ref: `artifact://read_page/tab-${safeTabId}/normal` },
     { kind: 'dom_snapshot', ref: `artifact://read_page/tab-${safeTabId}/full` },
   ];
+  if (includeMarkdown) {
+    refs.push({ kind: MARKDOWN_ARTIFACT_KIND, ref: buildMarkdownArtifactRef(safeTabId) });
+  }
+  return refs;
 }
 
 function buildRefSelectorMap(refMap: any[]): Map<string, string> {
@@ -511,6 +522,7 @@ function buildStableSnapshotLayer(params: {
 
 function buildExtensionLayer(params: {
   mode: ReadPageMode;
+  renderMode: ReadPageRenderMode;
   currentUrl: string;
   currentTitle: string;
   pageType: PageType;
@@ -527,6 +539,7 @@ function buildExtensionLayer(params: {
   interactiveElements: SnapshotInteractiveElement[];
   pageContext: ReadPagePageContext;
 }): ReadPageExtensionFields {
+  const markdownArtifact = params.artifactRefs.find((item) => item.kind === MARKDOWN_ARTIFACT_KIND);
   const taskProtocol = buildTaskProtocol({
     mode: params.mode,
     currentUrl: params.currentUrl,
@@ -539,6 +552,7 @@ function buildExtensionLayer(params: {
     artifactRefs: params.artifactRefs,
     pageContext: params.pageContext,
     contentSummary: params.contentSummary,
+    markdownArtifactRef: markdownArtifact?.ref ?? null,
   });
 
   // B-011: populate `historyRef` with a compact snapshot identifier so
@@ -552,6 +566,26 @@ function buildExtensionLayer(params: {
     pageRole: params.pageRole,
     contentSeed: `${params.contentSummary.normalizedLength}|${taskProtocol.highValueObjects.length}`,
   });
+
+  // V23-03 / B-015: when the caller explicitly requested
+  // render='markdown', generate a Markdown projection from the *final*
+  // ranked HVO + interactive lists (so it stays consistent with the JSON
+  // payload the same response carries). The projection is intentionally
+  // ref-free (see read-page-markdown.ts) so it cannot be misused as a
+  // click locator. Empty result -> emit `null` to signal "Markdown
+  // unavailable" rather than "page is empty".
+  let markdown: string | null = null;
+  if (params.renderMode === 'markdown') {
+    const projected = buildMarkdownProjection({
+      url: params.currentUrl,
+      title: params.currentTitle,
+      pageRole: params.pageRole,
+      primaryRegion: params.primaryRegion,
+      highValueObjects: taskProtocol.highValueObjects,
+      interactiveElements: params.interactiveElements,
+    });
+    markdown = projected || null;
+  }
 
   return {
     candidateActions: params.candidateActions,
@@ -567,11 +601,14 @@ function buildExtensionLayer(params: {
     L0: taskProtocol.L0,
     L1: taskProtocol.L1,
     L2: taskProtocol.L2,
+    renderMode: params.renderMode,
+    markdown,
   };
 }
 
 function buildModeOutput(params: {
   mode: ReadPageMode;
+  renderMode: ReadPageRenderMode;
   tabId: number;
   currentUrl: string;
   currentTitle: string;
@@ -618,7 +655,7 @@ function buildModeOutput(params: {
     params.candidateActions.length > 0
       ? params.candidateActions
       : buildCandidateActions(interactiveElements, params.refMap);
-  const artifactRefs = buildArtifactRefs(params.tabId);
+  const artifactRefs = buildArtifactRefs(params.tabId, params.renderMode === 'markdown');
   const pageContext: ReadPagePageContext = {
     filter: params.filter,
     depth: params.depth,
@@ -646,6 +683,7 @@ function buildModeOutput(params: {
 
   const extensionLayer = buildExtensionLayer({
     mode: params.mode,
+    renderMode: params.renderMode,
     currentUrl: params.currentUrl,
     currentTitle: params.currentTitle,
     pageType: params.pageType,
@@ -727,7 +765,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
 
   // Execute read page
   async execute(args: ReadPageParams): Promise<ToolResult> {
-    const { filter, depth, refId, mode } = args || {};
+    const { filter, depth, refId, mode, render } = args || {};
 
     // Validate refId parameter
     const focusRefId = typeof refId === 'string' ? refId.trim() : '';
@@ -752,6 +790,20 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       );
     }
     const selectedMode = selectedModeRaw as ReadPageMode;
+
+    // V23-03 / B-015: validate render mode. Default 'json' so legacy
+    // callers see no behavior change. We deliberately fail closed on
+    // unknown values rather than silently coerce — an unknown render
+    // mode usually means the upstream client speaks a newer contract
+    // than this extension can satisfy, and silent coercion would hide
+    // that drift.
+    const selectedRenderRaw = render || 'json';
+    if (!['json', 'markdown'].includes(selectedRenderRaw)) {
+      return createErrorResponse(
+        `${ERROR_MESSAGES.INVALID_PARAMETERS}: render must be one of json | markdown`,
+      );
+    }
+    const selectedRender = selectedRenderRaw as ReadPageRenderMode;
 
     // Track if user explicitly controlled the output (skip sparse heuristics)
     const userControlled = requestedDepth !== undefined || !!focusRefId;
@@ -790,6 +842,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
                 success: false,
                 ...buildModeOutput({
                   mode: selectedMode,
+                  renderMode: selectedRender,
                   tabId: tab.id,
                   currentUrl,
                   currentTitle,
@@ -937,6 +990,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       if (treeOk && !isSparse) {
         const modePayload = buildModeOutput({
           mode: selectedMode,
+          renderMode: selectedRender,
           tabId: tab.id,
           currentUrl,
           currentTitle,
@@ -1014,6 +1068,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
 
           const modePayload = buildModeOutput({
             mode: selectedMode,
+            renderMode: selectedRender,
             tabId: tab.id,
             currentUrl,
             currentTitle,
