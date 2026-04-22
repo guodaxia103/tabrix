@@ -369,20 +369,38 @@ Preferred stack:
 
 At the time of writing:
 
-- `L0 / L1 / L2` exist in the `read_page` contract and are emitted by the task protocol layer.
-- `read_page` still defaults to DOM/semantic JSON as the practical execution detail source.
+- `L0 / L1 / L2` exist in the `read_page` contract and are emitted by the task protocol layer
+  (`packages/shared/src/read-page-contract.ts`).
+- `read_page` still defaults to DOM/semantic JSON as the practical execution detail source —
+  HVOs / candidateActions / `targetRef` remain the click-resolution truth (§4.1).
+- `read_page(render='markdown')` is **landed** as a reading surface (V23-03 / B-015):
+  `ReadPageRenderMode = 'json' | 'markdown'` in the contract, Markdown projection emitted
+  from the same final HVO + interactive lists in
+  `app/chrome-extension/entrypoints/background/tools/browser/read-page.ts`. The Markdown
+  payload is intentionally ref-free so it cannot be misused as an execution surface (§4.3).
+- `L2` source routing is **landed** at the contract surface: `domJsonRef`, `markdownRef`,
+  and `knowledgeRef` (placeholder for future API Knowledge structured-data detail) let
+  upstream planners pick the right detail source instead of dumping all three
+  (`packages/shared/src/read-page-contract.ts` + `read-page-l2-source-routing.test.ts`).
 - API Knowledge v1 is landed as capture-only (`knowledge_api_endpoints`), GitHub-first.
-- `tabrix_choose_context` v1 is landed and can already route among:
+- `tabrix_choose_context` v1 is landed and now routes among **at least four** strategies:
   - `experience_reuse`
   - `knowledge_light`
-  - `read_page_required`
+  - `read_page_required` (DOM/JSON fallback)
+  - `read_page_markdown` (V23-03; gated on `siteFamily === 'github'` + a hand-curated
+    `MARKDOWN_FRIENDLY_PAGE_ROLES` whitelist; falls back to `read_page_required` for
+    actuation)
 
 ### 7.2 Not landed yet
 
-- `read_page(render='markdown')` is still a planned capability, not yet part of the runtime path.
 - `knowledge_call_api` is still deferred.
-- `L2` is still an entrypoint skeleton, not a fully family-aware deep reader.
-- There is not yet a formal runtime rule engine that says "simple page = 1 layer, medium = 2 layers, complex = 3 layers."
+- `L2` is still an entrypoint skeleton, not a fully family-aware deep reader (the
+  `markdownRef` / `domJsonRef` / `knowledgeRef` slots exist, but the chooser-side rules
+  that select between them on non-GitHub families are not yet there).
+- There is not yet a formal runtime rule engine that says "simple page = 1 layer, medium
+  = 2 layers, complex = 3 layers." Today the three-layer dispatch in §11 is a **product
+  rule with partial runtime backing** (markdown branch + L2 source routing surface), not a
+  fully enforced runtime contract.
 
 ### 7.3 Implication
 
@@ -412,9 +430,13 @@ This implies four practical design choices:
 
 The protocol should degrade gracefully:
 
-- no Markdown yet → `L2` points only to DOM/artefact/API-light detail
-- no API capture on a site → `L2` stays DOM-first
-- simple page → `L0/L1` may be sufficient
+- Markdown is landed as a **reading** surface (`render='markdown'`); for action-heavy
+  pages or non-whitelisted families, `L2` still points to DOM JSON as execution truth
+  (`markdownRef` may be `null` while `domJsonRef` is the only populated slot).
+- API capture is landed but `knowledge_call_api` is not; on sites without usable
+  `knowledge_api_endpoints`, `L2` stays DOM-first and `knowledgeRef` is `null`.
+- simple page → `L0/L1` may be sufficient; the chooser is not required to populate all
+  three `L2` source slots before the protocol is useful.
 
 ---
 
@@ -597,6 +619,10 @@ Because the full runtime rule engine is not landed yet, the practical v1 interpr
 - medium page -> act as if `L0 + L1` are primary
 - complex page -> act as if `L0 + L1 + L2` are primary
 
-This is the product rule future implementations should converge to.
+This is the product rule future implementations should converge to. Parts of the runtime
+have already started landing — notably `read_page(render='markdown')` (V23-03 / B-015) and
+the `tabrix_choose_context` Markdown branch — but neither makes the §11 dispatch a
+mandatory runtime contract; they just make the `L2`-by-source story executable on the
+GitHub-family reading paths.
 
 It is **not** a claim that every current runtime path already enforces this perfectly.
