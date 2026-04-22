@@ -1,6 +1,6 @@
 # Tabrix v2.2.0 Release Notes
 
-Release date: 2026-04-22 (release candidate; tag pending gate sign-off)
+Release date: 2026-04-22
 
 ## Summary
 
