@@ -8,6 +8,7 @@
 > - `Stage 3a → 5e` 执行计划、DoD、`B-*` 映射、波次图 → [`TASK_ROADMAP.md`](./TASK_ROADMAP.md)（英文正本）/ [`TASK_ROADMAP_zh.md`](./TASK_ROADMAP_zh.md)（中文镜像）。
 >
 > 本文作为 v0.3 时点的**历史快照**保留 —— 包括当时的调研溯源、竞品对照、产品表面精简叙事。**不要**在本文里继续规划新的 Stage；Stage 级的活规划从现在起只在 `TASK_ROADMAP.md` 下迭代。
+> 下文若出现 `feat/*`、`PR 串`、`阶段建议`、`优先级`、`下一步` 等措辞，**全部只代表 2026-04-20 当时的判断**，不能再作为当前版本计划、backlog 排序或 release 决策依据。
 >
 > —— 以下为 v0.3 原文 ——
 >
@@ -20,7 +21,7 @@
 > - `packages/shared` 的 public API 已收敛到 `{ constants, types, tools, labels, bridge-ws, read-page-contract }`，任何后续 Stage 工作都应以这 6 个模块为稳定边界。
 >   起草：项目组（Claude 作为总负责人；14 个竞品调研由 Codex CLI 并行完成并经抽查核验）
 >   关联文档：`docs/MKEP_CURRENT_VS_TARGET.md`（Week 2 gap 分析）· `docs/KNOWLEDGE_STAGE_1.md` · `docs/KNOWLEDGE_STAGE_2.md` · `docs/MEMORY_PHASE_0.md`（0.1/0.2/0.3）· `docs/POLICY_PHASE_0.md`
->   目的：把"已完成的 MKEP 阶段 + 产品愿景四性目标 + `E:\projects\AI\codex\competitor\` 下 14 个开源项目的实证借鉴"汇成一份 Stage 3+ 执行计划，作为后续 `feat/*` 分支的派生依据。
+>   目的：保留当时把"已完成的 MKEP 阶段 + 产品愿景四性目标 + `E:\projects\AI\codex\competitor\` 下 14 个开源项目的实证借鉴"汇成 Stage 3+ 执行计划的历史版本；当前版本的派生依据已经迁移，不再以本文作为后续 `feat/*` 分支或版本计划来源。
 
 ---
 

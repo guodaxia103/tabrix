@@ -1,6 +1,6 @@
 # B-EXP-REPLAY · `experience_replay` v1 — owner-lane brief (no implementation)
 
-> **Status (this doc):** **Brief only.** No code lands with this file. Implementation is gated on the **owner-lane** review described in `AGENTS.md` §"Tiered Execution Model" — fast-lane is explicitly forbidden from drafting (a) a new `TOOL_NAMES` entry, (b) a new risk tier, or (c) a new `requiresExplicitOptIn` flag, and `experience_replay` introduces all three.
+> **Status (this doc):** **Owner decisions locked (2026-04-23).** This file is still a brief, not an implementation PR, but the owner-lane decisions that previously blocked execution are now fixed in §10. A fast-lane implementation may proceed against this brief without reopening the policy / schema boundary.
 > **Lane:** Owner-lane (architecture + Policy decision + new public contract).
 > **Companion of:** `docs/B_018_CONTEXT_SELECTOR_V1.md` (the read-side selector v1; `experience_replay` is the **write/execute** half of the same Stage 3b loop).
 > **Roadmap pointers:** `docs/TASK_ROADMAP.md` §3 Stage 3b (the producer-side write path the read-side `experience_suggest_plan` was deliberately split off from), §9 Stage 3h (the consumer-side that gets a real `'experience_replay'` strategy once this lands).
@@ -16,9 +16,17 @@ The continuous-execution plan for v2.3.0 V23-05 (`tabrix v2.3.0 execution` plan,
 2. **New risk tier classification.** `experience_replay` is the first Tabrix tool that **autonomously executes a sequence of historical actions** under a single MCP call. The right tier is not obvious — `experience_suggest_plan` is `P0` (read-only) and `chrome_click_element` is `P2`, but a tool that fires `chrome_click_element` _N_ times under one decision is not naturally either of those. Picking the tier requires a Policy review (`docs/POLICY_PHASE_0.md` §2).
 3. **Capability gate decision.** `TABRIX_POLICY_CAPABILITIES` (B-016) currently has exactly one capability (`api_knowledge`). Whether to add a second (`experience_replay`) — and whether the gate is the _primary_ defense or just defense-in-depth on top of `requiresExplicitOptIn` — is a Policy decision, not a mechanical one.
 
-So the deliverable here is an **owner-lane-reviewable specification**: when the maintainer reads this and answers the open questions in §10, the result is a brief any fast-lane execution can carry out without reopening any of the policy-shaped questions.
+So the deliverable here is an **owner-approved specification**: the owner-lane review has now been completed inside this document, and the remaining job is implementation plus verification.
 
-Consistent with the V23-05 framing: this brief intentionally **does not pre-decide** the items in §10. It commits to the _minimum_ surface and lists the remaining decisions as explicit blockers.
+Decision lock for v1:
+
+1. **Risk tier** = `P1` + `requiresExplicitOptIn: true` + new capability `'experience_replay'`.
+2. **`parent_step_id` cross-link** = defer to v2; v1 carries no `memory_steps` migration.
+3. **Capability spelling** = `'experience_replay'`.
+4. **Substitution whitelist** = `['queryText', 'targetLabel']`.
+5. **`templateFields` schema bump** = lands in v1 as an optional per-step field.
+6. **P3-specific allowlist question** = not applicable in v1 because replay is not P3.
+7. **Real-browser acceptance floor** = the five scenario families in §8.3 are the feature-level minimum; version-level benchmark discipline still follows the repo-wide paired-run rules.
 
 ## 2. Hard constraints we hold
 
@@ -27,7 +35,7 @@ These are non-negotiable for v1. Loosening any of them is a v2 conversation.
 1. **Tabrix is the execution layer, not an agent** (`docs/PRD.md` §1 / P4). `experience_replay` re-runs a _named existing_ `actionPathId` from `experience_action_paths`. It does **not** plan. It does **not** invent new steps. It does **not** re-rank against a model. It does **not** call back into the upstream LLM mid-replay.
 2. **Bounded, deterministic step set.** The replay engine only knows how to replay step kinds whose semantics are already nailed down: today that means `chrome_click_element` and `chrome_fill_or_select`. Any other `toolName` encountered in `step_sequence` aborts the replay with a structured failure (see §6). We do **not** add a "fallback to upstream LLM" branch when an unsupported step is hit.
 3. **Fail-closed by default.** If any single step fails (locator stale, verifier red, dialog hit, navigation drift) the replay halts at that step with `status='failed'`. **No autonomous retry, no autonomous re-locator, no autonomous read_page-and-re-plan.** The whole point of replay is "the _plan_ is trusted because it succeeded before"; the moment that trust breaks, control returns to the upstream LLM.
-4. **Single, explicit opt-in.** Replay is `requiresExplicitOptIn: true` from day one — it never appears in `listTools` output unless the operator has _both_ turned on the capability gate (`TABRIX_POLICY_CAPABILITIES` includes `experience_replay`, see §4) **and** put the tool name on `TABRIX_POLICY_ALLOW_P3` if the chosen risk tier is P3 (see §3).
+4. **Single, explicit opt-in.** Replay is `requiresExplicitOptIn: true` from day one — in v1 it never appears in `listTools` output unless the operator has turned on the capability gate (`TABRIX_POLICY_CAPABILITIES` includes `experience_replay`, see §4). `TABRIX_POLICY_ALLOW_P3` does not participate because replay is not `P3`.
 5. **No new SQLite table.** Replay reads `experience_action_paths` (B-005) read-only and writes its outcome via the **existing** Memory pipeline (a normal `memory_sessions` row, plus a normal `memory_steps` row per replayed step). No bespoke `experience_replays` table.
 6. **GitHub-first.** `experience_action_paths` rows are bucketed by `(pageRole, intentSignature)`; `pageRole` is the same one B-013 / B-018 use. v1 only commits to GitHub-derived rows. A row whose `pageRole` is not in the GitHub-known set is a `failed-precondition`, not a "try anyway".
 7. **No public contract drift beyond the new tool.** Existing tools' input/output unchanged. The only new shared types are: `TabrixExperienceReplayInput`, `TabrixExperienceReplayResult`, the `experience_replay` capability constant, and the `TOOL_NAMES.EXPERIENCE.REPLAY` entry.
@@ -155,9 +163,9 @@ interface TabrixExperienceReplayResult {
 
 A naive design would let the caller resume a partial replay from the failed step. v1 deliberately does not: resume requires the runtime to _invent_ state that wasn't recorded (because between the original capture and this resume the page may have moved on), and the right answer is "ask the upstream LLM to re-plan from the current `read_page` snapshot". `partial` is therefore a **terminal** state in v1 — the caller takes the `replayId`, asks Memory what got done, and decides for themselves how to proceed.
 
-## 4. Risk tier classification (Policy review required — open question for the maintainer)
+## 4. Risk tier classification (owner decision locked 2026-04-23)
 
-This is the section the maintainer must approve before fast-lane writes any code. The brief commits to a specific _recommendation_ but explicitly flags the alternatives.
+This section records the v1 decision and the rejected alternatives, so the implementation PR does not reopen the Policy boundary.
 
 ### 4.1 Recommendation: `P1` + `requiresExplicitOptIn: true` + new `experience_replay` capability
 
@@ -177,13 +185,13 @@ Pinning the tier:
 - **Why `P1` with explicit opt-in:** `P1` semantics ("auto-execute + record") match per-step semantics, but the _autonomy of running ≥ 2 P2 steps under one MCP call_ is an additional surface that `P1` does not naturally describe. The right answer is `P1` + the existing `requiresExplicitOptIn: true` gate, **plus** a capability-gate so the operator's "yes I want autonomous replay" decision is a single env-var flip rather than a per-tool allowlist edit. **This is the first time `requiresExplicitOptIn: true` is used on a non-P3 tool — that is intentional, and the schema in `packages/shared/src/tools.ts` already allows it (the field is independent of `riskTier`).**
 - **Per-step Policy still applies.** When the replay engine fires `chrome_click_element` for step _i_, that call still goes through the existing P2 dispatch; it is not bypassed because the wrapper is P1. So a Policy upgrade that later hardens P2 (e.g. site-level allowlist) tightens replay automatically.
 
-### 4.2 Alternatives the maintainer may pick instead
+### 4.2 Alternatives considered and rejected for v1
 
 - **Alternative A — `P3` + opt-in.** Strictly safer, but folds replay into the same allowlist as `chrome_javascript` / `chrome_inject_script`. Operators who deliberately turned off P3 (the recommended default for shared environments) would also lose replay.
 - **Alternative B — `P2` + opt-in.** Matches the per-step tier. Loses the "autonomy is itself a surface" signal; from a Policy-audit standpoint, a P2 wrapper around P2 steps reads as no new risk, which is misleading.
 - **Alternative C — Stay P1, drop the capability gate, keep only `requiresExplicitOptIn`.** Lighter, but conflates "this tool exists" with "autonomous replay is on" — once a maintainer opts in for one tool, they have implicitly opted in for the whole feature.
 
-The recommendation (P1 + `requiresExplicitOptIn` + new capability) is the strictest of the three that still distinguishes replay from `chrome_javascript`. **Open question 1 in §10 is "approve or pick alternative".**
+The recommendation (P1 + `requiresExplicitOptIn` + new capability) is the strictest of the three that still distinguishes replay from `chrome_javascript`. **v1 locks this recommendation.**
 
 ### 4.3 Capability gate addition
 
@@ -194,6 +202,7 @@ export type TabrixCapability = 'api_knowledge' | 'experience_replay';
 ```
 
 Operator opts in via `TABRIX_POLICY_CAPABILITIES=experience_replay` (or `=all`). Default-deny.
+In v1 this capability gate is the operational opt-in boundary. `TABRIX_POLICY_ALLOW_P3` remains unchanged and does not participate because replay is not classified `P3`.
 
 ## 5. Variable substitution boundary
 
@@ -241,10 +250,10 @@ Replay is a Memory consumer + producer like any other MCP tool. We do **not** in
 - A single replay opens **one** `memory_sessions` row with `taskIntent = "experience_replay:" + actionPathId`. The opening write is bookkept by the existing `SessionManager`; we add no new method.
 - Each attempted step writes **one** `memory_steps` row, in the existing shape, with:
   - `tool_name` = the underlying tool name (`chrome_click_element`, etc.) — **not** `'experience_replay'`. We want post-hoc analysis to count "clicks issued under replay" the same way it counts "clicks issued under direct LLM control".
-  - `parent_step_id` = a new optional pointer to the `memory_steps` row representing the replay session itself (one row per session, `tool_name='experience_replay'`, written first). This is a _cross-link only_, surfaced via the existing `memory_steps.parent_step_id` column if present, else added in this brief's implementation as a guarded `ALTER TABLE ... ADD COLUMN` migration. **Open question 2 in §10**: confirm we want this cross-link in v1 or defer to v2.
+  - `parent_step_id` is **deferred to v2**. v1 keeps the existing `memory_steps` shape and does not carry a guarded `ALTER TABLE ... ADD COLUMN` migration just for replay cross-linking.
   - `history_ref` is taken from the underlying tool's natural history ref so existing post-processors still work.
 - After replay finishes (any terminal status), the existing `ExperienceAggregator` will pick the session up on its next pass and project the success/failure counters back into `experience_action_paths` _for the same `actionPathId`_ — i.e. successful replays compound the row's `success_count`, failed replays compound `failure_count`. This makes `experience_replay` a **first-class contributor to the same statistics that `experience_suggest_plan` reads**, closing the producer/consumer loop without a bespoke schema.
-- Aggregator change (small): `experience-aggregator.ts::EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS` already excludes `experience_suggest_plan`. We must **also** exclude the synthesised parent `experience_replay` step from aggregation as a top-level row, but **not** exclude its child steps (those are real clicks / fills and should aggregate as if the upstream LLM had issued them — modulo the `parent_step_id` link if we adopt option 2 above).
+- Aggregator change (small): `experience-aggregator.ts::EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS` already excludes `experience_suggest_plan`. We must **also** exclude the synthesised parent `experience_replay` step from aggregation as a top-level row, but **not** exclude its child steps (those are real clicks / fills and should aggregate as if the upstream LLM had issued them).
 
 ## 8. Test matrix
 
@@ -266,7 +275,7 @@ Native-server `app/native-server/src/mcp/experience-replay.test.ts`:
 
 - `experience_replay` is **not** registered as a native handler — it is a bridged tool (it must call `chrome_click_element` etc. through the existing dispatch). Test the wiring: stub bridge dispatches each child step in order; replay returns `ok` + `evidenceRefs` of length N.
 - Policy denial path: with `TABRIX_POLICY_CAPABILITIES` empty → `denied` + `code='capability_off'`, no Memory session opened.
-- Policy denial path #2: with capability on, but tool name not on `TABRIX_POLICY_ALLOW_P3` (or whichever allowlist matches the chosen tier in §10) → `denied` with the existing structured payload.
+- Metadata path: with capability on, `experience_replay` is visible as a `P1` tool that still advertises `requiresExplicitOptIn: true`; the implementation must not silently drop the explicit-opt-in marker just because replay is not `P3`.
 - Per-step failure: stub bridge fails step 1 → result `status='partial'`, exactly one `evidenceRefs` entry with `status='failed'`, replay session marked terminal.
 - No autonomous retry: assert that the failed step is not retried by the engine (count of bridge invocations matches the test's expectation exactly).
 - Lane integrity: assert the replay engine never emits a CDP-lane / debugger-lane request — reuses the V23-01 lane-integrity guard if available.
@@ -291,53 +300,53 @@ Before implementation lands: `pnpm -r typecheck`, `pnpm --filter @tabrix/native-
 
 This is a forward declaration so the maintainer can scope the eventual fast-lane brief.
 
-- `packages/shared/src/tools.ts` — adds `TOOL_NAMES.EXPERIENCE.REPLAY = 'experience_replay'`, adds the input schema entry, registers `TOOL_RISK_TIERS[TOOL_NAMES.EXPERIENCE.REPLAY]` (value chosen per §10 question 1), sets `requiresExplicitOptIn: true` on the schema entry.
+- `packages/shared/src/tools.ts` — adds `TOOL_NAMES.EXPERIENCE.REPLAY = 'experience_replay'`, adds the input schema entry, registers `TOOL_RISK_TIERS[TOOL_NAMES.EXPERIENCE.REPLAY] = 'P1'`, sets `requiresExplicitOptIn: true` on the schema entry.
 - `packages/shared/src/capabilities.ts` — adds `'experience_replay'` to `TabrixCapability` and `ALL_TABRIX_CAPABILITIES`.
 - `packages/shared/src/experience-replay.ts` — **new file**, all DTOs from §3 plus the `MAX_*` constants.
 - `app/native-server/src/mcp/experience-replay.ts` — **new file**, the parser + dispatcher + per-step engine.
 - `app/native-server/src/mcp/native-tool-handlers.ts` — registers `experience_replay` (note: this is a bridged tool, not a pure-native one — see §8.2).
 - `app/native-server/src/memory/experience/experience-aggregator.ts` — extend `EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS` to also exclude `experience_replay` parent rows; child rows pass through normally.
-- `app/native-server/src/memory/experience/experience-repository.ts` — _no schema change required_ if §10 question 2 is "defer cross-link to v2"; otherwise a guarded `ADD COLUMN parent_step_id` migration on `memory_steps`.
-- `app/native-server/src/memory/db/schema.ts` — same conditional.
+- `app/native-server/src/memory/experience/experience-repository.ts` — no replay-specific schema change required in v1.
+- `app/native-server/src/memory/db/schema.ts` — no replay-specific schema change required in v1.
 - `packages/shared/src/choose-context.ts` — extend `ContextStrategyName` with `'experience_replay'`. (B-018 v1.5 already lists this as a v2 candidate; this is its enabler.)
 - `app/native-server/src/mcp/choose-context.ts` — add a strategy branch that picks `experience_replay` when an experience hit _and_ the capability is enabled _and_ the row's step kinds are all replay-supported. Otherwise stay on `experience_reuse`.
 - `app/chrome-extension/entrypoints/background/tools/browser/click-verifier.ts` and `interaction.ts` — **no change required**. Replay ride the existing per-step verifier; the V23-01 lane-integrity guard already covers it.
 - `docs/PRODUCT_BACKLOG.md` — promote `B-EXP-REPLAY-V1` from "brief landed, awaiting Policy review" to "v1 implemented" and link the implementation PR.
 - `docs/TASK_ROADMAP.md` + `docs/TASK_ROADMAP_zh.md` — flip §3 Stage 3b "write-side MCP tools next" line to "write-side `experience_replay` v1 landed".
-- `docs/POLICY_PHASE_0.md` — add a paragraph documenting the first non-P3 use of `requiresExplicitOptIn` (if §10 question 1 picks the recommendation), or update the P3 list (if it picks Alternative A).
+- `docs/POLICY_PHASE_0.md` — add a paragraph documenting the first non-P3 use of `requiresExplicitOptIn`.
 
 No other files change.
 
-## 10. Open questions for the maintainer (block implementation until answered)
+## 10. Owner decisions locked (2026-04-23)
 
-These are the explicit decisions the brief refuses to make on its own. Each one is "owner-lane" by `AGENTS.md`:
+These are the decisions that were previously open and are now fixed for v1:
 
-1. **Risk tier.** Approve §4.1's recommendation (`P1` + `requiresExplicitOptIn` + new capability), or pick Alternative A / B / C from §4.2. Affects: `TOOL_RISK_TIERS` entry, `Phase0PolicyEnv` allowlist key, error payload code, the eventual implementation PR's "denied" test cases.
-2. **Cross-link parent step.** §7 — adopt the `parent_step_id` cross-link in v1, or defer to v2. Affects: whether the implementation PR carries a guarded `ADD COLUMN` migration.
-3. **Capability name spelling.** Confirm `'experience_replay'` (matches tool name, mirrors B-016 precedent of `'api_knowledge'` matching the feature name) vs. a more abstract `'autonomous_action_replay'`.
-4. **Substitution whitelist scope.** §5 — confirm `['queryText', 'targetLabel']` is the right minimal set, or expand based on data the maintainer has from real `experience_action_paths` rows.
-5. **`step_sequence` schema bump.** §5 introduces an optional `templateFields` array on each step. This is a Memory-layer schema decision under `AGENTS.md` rule "Schema-cite". Confirm we add it now (B-012 schema bump) vs. keep replay verbatim-only in v1 and add `templateFields` in v2.
-6. **`P3` allowlist key.** If the answer to #1 is "make it `P3` after all", confirm we want a _new_ env var (`TABRIX_POLICY_ALLOW_EXPERIENCE_REPLAY`) rather than overloading `TABRIX_POLICY_ALLOW_P3` — replay is structurally different from `chrome_javascript`, and bundling them in one env var loses that distinction.
-7. **Acceptance scenario count.** §8.3 lists 5 real-browser scenarios. Confirm this is enough for v1 GA, or pre-commit to additional ones (e.g. `T5-G-GH-REPLAY-ON-FRESH-PROFILE` for cold-start session state).
+1. **Risk tier.** Lock §4.1's recommendation: `P1` + `requiresExplicitOptIn: true` + new capability `'experience_replay'`.
+2. **Cross-link parent step.** Defer `parent_step_id` to v2. The v1 implementation carries no replay-specific `memory_steps` migration.
+3. **Capability name spelling.** Lock `'experience_replay'` to match the tool name and B-016's feature-level capability naming precedent.
+4. **Substitution whitelist scope.** Lock `['queryText', 'targetLabel']` as the v1 minimal set.
+5. **`step_sequence` schema bump.** Land the optional `templateFields` array in v1 so replay can parameterise the two approved placeholder types; replay is not verbatim-only in v1.
+6. **P3 allowlist question.** Closed as not applicable in v1 because replay is not `P3`.
+7. **Acceptance scenario count.** Keep the five real-browser scenarios in §8.3 as the feature-level minimum for v1. Repo-wide version comparison and benchmark gates remain governed by the separate release/benchmark rules.
 
 ## 11. Alignment with `AGENTS.md` §"Tiered Execution Model"
 
-This brief is the artifact §"Hand-off protocol" calls for: when the maintainer answers §10, the _next_ step is a fast-lane brief that points at this file, lists the files fast-lane may touch (the §9 set), the files fast-lane must not touch (anything outside §9), the acceptance criteria (§8 + the §10 answers), and the verification commands (§8.4). At that point fast-lane can run.
+This brief is now the artifact §"Hand-off protocol" calls for: the owner-lane answers are already recorded in §10, so the _next_ step is a fast-lane brief that points at this file, lists the files fast-lane may touch (the §9 set), the files fast-lane must not touch (anything outside §9), the acceptance criteria (§8 + §10), and the verification commands (§8.4). At that point fast-lane can run.
 
 Specifically, fast-lane is permitted to do under that brief:
 
-- Add a new `TOOL_NAMES` entry — **only because** §10 question 1 has been answered.
-- Add a new risk tier mapping — **only because** §10 question 1 has been answered.
-- Add `requiresExplicitOptIn: true` on a non-P3 tool — **only because** §10 question 1 has been answered (the schema already supports it; this is documenting the new precedent, not changing the type).
-- Add a new capability constant — **only because** §10 question 3 has been answered.
+- Add a new `TOOL_NAMES` entry — as locked in §10 item 1.
+- Add a new risk tier mapping — as locked in §10 item 1.
+- Add `requiresExplicitOptIn: true` on a non-P3 tool — as locked in §10 item 1.
+- Add a new capability constant — as locked in §10 item 3.
 
-If a fast-lane session encounters this brief without those answers in hand, it stops and surfaces the gap (per `AGENTS.md` rule 11 / "stop and ask").
+If a fast-lane session proposes to change any of the decisions already locked in §10, it stops and returns control to owner-lane instead of silently mutating the brief.
 
-## 12. Reviewer checklist (use after §10 answers come back)
+## 12. Reviewer checklist (implementation PR must satisfy)
 
-- [ ] §3 input/output DTO names match the answered risk tier (no `P3`-coded copy if the maintainer picked Alternative A).
-- [ ] §4.3 capability name matches the §10 answer; `ALL_TABRIX_CAPABILITIES` will hold exactly two entries after implementation.
-- [ ] §5 substitution whitelist matches the §10 answer; no key was added that the maintainer did not approve.
+- [ ] §3 input/output DTO names match the locked `P1` tier; no accidental `P3` semantics leaked into the surface.
+- [ ] §4.3 capability name matches the §10 decision; `ALL_TABRIX_CAPABILITIES` will hold exactly two entries after implementation.
+- [ ] §5 substitution whitelist matches the §10 decision; no key was added that the owner did not approve.
 - [ ] §6 failure-code enum is closed; the implementation PR's parser has a "default → unknown_failure_code" guard test.
 - [ ] §7 Memory write path produces exactly one `memory_sessions` row + N `memory_steps` rows; no bespoke `experience_replays` table.
 - [ ] §8 test matrix is honoured: unit + integration + private-repo acceptance, not "unit only".
