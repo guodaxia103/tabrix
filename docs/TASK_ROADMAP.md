@@ -183,6 +183,7 @@ The `V23-04` package extends `tabrix_choose_context` from a stateless v1 chooser
 - ✅ `B-005` — Experience schema seed (done).
 - ✅ `B-012` — Experience action-path aggregator (done).
 - ✅ `B-013` — `experience_suggest_plan` MCP tool (done; `experience_replay` / `experience_score_step` deferred — see backlog "Next" block under B-013).
+- 📝 `B-EXP-REPLAY-V1` — `experience_replay` v1 owner-lane brief landed (V23-05, no code), see `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`. Implementation gated on Policy review of 7 open questions (risk tier, capability name, substitution whitelist scope, etc.).
 
 ### Notes for incoming AI
 

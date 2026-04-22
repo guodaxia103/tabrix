@@ -183,6 +183,7 @@ v2.3.0 主线的 `V23-03` 包首次落地了 `read_page(render='markdown')` 与 
 - ✅ `B-005` —— Experience schema seed（done）。
 - ✅ `B-012` —— Experience action-path aggregator（done）。
 - ✅ `B-013` —— `experience_suggest_plan` MCP 工具（已落；`experience_replay` / `experience_score_step` 推迟，详见 backlog 中 B-013 的 "Next" 段）。
+- 📝 `B-EXP-REPLAY-V1` —— `experience_replay` v1 owner-lane brief 已落（V23-05，仅文档无代码），见 `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`。实现需先完成 Policy review 中的 7 个 owner-lane 决策（risk tier、capability 名称、变量替换白名单范围等）。
 
 ### 给接手 AI 的提示
 
