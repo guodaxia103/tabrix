@@ -151,7 +151,7 @@ All five backlog items landed on day one of the nominal sprint window. Outcome: 
     - `action_path_id TEXT PRIMARY KEY`
     - `page_role TEXT NOT NULL` (e.g. `github.repo.home`, `generic.form`)
     - `intent_signature TEXT NOT NULL` (normalised intent hash, populated by aggregator in B-012)
-    - `step_sequence TEXT NOT NULL` (JSON: ordered list of `{ toolName, argTemplate }`)
+    - `step_sequence TEXT NOT NULL` (JSON sequence; `B-012` v1 writes an ordered list of `{ toolName, status, historyRef }`)
     - `success_count INTEGER NOT NULL DEFAULT 0`
     - `failure_count INTEGER NOT NULL DEFAULT 0`
     - `last_used_at TEXT NULL` (ISO timestamp)

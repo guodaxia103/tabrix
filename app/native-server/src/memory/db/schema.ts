@@ -171,7 +171,7 @@ CREATE TABLE IF NOT EXISTS experience_action_paths (
   action_path_id    TEXT PRIMARY KEY,
   page_role         TEXT NOT NULL,
   intent_signature  TEXT NOT NULL,
-  step_sequence     TEXT NOT NULL,          -- JSON: ordered [{ toolName, argTemplate }]
+  step_sequence     TEXT NOT NULL,          -- JSON: ordered [{ toolName, status, historyRef }]
   success_count     INTEGER NOT NULL DEFAULT 0,
   failure_count     INTEGER NOT NULL DEFAULT 0,
   last_used_at      TEXT,
