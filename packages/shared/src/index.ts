@@ -6,4 +6,5 @@ export * from './bridge-ws';
 export * from './read-page-contract';
 export * from './memory';
 export * from './experience';
+export * from './capabilities';
 export * from './click';
