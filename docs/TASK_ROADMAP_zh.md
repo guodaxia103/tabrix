@@ -112,6 +112,14 @@ Wave 5 —— 远期，无具体时间。
 1. **稳定 `targetRef` 只对 ref-backed HVO 真正端到端可执行。** 每 tab 的快照 registry（`stable-target-ref-registry.ts`）只在 HVO 同时具备 `targetRef` 和 per-snapshot `ref` 时才记录映射（见 `read-page.ts` 里 `recordStableTargetRefSnapshot` 调用处的 `obj.targetRef && obj.ref` 守卫）。纯 synthetic / seed 派生的 HVO 即使被打了 `tgt_<10-hex>` 用于稳定性证据，click 桥对它的调用会 fail-closed（`unresolved_stable_target_ref`）—— 上游需要驱动交互时必须挑 ref-backed HVO。把可执行覆盖率扩开是 v2（Stage 3a item 6 / UI Map 消费切换）的事。
 2. **`historyRef` 当前只是轻量级快照相关性 ID，不是强内容锚（不等价于 `contentHash`）。** 扩展层会写 `historyRef = read://<host>/<pageRoleSlug>/<sha8>`（按内容 seed 派生），但 native server 的快照 post-processor 会无条件把 wire 层的值覆盖成 `memory://snapshot/<uuid>`（SQLite 快照行 ID）。所以上游 MCP 客户端看到的是 uuid，不是内容哈希。B-011 的稳定 `targetRef` **不**依赖 `historyRef` 来稳定 —— 它的派生纯粹是 `(pageRole | objectSubType | role | normalizedLabel | hrefPathBucket | ordinal)`。把 `historyRef` 升级成真正的 `contentHash` 等价物（让它能作为二级抗漂锚）是单独的 follow-up，不算在 B-011 v1 内。
 
+### V23-02 增量加固 —— 已落地（单测层守护）
+
+v2.3.0 主线的 `V23-02` 包在 B-011 v1 的派生公式之上加了一层显式的稳定性增量加固，**不重做** v1 的任何部分：
+
+- **`tests/stable-target-ref-stability.test.ts`** 把三种稳定性以命名场景方式钉死：（a）装饰性兄弟删除（两次快照之间一个无身份信息的 skeleton 行消失，存活的 HVO 仍拿同一个 `targetRef`）；（b）class / aria 样式抖动不能进入身份输入（builder 的输入形契约被钉住）；（c）reload 形态的重标注（每个 per-snapshot `ref` 都换新，身份元组不变 → 同一个 `targetRef`）。同时显式钉住"视觉相同的兄弟元素必须靠 ordinal 区分"这一契约。
+- 与 (c) 对应的真实浏览器跨 reload 场景是 `tabrix-private-tests` 仓库里的 `T5-F-GH-STABLE-TARGETREF-CROSS-RELOAD`（read_page → 拿 `targetRef` → reload tab → read_page → 断言 `targetRef` 相同 → click 桥经 registry 还原）。按 AGENTS 第 17 条该场景留在私库。
+- 没有动 `targetRef` 派生、per-tab snapshot registry、click 桥本身 —— V23-02 是对已经落地的 v1 表面所做的 regression-hardening 锁。
+
 ### 给接手 AI 的提示
 
 - **核心中立性不变式**由 `tests/read-page-understanding-core-neutrality.test.ts` 守护 —— `read-page-understanding-core.ts` 里不能出现 GitHub 字面量。弄挂这个测试 = 阻塞。
