@@ -6,6 +6,7 @@ export class TaskRepository {
   private readonly insertStmt;
   private readonly getStmt;
   private readonly updateStmt;
+  private readonly updateIntentStmt;
   private readonly listStmt;
   private readonly clearStmt;
 
@@ -20,6 +21,16 @@ export class TaskRepository {
     this.updateStmt = db.prepare(
       `UPDATE memory_tasks
          SET status = @status, updated_at = @updated_at
+       WHERE task_id = @task_id`,
+    );
+    // V24-01: re-tag a task's intent. Used by the `experience_replay`
+    // MCP handler so the wrapper-owned Memory session carries the
+    // `experience_replay:<actionPathId>` prefix the aggregator's
+    // special-case (brief §7) keys off. Narrow on purpose: only
+    // mutates `intent` + `updated_at`, never `task_type` / `title`.
+    this.updateIntentStmt = db.prepare(
+      `UPDATE memory_tasks
+         SET intent = @intent, updated_at = @updated_at
        WHERE task_id = @task_id`,
     );
     this.listStmt = db.prepare('SELECT * FROM memory_tasks ORDER BY created_at ASC');
@@ -44,6 +55,15 @@ export class TaskRepository {
 
   public updateStatus(taskId: string, status: Task['status'], updatedAt: string): void {
     this.updateStmt.run({ task_id: taskId, status, updated_at: updatedAt });
+  }
+
+  /**
+   * V24-01: update the task's `intent` column. The narrow shape (no
+   * status / type changes) keeps callers from accidentally widening
+   * this into a generic "patch task" surface.
+   */
+  public updateIntent(taskId: string, intent: string, updatedAt: string): void {
+    this.updateIntentStmt.run({ task_id: taskId, intent, updated_at: updatedAt });
   }
 
   public list(): Task[] {

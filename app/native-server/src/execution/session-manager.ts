@@ -491,6 +491,25 @@ export class SessionManager {
     this.dbHandle?.close();
   }
 
+  /**
+   * V24-01: re-tag a task's intent column. The `experience_replay`
+   * MCP handler uses this to mark its wrapper-owned session with the
+   * `experience_replay:<actionPathId>` prefix the aggregator's
+   * special-case (brief §7) keys off. Intentionally narrow: only
+   * intent + updated_at are mutated, never task status / title.
+   *
+   * No-op when the task is unknown OR persistence is disabled — the
+   * handler invokes this best-effort and never lets a tagging failure
+   * mask the real outcome.
+   */
+  public updateTaskIntent(taskId: string, intent: string): void {
+    const task = this.tasks.get(taskId);
+    if (!task) return;
+    task.intent = intent;
+    task.updatedAt = nowIso();
+    this.repos?.task.updateIntent(taskId, intent, task.updatedAt);
+  }
+
   private getStep(session: ExecutionSession, stepId: string): ExecutionStep {
     const step = session.steps.find((candidate) => candidate.stepId === stepId);
     if (!step) {

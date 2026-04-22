@@ -3,8 +3,14 @@ import { TOOL_NAMES } from '@tabrix/shared';
 import { getNativeToolHandler } from './native-tool-handlers';
 import type { NativeToolHandler, NativeToolHandlerDeps } from './native-tool-handlers';
 import type { ExperienceQueryService } from '../memory/experience';
+import type { ExperienceActionPathRow } from '../memory/experience/experience-repository';
 import type { KnowledgeApiRepository } from '../memory/knowledge/knowledge-api-repository';
 import type { CapabilityEnv } from '../policy/capabilities';
+import type {
+  DispatchBridgedFn,
+  ReplayStepRecorder,
+  UpdateTaskIntentFn,
+} from './experience-replay';
 
 function callTextPayload(result: CallToolResult): any {
   const text = String(result.content?.[0]?.text ?? '');
@@ -18,6 +24,9 @@ function makeDeps(
     experience: ExperienceQueryService | null;
     knowledgeApi: KnowledgeApiRepository | null;
     capabilityEnv: CapabilityEnv;
+    dispatchBridged: DispatchBridgedFn;
+    recorder: ReplayStepRecorder;
+    updateTaskIntent: UpdateTaskIntentFn;
   }> = {},
 ): NativeToolHandlerDeps {
   return {
@@ -36,6 +45,9 @@ function makeDeps(
       },
     } as unknown as NativeToolHandlerDeps['sessionManager'],
     capabilityEnv: overrides.capabilityEnv,
+    dispatchBridged: overrides.dispatchBridged,
+    recorder: overrides.recorder,
+    updateTaskIntent: overrides.updateTaskIntent,
   };
 }
 
@@ -248,5 +260,139 @@ describe('native-tool-handlers · tabrix_choose_context (B-018 v1)', () => {
     const disabledBody = callTextPayload(disabledResult);
     expect(disabledBody.strategy).toBe('read_page_required');
     expect(listBySite).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// V24-01: experience_replay handler dispatch wiring
+// ---------------------------------------------------------------------------
+
+describe('native-tool-handlers · experience_replay (V24-01)', () => {
+  const VALID_ID = 'action_path_' + 'a'.repeat(64);
+
+  function getReplayHandler(): NativeToolHandler {
+    const handler = getNativeToolHandler(TOOL_NAMES.EXPERIENCE.REPLAY);
+    if (!handler) throw new Error('experience_replay handler missing');
+    return handler;
+  }
+
+  function buildReplayableRow(): ExperienceActionPathRow {
+    return {
+      actionPathId: VALID_ID,
+      pageRole: 'issues_list',
+      intentSignature: 'open repo issues tab',
+      stepSequence: [
+        {
+          toolName: 'chrome_click_element',
+          status: 'ok',
+          historyRef: 'h1',
+          args: { selector: '.issues-tab' },
+        },
+      ],
+      successCount: 1,
+      failureCount: 0,
+      lastUsedAt: '2026-04-22T00:00:00.000Z',
+      createdAt: '2026-04-20T00:00:00.000Z',
+      updatedAt: '2026-04-22T00:00:00.000Z',
+    };
+  }
+
+  function makeRecorderSpy(): ReplayStepRecorder & {
+    readonly starts: number;
+    readonly completes: number;
+    readonly fails: number;
+  } {
+    const state = { starts: 0, completes: 0, fails: 0 };
+    return {
+      startStep: () => {
+        state.starts += 1;
+        return `step-${state.starts}`;
+      },
+      completeStep: () => {
+        state.completes += 1;
+      },
+      failStep: () => {
+        state.fails += 1;
+      },
+      get starts() {
+        return state.starts;
+      },
+      get completes() {
+        return state.completes;
+      },
+      get fails() {
+        return state.fails;
+      },
+    };
+  }
+
+  it('registers under TOOL_NAMES.EXPERIENCE.REPLAY', () => {
+    expect(getNativeToolHandler(TOOL_NAMES.EXPERIENCE.REPLAY)).toBeDefined();
+  });
+
+  it('returns denied/capability_off when capability env is empty (default-deny)', async () => {
+    const handler = getReplayHandler();
+    const result = await handler({ actionPathId: VALID_ID }, makeDeps());
+    expect(result.isError).toBe(true);
+    const body = callTextPayload(result);
+    expect(body.status).toBe('denied');
+    expect(body.error?.code).toBe('capability_off');
+  });
+
+  it('returns failed-precondition/unknown_action_path when persistence is off', async () => {
+    const handler = getReplayHandler();
+    const result = await handler(
+      { actionPathId: VALID_ID },
+      makeDeps({
+        mode: 'off',
+        enabled: false,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+      }),
+    );
+    expect(result.isError).toBe(true);
+    const body = callTextPayload(result);
+    expect(body.status).toBe('failed-precondition');
+    expect(body.error?.code).toBe('unknown_action_path');
+  });
+
+  it('end-to-end: replays a single click step with capability + bridge wired up', async () => {
+    const handler = getReplayHandler();
+    const fakeExperience = {
+      findActionPathById: jest.fn().mockReturnValue(buildReplayableRow()),
+      suggestActionPaths: jest.fn(),
+    } as unknown as ExperienceQueryService;
+    const recorder = makeRecorderSpy();
+    const dispatchBridged: DispatchBridgedFn = jest.fn(async () => ({
+      content: [{ type: 'text' as const, text: '{"ok":true,"historyRef":"h_live_1"}' }],
+      isError: false,
+    }));
+    const updateTaskIntent = jest.fn();
+
+    const result = await handler(
+      { actionPathId: VALID_ID },
+      makeDeps({
+        experience: fakeExperience,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+        recorder,
+        dispatchBridged,
+        updateTaskIntent,
+      }),
+    );
+
+    expect(result.isError).toBe(false);
+    const body = callTextPayload(result);
+    expect(body.status).toBe('ok');
+    expect(body.evidenceRefs).toHaveLength(1);
+    expect(body.evidenceRefs[0]).toMatchObject({
+      stepIndex: 0,
+      toolName: 'chrome_click_element',
+      status: 'ok',
+      historyRef: 'h_live_1',
+    });
+    expect(dispatchBridged).toHaveBeenCalledTimes(1);
+    expect(recorder.starts).toBe(1);
+    expect(recorder.completes).toBe(1);
+    expect(recorder.fails).toBe(0);
+    expect(updateTaskIntent).toHaveBeenCalledWith(`experience_replay:${VALID_ID}`);
   });
 });

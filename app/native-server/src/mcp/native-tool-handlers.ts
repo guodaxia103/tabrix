@@ -31,6 +31,12 @@ import {
 import { runTabrixChooseContext, runTabrixChooseContextRecordOutcome } from './choose-context';
 import type { CapabilityEnv } from '../policy/capabilities';
 import type { SessionManager } from '../execution/session-manager';
+import {
+  experienceReplayNativeHandler,
+  type DispatchBridgedFn,
+  type ReplayStepRecorder,
+  type UpdateTaskIntentFn,
+} from './experience-replay';
 
 export interface NativeToolHandlerDeps {
   sessionManager: Pick<
@@ -43,6 +49,26 @@ export interface NativeToolHandlerDeps {
    * "no capabilities enabled" — i.e. the safest default.
    */
   capabilityEnv?: CapabilityEnv;
+  /**
+   * V24-01: bridge into the existing extension-side dispatch path
+   * (`invokeExtensionCommand('call_tool', …)`). Required at runtime
+   * for `experience_replay`; other handlers ignore it. Optional so
+   * pre-existing handler tests (and the SUGGEST_PLAN / CONTEXT
+   * handlers themselves) stay source-compatible.
+   */
+  dispatchBridged?: DispatchBridgedFn;
+  /**
+   * V24-01: per-step `memory_steps` recorder bound to the wrapper's
+   * current session. Required for `experience_replay`.
+   */
+  recorder?: ReplayStepRecorder;
+  /**
+   * V24-01: callback to re-tag the wrapper-owned session's
+   * `task.intent` with the `experience_replay:<id>` prefix. Required
+   * for `experience_replay` so the aggregator's brief §7 special-case
+   * triggers.
+   */
+  updateTaskIntent?: UpdateTaskIntentFn;
 }
 
 export type NativeToolHandler = (
@@ -126,8 +152,33 @@ const handleTabrixChooseContextRecordOutcome: NativeToolHandler = (args, deps) =
   return jsonResult(result, result.status === 'invalid_input');
 };
 
+/**
+ * V24-01 adapter. Reshapes the experience-replay handler's typed deps
+ * (`ExperienceReplayHandlerDeps`) into the generic
+ * {@link NativeToolHandlerDeps} contract so it slots into the
+ * existing dispatch table without leaking replay-specific types
+ * upward. The replay handler itself uses a structural cast back to
+ * its real deps shape.
+ */
+const handleExperienceReplayBridged: NativeToolHandler = async (args, deps) => {
+  // The replay handler reaches into `deps` via a structural cast and
+  // pulls out `experience` / `dispatchBridged` / `recorder` /
+  // `updateTaskIntent` / `capabilityEnv` / `persistenceMode` itself.
+  // We just need to supply `experience` (the read-only Experience
+  // façade) and the persistence mode here; the wrapper
+  // (`register-tools.ts`) supplies the rest.
+  const persistenceMode = deps.sessionManager.getPersistenceStatus().mode;
+  const reshaped = {
+    ...deps,
+    experience: deps.sessionManager.experience,
+    persistenceMode,
+  } as unknown as Parameters<typeof experienceReplayNativeHandler>[1];
+  return await experienceReplayNativeHandler(args, reshaped);
+};
+
 const NATIVE_HANDLERS: ReadonlyMap<string, NativeToolHandler> = new Map([
   [TOOL_NAMES.EXPERIENCE.SUGGEST_PLAN, handleExperienceSuggestPlan],
+  [TOOL_NAMES.EXPERIENCE.REPLAY, handleExperienceReplayBridged],
   [TOOL_NAMES.CONTEXT.CHOOSE, handleTabrixChooseContext],
   [TOOL_NAMES.CONTEXT.RECORD_OUTCOME, handleTabrixChooseContextRecordOutcome],
 ]);

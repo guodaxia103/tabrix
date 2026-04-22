@@ -6,9 +6,13 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import nativeMessagingHostInstance from '../native-messaging-host';
 import {
+  CAPABILITY_GATED_TOOLS,
   NativeMessageType,
+  TOOL_NAMES,
   TOOL_SCHEMAS,
+  getRequiredCapability,
   getToolRiskTier,
+  isCapabilityGatedTool,
   isExplicitOptInTool,
 } from '@tabrix/shared';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -17,10 +21,16 @@ import {
   isToolAllowedByPolicy,
   resolveOptInAllowlist,
 } from '../policy/phase0-opt-in';
+import { isCapabilityEnabled, type CapabilityEnv } from '../policy/capabilities';
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { runPostProcessor } from './tool-post-processors';
 import { getNativeToolHandler } from './native-tool-handlers';
+import type {
+  DispatchBridgedFn,
+  ReplayStepRecorder,
+  SupportedReplayToolName,
+} from './experience-replay';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -80,6 +90,14 @@ function isToolAllowed(toolName: string, tools: Tool[]): boolean {
 /**
  * Phase 0 Policy view of the tools list. Removes P3 opt-in tools that have not been opted-in
  * and injects the Tabrix-private `riskTier` annotation so clients that choose to render it can.
+ *
+ * V24-01: also injects `requiresExplicitOptIn: true` for tools listed
+ * in {@link CAPABILITY_GATED_TOOLS} (e.g. `experience_replay`), even
+ * though they are NOT in `P3_EXPLICIT_OPT_IN_TOOLS`. This is the
+ * first non-P3 use of that annotation; the actual filtering happens
+ * in {@link filterToolsByCapability} below, downstream of this
+ * function.
+ *
  * Never mutates the input tool objects.
  */
 function filterToolsByPolicy(tools: Tool[]): Tool[] {
@@ -90,18 +108,168 @@ function filterToolsByPolicy(tools: Tool[]): Tool[] {
       continue;
     }
     const riskTier = getToolRiskTier(tool.name);
-    if (!riskTier) {
+    const requiresOptIn = isExplicitOptInTool(tool.name) || isCapabilityGatedTool(tool.name);
+    if (!riskTier && !requiresOptIn) {
       result.push(tool);
       continue;
     }
     const annotations = {
       ...(tool.annotations ?? {}),
-      riskTier,
-      ...(isExplicitOptInTool(tool.name) ? { requiresExplicitOptIn: true } : {}),
+      ...(riskTier ? { riskTier } : {}),
+      ...(requiresOptIn ? { requiresExplicitOptIn: true } : {}),
     } as Tool['annotations'];
     result.push({ ...tool, annotations });
   }
   return result;
+}
+
+/**
+ * V24-01 capability gate. Drops tools listed in
+ * {@link CAPABILITY_GATED_TOOLS} when the matching capability is not
+ * present in the active capability allowlist (`TABRIX_POLICY_CAPABILITIES`
+ * — see {@link isCapabilityEnabled}).
+ *
+ * This is orthogonal to the P3 opt-in path: a tool can be capability-
+ * gated without being P3 (e.g. `experience_replay` is P1 + capability
+ * `experience_replay`). The gate runs AFTER `filterToolsByPolicy` so
+ * the annotation injection above is always honoured for clients that
+ * render the gate explanation.
+ *
+ * Never mutates the input tool objects.
+ */
+function filterToolsByCapability(tools: Tool[], env: CapabilityEnv): Tool[] {
+  if (CAPABILITY_GATED_TOOLS.size === 0) return tools;
+  return tools.filter((tool) => {
+    const cap = getRequiredCapability(tool.name);
+    if (!cap) return true;
+    return isCapabilityEnabled(cap, env);
+  });
+}
+
+function getCurrentCapabilityEnv(): CapabilityEnv {
+  return { TABRIX_POLICY_CAPABILITIES: process.env.TABRIX_POLICY_CAPABILITIES };
+}
+
+/**
+ * V24-01 production wiring for the `experience_replay` handler.
+ * Binds:
+ *   - `dispatchBridged` to the existing `invokeExtensionCommand`
+ *     round-trip (with the same recovery-aware wrapper used for
+ *     ordinary tool calls).
+ *   - `recorder` to `sessionManager.startStep` / `completeStep`
+ *     against the wrapper-owned session, so each replayed sub-step
+ *     gets its own `memory_steps` row carrying the underlying
+ *     tool name (brief §7).
+ *   - `updateTaskIntent` to `sessionManager.updateTaskIntent` so the
+ *     wrapper-owned session is re-tagged with
+ *     `experience_replay:<actionPathId>`.
+ *
+ * Lookup of the wrapper-owned session/task happens inside the
+ * recorder closure (instead of capturing the live `ExecutionSession`
+ * object) so the production code path stays compatible with future
+ * persistence-mode changes (`'off'` does not produce a real session,
+ * but the handler short-circuits before we reach that branch).
+ */
+function buildReplayDeps(wrapperSessionId: string): {
+  dispatchBridged: DispatchBridgedFn;
+  recorder: ReplayStepRecorder;
+  updateTaskIntent: (intent: string) => void;
+} {
+  const dispatchBridged: DispatchBridgedFn = async (toolName, toolArgs) => {
+    const { response, bridgeFailure } = await callWithBridgeRecovery(
+      () => invokeExtensionCommand('call_tool', { name: toolName, args: toolArgs }, 120000),
+      `tool:${toolName}`,
+    );
+    if (response?.status === 'success') {
+      const normalized = normalizeToolCallResult(toolName, response.data);
+      // Pass through the underlying tool's CallToolResult shape so
+      // the ReplayEngine can extract `historyRef` from its content.
+      return (
+        response.data ?? {
+          content: [{ type: 'text' as const, text: normalized.stepSummary ?? '' }],
+          isError: false,
+        }
+      );
+    }
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: bridgeFailure
+            ? JSON.stringify(bridgeFailure)
+            : JSON.stringify({
+                code: 'TABRIX_TOOL_CALL_FAILED',
+                message: String(response?.error ?? 'Unknown tool error'),
+              }),
+        },
+      ],
+      isError: true,
+    };
+  };
+
+  const recorder: ReplayStepRecorder = {
+    startStep(input) {
+      const child = sessionManager.startStep({
+        sessionId: wrapperSessionId,
+        toolName: input.toolName,
+        stepType: 'tool_call',
+        inputSummary: input.inputSummary,
+      });
+      return child.stepId;
+    },
+    completeStep(stepId, update) {
+      sessionManager.completeStep(wrapperSessionId, stepId, {
+        status: 'completed',
+        resultSummary: update.resultSummary,
+        artifactRefs: update.artifactRefs,
+      });
+    },
+    failStep(stepId, update) {
+      sessionManager.completeStep(wrapperSessionId, stepId, {
+        status: 'failed',
+        errorCode: update.failureCode,
+        errorSummary: update.errorSummary,
+      });
+    },
+  };
+
+  const updateTaskIntent = (intent: string) => {
+    // Resolve the live wrapper session → its taskId and forward to
+    // the SessionManager. Wrapped in try/catch because tagging is
+    // best-effort: a missing session must never mask the real
+    // experience_replay outcome.
+    try {
+      const wrapperSession = sessionManager.getSession(wrapperSessionId);
+      sessionManager.updateTaskIntent(wrapperSession.taskId, intent);
+    } catch {
+      // Session no longer present (e.g. test fixture reset between
+      // invocation and tagging) — ignore.
+    }
+  };
+
+  return { dispatchBridged, recorder, updateTaskIntent };
+}
+
+function createCapabilityDeniedResult(toolName: string, capability: string): CallToolResult {
+  // Mirrors the experience_replay handler's `denied / capability_off`
+  // payload so callers do not have to branch on whether the gate
+  // fired pre- or post-handler.
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify({
+          status: 'denied',
+          evidenceRefs: [],
+          error: {
+            code: 'capability_off',
+            message: `Tool "${toolName}" requires the '${capability}' capability (set TABRIX_POLICY_CAPABILITIES=${capability} or =all)`,
+          },
+        }),
+      },
+    ],
+    isError: true,
+  };
 }
 
 function createPolicyDeniedResult(toolName: string): CallToolResult {
@@ -890,7 +1058,8 @@ export const setupTools = (server: McpServer) => {
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const dynamicTools = await listDynamicFlowTools();
     const byEnv = filterToolsByEnvironment([...TOOL_SCHEMAS, ...dynamicTools]);
-    return { tools: filterToolsByPolicy(byEnv) };
+    const byPolicy = filterToolsByPolicy(byEnv);
+    return { tools: filterToolsByCapability(byPolicy, getCurrentCapabilityEnv()) };
   });
 
   // Call tool handler
@@ -955,18 +1124,46 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       return result;
     }
 
+    // V24-01 capability gate (defense-in-depth — `filterToolsByCapability`
+    // already removed disabled tools from `listTools`, but a curious
+    // client may still try to call one directly). Returns the same
+    // `denied / capability_off` payload shape the experience_replay
+    // handler would produce, so callers branch on `error.code` not on
+    // the source of the denial.
+    const requiredCapability = getRequiredCapability(name);
+    if (requiredCapability && !isCapabilityEnabled(requiredCapability, getCurrentCapabilityEnv())) {
+      const result = createCapabilityDeniedResult(name, requiredCapability);
+      sessionManager.completeStep(session.sessionId, step.stepId, {
+        status: 'failed',
+        errorCode: 'capability_off',
+        errorSummary: `Tool "${name}" denied — capability '${requiredCapability}' is not enabled`,
+        resultSummary: `Tool ${name} denied by capability gate`,
+      });
+      sessionManager.finishSession(session.sessionId, {
+        status: 'failed',
+        summary: `Tool ${name} denied by capability gate`,
+      });
+      return result;
+    }
+
     // Native-handled tools short-circuit the extension round-trip — see
     // `mcp/native-tool-handlers.ts`. Currently Experience read-side
-    // queries (B-013) and the context selector (B-018 v1) qualify;
-    // everything else still goes through the Chrome extension via
+    // queries (B-013), the context selector (B-018 v1), and the V24-01
+    // `experience_replay` write-side tool qualify; everything else
+    // still goes through the Chrome extension via
     // `invokeExtensionCommand`.
     const nativeHandler = getNativeToolHandler(name);
     if (nativeHandler) {
+      // V24-01: only the experience_replay handler needs the bridge
+      // adapter + per-step recorder + intent re-tagger. The other
+      // native handlers ignore them, but always passing them keeps
+      // the deps shape uniform.
+      const replayDeps =
+        name === TOOL_NAMES.EXPERIENCE.REPLAY ? buildReplayDeps(session.sessionId) : {};
       const nativeResult = await nativeHandler(args, {
         sessionManager,
-        capabilityEnv: {
-          TABRIX_POLICY_CAPABILITIES: process.env.TABRIX_POLICY_CAPABILITIES,
-        },
+        capabilityEnv: getCurrentCapabilityEnv(),
+        ...replayDeps,
       });
       if (nativeResult.isError) {
         let errorSummary = `Native tool ${name} failed`;
