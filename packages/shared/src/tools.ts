@@ -76,6 +76,14 @@ export const TOOL_NAMES = {
   EXPERIENCE: {
     SUGGEST_PLAN: 'experience_suggest_plan',
   },
+  /**
+   * MKEP context selector (Stage 3h, B-018 v1 minimal slice).
+   * Native-handled. See `app/native-server/src/mcp/choose-context.ts`
+   * and `docs/B_018_CONTEXT_SELECTOR_V1.md` for the SoT.
+   */
+  CONTEXT: {
+    CHOOSE: 'tabrix_choose_context',
+  },
 };
 
 export const TOOL_SCHEMAS: Tool[] = [
@@ -1796,6 +1804,45 @@ export const TOOL_SCHEMAS: Tool[] = [
       required: ['intent'],
     },
   },
+  {
+    name: TOOL_NAMES.CONTEXT.CHOOSE,
+    description:
+      'Tabrix MKEP context selector (v1 minimal slice, B-018). Given an `intent` (free text) and optional `url` / `pageRole` / `siteId`, deterministically pick which existing native asset to use as context: `experience_reuse` (a previously-successful action path), `knowledge_light` (the captured site API catalog as shape evidence — Tabrix CANNOT call those endpoints in v1), or `read_page_required` (fallback: caller should issue `chrome_read_page`). Pure SELECT against local SQLite. GitHub-first; non-GitHub URLs always resolve to `read_page_required`. See `docs/B_018_CONTEXT_SELECTOR_V1.md` for the contract and the v2 deferrals.',
+    annotations: {
+      readOnlyHint: true,
+      idempotentHint: true,
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        intent: {
+          type: 'string',
+          description:
+            'Caller intent in natural language. Trimmed and matched on the same normalized signature as `experience_suggest_plan`.intent so a hit there is also a hit here. Empty string is rejected.',
+          minLength: 1,
+          maxLength: 1024,
+        },
+        url: {
+          type: 'string',
+          description:
+            'Optional URL of the page being reasoned about. Used only to derive a site family. Unparseable values are silently ignored (not an error) so a templating bug upstream cannot break selection.',
+        },
+        pageRole: {
+          type: 'string',
+          description:
+            'Optional `pageRole` filter (e.g. `repo_home`, `issues_list`). Forwarded to the Experience lookup verbatim.',
+          maxLength: 128,
+        },
+        siteId: {
+          type: 'string',
+          description:
+            'Optional explicit site-family override. v1 only honours `"github"`; other values are ignored (URL-derived family is used instead).',
+          enum: ['github'],
+        },
+      },
+      required: ['intent'],
+    },
+  },
 ];
 
 /**
@@ -1862,6 +1909,9 @@ export const TOOL_RISK_TIERS: Readonly<Record<string, TabrixRiskTier>> = Object.
 
   // ---- MKEP Experience layer (read-only SELECT against native SQLite) ----
   [TOOL_NAMES.EXPERIENCE.SUGGEST_PLAN]: 'P0',
+
+  // ---- MKEP Context selector (read-only SELECT against native SQLite) ----
+  [TOOL_NAMES.CONTEXT.CHOOSE]: 'P0',
 });
 
 /**

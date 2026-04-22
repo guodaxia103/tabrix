@@ -28,10 +28,18 @@ import {
   buildSuggestPlanResult,
   parseExperienceSuggestPlanInput,
 } from '../memory/experience';
+import { runTabrixChooseContext } from './choose-context';
+import type { CapabilityEnv } from '../policy/capabilities';
 import type { SessionManager } from '../execution/session-manager';
 
 export interface NativeToolHandlerDeps {
-  sessionManager: Pick<SessionManager, 'experience' | 'getPersistenceStatus'>;
+  sessionManager: Pick<SessionManager, 'experience' | 'getPersistenceStatus' | 'knowledgeApi'>;
+  /**
+   * Capability allowlist source. Optional so existing handler tests
+   * (which only need `sessionManager`) keep compiling; missing means
+   * "no capabilities enabled" — i.e. the safest default.
+   */
+  capabilityEnv?: CapabilityEnv;
 }
 
 export type NativeToolHandler = (
@@ -96,8 +104,18 @@ const handleExperienceSuggestPlan: NativeToolHandler = (args, deps) => {
   return jsonResult(buildSuggestPlanResult(rows, mode), false);
 };
 
+const handleTabrixChooseContext: NativeToolHandler = (args, deps) => {
+  const result = runTabrixChooseContext(args, {
+    experience: deps.sessionManager.experience,
+    knowledgeApi: deps.sessionManager.knowledgeApi,
+    capabilityEnv: deps.capabilityEnv ?? {},
+  });
+  return jsonResult(result, result.status === 'invalid_input');
+};
+
 const NATIVE_HANDLERS: ReadonlyMap<string, NativeToolHandler> = new Map([
   [TOOL_NAMES.EXPERIENCE.SUGGEST_PLAN, handleExperienceSuggestPlan],
+  [TOOL_NAMES.CONTEXT.CHOOSE, handleTabrixChooseContext],
 ]);
 
 export function getNativeToolHandler(toolName: string): NativeToolHandler | undefined {
@@ -115,5 +133,10 @@ export async function invokeNativeToolHandler(
 ): Promise<CallToolResult | undefined> {
   const handler = getNativeToolHandler(toolName);
   if (!handler) return undefined;
-  return await handler(args, { sessionManager: defaultSessionManager });
+  return await handler(args, {
+    sessionManager: defaultSessionManager,
+    capabilityEnv: {
+      TABRIX_POLICY_CAPABILITIES: process.env.TABRIX_POLICY_CAPABILITIES,
+    },
+  });
 }

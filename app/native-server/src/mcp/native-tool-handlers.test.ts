@@ -3,6 +3,8 @@ import { TOOL_NAMES } from '@tabrix/shared';
 import { getNativeToolHandler } from './native-tool-handlers';
 import type { NativeToolHandler, NativeToolHandlerDeps } from './native-tool-handlers';
 import type { ExperienceQueryService } from '../memory/experience';
+import type { KnowledgeApiRepository } from '../memory/knowledge/knowledge-api-repository';
+import type { CapabilityEnv } from '../policy/capabilities';
 
 function callTextPayload(result: CallToolResult): any {
   const text = String(result.content?.[0]?.text ?? '');
@@ -14,12 +16,17 @@ function makeDeps(
     mode: 'disk' | 'memory' | 'off';
     enabled: boolean;
     experience: ExperienceQueryService | null;
+    knowledgeApi: KnowledgeApiRepository | null;
+    capabilityEnv: CapabilityEnv;
   }> = {},
 ): NativeToolHandlerDeps {
   return {
     sessionManager: {
       get experience() {
         return overrides.experience ?? null;
+      },
+      get knowledgeApi() {
+        return overrides.knowledgeApi ?? null;
       },
       getPersistenceStatus() {
         return {
@@ -28,6 +35,7 @@ function makeDeps(
         };
       },
     } as unknown as NativeToolHandlerDeps['sessionManager'],
+    capabilityEnv: overrides.capabilityEnv,
   };
 }
 
@@ -120,5 +128,125 @@ describe('native-tool-handlers · experience_suggest_plan', () => {
       plans: [],
       persistenceMode: 'memory',
     });
+  });
+});
+
+describe('native-tool-handlers · tabrix_choose_context (B-018 v1)', () => {
+  function getChooseHandler(): NativeToolHandler {
+    const handler = getNativeToolHandler(TOOL_NAMES.CONTEXT.CHOOSE);
+    if (!handler) throw new Error('tabrix_choose_context handler missing');
+    return handler;
+  }
+
+  it('registers under TOOL_NAMES.CONTEXT.CHOOSE', () => {
+    expect(getNativeToolHandler(TOOL_NAMES.CONTEXT.CHOOSE)).toBeDefined();
+  });
+
+  it('returns invalid_input with isError=true when intent is missing', async () => {
+    const handler = getChooseHandler();
+    const result = await handler({}, makeDeps());
+    expect(result.isError).toBe(true);
+    expect(callTextPayload(result)).toMatchObject({
+      status: 'invalid_input',
+      error: { code: 'TABRIX_CHOOSE_CONTEXT_BAD_INPUT' },
+    });
+  });
+
+  it('falls back to read_page_required when nothing is wired', async () => {
+    const handler = getChooseHandler();
+    const result = await handler({ intent: 'open issues' }, makeDeps());
+    expect(result.isError).toBe(false);
+    expect(callTextPayload(result)).toMatchObject({
+      status: 'ok',
+      strategy: 'read_page_required',
+      artifacts: [],
+    });
+  });
+
+  it('routes to experience_reuse when the experience query returns a winning plan', async () => {
+    const handler = getChooseHandler();
+    const fakeExperience = {
+      suggestActionPaths: jest.fn().mockReturnValue([
+        {
+          actionPathId: 'ap-experience',
+          pageRole: 'repo_home',
+          intentSignature: 'open issues',
+          stepSequence: [],
+          successCount: 8,
+          failureCount: 2,
+          createdAt: '2026-04-22T00:00:00.000Z',
+          updatedAt: '2026-04-22T00:00:00.000Z',
+        },
+      ]),
+    } as unknown as ExperienceQueryService;
+
+    const result = await handler(
+      { intent: 'open issues', pageRole: 'repo_home' },
+      makeDeps({ experience: fakeExperience }),
+    );
+    expect(result.isError).toBe(false);
+    const body = callTextPayload(result);
+    expect(body.strategy).toBe('experience_reuse');
+    expect(body.fallbackStrategy).toBe('read_page_required');
+    expect(body.artifacts[0]).toMatchObject({ kind: 'experience', ref: 'ap-experience' });
+  });
+
+  it('routes to knowledge_light only when capability is enabled and repo non-empty', async () => {
+    const handler = getChooseHandler();
+    const fakeExperience = {
+      suggestActionPaths: jest.fn().mockReturnValue([]),
+    } as unknown as ExperienceQueryService;
+    const listBySite = jest.fn().mockReturnValue([
+      {
+        endpointId: 'ep-1',
+        site: 'api.github.com',
+        family: 'github',
+        method: 'GET',
+        urlPattern: '/repos/:owner/:repo/issues',
+        endpointSignature: 'GET api.github.com/repos/:owner/:repo/issues',
+        semanticTag: null,
+        statusClass: '2xx',
+        requestSummary: {
+          headerNames: [],
+          queryKeys: [],
+          bodyKeys: [],
+          hasAuth: false,
+          hasCookie: false,
+        },
+        responseSummary: { shape: 'array<object>', truncated: false },
+        sourceSessionId: null,
+        sourceStepId: null,
+        sourceHistoryRef: null,
+        sampleCount: 1,
+        firstSeenAt: '2026-04-22T00:00:00.000Z',
+        lastSeenAt: '2026-04-22T00:00:00.000Z',
+      },
+    ]);
+    const knowledgeApi = { listBySite } as unknown as KnowledgeApiRepository;
+
+    const enabledResult = await handler(
+      { intent: 'open issues', url: 'https://github.com/octocat/hello' },
+      makeDeps({
+        experience: fakeExperience,
+        knowledgeApi,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'api_knowledge' },
+      }),
+    );
+    const enabledBody = callTextPayload(enabledResult);
+    expect(enabledBody.strategy).toBe('knowledge_light');
+    expect(listBySite).toHaveBeenCalledTimes(1);
+
+    listBySite.mockClear();
+    const disabledResult = await handler(
+      { intent: 'open issues', url: 'https://github.com/octocat/hello' },
+      makeDeps({
+        experience: fakeExperience,
+        knowledgeApi,
+        // capabilityEnv left undefined → must be treated as default-deny.
+      }),
+    );
+    const disabledBody = callTextPayload(disabledResult);
+    expect(disabledBody.strategy).toBe('read_page_required');
+    expect(listBySite).not.toHaveBeenCalled();
   });
 });

@@ -8,3 +8,4 @@ export * from './memory';
 export * from './experience';
 export * from './capabilities';
 export * from './click';
+export * from './choose-context';

@@ -956,12 +956,18 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     }
 
     // Native-handled tools short-circuit the extension round-trip — see
-    // `mcp/native-tool-handlers.ts`. Currently only Experience read-side
-    // queries (B-013) qualify; everything else still goes through the
-    // Chrome extension via `invokeExtensionCommand`.
+    // `mcp/native-tool-handlers.ts`. Currently Experience read-side
+    // queries (B-013) and the context selector (B-018 v1) qualify;
+    // everything else still goes through the Chrome extension via
+    // `invokeExtensionCommand`.
     const nativeHandler = getNativeToolHandler(name);
     if (nativeHandler) {
-      const nativeResult = await nativeHandler(args, { sessionManager });
+      const nativeResult = await nativeHandler(args, {
+        sessionManager,
+        capabilityEnv: {
+          TABRIX_POLICY_CAPABILITIES: process.env.TABRIX_POLICY_CAPABILITIES,
+        },
+      });
       if (nativeResult.isError) {
         let errorSummary = `Native tool ${name} failed`;
         const firstContent = nativeResult.content?.[0];
