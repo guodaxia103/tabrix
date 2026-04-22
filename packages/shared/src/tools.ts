@@ -1,4 +1,5 @@
 import { type Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { TabrixCapability } from './capabilities';
 
 /**
  * Tabrix MKEP Policy — risk classification for MCP tools.
@@ -75,6 +76,14 @@ export const TOOL_NAMES = {
    */
   EXPERIENCE: {
     SUGGEST_PLAN: 'experience_suggest_plan',
+    /**
+     * V24-01: write/execute path. Replays a NAMED `actionPathId`
+     * previously recorded in `experience_action_paths`. Bridged tool
+     * — calls `chrome_click_element` / `chrome_fill_or_select` through
+     * the existing per-step Policy + verifier dispatch. Capability-gated
+     * by `experience_replay`. SoT: `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`.
+     */
+    REPLAY: 'experience_replay',
   },
   /**
    * MKEP context selector (Stage 3h, B-018 v1 minimal slice).
@@ -1817,6 +1826,68 @@ export const TOOL_SCHEMAS: Tool[] = [
     },
   },
   {
+    name: TOOL_NAMES.EXPERIENCE.REPLAY,
+    description:
+      'Tabrix MKEP Experience write/execute (V24-01): replay a NAMED `actionPathId` previously surfaced by `experience_suggest_plan`. Re-runs the recorded `step_sequence` step-by-step against the named tab. Bounded, fail-closed: if any step fails, the replay halts at that step (no autonomous retry, no autonomous re-locator, no autonomous re-plan). v1 only knows two step kinds (`chrome_click_element`, `chrome_fill_or_select`); GitHub-only `pageRole` set; substitution whitelist is `{queryText,targetLabel}`. Capability-gated by `TABRIX_POLICY_CAPABILITIES=experience_replay` (default-deny). See `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`.',
+    annotations: {
+      // `requiresExplicitOptIn: true` is injected at listTools time by
+      // `register-tools.ts::filterToolsByPolicy` (alongside `riskTier`)
+      // so the static schema stays compatible with the upstream
+      // MCP SDK `Tool['annotations']` shape. The capability gate
+      // (CAPABILITY_GATED_TOOLS) drives both visibility and dispatch
+      // — see `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §4.1 / §4.3.
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        actionPathId: {
+          type: 'string',
+          description:
+            'The action-path to replay. Must match `^action_path_[0-9a-f]{64}$` (the producer in `experience-aggregator.ts::buildActionPathId`). Caller obtains this id from a prior `experience_suggest_plan` response.',
+          minLength: 1,
+          maxLength: 256,
+          pattern: '^action_path_[0-9a-f]{64}$',
+        },
+        variableSubstitutions: {
+          type: 'object',
+          description:
+            "Optional substitution map. Keys are restricted to the v1 whitelist: 'queryText' (search/filter text) and 'targetLabel' (label/tag/state selector). Values are runtime strings to substitute into the per-step `templateFields` declared at capture time. A key not present in a step's `templateFields` is rejected (`failed-precondition`). Empty / omitted = replay verbatim.",
+          properties: {
+            queryText: {
+              type: 'string',
+              maxLength: 4096,
+              description: 'Search / filter text for issue-search-style steps.',
+            },
+            targetLabel: {
+              type: 'string',
+              maxLength: 4096,
+              description: 'Label / tag / state selector value.',
+            },
+          },
+          additionalProperties: false,
+        },
+        targetTabId: {
+          type: 'integer',
+          description:
+            'Optional Chrome tab id to replay against. Defaults to the active tab in the active window. Mismatched `pageRole` against the recorded `experience_action_paths.page_role` is `failed-precondition` (`page_role_mismatch`).',
+          minimum: 1,
+        },
+        maxSteps: {
+          type: 'integer',
+          description:
+            'Hard ceiling on attempted steps. Defaults to 16; clamped to [1, 16]. A row whose `step_sequence.length` exceeds this is `failed-precondition` (`step_budget_exceeded`), NOT "execute the first 16".',
+          minimum: 1,
+          maximum: 16,
+          default: 16,
+        },
+      },
+      required: ['actionPathId'],
+    },
+  },
+  {
     name: TOOL_NAMES.CONTEXT.CHOOSE,
     description:
       'Tabrix MKEP context selector (v1 minimal slice, B-018). Given an `intent` (free text) and optional `url` / `pageRole` / `siteId`, deterministically pick which existing native asset to use as context: `experience_reuse` (a previously-successful action path), `knowledge_light` (the captured site API catalog as shape evidence — Tabrix CANNOT call those endpoints in v1), or `read_page_required` (fallback: caller should issue `chrome_read_page`). Pure SELECT against local SQLite. GitHub-first; non-GitHub URLs always resolve to `read_page_required`. See `docs/B_018_CONTEXT_SELECTOR_V1.md` for the contract and the v2 deferrals.',
@@ -1949,6 +2020,12 @@ export const TOOL_RISK_TIERS: Readonly<Record<string, TabrixRiskTier>> = Object.
 
   // ---- MKEP Experience layer (read-only SELECT against native SQLite) ----
   [TOOL_NAMES.EXPERIENCE.SUGGEST_PLAN]: 'P0',
+  // V24-01 write/execute path. P1 (per-step P2 actions are still gated
+  // by their own dispatch); first non-P3 use of `requiresExplicitOptIn`,
+  // additionally guarded by the `experience_replay` capability gate
+  // (CAPABILITY_GATED_TOOLS below) so listing + dispatch require an
+  // explicit operator opt-in independent of `TABRIX_POLICY_ALLOW_P3`.
+  [TOOL_NAMES.EXPERIENCE.REPLAY]: 'P1',
 
   // ---- MKEP Context selector (read-only SELECT against native SQLite) ----
   [TOOL_NAMES.CONTEXT.CHOOSE]: 'P0',
@@ -1983,4 +2060,42 @@ export function getToolRiskTier(toolName: string): TabrixRiskTier | undefined {
 /** True when the tool is P3 and requires explicit opt-in to be visible/callable. */
 export function isExplicitOptInTool(toolName: string): boolean {
   return P3_EXPLICIT_OPT_IN_TOOLS.has(toolName);
+}
+
+/**
+ * V24-01: tools whose visibility AND dispatch are gated by a Tabrix
+ * capability (`TABRIX_POLICY_CAPABILITIES`), independent of the P3
+ * opt-in path.
+ *
+ * The map's value is the {@link import('./capabilities').TabrixCapability}
+ * the tool requires. The native-server's `register-tools.ts`:
+ *   1. drops the tool from `listTools` when its capability is not enabled, and
+ *   2. denies `callTool` with `code: 'capability_off'` (brief §6) when its
+ *      capability is not enabled — without opening a Memory session.
+ *
+ * Why a separate map (rather than reusing `P3_EXPLICIT_OPT_IN_TOOLS`):
+ * `experience_replay` is `P1`, not `P3`; folding it into the P3 set
+ * would mis-classify it for every Policy reader (`getToolRiskTier`,
+ * `buildPolicyDeniedPayload`, etc.). See
+ * `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §4.1 / §4.3 / §10 item 1.
+ *
+ * Invariant: every key here SHOULD also be tagged
+ * `requiresExplicitOptIn: true` in its `TOOL_SCHEMAS` annotations so
+ * MCP clients that render annotations see a coherent "opt-in required"
+ * marker — but the gating is enforced by this map, not by the
+ * annotation. (`isExplicitOptInTool` intentionally does NOT widen.)
+ */
+export const CAPABILITY_GATED_TOOLS: ReadonlyMap<string, TabrixCapability> = new Map<
+  string,
+  TabrixCapability
+>([[TOOL_NAMES.EXPERIENCE.REPLAY, 'experience_replay']]);
+
+/** True when the tool requires a Tabrix capability to be enabled. */
+export function isCapabilityGatedTool(toolName: string): boolean {
+  return CAPABILITY_GATED_TOOLS.has(toolName);
+}
+
+/** Returns the required capability for a capability-gated tool, or undefined. */
+export function getRequiredCapability(toolName: string): TabrixCapability | undefined {
+  return CAPABILITY_GATED_TOOLS.get(toolName);
 }

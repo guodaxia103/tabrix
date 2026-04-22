@@ -16,12 +16,17 @@
  *    metadata of a user's network traffic, even after redaction".
  *
  * Scope of v1 (intentionally minimal):
- *  - Only one capability is wired: `api_knowledge`. It unblocks B-017
- *    (GitHub-first API Knowledge capture v1). Additional capability
- *    names from the original design (`vision | elevated_js | download |
- *    devtools | testing | cross_origin_nav`) are deferred until a real
- *    consumer exists — adding them now would just be future-proofing
- *    without exercise.
+ *  - `api_knowledge` (B-016/B-017): unblocks GitHub-first API Knowledge
+ *    capture v1.
+ *  - `experience_replay` (V24-01): unblocks the autonomous replay of a
+ *    named historical `experience_action_paths` row. This is the FIRST
+ *    use of a capability gate as the operational opt-in for a non-P3
+ *    tool — see `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §4.1 / §10.
+ *
+ *  Additional capability names from the original design
+ *  (`vision | elevated_js | download | devtools | testing | cross_origin_nav`)
+ *  are deferred until a real consumer exists — adding them now would
+ *  just be future-proofing without exercise.
  *
  * Env contract:
  *  - `TABRIX_POLICY_CAPABILITIES`: comma-separated list of capability
@@ -32,7 +37,7 @@
  *    startup without making a typo a hard failure.
  */
 
-export type TabrixCapability = 'api_knowledge';
+export type TabrixCapability = 'api_knowledge' | 'experience_replay';
 
 /**
  * Canonical set of every capability the codebase recognises today.
@@ -40,6 +45,7 @@ export type TabrixCapability = 'api_knowledge';
  */
 export const ALL_TABRIX_CAPABILITIES: ReadonlySet<TabrixCapability> = new Set<TabrixCapability>([
   'api_knowledge',
+  'experience_replay',
 ]);
 
 const CAPABILITY_VALUES = ALL_TABRIX_CAPABILITIES as ReadonlySet<string>;

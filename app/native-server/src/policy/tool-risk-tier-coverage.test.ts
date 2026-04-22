@@ -1,9 +1,12 @@
 import {
+  ALL_TABRIX_CAPABILITIES,
+  CAPABILITY_GATED_TOOLS,
   P3_EXPLICIT_OPT_IN_TOOLS,
   TOOL_NAMES,
   TOOL_RISK_TIERS,
   TOOL_SCHEMAS,
   getToolRiskTier,
+  isCapabilityGatedTool,
   isExplicitOptInTool,
 } from '@tabrix/shared';
 
@@ -61,6 +64,21 @@ describe('TOOL_RISK_TIERS coverage invariants', () => {
     expect(TOOL_RISK_TIERS[TOOL_NAMES.BROWSER.INJECT_SCRIPT]).toBe('P3');
     expect(TOOL_RISK_TIERS[TOOL_NAMES.BROWSER.SEND_COMMAND_TO_INJECT_SCRIPT]).toBe('P3');
     expect(TOOL_RISK_TIERS[TOOL_NAMES.BROWSER.USERSCRIPT]).toBe('P3');
+  });
+
+  it('every capability-gated tool maps to a known TabrixCapability', () => {
+    const allCaps = new Set<string>(ALL_TABRIX_CAPABILITIES);
+    const offenders: string[] = [];
+    for (const [toolName, capability] of CAPABILITY_GATED_TOOLS) {
+      if (!allCaps.has(capability)) offenders.push(`${toolName}->${capability}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('experience_replay is P1 + capability-gated (V24-01 invariant)', () => {
+    expect(TOOL_RISK_TIERS[TOOL_NAMES.EXPERIENCE.REPLAY]).toBe('P1');
+    expect(isCapabilityGatedTool(TOOL_NAMES.EXPERIENCE.REPLAY)).toBe(true);
+    expect(P3_EXPLICIT_OPT_IN_TOOLS).not.toContain(TOOL_NAMES.EXPERIENCE.REPLAY);
   });
 
   it('known-safe tools are classified P0 (regression guard)', () => {

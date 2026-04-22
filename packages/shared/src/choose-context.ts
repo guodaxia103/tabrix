@@ -67,6 +67,7 @@ export type TabrixContextSiteFamily = 'github';
  * behavior change.
  */
 export type ContextStrategyName =
+  | 'experience_replay'
   | 'experience_reuse'
   | 'knowledge_light'
   | 'read_page_markdown'
