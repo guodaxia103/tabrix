@@ -38,7 +38,7 @@
 ```
 Wave 1 —— 近期可并行，不阻塞。
   Stage 3a · Knowledge UI Map + 稳定 targetRef     [B-010 done; B-011 v1 done]
-  Stage 3d · read_page(render='markdown')          [B-015 pool]
+  Stage 3d · read_page(render='markdown')          [B-015 v1 done]
   Stage 3g · API Knowledge（XHR/fetch 捕获）        [B-017 v1 done] ← K1 最大杠杆（数据侧）；call 侧延后
   Stage 3f · Policy capability opt-in 枚举         [B-016 v1 done] capability allowlist 已落地；v1 只暴露 `api_knowledge`
 
@@ -241,13 +241,13 @@ v2.3.0 主线的 `V23-03` 包首次落地了 `read_page(render='markdown')` 与 
 - **层**：`K` + `M`
 - **KPI**：`省 token`
 - **优先级**：`P1` · **规模**：`S` · **依赖**：无
-- **状态**：pool —— `B-015`。
+- **状态**：v1 已完成（2026-04-22，V23-03）—— `B-015` v1 已端到端落地。详见上方 §"V23-03 / B-015 —— Markdown 渲染路径 + L2 source routing 已落地（2026-04-22）"。剩余 pool 工作：`agentStep` JSON schema 发布（范围 3）与 `memory_page_snapshots.readable_markdown` 懒列（范围 2）。
 
 ### 范围
 
-1. `chrome_read_page(render = 'json' | 'markdown')` —— 默认保持 `json`；无 break change。
-2. `memory_page_snapshots.readable_markdown` 列（懒计算）。
-3. 可选：`agentStep` envelope JSON schema 发到 `packages/shared/src/`，方便 MCP 客户端在 prompt 里引用。
+1. `chrome_read_page(render = 'json' | 'markdown')` —— 默认保持 `json`；无 break change。**v1 已落地（2026-04-22）。**
+2. `memory_page_snapshots.readable_markdown` 列（懒计算）。_Pool —— v1 未落地。_
+3. 可选：`agentStep` envelope JSON schema 发到 `packages/shared/src/`，方便 MCP 客户端在 prompt 里引用。_Pool —— v1 未落地。_
 
 ### 非范围
 
@@ -263,7 +263,7 @@ v2.3.0 主线的 `V23-03` 包首次落地了 `read_page(render='markdown')` 与 
 
 ### 关联 `B-*`
 
-- ⬜ `B-015` —— `read_page(render='markdown')` + 单测。
+- ✅ `B-015` v1 —— `read_page(render='markdown')` + 单测于 2026-04-22 落地（V23-03）。范围 2（snapshot 列）与范围 3（`agentStep` envelope 发布）仍为 pool。
 
 ### 给接手 AI 的提示
 
@@ -798,7 +798,7 @@ Memory 加 `user_preferences { key, value, sourceSessionId, confidence }` ——
 
 没阻塞的话按这个顺序捡：
 
-1. `B-015` —— `read_page(render='markdown')`（Stage 3d，小而 K1 大）。
+1. `B-015` 后续项 —— Stage 3d 范围 2 + 3（`memory_page_snapshots.readable_markdown` 懒列 + `agentStep` envelope JSON schema 发布）。`B-015` v1（`render='markdown'` 参数本体）已于 2026-04-22 落地（V23-03），只剩可选的持久化 + envelope 尾巴。
 2. `B-018` v2 —— 在 v1 选择器之上完成 Stage 3h 完整 DoD（现已可消费 `B-011` 的稳定 `targetRef`）。
 3. Stage 3a 后续项 —— `candidate-action.ts` 的 UI Map 消费切换（Stage 3a item 6，`B-011` 留下来的尾巴）。
 4. Stage 3b 写侧后续项 —— `experience_replay` + `experience_score_step`（需要先做 Policy review；目前没有单独 backlog ID）。

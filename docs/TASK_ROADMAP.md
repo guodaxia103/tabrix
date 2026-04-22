@@ -38,7 +38,7 @@ When in doubt: **do not expand scope without updating this file first**. Scope c
 ```
 Wave 1 — near-term, parallelizable. Starts unblocked.
   Stage 3a · Knowledge UI Map + stable targetRef      [B-010 done; B-011 v1 done]
-  Stage 3d · read_page(render='markdown')             [B-015 pool]
+  Stage 3d · read_page(render='markdown')             [B-015 v1 done]
   Stage 3g · API Knowledge (XHR/fetch capture)        [B-017 v1 done]    ← biggest K1 lever (data side); call-side deferred
   Stage 3f · Policy capability opt-in enum            [B-016 v1 done]    capability allowlist landed; v1 ships only `api_knowledge`
 
@@ -241,13 +241,13 @@ The `V23-04` package extends `tabrix_choose_context` from a stateless v1 chooser
 - **Layer**: `K` + `M`
 - **KPI**: `省 token`
 - **Priority**: `P1` · **Size**: `S` · **Dependencies**: none
-- **Status**: pool — `B-015`.
+- **Status**: v1 done (2026-04-22, V23-03) — `B-015` v1 landed end-to-end. See §"V23-03 / B-015 — Markdown render path + L2 source routing landed (2026-04-22)" above for the landing note. Remaining pool work: `agentStep` JSON schema publish (Scope item 3) and the `memory_page_snapshots.readable_markdown` lazy column (Scope item 2).
 
 ### Scope
 
-1. `chrome_read_page(render = 'json' | 'markdown')` — default stays `json`; no breaking change.
-2. `memory_page_snapshots.readable_markdown` column (lazy-computed on demand).
-3. Optional: `agentStep` envelope JSON schema published to `packages/shared/src/` for MCP clients that want to embed the schema in a prompt.
+1. `chrome_read_page(render = 'json' | 'markdown')` — default stays `json`; no breaking change. **Landed v1 (2026-04-22).**
+2. `memory_page_snapshots.readable_markdown` column (lazy-computed on demand). _Pool — not landed in v1._
+3. Optional: `agentStep` envelope JSON schema published to `packages/shared/src/` for MCP clients that want to embed the schema in a prompt. _Pool — not landed in v1._
 
 ### Non-scope
 
@@ -263,7 +263,7 @@ The `V23-04` package extends `tabrix_choose_context` from a stateless v1 chooser
 
 ### Linked `B-*`
 
-- ⬜ `B-015` — `read_page(render='markdown')` + unit tests.
+- ✅ `B-015` v1 — `read_page(render='markdown')` + unit tests landed 2026-04-22 (V23-03). Scope items 2 (snapshot column) and 3 (`agentStep` envelope publish) remain pool.
 
 ### Notes for incoming AI
 
@@ -798,7 +798,7 @@ Before adding any MCP tool / background listener / sidepanel tab / shared type, 
 
 Pick in this order unless something blocks:
 
-1. `B-015` — `read_page(render='markdown')` (Stage 3d, small and high-K1).
+1. `B-015` follow-on — Stage 3d Scope items 2 + 3 (`memory_page_snapshots.readable_markdown` lazy column + `agentStep` envelope JSON schema publish). `B-015` v1 (the `render='markdown'` parameter) landed 2026-04-22 (V23-03); only the optional persistence + envelope tail remains.
 2. `B-018` v2 — full Stage 3h DoD on top of the v1 selector (now also able to consume `B-011` stable `targetRef`).
 3. Stage 3a follow-up — UI Map consumer cutover inside `candidate-action.ts` (Stage 3a item 6, deferred from `B-011`).
 4. Stage 3b write-side follow-up — `experience_replay` + `experience_score_step` (needs Policy review first; not a single backlog ID yet).

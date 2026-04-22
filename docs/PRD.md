@@ -428,7 +428,7 @@ Full detail, DoD, and `B-*` mapping lives in [`TASK_ROADMAP.md`](./TASK_ROADMAP.
 ```
 Wave 1 (near-term, parallelizable)
   3a · Knowledge UI Map + stable targetRef       (B-010 done; B-011 v1 done — UI-Map consumer cutover deferred to v2)
-  3d · read_page(render='markdown')              (B-015 pool)
+  3d · read_page(render='markdown')              (B-015 v1 done)
   3g · API Knowledge (capture v1)                (B-017 v1 done; v2 in pool) ← biggest K1 lever
   3f · Policy capability opt-in enum             (B-016 v1 done)
 

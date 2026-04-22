@@ -297,64 +297,11 @@ export function summariseBenchmarkRun(input: BenchmarkRunInput): BenchmarkSummar
   };
 }
 
-/**
- * Hard release-gate predicate. Returns the list of reasons the report
- * is not ship-grade for v2.3.0; an empty array means "ship-grade".
- *
- * Used by `scripts/check-release-readiness.mjs` for v2.3.0+ tags.
- *
- * v1 thresholds are intentionally minimum-viable. The maintainer can
- * tighten them in a follow-up; loosening them requires a documented
- * decision (the comment in `release-check` calls this out).
- */
-export interface BenchmarkGateThresholds {
-  /** Maximum allowed tool retry rate (K4a). Default 0.10 per PRD §K4. */
-  maxToolRetryRate: number;
-  /** Minimum scenario completion rate (K3). Default 0.85 per PRD §K3. */
-  minScenarioCompletionRate: number;
-}
-
-export const DEFAULT_BENCHMARK_GATE_THRESHOLDS: BenchmarkGateThresholds = {
-  maxToolRetryRate: 0.1,
-  minScenarioCompletionRate: 0.85,
-};
-
-export function evaluateBenchmarkGate(
-  summary: BenchmarkSummary,
-  thresholds: BenchmarkGateThresholds = DEFAULT_BENCHMARK_GATE_THRESHOLDS,
-): string[] {
-  const reasons: string[] = [];
-
-  if (summary.reportVersion !== BENCHMARK_REPORT_VERSION) {
-    reasons.push(
-      `report version mismatch: expected ${BENCHMARK_REPORT_VERSION}, got ${summary.reportVersion}`,
-    );
-  }
-
-  if (summary.totalScenarios === 0) {
-    reasons.push('no scenarios in run — release evidence is empty');
-  }
-
-  if (summary.laneCounters.violationCount > 0) {
-    reasons.push(
-      `lane-integrity violations present: cdp=${summary.laneCounters.cdpCount}, debugger=${summary.laneCounters.debuggerCount}`,
-    );
-  }
-
-  if (
-    summary.k3TaskSuccessRate !== null &&
-    summary.k3TaskSuccessRate < thresholds.minScenarioCompletionRate
-  ) {
-    reasons.push(
-      `K3 task success rate ${summary.k3TaskSuccessRate.toFixed(3)} below threshold ${thresholds.minScenarioCompletionRate}`,
-    );
-  }
-
-  if (summary.k4ToolRetryRate !== null && summary.k4ToolRetryRate > thresholds.maxToolRetryRate) {
-    reasons.push(
-      `K4 tool retry rate ${summary.k4ToolRetryRate.toFixed(3)} above threshold ${thresholds.maxToolRetryRate}`,
-    );
-  }
-
-  return reasons;
-}
+// NOTE: `evaluateBenchmarkGate` and `DEFAULT_BENCHMARK_GATE_THRESHOLDS`
+// used to live here. They were lifted to `scripts/lib/v23-benchmark-gate.mjs`
+// as part of the V23-06 closeout fix so that `scripts/check-release-readiness.mjs`
+// and `scripts/benchmark-v23.mjs --gate` share a single source of truth
+// without depending on the native-server build artifact (`dist/`).
+// `v23-benchmark.test.ts` dynamically imports that module and asserts
+// `BENCHMARK_REPORT_VERSION_EXPECTED` there matches `BENCHMARK_REPORT_VERSION`
+// here, so the report shape and the gate cannot drift silently.

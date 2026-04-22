@@ -32,6 +32,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
+
+// `v23-benchmark-gate.cjs` is the canonical, fresh-checkout-safe gate
+// (V23-06 closeout). CommonJS so it is reusable from Jest CJS tests
+// without `--experimental-vm-modules`. Loaded here via `createRequire`
+// for deterministic named destructure across Node versions.
+const require = createRequire(import.meta.url);
+const { evaluateBenchmarkGate } = require('./lib/v23-benchmark-gate.cjs');
 
 const ROOT = process.cwd();
 
@@ -121,12 +129,12 @@ function ensureOutputDir(outPath) {
 }
 
 async function loadTransformer() {
-  // The transformer lives in the native-server package as TypeScript.
-  // After `pnpm -C app/native-server build`, it is emitted to `dist/`.
-  // We try the built artifact first; if absent, fall back to running
-  // the script via `tsx` is the maintainer's job — we surface the
-  // missing-build path with an actionable error rather than silently
-  // re-implementing summarisation here.
+  // The pure-data transformer lives in the native-server package as
+  // TypeScript and is emitted to `dist/` after `pnpm -C app/native-server build`.
+  // The release gate is NOT loaded from here — it lives in
+  // `scripts/lib/v23-benchmark-gate.mjs` so that `release:check`
+  // and `--gate` share a single source that does not depend on a
+  // build artifact (V23-06 closeout fix).
   const builtPath = path.join(
     ROOT,
     'app',
@@ -168,9 +176,26 @@ async function main() {
     fail(`malformed input file: ${err.message}`);
   }
 
-  const { summariseBenchmarkRun, evaluateBenchmarkGate, BENCHMARK_REPORT_VERSION } =
-    await loadTransformer();
+  const { summariseBenchmarkRun, BENCHMARK_REPORT_VERSION } = await loadTransformer();
   const summary = summariseBenchmarkRun(runInput);
+
+  // V23-06 closeout fix: in `--gate` mode we evaluate the gate FIRST
+  // and only write the report on success. Pre-fix the order was
+  // write-then-gate, which left a fresh failing JSON on disk that then
+  // satisfied `release:check`'s presence + recency check.
+  if (opts.gate) {
+    const reasons = evaluateBenchmarkGate(summary);
+    if (reasons.length > 0) {
+      console.error('benchmark:v23 — release gate FAILED (no report written):');
+      for (const r of reasons) console.error(`  - ${r}`);
+      console.error(`  runId: ${runInput.runId}`);
+      console.error(`  buildSha: ${runInput.buildSha}`);
+      console.error(
+        `  K3 task success: ${summary.k3TaskSuccessRate ?? 'n/a'} | K4 retry: ${summary.k4ToolRetryRate ?? 'n/a'} | lane violations: ${summary.laneCounters.violationCount}`,
+      );
+      process.exit(2);
+    }
+  }
 
   const outPath =
     opts.out ?? path.join(ROOT, 'docs', 'benchmarks', 'v23', `${runInput.runId}.json`);
@@ -189,12 +214,6 @@ async function main() {
   console.log(`- out: ${path.relative(ROOT, outPath)}`);
 
   if (opts.gate) {
-    const reasons = evaluateBenchmarkGate(summary);
-    if (reasons.length > 0) {
-      console.error('benchmark:v23 — release gate FAILED:');
-      for (const r of reasons) console.error(`  - ${r}`);
-      process.exit(2);
-    }
     console.log('benchmark:v23 — release gate passed');
   }
 }

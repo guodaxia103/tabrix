@@ -1,5 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+
+// `v23-benchmark-gate.cjs` is intentionally CommonJS so the same module
+// can be consumed by Jest tests AND by these ESM scripts. ESM-of-CJS
+// named-import detection is fragile across Node versions; using
+// `createRequire` keeps the destructure deterministic.
+const require = createRequire(import.meta.url);
+const { benchmarkGateApplies, loadAndEvaluateBenchmarkReport } = require(
+  './lib/v23-benchmark-gate.cjs',
+);
 
 const ROOT = process.cwd();
 
@@ -153,30 +163,16 @@ if (!fileExists(releaseNotesFile)) {
   }
 }
 
-// V23-06 release gate: v2.3.0+ tags must reference a recent
-// real-browser benchmark report. The check is intentionally light
-// (presence + recency) so the maintainer can iterate on real-browser
-// runs without rebuilding the whole release pipeline. The hard
-// invariants (lane integrity, K3, K4 thresholds) are enforced by
-// `pnpm run benchmark:v23 -- --gate` against the report itself, not
-// repeated here.
-const BENCHMARK_GATE_MIN_MAJOR = 2;
-const BENCHMARK_GATE_MIN_MINOR = 3;
+// V23-06 release gate: v2.3.0+ tags must ship a real-browser benchmark
+// report that PASSES the same predicate `pnpm run benchmark:v23 -- --gate`
+// uses. Pre-closeout this check only validated presence + recency, which
+// meant a failing benchmark could leak through the gate as long as its
+// JSON file was on disk and recent. Closeout fix: load the report,
+// validate report-version + lane integrity + K3/K4 thresholds + non-empty
+// scenarios via the canonical predicate from
+// `scripts/lib/v23-benchmark-gate.mjs`. Single source of truth — the
+// `benchmark-v23.mjs --gate` invocation reads from the same module.
 const BENCHMARK_REPORT_MAX_AGE_DAYS = 7;
-
-function parseSemverPrefix(version) {
-  const match = String(version || '').match(/^(\d+)\.(\d+)\.(\d+)/);
-  if (!match) return null;
-  return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) };
-}
-
-function benchmarkGateApplies(version) {
-  const semver = parseSemverPrefix(version);
-  if (!semver) return false;
-  if (semver.major > BENCHMARK_GATE_MIN_MAJOR) return true;
-  if (semver.major < BENCHMARK_GATE_MIN_MAJOR) return false;
-  return semver.minor >= BENCHMARK_GATE_MIN_MINOR;
-}
 
 if (benchmarkGateApplies(nativePkg.version) && !options.allowMissingNotes) {
   const benchmarkDir = path.join(ROOT, 'docs', 'benchmarks', 'v23');
@@ -211,9 +207,21 @@ if (benchmarkGateApplies(nativePkg.version) && !options.allowMissingNotes) {
         );
       }
 
+      // Hard content gate: parse the newest report and run the same
+      // predicate `benchmark-v23.mjs --gate` would run. A failing
+      // report cannot slip past release-check just because the file
+      // is on disk and recent.
+      const gateResult = loadAndEvaluateBenchmarkReport(newest.fullPath);
+      if (!gateResult.ok) {
+        for (const reason of gateResult.reasons) {
+          errors.push(
+            `v2.3.0+ release gate: benchmark report ${newest.name} failed gate — ${reason}`,
+          );
+        }
+      }
+
       // Soft assertion: release notes should reference some benchmark
-      // report (commit SHA or filename). We only warn — the hard
-      // numbers gate lives in `benchmark-v23.mjs --gate` itself.
+      // report (commit SHA or filename).
       if (fileExists(selectedNotesFile)) {
         const notes = fs.readFileSync(path.join(ROOT, selectedNotesFile), 'utf8');
         if (!notes.includes('benchmarks/v23')) {

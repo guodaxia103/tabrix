@@ -1,12 +1,39 @@
+import * as path from 'node:path';
 import {
   BENCHMARK_REPORT_VERSION,
-  DEFAULT_BENCHMARK_GATE_THRESHOLDS,
-  evaluateBenchmarkGate,
   summariseBenchmarkRun,
   type BenchmarkRunInput,
   type BenchmarkSummary,
   type BenchmarkToolCallRecord,
 } from './v23-benchmark';
+
+// V23-06 closeout: the gate predicate moved to a fresh-checkout-safe
+// CommonJS module at `scripts/lib/v23-benchmark-gate.cjs` so that
+// release-check no longer depends on the native-server `dist/` build.
+// CommonJS lets Jest `require()` the same module the ESM scripts
+// `import` via `createRequire`, with no `--experimental-vm-modules`
+// needed. Single source of truth.
+interface GateModule {
+  BENCHMARK_REPORT_VERSION_EXPECTED: number;
+  DEFAULT_BENCHMARK_GATE_THRESHOLDS: {
+    maxToolRetryRate: number;
+    minScenarioCompletionRate: number;
+  };
+  evaluateBenchmarkGate: (
+    summary: unknown,
+    thresholds?: { maxToolRetryRate: number; minScenarioCompletionRate: number },
+  ) => string[];
+  benchmarkGateApplies: (version: string) => boolean;
+  parseSemverPrefix: (version: string) => { major: number; minor: number; patch: number } | null;
+  loadAndEvaluateBenchmarkReport: (
+    filePath: string,
+    thresholds?: { maxToolRetryRate: number; minScenarioCompletionRate: number },
+  ) => { ok: boolean; reasons: string[]; parseError: string | null };
+}
+
+const gateModule: GateModule = require(
+  path.resolve(__dirname, '..', '..', '..', '..', 'scripts', 'lib', 'v23-benchmark-gate.cjs'),
+);
 
 function call(overrides: Partial<BenchmarkToolCallRecord> = {}): BenchmarkToolCallRecord {
   return {
@@ -197,7 +224,7 @@ describe('summariseBenchmarkRun (V23-06)', () => {
   });
 });
 
-describe('evaluateBenchmarkGate (V23-06 release gate)', () => {
+describe('evaluateBenchmarkGate (V23-06 release gate, canonical .mjs)', () => {
   function summary(overrides: Partial<BenchmarkSummary> = {}): BenchmarkSummary {
     return {
       reportVersion: BENCHMARK_REPORT_VERSION,
@@ -227,12 +254,16 @@ describe('evaluateBenchmarkGate (V23-06 release gate)', () => {
     };
   }
 
+  it('cross-source-version guard: .mjs gate version matches TS transformer', () => {
+    expect(gateModule.BENCHMARK_REPORT_VERSION_EXPECTED).toBe(BENCHMARK_REPORT_VERSION);
+  });
+
   it('passes a clean summary', () => {
-    expect(evaluateBenchmarkGate(summary())).toEqual([]);
+    expect(gateModule.evaluateBenchmarkGate(summary())).toEqual([]);
   });
 
   it('blocks on lane-integrity violations', () => {
-    const reasons = evaluateBenchmarkGate(
+    const reasons = gateModule.evaluateBenchmarkGate(
       summary({
         laneCounters: {
           tabrixOwnedCount: 9,
@@ -247,27 +278,98 @@ describe('evaluateBenchmarkGate (V23-06 release gate)', () => {
   });
 
   it('blocks when K3 below threshold', () => {
-    const reasons = evaluateBenchmarkGate(
+    const reasons = gateModule.evaluateBenchmarkGate(
       summary({ k3TaskSuccessRate: 0.5, scenarioCompletionRate: 0.5 }),
     );
     expect(reasons.some((r) => r.includes('K3'))).toBe(true);
   });
 
   it('blocks when K4 retry rate too high', () => {
-    const reasons = evaluateBenchmarkGate(summary({ k4ToolRetryRate: 0.5 }));
+    const reasons = gateModule.evaluateBenchmarkGate(summary({ k4ToolRetryRate: 0.5 }));
     expect(reasons.some((r) => r.includes('K4'))).toBe(true);
   });
 
   it('blocks an empty run', () => {
-    const reasons = evaluateBenchmarkGate(
+    const reasons = gateModule.evaluateBenchmarkGate(
       summary({ totalScenarios: 0, completedScenarios: 0, scenarioCompletionRate: null }),
     );
     expect(reasons.some((r) => r.includes('no scenarios'))).toBe(true);
   });
 
   it('respects custom thresholds', () => {
-    const stricter = { ...DEFAULT_BENCHMARK_GATE_THRESHOLDS, maxToolRetryRate: 0.01 };
-    const reasons = evaluateBenchmarkGate(summary({ k4ToolRetryRate: 0.05 }), stricter);
+    const stricter = {
+      ...gateModule.DEFAULT_BENCHMARK_GATE_THRESHOLDS,
+      maxToolRetryRate: 0.01,
+    };
+    const reasons = gateModule.evaluateBenchmarkGate(summary({ k4ToolRetryRate: 0.05 }), stricter);
     expect(reasons.some((r) => r.includes('K4'))).toBe(true);
+  });
+
+  it('blocks on non-object input (defensive)', () => {
+    expect(gateModule.evaluateBenchmarkGate(null)).toEqual(['report is not a JSON object']);
+    expect(gateModule.evaluateBenchmarkGate('not-a-summary')).toEqual([
+      'report is not a JSON object',
+    ]);
+  });
+
+  it('blocks when laneCounters block is missing', () => {
+    const broken = summary();
+    delete (broken as { laneCounters?: unknown }).laneCounters;
+    const reasons = gateModule.evaluateBenchmarkGate(broken);
+    expect(reasons.some((r) => r.includes('laneCounters block missing'))).toBe(true);
+  });
+
+  it('blocks on report-version drift', () => {
+    const reasons = gateModule.evaluateBenchmarkGate(
+      summary({ reportVersion: 999 as unknown as typeof BENCHMARK_REPORT_VERSION }),
+    );
+    expect(reasons.some((r) => r.includes('report version mismatch'))).toBe(true);
+  });
+
+  it('flags self-inconsistent lane counters (violationCount lies)', () => {
+    const reasons = gateModule.evaluateBenchmarkGate(
+      summary({
+        laneCounters: {
+          tabrixOwnedCount: 8,
+          cdpCount: 1,
+          debuggerCount: 1,
+          unknownCount: 0,
+          // claims zero violations but cdp+debugger=2
+          violationCount: 0,
+        },
+      }),
+    );
+    expect(reasons.some((r) => r.includes('lane counters self-inconsistent'))).toBe(true);
+  });
+});
+
+describe('benchmarkGateApplies (V23-06 release gate scope)', () => {
+  it('returns true for v2.3.0 and above', () => {
+    expect(gateModule.benchmarkGateApplies('2.3.0')).toBe(true);
+    expect(gateModule.benchmarkGateApplies('2.3.5')).toBe(true);
+    expect(gateModule.benchmarkGateApplies('2.4.0')).toBe(true);
+    expect(gateModule.benchmarkGateApplies('3.0.0')).toBe(true);
+  });
+
+  it('returns false for v2.2.x and below', () => {
+    expect(gateModule.benchmarkGateApplies('2.2.0')).toBe(false);
+    expect(gateModule.benchmarkGateApplies('2.2.5')).toBe(false);
+    expect(gateModule.benchmarkGateApplies('2.0.0')).toBe(false);
+    expect(gateModule.benchmarkGateApplies('1.99.99')).toBe(false);
+  });
+
+  it('returns false for malformed version strings', () => {
+    expect(gateModule.benchmarkGateApplies('')).toBe(false);
+    expect(gateModule.benchmarkGateApplies('not-a-version')).toBe(false);
+  });
+
+  it('parseSemverPrefix matches benchmarkGateApplies', () => {
+    expect(gateModule.parseSemverPrefix('2.3.0')).toEqual({ major: 2, minor: 3, patch: 0 });
+    expect(gateModule.parseSemverPrefix('2.3.0-rc.1')).toEqual({
+      major: 2,
+      minor: 3,
+      patch: 0,
+    });
+    expect(gateModule.parseSemverPrefix('garbage')).toBeNull();
   });
 });
