@@ -1,8 +1,6 @@
-# Tabrix v2.3.0 Release Notes — DRAFT
+# Tabrix v2.3.0 Release Notes
 
-> **Status:** **Draft. Not released.** This file is the v2.3.0 release-notes scaffold landed at the end of V23-06 of the v2.3.0 continuous-execution plan. The maintainer will fill in the §"Real-browser acceptance evidence" section after running the commands listed in §"Maintainer command list" against a live Chrome session, then promote this file from draft to release by removing this banner and bumping the workspace version (root + native + extension + shared + wasm-simd) to `2.3.0` in the same commit. **Do not tag `v2.3.0` until that promotion lands.**
-
-Release date: _to be filled in by the maintainer when promoting this draft_.
+Release date: `2026-04-23`.
 
 ## Summary
 
@@ -63,7 +61,7 @@ The release is backward compatible with v2.2.x. Every new MCP tool is additive a
 
 This section is what fast-lane can fill in deterministically (no real Chrome).
 
-- `pnpm -r typecheck` — green (status to be confirmed by the maintainer at promotion time).
+- `pnpm -r typecheck` — green.
 - `pnpm -C app/native-server test:ci` — green; full native-server suite including the new `v23-benchmark.test.ts`, `choose-context-telemetry.test.ts`, V23-04 chooser branches, V23-05 brief is doc-only.
 - `pnpm -C app/chrome-extension test` — green; including the V23-01 lane-integrity tests and V23-02 stable-targetRef-stability tests.
 - `pnpm run docs:check` — green.
@@ -71,25 +69,27 @@ This section is what fast-lane can fill in deterministically (no real Chrome).
 
 ## Real-browser acceptance evidence
 
-The v2.3.0 promotion gate was exercised against a live Chrome session bound to the maintainer's GitHub account and then projected through `pnpm run benchmark:v23 -- --input <ndjson> --gate`.
+The released v2.3.0 benchmark baseline was exercised against a live Chrome session bound to the maintainer's GitHub account and then projected through `pnpm run benchmark:v23 -- --input <ndjson> --gate`.
 
-- **Run ID:** `v23-local-2026-04-23-final`
-- **Build SHA:** `ce209fa061ff1dfc83b979ed197f3e1326201cc4`
-- **Acceptance summary:** `E:/projects/AI/codex/tabrix-private-tests/artifacts/v23-real-browser-acceptance/v23-real-browser-acceptance-2026-04-22T17-51-04.843Z/summary.json`
-- **Report file:** `docs/benchmarks/v23/v23-local-2026-04-23-final.json`
+- **Run ID:** `v23-baseline-2026-04-23`
+- **Build SHA:** `52b1b260c2c82ac04050d4eeab8fc3730efa9ab6`
+- **Acceptance summary:** `E:/projects/AI/codex/tabrix-private-tests/artifacts/v23-real-browser-acceptance/v23-real-browser-acceptance-2026-04-22T18-09-05.099Z/summary.json`
+- **Report file:** `docs/benchmarks/v23/v23-baseline-2026-04-23.json`
 - **Scenario result:** `8/8` passed, `blocked=false`
 - **Headline numbers:**
   - `K1 mean input tokens per task`: `null` (current CLI envelope did not surface token usage for this run)
-  - `K2 click p50`: `7317 ms`
+  - `K2 click p50`: `7340 ms`
   - `K3 task success`: `1.0`
   - `K4 retry rate`: `0`
   - `K4 fallback rate`: `0`
   - `lane violations`: `0`
   - `meanClickAttemptsPerStep`: `1`
   - `readPageProbeCount`: `14`
+  - `totalToolCalls`: `29`
 - **Caveats observed:**
-  - This run only went green after rebuilding and reloading the extension from the current workspace. A pre-rebuild run produced a false red on `T5-H-GH-REPO-HOME-READ-MARKDOWN` because the browser was still serving an older `.output` bundle.
+  - This release uses the final baseline run after extension rebuild + reload. Earlier same-day trial runs proved that stale unpacked-extension state can fake a regression if `pnpm -C app/chrome-extension build` and `pnpm run extension:reload` are skipped.
   - `laneCounters.unknownCount=24` is expected for this report because only the click path currently emits an explicit lane marker. The hard gate still passed because `cdpCount=0`, `debuggerCount=0`, and `violationCount=0`.
+  - This report is the comparison baseline for future `v2.4.0 -> v2.3.0` release review.
 
 ## Maintainer command list (real-browser run)
 
@@ -120,9 +120,9 @@ pnpm run benchmark:v23 -- \
   --input ~/.chrome-mcp-agent/benchmarks/v23/v23-acceptance-2026-MM-DD.ndjson \
   --gate
 
-# 5. Commit the report alongside the promotion of this draft.
+# 5. Commit the benchmark report and release-notes update.
 git add docs/benchmarks/v23/v23-acceptance-2026-MM-DD.json docs/RELEASE_NOTES_v2.3.0.md
-git commit -m "release: v2.3.0 — promote draft + benchmark evidence"
+git commit -m "release: v2.3.0 — benchmark evidence"
 
 # 6. The release gate is now green.
 pnpm run release:check
@@ -149,7 +149,7 @@ The `tabrix-private-tests` `acceptance:v2.3.0` runner is expected to cover at mi
 ## Versioning policy reminder
 
 - v2.3.0 is a minor bump (PRD-level capabilities added, no API breakage).
-- Promoting this draft to release MUST bump `version` in **all five** `package.json` files in lockstep: root, `app/native-server`, `app/chrome-extension`, `packages/shared`, `packages/wasm-simd`. `release:check` enforces this.
+- Releasing v2.3.0 MUST bump `version` in **all five** `package.json` files in lockstep: root, `app/native-server`, `app/chrome-extension`, `packages/shared`, `packages/wasm-simd`. `release:check` enforces this.
 - Tag format `vX.Y.Z` or `tabrix-vX.Y.Z` (existing convention).
 
 ## Known limitations carried into v2.3.0
