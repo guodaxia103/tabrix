@@ -277,15 +277,15 @@ Wave 5 — long horizon, no dates.
 - **Layer**: `P` + `M`
 - **KPI**: `更稳` (auditability)
 - **Priority**: `P1` · **Size**: `S` · **Dependencies**: none
-- **Status**: pool — `B-016`.
+- **Status**: `v1 done (2026-04-22)` — `B-016`. v1 ships the enum + env parser only; per-tool capability annotations and the `TABRIX_POLICY_ALLOW_P3` ↔ `TABRIX_POLICY_CAPABILITIES` migration are intentionally deferred to keep v1 surgical for `B-017`.
 
 ### Scope
 
-1. `TabrixCapability` enum: `vision | elevated_js | download | devtools | testing | cross_origin_nav`.
-2. Each P2/P3 tool declares its required capability (`tools.ts`).
-3. Env: `TABRIX_POLICY_ALLOW_P3` → `TABRIX_POLICY_CAPABILITIES` (back-compat for ≥ 6 months).
-4. `MemoryAction.policyCapabilities` field (for the Insights tab and future audits).
-5. Hook for Stage 4b's origin/siteId dynamic policy (reserved interface, no implementation yet).
+1. `TabrixCapability` enum (v1: `api_knowledge`; future capabilities `vision | elevated_js | download | devtools | testing | cross_origin_nav` will land per-feature, not as a big-bang renaming).
+2. Each P2/P3 tool declares its required capability (`tools.ts`). **Deferred — orthogonal to v1; the v1 gate is feature-level (e.g. API Knowledge capture), not tool-level.**
+3. Env: `TABRIX_POLICY_ALLOW_P3` → `TABRIX_POLICY_CAPABILITIES` (back-compat for ≥ 6 months). **Deferred — v1 introduces `TABRIX_POLICY_CAPABILITIES` as an _additional_ gate that runs alongside `TABRIX_POLICY_ALLOW_P3`; no migration / no deprecation path is enforced yet.**
+4. `MemoryAction.policyCapabilities` field (for the Insights tab and future audits). **Deferred.**
+5. Hook for Stage 4b's origin/siteId dynamic policy (reserved interface, no implementation yet). **Deferred.**
 
 ### Non-scope
 
@@ -318,7 +318,14 @@ Wave 5 — long horizon, no dates.
 - **Layer**: `K` + `P`
 - **KPI**: `省 token` (largest) · `更快` · `更准`
 - **Priority**: `P0` · **Size**: `L` · **Dependencies**: `Stage 3f` (capability framework)
-- **Status**: pool — `B-017`.
+- **Status**: `v1 done (2026-04-22)` — `B-017`. v1 ships **GitHub-first, capture-only**; `knowledge_call_api`, the per-site Sidepanel toggle, JSON-Schema inference and cross-site coverage are intentionally **out** for v1 and remain in the pool.
+
+### v1 landed (2026-04-22)
+
+- New `knowledge_api_endpoints` table (idempotent migration; dedup by `(site, endpoint_signature)` with `sample_count` / `first_seen_at` / `last_seen_at` provenance).
+- Pure transformer in `app/native-server/src/memory/knowledge/api-knowledge-capture.ts`: 9 GitHub families covered (issues / pulls / actions runs / actions workflows / search/issues / search/repositories / repo metadata + their `:number` / `:run_id` detail variants), plus an `unclassified` fallback that still respects redaction.
+- Wired through a new `chrome_network_capture` post-processor — **no MCP surface change**, no extension change. Capture is gated on capability `api_knowledge`; default off.
+- Hard PII guarantees (regression-tested at three layers — pure transformer, repository, post-processor): never persists raw header values, cookies, query values, request body values, or response body text. Only header _names_, query _keys_, body _keys_, presence flags (`hasAuth` / `hasCookie`), and a coarse response shape descriptor.
 
 ### Scope
 
@@ -363,7 +370,7 @@ Wave 5 — long horizon, no dates.
 
 ### Linked `B-*`
 
-- ⬜ `B-017` — API Knowledge capture + schema + redact (XL — may split).
+- ✅ `B-017` v1 — capture-only, GitHub-first, capability-gated, PII-safe (landed 2026-04-22). Remaining v2 work (call layer, JSON-Schema inference, Sidepanel per-site toggle, additional sites) stays in the pool under the same `B-017` umbrella; spin out a sub-ID when v2 is sequenced.
 
 ### Notes for incoming AI
 
@@ -756,15 +763,16 @@ Pick in this order unless something blocks:
 
 1. `B-011` — Stable `targetRef` (finishes Stage 3a properly).
 2. `B-015` — `read_page(render='markdown')` (Stage 3d, small and high-K1).
-3. `B-016` — `TabrixCapability` enum (Stage 3f, unblocks Stage 3g).
+3. `B-018` — `tabrix_choose_context` MCP tool (Stage 3h) — now unblocked by the v1 of `B-016` + `B-017`.
 4. Stage 3b write-side follow-up — `experience_replay` + `experience_score_step` (needs Policy review first; not a single backlog ID yet).
 
-Do not pull `B-017` (API Knowledge) until `B-016` is at least in `review` — API Knowledge depends on the capability framework.
+`B-016` and `B-017` v1 landed 2026-04-22 (capture-only, GitHub-first, capability-gated). v2 work for `B-017` (call layer / JSON-Schema inference / Sidepanel per-site toggle) is intentionally **not** in the next-sprint candidates yet — sequence it after `B-018` proves the read side is actually used.
 
 ---
 
 ## 21. Changelog
 
-| Version  | Date       | Change                                                                                                                                                                                                                                  |
-| -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `v1.0.0` | 2026-04-21 | First consolidated Stage-level roadmap. Supersedes the roadmap portion of [`MKEP_STAGE_3_PLUS_ROADMAP.md`](./MKEP_STAGE_3_PLUS_ROADMAP.md) (kept as historical reference). Covers `Stage 3a → 5e` (17 stages) with DoD + `B-*` mapping. |
+| Version  | Date       | Change                                                                                                                                                                                                                                                                                                                 |
+| -------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v1.0.0` | 2026-04-21 | First consolidated Stage-level roadmap. Supersedes the roadmap portion of [`MKEP_STAGE_3_PLUS_ROADMAP.md`](./MKEP_STAGE_3_PLUS_ROADMAP.md) (kept as historical reference). Covers `Stage 3a → 5e` (17 stages) with DoD + `B-*` mapping.                                                                                |
+| `v1.1.0` | 2026-04-22 | `B-016` + `B-017` v1 landed — capability gate (`TABRIX_POLICY_CAPABILITIES=api_knowledge`) and GitHub-first capture-only API Knowledge. v2 (`knowledge_call_api` / Sidepanel per-site toggle / cross-site / JSON-Schema inference) explicitly deferred. Stage 3f / Stage 3g sections updated with v1-vs-future deltas. |

@@ -277,15 +277,15 @@ Wave 5 —— 远期，无具体时间。
 - **层**：`P` + `M`
 - **KPI**：`更稳`（可审计）
 - **优先级**：`P1` · **规模**：`S` · **依赖**：无
-- **状态**：pool —— `B-016`。
+- **状态**：`v1 done (2026-04-22)` —— `B-016`。v1 只落了枚举 + env 解析；按工具粒度的 capability 注解、`TABRIX_POLICY_ALLOW_P3` ↔ `TABRIX_POLICY_CAPABILITIES` 迁移都明确推迟，让 v1 紧贴 `B-017` 这一刀。
 
 ### 范围
 
-1. `TabrixCapability` 枚举：`vision | elevated_js | download | devtools | testing | cross_origin_nav`。
-2. 每个 P2/P3 工具显式声明所需 capability（`tools.ts`）。
-3. env：`TABRIX_POLICY_ALLOW_P3` → `TABRIX_POLICY_CAPABILITIES`（保持 6 个月以上兼容）。
-4. `MemoryAction.policyCapabilities` 字段（给 Insights tab 和未来审计用）。
-5. 为 Stage 4b 的 origin/siteId 动态策略留接口（保留不实现）。
+1. `TabrixCapability` 枚举（v1：`api_knowledge`；未来 `vision | elevated_js | download | devtools | testing | cross_origin_nav` 等会按 feature 单独追加，**不**做大爆炸式重命名）。
+2. 每个 P2/P3 工具显式声明所需 capability（`tools.ts`）。**已推迟 —— 与 v1 正交；v1 这层 gate 是 feature 级（如 API Knowledge 捕获），不是 tool 级。**
+3. env：`TABRIX_POLICY_ALLOW_P3` → `TABRIX_POLICY_CAPABILITIES`（保持 6 个月以上兼容）。**已推迟 —— v1 把 `TABRIX_POLICY_CAPABILITIES` 当成额外开关、与 `TABRIX_POLICY_ALLOW_P3` 并行运行；尚未做迁移 / 弃用通道。**
+4. `MemoryAction.policyCapabilities` 字段（给 Insights tab 和未来审计用）。**已推迟。**
+5. 为 Stage 4b 的 origin/siteId 动态策略留接口（保留不实现）。**已推迟。**
 
 ### 非范围
 
@@ -318,7 +318,14 @@ Wave 5 —— 远期，无具体时间。
 - **层**：`K` + `P`
 - **KPI**：`省 token`（**最大**）· `更快` · `更准`
 - **优先级**：`P0` · **规模**：`L` · **依赖**：`Stage 3f`（capability 框架）
-- **状态**：pool —— `B-017`。
+- **状态**：`v1 done (2026-04-22)` —— `B-017`。v1 落地的是 **GitHub-first、仅捕获**；`knowledge_call_api`、Sidepanel 按站 toggle、JSON-Schema 推断、跨站点覆盖都明确**不在 v1**，仍留在 pool。
+
+### v1 落地 (2026-04-22)
+
+- 新增 `knowledge_api_endpoints` 表（幂等 migration；按 `(site, endpoint_signature)` 去重，`sample_count` / `first_seen_at` / `last_seen_at` 维护溯源）。
+- 纯转换器在 `app/native-server/src/memory/knowledge/api-knowledge-capture.ts`：覆盖 9 类 GitHub family（issues / pulls / actions runs / actions workflows / search/issues / search/repositories / repo metadata + 各 `:number` / `:run_id` 详情），加 `unclassified` 兜底，但 redaction 一视同仁。
+- 通过新的 `chrome_network_capture` post-processor 接入 —— **MCP 表面零变更**、扩展层零变更。捕获受 `api_knowledge` capability 控制，默认关。
+- 硬性 PII 保证（在三层上回归测试 —— 纯转换器、仓库、post-processor）：永不持久化原始 header value、cookie、query value、request body value、response body 文本。只存 header _名_、query _键_、body _键_、`hasAuth` / `hasCookie` 布尔标记，以及粗粒度的响应 shape 描述。
 
 ### 范围
 
@@ -363,7 +370,7 @@ Wave 5 —— 远期，无具体时间。
 
 ### 关联 `B-*`
 
-- ⬜ `B-017` —— API Knowledge 捕获 + schema + redact（XL，可能拆）。
+- ✅ `B-017` v1 —— 仅捕获、GitHub-first、capability gate、PII-safe（2026-04-22 落地）。剩余 v2（call 层、JSON-Schema 推断、Sidepanel 按站 toggle、其他站点）仍在同一个 `B-017` 名下；排到 v2 时再单独拆 sub-ID。
 
 ### 给接手 AI 的提示
 
@@ -757,14 +764,15 @@ Memory 加 `user_preferences { key, value, sourceSessionId, confidence }` ——
 1. `B-011` —— 稳定 `targetRef`（把 Stage 3a 真正收掉）。
 2. Stage 3b 写侧后续项 —— `experience_replay` + `experience_score_step`（需要先做 Policy review；目前没有单独 backlog ID）。
 3. `B-015` —— `read_page(render='markdown')`（Stage 3d，小而 K1 大）。
-4. `B-016` —— `TabrixCapability` 枚举（Stage 3f，解锁 Stage 3g）。
+4. `B-018` —— `tabrix_choose_context` MCP 工具（Stage 3h），现已被 `B-016` + `B-017` v1 解锁。
 
-**不要**在 `B-016` 至少 `review` 之前拉 `B-017`（API Knowledge）—— API Knowledge 依赖 capability 框架。
+`B-016` / `B-017` v1 已于 2026-04-22 落地（仅捕获、GitHub-first、受 capability gate 控制）。`B-017` v2（call 层 / JSON-Schema 推断 / Sidepanel 按站 toggle）**暂不**进入下个 sprint 候选 —— 等 `B-018` 把读侧需求验出来再排。
 
 ---
 
 ## 21. Changelog
 
-| 版本     | 日期       | 变更                                                                                                                                                                                                    |
-| -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `v1.0.0` | 2026-04-21 | 首份仓库内集中化 Stage 级路线图。取代 [`MKEP_STAGE_3_PLUS_ROADMAP.md`](./MKEP_STAGE_3_PLUS_ROADMAP.md) 的路线图部分（老文档保留作历史参考）。覆盖 `Stage 3a → 5e`（17 个 Stage），含 DoD + `B-*` 映射。 |
+| 版本     | 日期       | 变更                                                                                                                                                                                                                                                                    |
+| -------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v1.0.0` | 2026-04-21 | 首份仓库内集中化 Stage 级路线图。取代 [`MKEP_STAGE_3_PLUS_ROADMAP.md`](./MKEP_STAGE_3_PLUS_ROADMAP.md) 的路线图部分（老文档保留作历史参考）。覆盖 `Stage 3a → 5e`（17 个 Stage），含 DoD + `B-*` 映射。                                                                 |
+| `v1.1.0` | 2026-04-22 | `B-016` + `B-017` v1 落地 —— capability gate（`TABRIX_POLICY_CAPABILITIES=api_knowledge`）+ GitHub-first 仅捕获 API Knowledge。v2（`knowledge_call_api` / Sidepanel 按站 toggle / 跨站点 / JSON-Schema 推断）明确推迟。Stage 3f / Stage 3g 章节同步 v1-vs-future 差异。 |

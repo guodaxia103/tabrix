@@ -179,7 +179,7 @@ Tabrix is a four-layer learning loop sitting on top of a tool surface and a tran
 
 - `read_page` HVO `targetRef` is not yet stable across reloads (Stage 3a — `B-011`).
 - Locator hints for non-GitHub families still in TS adapters.
-- **API Knowledge is completely missing** — the biggest competitive gap (Stage 3g — `B-017`).
+- API Knowledge **v1 landed (Stage 3g — `B-017`, capture-only, GitHub-first, capability-gated)**; the call layer (`knowledge_call_api`) and Sidepanel per-site toggle remain in v2.
 - Only GitHub is properly data-fied; Douyin and Creator Center still TS-first (Stage 4c).
 
 **Code touchpoints**:
@@ -211,14 +211,14 @@ Tabrix is a four-layer learning loop sitting on top of a tool surface and a tran
 
 **Role**: risk-tier gating for every MCP tool, with capability-based opt-in and (future) context-aware overrides.
 
-**Current maturity**: ~40% — `TOOL_RISK_TIERS` (P0/P1/P2/P3) + `requiresExplicitOptIn` shipped in `packages/shared/src/tools.ts`; P3 tools are hidden by default unless allow-listed via env.
+**Current maturity**: ~45% — `TOOL_RISK_TIERS` (P0/P1/P2/P3) + `requiresExplicitOptIn` shipped in `packages/shared/src/tools.ts`; P3 tools are hidden by default unless allow-listed via env. `B-016` v1 added an **orthogonal** feature-level gate — `TabrixCapability` enum (`api_knowledge` in v1) and `TABRIX_POLICY_CAPABILITIES` env — which `B-017` v1's API Knowledge capture is the first consumer of.
 
 **Target**: Policy is context-aware — `PolicyContext = { toolName, pageRole, siteId, recentFailureRate, apiEndpointCalled }` allows dynamic risk re-tiering (e.g. `chrome_javascript` is P2 on GitHub issues page but P3 on `bank.com`).
 
 **Gaps vs. target**:
 
 - Static today — no pageRole / siteId context (Stage 4b).
-- Capability opt-in is a boolean flag, not the full `TabrixCapability` enum (Stage 3f — `B-016`).
+- `TabrixCapability` enum exists (`B-016` v1) but is currently **feature-level** (one entry: `api_knowledge`); per-tool capability annotation + `TABRIX_POLICY_ALLOW_P3` migration are deferred (Stage 3f follow-up).
 - No user-level override layer.
 
 **Code touchpoints**:
@@ -382,6 +382,8 @@ This is the single largest K1 lever. It depends on Stage 3a / 3b / 3d / 3g all b
 
 Modern SPAs carry real semantics in XHR/fetch, not DOM. No surveyed competitor treats "site API catalog" as a first-class Knowledge entity. Capturing `urlPattern + request/response schema + pagination hint + auth` and exposing `knowledge_call_api` (which reuses the user's real Chrome cookies — something cloud browsers cannot do) simultaneously hits K1 (token-thrift), K2 (faster), and K3 (more correct).
 
+**v1 status (B-017, 2026-04-22)**: capture-only, GitHub-first, capability-gated (`TABRIX_POLICY_CAPABILITIES=api_knowledge`). Lands `knowledge_api_endpoints` table with hard PII guarantees (only header _names_ / query _keys_ / body _keys_ / shape descriptors are persisted; no raw tokens, cookies, or response text). v1 deliberately does **not** ship `knowledge_call_api`, JSON-Schema inference, or a Sidepanel per-site toggle — those depend on B-018 proving the read side is wanted before we open the call surface.
+
 ---
 
 ## 10. Task Numbering System
@@ -427,8 +429,8 @@ Full detail, DoD, and `B-*` mapping lives in [`TASK_ROADMAP.md`](./TASK_ROADMAP.
 Wave 1 (near-term, parallelizable)
   3a · Knowledge UI Map + stable targetRef       (B-010 done; B-011 next)
   3d · read_page(render='markdown')              (B-015 pool)
-  3g · API Knowledge (XHR/fetch capture)         (B-017 pool) ← biggest K1 lever
-  3f · Policy capability opt-in enum             (B-016 pool)
+  3g · API Knowledge (capture v1)                (B-017 v1 done; v2 in pool) ← biggest K1 lever
+  3f · Policy capability opt-in enum             (B-016 v1 done)
 
 Wave 2 (depends on Wave 1)
   3b · Experience action-path replay             (B-005 schema done, B-012 done, B-013 done — write-side replay/score_step deferred)
