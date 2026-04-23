@@ -15,7 +15,8 @@
  *
  *   - Pair-aware schema: each KPI scenario runs twice (first_touch /
  *     second_touch). K5 (second-touch speedup) and K8 (token saving
- *     ratio) are MEDIANS across pairs, not means.
+ *     ratio, `(first - second) / first`, higher is better) are
+ *     MEDIANS across pairs, not means.
  *   - Replay eligibility distribution: tool calls carry the V24-03
  *     chooser strategy + `replayEligibleBlockedBy` reason so the
  *     report can show "cold | replay | reuse | knowledge_light"
@@ -153,9 +154,10 @@ export interface BenchmarkToolCallRecordV24 extends BenchmarkToolCallRecord {
   chooserBlockedBy?: BenchmarkReplayBlockReason;
   /**
    * Total LLM-side input tokens attributed to this tool call (the
-   * v23 `inputTokens` field). Mirrored here so K8 (token saving ratio)
-   * can read it without poking back into the v23 type. Optional;
-   * `null` is allowed and means "the runner did not measure it".
+   * v23 `inputTokens` field). Mirrored here so K8 (token saving
+   * ratio, `(first - second) / first`, higher is better) can read it
+   * without poking back into the v23 type. Optional; `null` is allowed
+   * and means "the runner did not measure it".
    */
   tokensIn?: number | null;
 }
@@ -473,7 +475,16 @@ function aggregatePairBuckets(buckets: BenchmarkPairBucket[]): BenchmarkPairAggr
       isNumber(bucket.secondTouchTokensIn) &&
       bucket.firstTouchTokensIn > 0
     ) {
-      k8Samples.push(bucket.secondTouchTokensIn / bucket.firstTouchTokensIn);
+      // v2.4.0 closeout review fix: K8 is the TOKEN SAVING RATIO,
+      // `(first - second) / first`. Higher is better; 1.0 = "second
+      // touch spent zero tokens", 0.0 = "second touch spent the same
+      // as first touch", negative = "second touch was MORE expensive".
+      // This replaces the earlier `second / first` "lower is better"
+      // formulation that the closeout review flagged as inverted vs.
+      // the documented gate target (`>= 0.40` saving).
+      k8Samples.push(
+        (bucket.firstTouchTokensIn - bucket.secondTouchTokensIn) / bucket.firstTouchTokensIn,
+      );
     }
   }
 
@@ -660,7 +671,12 @@ export function summariseBenchmarkRunV24(input: BenchmarkRunInputV24): Benchmark
       isNumber(bucket.secondTouchTokensIn) &&
       bucket.firstTouchTokensIn > 0
     ) {
-      allK8.push(bucket.secondTouchTokensIn / bucket.firstTouchTokensIn);
+      // v2.4.0 closeout review fix: see the matching note in
+      // `aggregatePairBuckets` above. K8 = (first - second) / first,
+      // higher is better, target ≥ 0.40.
+      allK8.push(
+        (bucket.firstTouchTokensIn - bucket.secondTouchTokensIn) / bucket.firstTouchTokensIn,
+      );
     }
   }
 

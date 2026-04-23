@@ -18,7 +18,7 @@ interface GateModuleV24 {
     warnMinK5SecondTouchSpeedup: number;
     warnMinK6ReplaySuccessRate: number;
     warnMaxK7ReplayFallbackRate: number;
-    warnMaxK8TokenSavingRatio: number;
+    warnMinK8TokenSavingRatio: number;
   };
   evaluateBenchmarkGateV24: (summary: unknown, thresholds?: unknown) => string[];
   benchmarkGateAppliesV24: (version: string) => boolean;
@@ -174,7 +174,10 @@ describe('summariseBenchmarkRunV24 — pair-aware K5..K8', () => {
     // pair 0 second-touch: replay (ok) + fallback => K6 = 1/1, K7 = 1/2
     // pair 1 second-touch: replay (failed) + replay (ok) => K6 = 1/2, K7 = 0/2
     // pair 2 second-touch: 2 replays (ok) => K6 = 2/2, K7 = 0/2
-    // tokens: pair 0: 100→40 = 0.4 ; pair 1: 200→60 = 0.3 ; pair 2: 300→150 = 0.5
+    // tokens (K8 = (first - second) / first, higher is better):
+    //   pair 0: 100→40 saving = (100-40)/100 = 0.6
+    //   pair 1: 200→60 saving = (200-60)/200 = 0.7
+    //   pair 2: 300→150 saving = (300-150)/300 = 0.5
     const calls: BenchmarkToolCallRecordV24[] = [];
     let seq = 0;
     function add(o: Partial<BenchmarkToolCallRecordV24>): number {
@@ -266,9 +269,9 @@ describe('summariseBenchmarkRunV24 — pair-aware K5..K8', () => {
     expect(summary.k7ReplayFallbackRate).toBe(0);
   });
 
-  it('K8 token saving ratio median = median(0.4, 0.3, 0.5) = 0.4', () => {
+  it('K8 token saving ratio median = median(0.6, 0.7, 0.5) = 0.6 ((first-second)/first, higher better)', () => {
     const summary = summariseBenchmarkRunV24(pairRun());
-    expect(summary.k8TokenSavingRatio).toBeCloseTo(0.4, 6);
+    expect(summary.k8TokenSavingRatio).toBeCloseTo(0.6, 6);
   });
 
   it('replay eligibility distribution counts strategies and unknowns', () => {
@@ -430,14 +433,27 @@ describe('evaluateBenchmarkGateV24', () => {
     summary.k5SecondTouchSpeedup = 1.0;
     summary.k6ReplaySuccessRate = 0.5;
     summary.k7ReplayFallbackRate = 0.5;
-    summary.k8TokenSavingRatio = 0.9;
+    // K8 is now `(first - second) / first` (higher better, target ≥ 0.40);
+    // 0.1 means the second-touch saved only 10 % of first-touch tokens.
+    summary.k8TokenSavingRatio = 0.1;
     const reasons = gateModule.evaluateBenchmarkGateV24(summary);
     const { hard, soft } = gateModule.partitionGateReasons(reasons);
     expect(hard).toEqual([]);
     expect(soft.some((r) => r.includes('K5'))).toBe(true);
     expect(soft.some((r) => r.includes('K6'))).toBe(true);
     expect(soft.some((r) => r.includes('K7'))).toBe(true);
-    expect(soft.some((r) => r.includes('K8'))).toBe(true);
+    expect(soft.some((r) => r.includes('K8') && r.includes('below guidance'))).toBe(true);
+  });
+
+  it('K8 ABOVE the floor (high saving) does NOT trigger WARN', () => {
+    // Regression-pin for the v2.4.0 closeout review-fix: prior to the
+    // K8 semantic flip, "0.95" meant "second touch spent 95 % of
+    // first" → WARN. Under the corrected semantic it means "saved 95
+    // % of first-touch tokens" → no WARN.
+    const summary = summariseBenchmarkRunV24(passingPairRun());
+    summary.k8TokenSavingRatio = 0.95;
+    const reasons = gateModule.evaluateBenchmarkGateV24(summary);
+    expect(reasons.some((r) => r.includes('K8'))).toBe(false);
   });
 
   it('blocks on non-object input (defensive)', () => {

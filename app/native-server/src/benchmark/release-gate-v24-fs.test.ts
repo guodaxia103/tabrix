@@ -215,7 +215,9 @@ describe('release-gate v24 — fs-anchored content checks', () => {
     summary.k5SecondTouchSpeedup = 0.8;
     summary.k6ReplaySuccessRate = 0.4;
     summary.k7ReplayFallbackRate = 0.6;
-    summary.k8TokenSavingRatio = 0.95;
+    // K8 = (first - second) / first, higher is better, guidance ≥ 0.40.
+    // 0.05 = "second touch saved only 5 %" → WARN.
+    summary.k8TokenSavingRatio = 0.05;
     const filePath = writeReport('warn-only.json', summary);
     const result = gateModule.loadAndEvaluateBenchmarkReportV24(filePath);
     expect(result.ok).toBe(true);

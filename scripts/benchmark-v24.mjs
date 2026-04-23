@@ -218,7 +218,8 @@ function emitBaselineComparison(summary, baselinePath) {
   rows.push(['K5 second-touch speedup (median)', null, summary.k5SecondTouchSpeedup, {}]);
   rows.push(['K6 replay success rate (median)', null, summary.k6ReplaySuccessRate, {}]);
   rows.push(['K7 replay fallback rate (median)', null, summary.k7ReplayFallbackRate, { lowerBetter: true }]);
-  rows.push(['K8 token saving ratio (median)', null, summary.k8TokenSavingRatio, { lowerBetter: true }]);
+  // v2.4.0 closeout: K8 = (first - second) / first, HIGHER is better.
+  rows.push(['K8 token saving ratio (median)', null, summary.k8TokenSavingRatio, {}]);
 
   const lines = [];
   lines.push('# v2.4.0 vs v2.3.0 baseline comparison');

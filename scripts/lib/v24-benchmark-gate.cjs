@@ -21,11 +21,17 @@
  *   - K5 second-touch speedup median guidance: ≥ 1.50.
  *   - K6 replay success rate median guidance: ≥ 0.80.
  *   - K7 replay fallback rate median guidance: ≤ 0.20.
- *   - K8 token saving ratio median guidance: ≤ 0.40 (lower is
- *     better — ratio of second-touch tokens to first-touch tokens).
+ *   - K8 token saving ratio median guidance: ≥ 0.40 (HIGHER is
+ *     better — `(firstTouchTokensIn - secondTouchTokensIn) /
+ *     firstTouchTokensIn`, the fraction of input tokens the
+ *     second-touch saved relative to first-touch). The v2.4.0
+ *     closeout review-fix flipped this away from the earlier
+ *     `secondTouchTokensIn / firstTouchTokensIn` "lower is better"
+ *     formulation that conflicted with the documented gate target.
  *
  * Why soft for K5..K8: the v2.4.0 plan defers K8-driven token-cache
- * work (V24-04) to v2.5 unless real-MCP measurement shows K8 < 0.40.
+ * work (V24-04) to v2.5 unless real-MCP measurement shows K8 < 0.40
+ * (i.e. the second-touch saved less than 40 % of first-touch tokens).
  * Failing the gate on K5..K8 in v2.4 would force the maintainer to
  * either ship without evidence or block on V24-04. Instead we emit
  * `WARN:`-prefixed reasons that the release notes can cite without
@@ -58,8 +64,13 @@ const DEFAULT_BENCHMARK_GATE_THRESHOLDS_V24 = Object.freeze({
   warnMinK6ReplaySuccessRate: 0.8,
   /** Soft (WARN): K7 replay fallback rate ceiling. */
   warnMaxK7ReplayFallbackRate: 0.2,
-  /** Soft (WARN): K8 token saving ratio ceiling. Below this triggers V24-04 defer-decision per plan §6.4. */
-  warnMaxK8TokenSavingRatio: 0.4,
+  /**
+   * Soft (WARN): K8 token saving ratio FLOOR. K8 is `(first - second)
+   * / first` (higher is better). Falling below 0.40 means the
+   * second-touch saved less than 40 % of first-touch input tokens —
+   * the V24-04 token-cache defer-decision trigger per plan §6.4.
+   */
+  warnMinK8TokenSavingRatio: 0.4,
 });
 
 const KNOWN_LANES = new Set(['tabrix_owned', 'cdp', 'debugger', 'unknown']);
@@ -194,10 +205,10 @@ function evaluateBenchmarkGateV24(summary, thresholds = DEFAULT_BENCHMARK_GATE_T
   if (
     typeof k8 === 'number' &&
     Number.isFinite(k8) &&
-    k8 > thresholds.warnMaxK8TokenSavingRatio
+    k8 < thresholds.warnMinK8TokenSavingRatio
   ) {
     reasons.push(
-      `WARN: K8 token saving ratio median ${k8.toFixed(3)} above guidance ${thresholds.warnMaxK8TokenSavingRatio}`,
+      `WARN: K8 token saving ratio median ${k8.toFixed(3)} below guidance ${thresholds.warnMinK8TokenSavingRatio} (higher is better; saving = (first - second) / first)`,
     );
   }
 

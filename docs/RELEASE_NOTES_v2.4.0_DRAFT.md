@@ -37,7 +37,7 @@ The release is backward compatible with v2.3.x. Every new MCP tool is additive; 
 
 ### V24-04 — DEFERRED to v2.5
 
-- The K8 token-cache work (V24-04) is deferred per the `v2.4.0_p0_chain` plan §6.4 conditional. v2.5 picks it up only if the maintainer's real-MCP benchmark shows K8 < 0.40 (i.e. the second-touch token spend drops below 40 % of first-touch). Until then, the v2.4 benchmark gate emits `WARN: K8 …` evidence but does not block on it.
+- The K8 token-cache work (V24-04) is deferred per the `v2.4.0_p0_chain` plan §6.4 conditional. v2.5 picks it up only if the maintainer's real-MCP benchmark shows K8 < 0.40 (i.e. the second-touch saves less than 40 % of first-touch input tokens). Until then, the v2.4 benchmark gate emits `WARN: K8 …` evidence but does not block on it. (v2.4.0 closeout: K8 is the TOKEN SAVING RATIO `(first - second) / first`; HIGHER is better; target ≥ 0.40 — the previous "second / first, lower is better" wording was inverted vs. the gate target and has been corrected.)
 
 ### V24-05 — Real-browser benchmark v2 framework + v2.3 baseline gate
 
@@ -45,10 +45,10 @@ The release is backward compatible with v2.3.x. Every new MCP tool is additive; 
   - **K5 second-touch speedup**: `firstTouchDurationMs / secondTouchDurationMs`, MEDIAN across pairs.
   - **K6 replay success rate**: per-pair `successCount / replayCount` for second-touch tool calls tagged `chooserStrategy = 'experience_replay'`, MEDIAN.
   - **K7 replay fallback rate**: per-pair `fallbackCount / totalSecondTouchCount`, MEDIAN.
-  - **K8 token saving ratio**: `secondTouchTokensIn / firstTouchTokensIn`, MEDIAN. Lower is better; the V24-04 trigger is K8 < 0.40.
+  - **K8 token saving ratio**: `(firstTouchTokensIn - secondTouchTokensIn) / firstTouchTokensIn`, MEDIAN. HIGHER is better; the V24-04 trigger is K8 < 0.40 (i.e. second-touch saves less than 40 % of first-touch input tokens). v2.4.0 closeout corrected the prior "second / first, lower is better" wording, which was inverted vs. the documented gate target.
 - New `replayEligibilityDistribution` and `replayEligibilityBlockedBy` distributions derived from per-tool-call V24-03 chooser metadata (`chooserStrategy`, `chooserBlockedBy`). Lets Codex see "we had a candidate but blocked it because: …" at the run level.
 - New CLI wrapper `pnpm run benchmark:v24` (`scripts/benchmark-v24.mjs`): reads NDJSON, writes `docs/benchmarks/v24/<runId>.json`, supports `--gate` (gate-then-write semantics, hard reasons block the write), and `--baseline <v23-report.json>` to auto-emit `docs/benchmarks/v24/v24-vs-v23-baseline-<date>.md` with the canonical `metric | v2.3.0 baseline | v2.4.0 median | delta | direction` table.
-- New release gate `scripts/lib/v24-benchmark-gate.cjs` (independent CommonJS file from v23): hard invariants are lane-integrity / K3 ≥ 0.85 / K4 ≤ 0.10 / non-empty scenarios / `reportVersion === 1` / `pairCount ≥ 3` per declared KPI scenario / baseline comparison table embed in release notes; soft (`WARN:`) reasons cover K5..K8 guidance (≥ 1.5, ≥ 0.80, ≤ 0.20, ≤ 0.40 respectively). Gate-then-write blocks `--gate` from leaving a failing JSON on disk.
+- New release gate `scripts/lib/v24-benchmark-gate.cjs` (independent CommonJS file from v23): hard invariants are lane-integrity / K3 ≥ 0.85 / K4 ≤ 0.10 / non-empty scenarios / `reportVersion === 1` / `pairCount ≥ 3` per declared KPI scenario / baseline comparison table embed in release notes; soft (`WARN:`) reasons cover K5..K8 guidance (K5 ≥ 1.5, K6 ≥ 0.80, K7 ≤ 0.20, K8 ≥ 0.40 — K8 is "higher is better" under the closeout-corrected `(first - second) / first` semantic). Gate-then-write blocks `--gate` from leaving a failing JSON on disk.
 - `scripts/check-release-readiness.mjs` adds a `benchmarkGateAppliesV24` branch (v2.4.0+) preempting the v23 branch (which still applies to v2.3.x). `--allow-missing-notes` still does NOT bypass the v24 content gate, the baseline-comparison-table embed requirement, or the pairCount check (mirrors the V23-06 closeout).
 
 ## Compatibility
@@ -99,7 +99,7 @@ The numbers below are derived from a synthetic fixture run produced by `release-
 | K7 replay fallback rate (median) | n/a             | _TBD_         | —     | —         |
 | K8 token saving ratio (median)   | n/a             | _TBD_         | —     | —         |
 
-> NOTE: K5..K8 are evidence-only in v2.4 (the gate emits `WARN:` reasons rather than hard-fails). v23 baseline does not measure them. K8 < 0.40 is the v2.5 V24-04 trigger.
+> NOTE: K5..K8 are evidence-only in v2.4 (the gate emits `WARN:` reasons rather than hard-fails). v23 baseline does not measure them. K8 is the token saving ratio `(first - second) / first` — HIGHER is better; K8 < 0.40 is the v2.5 V24-04 trigger.
 
 ## Maintainer command list (real-browser run)
 
