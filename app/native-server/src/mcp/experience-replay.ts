@@ -52,6 +52,7 @@ import type {
   ExperienceRepository,
 } from '../memory/experience/experience-repository';
 import { isCapabilityEnabled, type CapabilityEnv } from '../policy/capabilities';
+import { extractPortableReplayArgs } from './experience-replay-args';
 import type { NativeToolHandler } from './native-tool-handlers';
 
 /** Whitelisted underlying tool names a v1 replay may dispatch. */
@@ -265,7 +266,22 @@ export class ReplayEngine {
       return preconditionCheck;
     }
 
-    const stepsToRun = row.stepSequence;
+    // V24-01 P1 (replay-args portability): the chooser already refuses
+    // rows whose persisted `args` are non-portable (the shared check
+    // lives in `experience-replay-args.ts::extractPortableReplayArgs`),
+    // but direct callers of `experience_replay` (operator opt-in path)
+    // can still hand us an `actionPathId` whose row carries
+    // session-local handles (`tabId`, `ref`, `windowId`, legacy
+    // `ref_*` `targetRef`, `type=ref` `locatorChain`, ...). Without
+    // this defense-in-depth gate those handles would be re-dispatched
+    // verbatim to the bridge - either silently clicking the wrong
+    // element or hitting a dead handle. Per brief §2 item 3 we
+    // fail-closed BEFORE any `recorder.startStep` / `dispatch`.
+    const sanitized = sanitizePortableSteps(row.stepSequence);
+    if (sanitized.kind === 'precondition_error') {
+      return failedPrecondition('unsupported_step_kind', sanitized.message);
+    }
+    const stepsToRun = sanitized.steps;
     const evidenceRefs: TabrixExperienceReplayStepOutcome[] = [];
     const appliedSubstitutionKeys = new Set<TabrixReplayPlaceholder>();
 
@@ -400,6 +416,40 @@ function checkRowPreconditions(
   return null;
 }
 
+/**
+ * Pre-flight portable-args sanitizer (V24-01 P1). Drops every step
+ * down to the per-tool portable allowlist via the shared
+ * {@link extractPortableReplayArgs}; returns a precondition error on
+ * the first non-portable step. The returned step list is what the
+ * dispatch loop must use - subsequent `applySubstitutions` /
+ * `withTargetTab` / `dispatch` MUST NOT see the original
+ * `step.args`, so non-portable keys cannot leak to the bridge.
+ *
+ * Why pre-flight (vs per-step in the loop): brief §6 reserves
+ * `failed-precondition` for "we never even tried"; having the gate
+ * fire before `recorder.startStep` keeps that contract clean for
+ * direct callers too.
+ */
+function sanitizePortableSteps(
+  steps: ReadonlyArray<ExperienceActionPathStep>,
+):
+  | { kind: 'ok'; steps: ExperienceActionPathStep[] }
+  | { kind: 'precondition_error'; message: string } {
+  const out: ExperienceActionPathStep[] = [];
+  for (let i = 0; i < steps.length; i += 1) {
+    const step = steps[i];
+    const portable = extractPortableReplayArgs(step.toolName, step.args);
+    if (!portable) {
+      return {
+        kind: 'precondition_error',
+        message: `experience_replay: step[${i}] '${step.toolName}' lacks portable replay args (row not replay-eligible across sessions)`,
+      };
+    }
+    out.push({ ...step, args: portable });
+  }
+  return { kind: 'ok', steps: out };
+}
+
 interface SubstitutionAppliedOk {
   kind: 'ok';
   args: Record<string, unknown>;
@@ -416,14 +466,15 @@ function applySubstitutions(
   step: ExperienceActionPathStep,
   substitutions: Partial<Record<TabrixReplayPlaceholder, string>>,
 ): SubstitutionAppliedOk | SubstitutionAppliedError {
-  // Defensive guard: chooser-side `isReplayEligible()` already
-  // refuses to route rows whose steps lack PORTABLE `args` (the
-  // shared portability check lives in
-  // `experience-replay-args.ts::extractPortableReplayArgs`), so in
-  // steady state we should never reach this branch from the chooser.
-  // Direct callers of `experience_replay` (operator opt-in path)
-  // can still hit it; we fail-closed rather than guessing - brief
-  // §2 item 3.
+  // Defensive guard. In steady state this branch is unreachable
+  // because:
+  //   - the chooser-side `isReplayEligible()` already refuses to
+  //     route rows whose steps lack PORTABLE `args`, and
+  //   - the engine's pre-flight `sanitizePortableSteps()` runs the
+  //     same shared portability check
+  //     (`experience-replay-args.ts::extractPortableReplayArgs`)
+  //     against direct callers BEFORE we walk the loop.
+  // We still fail-closed here rather than asserting - brief §2 item 3.
   //
   // V24-01 closeout: the aggregator populates `args` for the v1
   // supported step kinds via the same per-tool portable allowlist
@@ -477,8 +528,12 @@ function withTargetTab(
   targetTabId: number | undefined,
 ): Record<string, unknown> {
   if (targetTabId === undefined) return args;
-  // Only inject if the underlying tool's args do not already pin a
-  // tab — never override the recorder's intent.
+  // V24-01 P1: the portable allowlist (see `sanitizePortableSteps`)
+  // strips `tabId` from recorded args, so in steady state the
+  // operator-supplied `targetTabId` always wins. The
+  // already-pinned check stays as defense-in-depth - if a future
+  // capture path ever surfaces a portable `tabId` we still respect
+  // the recorder's intent over the operator's hint.
   if (Object.prototype.hasOwnProperty.call(args, 'tabId')) return args;
   return { ...args, tabId: targetTabId };
 }

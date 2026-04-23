@@ -74,11 +74,15 @@ function buildRow(overrides: Partial<ExperienceActionPathRow> = {}): ExperienceA
         toolName: 'chrome_fill_or_select',
         status: 'ok',
         historyRef: 'h_step_2',
-        // Recorded args carry a literal `queryText` slot so the
-        // declared templateField can substitute it. Brief §5: declared
-        // placeholders MUST be present as top-level args keys.
-        args: { selector: '.search-input', queryText: 'placeholder' },
-        templateFields: ['queryText'],
+        // V24-01 P1: aggregator-written rows carry only the
+        // per-tool portable allowlist (selector / value / ...). The
+        // engine's `sanitizePortableSteps` would refuse a row that
+        // lacks `value`, so the default fixture mirrors a realistic
+        // post-aggregator shape. `templateFields` capture remains
+        // V24-02+, so this fixture has none; tests that need to
+        // exercise the `template_field_missing` branch attach
+        // `templateFields` explicitly.
+        args: { selector: '.search-input', value: 'placeholder' },
       },
     ],
     successCount: 5,
@@ -389,12 +393,19 @@ describe('ReplayEngine — failed-precondition branches (no recorder writes)', (
   });
 
   it('returns `template_field_missing` when caller does not supply a declared placeholder', async () => {
+    // V24-01 P1: row is portable (has selector + value) so the engine's
+    // pre-flight portability gate passes; the per-step template
+    // substitution then complains that `queryText` was not supplied.
+    // (V24-02+ will widen the placeholder→key bridge so a placeholder
+    // can substitute `value` directly; until then the placeholder must
+    // also exist as a literal top-level args key for substitution to
+    // happen.)
     const row = fixRowSteps([
       {
         toolName: 'chrome_fill_or_select',
         status: 'ok',
         historyRef: 'h0',
-        args: { selector: '#search', text: 'placeholder' },
+        args: { selector: '#search', value: 'literal' },
         templateFields: ['queryText'],
       },
     ]);
@@ -421,7 +432,9 @@ describe('ReplayEngine — failed-precondition branches (no recorder writes)', (
         toolName: 'chrome_fill_or_select',
         status: 'ok',
         historyRef: 'h0',
-        args: { selector: '#search' /* no `queryText` key */ },
+        // Portable shape (passes the engine's pre-flight gate) but
+        // lacks the literal `queryText` key the templateField wants.
+        args: { selector: '#search', value: 'literal' /* no `queryText` key */ },
         templateFields: ['queryText'],
       },
     ]);
@@ -447,7 +460,7 @@ describe('ReplayEngine — failed-precondition branches (no recorder writes)', (
 // ---------------------------------------------------------------------------
 
 describe('ReplayEngine — execution', () => {
-  it('walks the full plan, applies substitutions, and reports `ok`', async () => {
+  it('walks the full plan and reports `ok`, dispatching only the portable args', async () => {
     const row = buildRow();
     const recorder = makeRecorder();
     const { dispatch, calls } = makeDispatch([
@@ -461,6 +474,8 @@ describe('ReplayEngine — execution', () => {
     });
     const out = await engine.execute({
       actionPathId: VALID_ID_A,
+      // No templateFields on the default fixture (V24-01); operator
+      // can still hand placeholders in - they simply are not applied.
       variableSubstitutions: { queryText: 'tabrix-bug-1' },
       maxSteps: 16,
     });
@@ -479,7 +494,8 @@ describe('ReplayEngine — execution', () => {
       status: 'ok',
       historyRef: 'h_step_2_live',
     });
-    expect(out.resolved.appliedSubstitutionKeys).toEqual(['queryText']);
+    // Default fixture has no templateFields → nothing applied (V24-02+).
+    expect(out.resolved.appliedSubstitutionKeys).toEqual([]);
     expect(out.resolved.actionPathId).toBe(VALID_ID_A);
     expect(out.resolved.pageRole).toBe('issues_list');
     expect(out.resolved.intentSignature).toBe('open repo issues tab');
@@ -489,12 +505,11 @@ describe('ReplayEngine — execution', () => {
     expect(recorder.completeCalls).toHaveLength(2);
     expect(recorder.failCalls).toHaveLength(0);
 
-    // Substitution actually replaced the placeholder in the second
-    // step's `queryText` arg (NOT the unrelated `selector` arg).
-    expect(calls[1].args.queryText).toBe('tabrix-bug-1');
-    expect(calls[1].args.selector).toBe('.search-input');
-    // Verbatim args on step 0 (no templateFields).
+    // Each dispatch carries ONLY the portable subset for its tool kind
+    // (V24-01 P1: `sanitizePortableSteps` already stripped any
+    // session-local handles - see `experience-replay-args.ts`).
     expect(calls[0].args).toEqual({ selector: '.issues-tab' });
+    expect(calls[1].args).toEqual({ selector: '.search-input', value: 'placeholder' });
   });
 
   it('injects targetTabId into args when not already pinned', async () => {
@@ -522,7 +537,11 @@ describe('ReplayEngine — execution', () => {
     expect(calls[0].args).toEqual({ selector: '.btn', tabId: 42 });
   });
 
-  it('does NOT override pre-pinned tabId in recorded args', async () => {
+  it('strips a pre-pinned tabId from recorded args via the portable allowlist (operator targetTabId wins)', async () => {
+    // V24-01 P1: even if a row was persisted with a session-local
+    // `tabId` (legacy aggregator data, manual SQL, ...), the engine's
+    // `sanitizePortableSteps` drops it before dispatch. The operator
+    // -supplied `targetTabId` is then re-injected by `withTargetTab`.
     const row = fixRowSteps([
       {
         toolName: 'chrome_click_element',
@@ -544,7 +563,7 @@ describe('ReplayEngine — execution', () => {
       maxSteps: 16,
       targetTabId: 42,
     });
-    expect(calls[0].args.tabId).toBe(1);
+    expect(calls[0].args).toEqual({ selector: '.btn', tabId: 42 });
   });
 
   it('terminates on the first per-step failure (no retry, no later steps)', async () => {
@@ -651,6 +670,105 @@ describe('ReplayEngine — execution', () => {
     expect(out.status).toBe('failed');
     expect(out.evidenceRefs[0].failureCode).toBe('step_target_not_found');
     expect(recorder.failCalls[0].errorSummary).toBe('extension disconnected');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// V24-01 P1 — direct-call portable allowlist gate (defense in depth)
+//
+// The chooser already refuses to route non-portable rows to
+// `experience_replay`, but operators can call the bridged tool
+// directly with an `actionPathId` whose row was aggregated before
+// V24-01 (or smuggled in via manual SQL). The engine MUST NOT
+// re-dispatch session-local handles (per-snapshot `ref`, old `tabId`,
+// `windowId`, ...) to the bridge - it would either silently click
+// the wrong element or hit a dead handle. These two tests pin the
+// engine-level gate so a future regression is loud.
+// ---------------------------------------------------------------------------
+
+describe('ReplayEngine — direct-call portable allowlist gate (V24-01 P1)', () => {
+  it('strips non-portable handles (per-snapshot `ref`, recorded `tabId`) before dispatch when called directly', async () => {
+    // Persisted row carries a portable `selector` PLUS session-local
+    // `tabId` + per-snapshot `ref`. Without the gate the engine would
+    // dispatch all three to the bridge.
+    const row = fixRowSteps([
+      {
+        toolName: 'chrome_click_element',
+        status: 'ok',
+        historyRef: 'h0',
+        args: {
+          selector: '.issues-tab',
+          // Session-local handles that MUST NOT survive to dispatch.
+          tabId: 13,
+          ref: 'ref_per_snapshot_xyz',
+        },
+      },
+    ]);
+    const recorder = makeRecorder();
+    const { dispatch, calls } = makeDispatch([alwaysOk()]);
+    const engine = new ReplayEngine({
+      experience: { findActionPathById: () => row },
+      dispatch,
+      recorder,
+    });
+    const out = await engine.execute({
+      actionPathId: VALID_ID_A,
+      variableSubstitutions: {},
+      maxSteps: 16,
+      // Operator-supplied targetTabId is the only legal way to pin a
+      // tab on replay; it gets re-injected after the portable strip.
+      targetTabId: 999,
+    });
+
+    expect(out.status).toBe('ok');
+    expect(calls).toHaveLength(1);
+    // Only the portable selector + the operator's targetTabId reach
+    // the bridge. NO `ref`, NO recorded `tabId: 13`.
+    expect(calls[0]).toEqual({
+      toolName: 'chrome_click_element',
+      args: { selector: '.issues-tab', tabId: 999 },
+    });
+    expect(calls[0].args).not.toHaveProperty('ref');
+    // Recorder DID open one row (the row passed the gate after
+    // sanitization, so the step legitimately ran).
+    expect(recorder.startCalls).toHaveLength(1);
+  });
+
+  it('fails-precondition with zero dispatches and zero startStep when a step has only a per-snapshot `ref`', async () => {
+    // No portable target after stripping (`ref` is non-portable, no
+    // selector, no candidateAction). Direct caller must NOT see the
+    // engine startStep / dispatch ANYTHING.
+    const row = fixRowSteps([
+      {
+        toolName: 'chrome_click_element',
+        status: 'ok',
+        historyRef: 'h0',
+        args: {
+          tabId: 13,
+          ref: 'ref_per_snapshot_xyz',
+        },
+      },
+    ]);
+    const recorder = makeRecorder();
+    const { dispatch, callCount } = makeDispatch([alwaysOk()]);
+    const engine = new ReplayEngine({
+      experience: { findActionPathById: () => row },
+      dispatch,
+      recorder,
+    });
+    const out = await engine.execute({
+      actionPathId: VALID_ID_A,
+      variableSubstitutions: {},
+      maxSteps: 16,
+      targetTabId: 999,
+    });
+
+    expect(out.status).toBe('failed-precondition');
+    expect(out.error?.code).toBe('unsupported_step_kind');
+    expect(callCount()).toBe(0);
+    expect(recorder.startCalls).toHaveLength(0);
+    expect(recorder.completeCalls).toHaveLength(0);
+    expect(recorder.failCalls).toHaveLength(0);
   });
 });
 
