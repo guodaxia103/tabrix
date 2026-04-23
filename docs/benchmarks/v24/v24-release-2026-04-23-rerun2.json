@@ -1,0 +1,383 @@
+{
+  "reportVersion": 1,
+  "runId": "v24-release-2026-04-23-rerun2",
+  "runStartedAt": "2026-04-23T07:48:15.874Z",
+  "runEndedAt": "2026-04-23T07:52:20.234Z",
+  "buildSha": "f76a01809199e4a324fb12fa6189bf49f0461eaa",
+  "totalToolCalls": 96,
+  "scenarioCompletionRate": 1,
+  "totalScenarios": 15,
+  "completedScenarios": 15,
+  "kpiScenarioIds": [
+    "T5-A-GH-REPO-NAV-ISSUES",
+    "T5-A-GH-REPO-NAV-PRS",
+    "T5-F-GH-STABLE-TARGETREF-CROSS-RELOAD",
+    "T5-H-GH-REPO-HOME-READ-MARKDOWN",
+    "T5-I-GH-CHOOSE-CONTEXT-RANKED-REPLAY"
+  ],
+  "k1MeanInputTokensPerTask": 12437.266666666666,
+  "k2PerToolLatencyMs": [
+    {
+      "toolName": "chrome_click_element",
+      "sampleCount": 12,
+      "p50Ms": 6612
+    },
+    {
+      "toolName": "chrome_navigate",
+      "sampleCount": 24,
+      "p50Ms": 3706
+    },
+    {
+      "toolName": "chrome_read_page",
+      "sampleCount": 48,
+      "p50Ms": 1478
+    },
+    {
+      "toolName": "tabrix_choose_context",
+      "sampleCount": 6,
+      "p50Ms": 645.5
+    }
+  ],
+  "k3TaskSuccessRate": 1,
+  "k4ToolRetryRate": 0,
+  "k4FallbackRate": 0,
+  "readPageProbeCount": 48,
+  "laneCounters": {
+    "tabrixOwnedCount": 12,
+    "cdpCount": 0,
+    "debuggerCount": 0,
+    "unknownCount": 84,
+    "violationCount": 0
+  },
+  "meanClickAttemptsPerStep": 1,
+  "pairs": [
+    {
+      "scenarioId": "T5-A-GH-REPO-NAV-ISSUES",
+      "perPair": [
+        {
+          "pairIndex": 0,
+          "firstTouchDurationMs": 14516,
+          "secondTouchDurationMs": 13698,
+          "firstTouchTokensIn": 7125,
+          "secondTouchTokensIn": 7103,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 4,
+          "complete": true
+        },
+        {
+          "pairIndex": 1,
+          "firstTouchDurationMs": 11129,
+          "secondTouchDurationMs": 13697,
+          "firstTouchTokensIn": 7141,
+          "secondTouchTokensIn": 7125,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 4,
+          "complete": true
+        },
+        {
+          "pairIndex": 2,
+          "firstTouchDurationMs": 11014,
+          "secondTouchDurationMs": 13312,
+          "firstTouchTokensIn": 7141,
+          "secondTouchTokensIn": 7125,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 4,
+          "complete": true
+        }
+      ],
+      "aggregate": {
+        "pairCount": 3,
+        "incompletePairs": 0,
+        "k5SecondTouchSpeedupMedian": 0.8273737980769231,
+        "k5SecondTouchSpeedupMin": 0.8125136891290063,
+        "k5SecondTouchSpeedupMax": 1.0597167469703606,
+        "k5SecondTouchSpeedupStddev": 0.1131927660353289,
+        "k6ReplaySuccessRateMedian": null,
+        "k6ReplaySuccessRateMin": null,
+        "k6ReplaySuccessRateMax": null,
+        "k6ReplaySuccessRateStddev": null,
+        "k7ReplayFallbackRateMedian": 0.25,
+        "k7ReplayFallbackRateMin": 0.25,
+        "k7ReplayFallbackRateMax": 0.25,
+        "k7ReplayFallbackRateStddev": 0,
+        "k8TokenSavingRatioMedian": 0.0022405825514633807,
+        "k8TokenSavingRatioMin": 0.0022405825514633807,
+        "k8TokenSavingRatioMax": 0.003087719298245614,
+        "k8TokenSavingRatioStddev": 0.00039934409216135227
+      }
+    },
+    {
+      "scenarioId": "T5-A-GH-REPO-NAV-PRS",
+      "perPair": [
+        {
+          "pairIndex": 0,
+          "firstTouchDurationMs": 14275,
+          "secondTouchDurationMs": 14114,
+          "firstTouchTokensIn": 7133,
+          "secondTouchTokensIn": 7153,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 4,
+          "complete": true
+        },
+        {
+          "pairIndex": 1,
+          "firstTouchDurationMs": 14144,
+          "secondTouchDurationMs": 13422,
+          "firstTouchTokensIn": 7133,
+          "secondTouchTokensIn": 7133,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 4,
+          "complete": true
+        },
+        {
+          "pairIndex": 2,
+          "firstTouchDurationMs": 13927,
+          "secondTouchDurationMs": 13745,
+          "firstTouchTokensIn": 7133,
+          "secondTouchTokensIn": 7128,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 4,
+          "complete": true
+        }
+      ],
+      "aggregate": {
+        "pairCount": 3,
+        "incompletePairs": 0,
+        "k5SecondTouchSpeedupMedian": 1.0132411786104039,
+        "k5SecondTouchSpeedupMin": 1.0114071135043219,
+        "k5SecondTouchSpeedupMax": 1.0537922813291611,
+        "k5SecondTouchSpeedupStddev": 0.019562600878150524,
+        "k6ReplaySuccessRateMedian": null,
+        "k6ReplaySuccessRateMin": null,
+        "k6ReplaySuccessRateMax": null,
+        "k6ReplaySuccessRateStddev": null,
+        "k7ReplayFallbackRateMedian": 0.25,
+        "k7ReplayFallbackRateMin": 0.25,
+        "k7ReplayFallbackRateMax": 0.25,
+        "k7ReplayFallbackRateStddev": 0,
+        "k8TokenSavingRatioMedian": 0,
+        "k8TokenSavingRatioMin": -0.0028038693396887707,
+        "k8TokenSavingRatioMax": 0.0007009673349221927,
+        "k8TokenSavingRatioStddev": 0.0015142625118949157
+      }
+    },
+    {
+      "scenarioId": "T5-F-GH-STABLE-TARGETREF-CROSS-RELOAD",
+      "perPair": [
+        {
+          "pairIndex": 0,
+          "firstTouchDurationMs": 8064,
+          "secondTouchDurationMs": 4854,
+          "firstTouchTokensIn": 8905,
+          "secondTouchTokensIn": 8921,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 4,
+          "complete": true
+        },
+        {
+          "pairIndex": 1,
+          "firstTouchDurationMs": 8099,
+          "secondTouchDurationMs": 4698,
+          "firstTouchTokensIn": 8905,
+          "secondTouchTokensIn": 8921,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 4,
+          "complete": true
+        },
+        {
+          "pairIndex": 2,
+          "firstTouchDurationMs": 7060,
+          "secondTouchDurationMs": 5171,
+          "firstTouchTokensIn": 8905,
+          "secondTouchTokensIn": 8921,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 4,
+          "complete": true
+        }
+      ],
+      "aggregate": {
+        "pairCount": 3,
+        "incompletePairs": 0,
+        "k5SecondTouchSpeedupMedian": 1.661310259579728,
+        "k5SecondTouchSpeedupMin": 1.365306517114678,
+        "k5SecondTouchSpeedupMax": 1.7239250744997872,
+        "k5SecondTouchSpeedupStddev": 0.15639909785963374,
+        "k6ReplaySuccessRateMedian": null,
+        "k6ReplaySuccessRateMin": null,
+        "k6ReplaySuccessRateMax": null,
+        "k6ReplaySuccessRateStddev": null,
+        "k7ReplayFallbackRateMedian": 0.25,
+        "k7ReplayFallbackRateMin": 0.25,
+        "k7ReplayFallbackRateMax": 0.25,
+        "k7ReplayFallbackRateStddev": 0,
+        "k8TokenSavingRatioMedian": -0.0017967434025828186,
+        "k8TokenSavingRatioMin": -0.0017967434025828186,
+        "k8TokenSavingRatioMax": -0.0017967434025828186,
+        "k8TokenSavingRatioStddev": 0
+      }
+    },
+    {
+      "scenarioId": "T5-H-GH-REPO-HOME-READ-MARKDOWN",
+      "perPair": [
+        {
+          "pairIndex": 0,
+          "firstTouchDurationMs": 4394,
+          "secondTouchDurationMs": 4689,
+          "firstTouchTokensIn": 9119,
+          "secondTouchTokensIn": 6405,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 3,
+          "complete": true
+        },
+        {
+          "pairIndex": 1,
+          "firstTouchDurationMs": 4164,
+          "secondTouchDurationMs": 4801,
+          "firstTouchTokensIn": 9119,
+          "secondTouchTokensIn": 6405,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 3,
+          "complete": true
+        },
+        {
+          "pairIndex": 2,
+          "firstTouchDurationMs": 4301,
+          "secondTouchDurationMs": 4637,
+          "firstTouchTokensIn": 9119,
+          "secondTouchTokensIn": 6405,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 3,
+          "complete": true
+        }
+      ],
+      "aggregate": {
+        "pairCount": 3,
+        "incompletePairs": 0,
+        "k5SecondTouchSpeedupMedian": 0.9275393573431098,
+        "k5SecondTouchSpeedupMin": 0.8673193084774006,
+        "k5SecondTouchSpeedupMax": 0.9370867988910215,
+        "k5SecondTouchSpeedupStddev": 0.03088529071709251,
+        "k6ReplaySuccessRateMedian": null,
+        "k6ReplaySuccessRateMin": null,
+        "k6ReplaySuccessRateMax": null,
+        "k6ReplaySuccessRateStddev": null,
+        "k7ReplayFallbackRateMedian": 0.3333333333333333,
+        "k7ReplayFallbackRateMin": 0.3333333333333333,
+        "k7ReplayFallbackRateMax": 0.3333333333333333,
+        "k7ReplayFallbackRateStddev": 0,
+        "k8TokenSavingRatioMedian": 0.2976203531088935,
+        "k8TokenSavingRatioMin": 0.2976203531088935,
+        "k8TokenSavingRatioMax": 0.2976203531088935,
+        "k8TokenSavingRatioStddev": 0
+      }
+    },
+    {
+      "scenarioId": "T5-I-GH-CHOOSE-CONTEXT-RANKED-REPLAY",
+      "perPair": [
+        {
+          "pairIndex": 0,
+          "firstTouchDurationMs": 692,
+          "secondTouchDurationMs": 663,
+          "firstTouchTokensIn": 156,
+          "secondTouchTokensIn": 156,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 1,
+          "complete": true
+        },
+        {
+          "pairIndex": 1,
+          "firstTouchDurationMs": 628,
+          "secondTouchDurationMs": 673,
+          "firstTouchTokensIn": 156,
+          "secondTouchTokensIn": 156,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 1,
+          "complete": true
+        },
+        {
+          "pairIndex": 2,
+          "firstTouchDurationMs": 627,
+          "secondTouchDurationMs": 557,
+          "firstTouchTokensIn": 156,
+          "secondTouchTokensIn": 156,
+          "secondTouchReplayCount": 0,
+          "secondTouchReplaySuccessCount": 0,
+          "secondTouchFallbackCount": 1,
+          "secondTouchTotalCount": 1,
+          "complete": true
+        }
+      ],
+      "aggregate": {
+        "pairCount": 3,
+        "incompletePairs": 0,
+        "k5SecondTouchSpeedupMedian": 1.043740573152338,
+        "k5SecondTouchSpeedupMin": 0.9331352154531947,
+        "k5SecondTouchSpeedupMax": 1.125673249551167,
+        "k5SecondTouchSpeedupStddev": 0.07889331980447649,
+        "k6ReplaySuccessRateMedian": null,
+        "k6ReplaySuccessRateMin": null,
+        "k6ReplaySuccessRateMax": null,
+        "k6ReplaySuccessRateStddev": null,
+        "k7ReplayFallbackRateMedian": 1,
+        "k7ReplayFallbackRateMin": 1,
+        "k7ReplayFallbackRateMax": 1,
+        "k7ReplayFallbackRateStddev": 0,
+        "k8TokenSavingRatioMedian": 0,
+        "k8TokenSavingRatioMin": 0,
+        "k8TokenSavingRatioMax": 0,
+        "k8TokenSavingRatioStddev": 0
+      }
+    }
+  ],
+  "k5SecondTouchSpeedup": 1.0132411786104039,
+  "k6ReplaySuccessRate": null,
+  "k7ReplayFallbackRate": 0.25,
+  "k8TokenSavingRatio": 0,
+  "replayEligibilityDistribution": {
+    "experience_replay": 0,
+    "experience_reuse": 12,
+    "knowledge_light": 0,
+    "read_page_required": 0,
+    "read_page_markdown": 3,
+    "cold": 15,
+    "unknown": 66
+  },
+  "replayEligibilityBlockedBy": {
+    "capability_off": 0,
+    "unsupported_step_kind": 0,
+    "non_portable_args": 0,
+    "non_github_pageRole": 0,
+    "below_threshold": 0,
+    "stale_locator": 0,
+    "none": 0,
+    "unknown": 96
+  }
+}
