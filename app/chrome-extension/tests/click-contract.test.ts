@@ -94,6 +94,25 @@ describe('mergeClickSignals (pure function)', () => {
     expect(merged.verification.navigationOccurred).toBe(false);
   });
 
+  /**
+   * V25-04 (no-regression): the verifier hook (B-024) ONLY operates
+   * on the response side — it can collapse `finalSuccess` to false on
+   * a verifier-rejected outcome. It must NEVER feed back into
+   * `mergeClickSignals` so as to upgrade an outcome. Concretely:
+   * `success === true` is a function of the merged page+browser
+   * signals alone, and `no_observed_change` from those signals can
+   * never be turned into a success-like outcome by an external
+   * verifier verdict. This test is a structural pin — it locks the
+   * fact that `mergeClickSignals` has no `verifierResult` parameter
+   * and therefore its outcome is independent of any verifier.
+   */
+  it('V25-04: mergeClickSignals signature does not accept a verifier result', () => {
+    expect(mergeClickSignals.length).toBe(3);
+    const noChange = mergeClickSignals(true, zeroPage, { newTabOpened: false });
+    expect(noChange.observedOutcome).toBe('no_observed_change');
+    expect(noChange.success).toBe(false);
+  });
+
   it('beforeunload → cross_document_navigation, success=true', () => {
     const merged = mergeClickSignals(
       true,

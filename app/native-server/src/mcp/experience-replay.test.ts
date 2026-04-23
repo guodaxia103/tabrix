@@ -537,6 +537,120 @@ describe('ReplayEngine — execution', () => {
     expect(calls[0].args).toEqual({ selector: '.btn', tabId: 42 });
   });
 
+  /**
+   * V25-04 no-regression: a row recorded against an L0+L1+L2
+   * snapshot may still be replayed safely when the choosing turn
+   * previously read at the reduced L0 envelope. The persisted
+   * portable args must not include any per-snapshot `ref_*` handle,
+   * `tabId`, `windowId`, `frameId`, or coordinates — those are
+   * session-local and would aim at the wrong element under any
+   * subsequent snapshot, regardless of whether L1/L2 was loaded.
+   *
+   * The row below mimics what an L0-driven turn would persist: the
+   * stable `tgt_*` survives, but everything per-snapshot is stripped
+   * by `sanitizePortableSteps` at dispatch time.
+   */
+  it('reduced L0 row stays replay-safe — sanitizePortableSteps drops historical refs and session handles', async () => {
+    const row = fixRowSteps([
+      {
+        toolName: 'chrome_click_element',
+        status: 'ok',
+        historyRef: 'h0',
+        args: {
+          selector: '.issues-tab',
+          // V24-01 P1: even though a recorder under an old L0+L1+L2
+          // turn might capture all of these, the engine MUST drop:
+          //   - per-snapshot `ref_*` (would point at the wrong element)
+          //   - tabId/windowId/frameId (session-local handles)
+          //   - coordinates (viewport-dependent)
+          //   - candidateAction.locatorChain entries with type === 'ref'
+          ref: 'ref_legacy_must_not_replay',
+          tabId: 999,
+          windowId: 7,
+          frameId: 1,
+          coordinates: { x: 100, y: 200 },
+          candidateAction: {
+            targetRef: 'tgt_aaaaaaaaaa',
+            locatorChain: [
+              { type: 'ref', value: 'ref_should_be_dropped' },
+              { type: 'css', value: '.issues-tab' },
+            ],
+          },
+        },
+      },
+    ]);
+    const recorder = makeRecorder();
+    const { dispatch, calls } = makeDispatch([alwaysOk()]);
+    const engine = new ReplayEngine({
+      experience: { findActionPathById: () => row },
+      dispatch,
+      recorder,
+    });
+    const out = await engine.execute({
+      actionPathId: VALID_ID_A,
+      variableSubstitutions: {},
+      maxSteps: 16,
+      targetTabId: 42,
+    });
+
+    expect(out.status).toBe('ok');
+    expect(calls).toHaveLength(1);
+    const dispatched = calls[0].args as Record<string, unknown>;
+    // Stable surface preserved.
+    expect(dispatched.selector).toBe('.issues-tab');
+    expect((dispatched.candidateAction as { targetRef?: string }).targetRef).toBe('tgt_aaaaaaaaaa');
+    // Operator-supplied tabId reinjected (only safe session pin).
+    expect(dispatched.tabId).toBe(42);
+    // Per-snapshot / viewport-local fields stripped.
+    expect(dispatched.ref).toBeUndefined();
+    expect(dispatched.windowId).toBeUndefined();
+    expect(dispatched.frameId).toBeUndefined();
+    expect(dispatched.coordinates).toBeUndefined();
+    // Locator chain `ref` entries dropped; only `css` survives.
+    const locator = (dispatched.candidateAction as { locatorChain?: unknown[] }).locatorChain;
+    expect(Array.isArray(locator)).toBe(true);
+    expect(locator).toEqual([{ type: 'css', value: '.issues-tab' }]);
+  });
+
+  /**
+   * V25-04 no-regression (negative direction): a row whose ONLY
+   * targeting handle is a per-snapshot `ref_*` (no portable
+   * targetRef, no css locator, no selector) MUST be rejected by
+   * `sanitizePortableSteps` regardless of which layer envelope the
+   * upstream turn used. Historical refs stay fail-closed.
+   */
+  it('historical ref-only rows still fail-closed under reduced L0 envelopes', async () => {
+    const row = fixRowSteps([
+      {
+        toolName: 'chrome_click_element',
+        status: 'ok',
+        historyRef: 'h0',
+        // ref_* would have been valid in the original session but is
+        // a per-snapshot handle - portable allowlist drops it, and
+        // there is nothing left to target by.
+        args: { ref: 'ref_legacy_only' },
+      },
+    ]);
+    const recorder = makeRecorder();
+    const { dispatch, callCount } = makeDispatch([alwaysOk()]);
+    const engine = new ReplayEngine({
+      experience: { findActionPathById: () => row },
+      dispatch,
+      recorder,
+    });
+    const out = await engine.execute({
+      actionPathId: VALID_ID_A,
+      variableSubstitutions: {},
+      maxSteps: 16,
+      targetTabId: 42,
+    });
+
+    expect(out.status).toBe('failed-precondition');
+    expect(callCount()).toBe(0);
+    expect(recorder.startCalls).toHaveLength(0);
+    expect(recorder.failCalls).toHaveLength(0);
+  });
+
   it('strips a pre-pinned tabId from recorded args via the portable allowlist (operator targetTabId wins)', async () => {
     // V24-01 P1: even if a row was persisted with a session-local
     // `tabId` (legacy aggregator data, manual SQL, ...), the engine's
