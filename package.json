@@ -50,6 +50,7 @@
     "release:check:ci": "node ./scripts/check-release-readiness.mjs --allow-missing-notes",
     "release:choose-context-stats": "node ./scripts/release-choose-context-stats.mjs",
     "benchmark:v23": "node ./scripts/benchmark-v23.mjs",
+    "benchmark:v24": "node ./scripts/benchmark-v24.mjs",
     "size:check": "node ./scripts/check-bundle-size.mjs",
     "ci:check": "pnpm run i18n:check && pnpm run docs:check && pnpm run typecheck && pnpm run test:core && pnpm run audit",
     "prepare": "husky"
