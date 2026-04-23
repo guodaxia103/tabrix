@@ -640,6 +640,141 @@ describe('runTabrixChooseContext (orchestrator)', () => {
     expect(result.strategy).toBe('experience_reuse');
   });
 
+  // V24-01 portability follow-up: the eligibility gate is no longer
+  // "args is non-empty" - it is the per-tool portable allowlist in
+  // `experience-replay-args.ts`. These tests pin the chooser-side
+  // behaviour for rows whose persisted args are well-formed JSON
+  // but carry only session-local handles (a common shape for rows
+  // aggregated by an older code path or smuggled in via manual
+  // SQL). The chooser must downgrade them to `experience_reuse`
+  // rather than route them to a dispatch path that would either
+  // misclick or hit a dead ref.
+
+  it('stays on experience_reuse when a step args carry only a per-snapshot ref', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-ref-only',
+        pageRole: 'issues_list',
+        stepSequence: [
+          {
+            toolName: 'chrome_click_element',
+            status: 'completed',
+            historyRef: null,
+            // Top-level `ref` is per-snapshot session-local; the
+            // portable allowlist drops it. Without `selector`,
+            // `candidateAction.targetRef`, or a css `locatorChain`,
+            // the row has no portable target.
+            args: { ref: 'ref_per_snapshot_xyz' },
+          },
+        ],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+      },
+    );
+    expect(result.strategy).toBe('experience_reuse');
+    expect(result.fallbackStrategy).toBe('read_page_required');
+  });
+
+  it('stays on experience_reuse when candidateAction.targetRef is the legacy ref_* form', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-legacy-targetref',
+        pageRole: 'issues_list',
+        stepSequence: [
+          {
+            toolName: 'chrome_click_element',
+            status: 'completed',
+            historyRef: null,
+            // Only `tgt_*` survives portability filtering;
+            // legacy `ref_*` targetRef is per-snapshot.
+            args: { candidateAction: { targetRef: 'ref_legacy_session_local' } },
+          },
+        ],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+      },
+    );
+    expect(result.strategy).toBe('experience_reuse');
+  });
+
+  it('routes to experience_replay when candidateAction.targetRef is the stable tgt_* form', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-stable-targetref',
+        pageRole: 'issues_list',
+        stepSequence: [
+          {
+            toolName: 'chrome_click_element',
+            status: 'completed',
+            historyRef: null,
+            // Companion to the previous test: B-011 stable refs are
+            // explicitly portable, so this row IS replay-eligible
+            // even without a top-level selector.
+            args: { candidateAction: { targetRef: 'tgt_0123456789' } },
+          },
+        ],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+      },
+    );
+    expect(result.strategy).toBe('experience_replay');
+    expect(result.fallbackStrategy).toBe('experience_reuse');
+  });
+
+  it('stays on experience_reuse when chrome_fill_or_select args are missing the value', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-fill-noval',
+        pageRole: 'issues_list',
+        stepSequence: [
+          {
+            toolName: 'chrome_fill_or_select',
+            status: 'completed',
+            historyRef: null,
+            // chrome_fill_or_select schema requires `value`; without
+            // it the bridge would reject the call at dispatch.
+            args: { selector: '#search' },
+          },
+        ],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'search', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+      },
+    );
+    expect(result.strategy).toBe('experience_reuse');
+  });
+
   it('the "all" capability token enables experience_replay routing', () => {
     const { service } = fakeExperience([
       fakeRow({

@@ -49,6 +49,7 @@ import type { KnowledgeApiRepository } from '../memory/knowledge/knowledge-api-r
 import type { ExperienceQueryService } from '../memory/experience';
 import type { ExperienceActionPathRow } from '../memory/experience/experience-repository';
 import type { ChooseContextTelemetryRepository } from '../memory/telemetry/choose-context-telemetry';
+import { extractPortableReplayArgs } from './experience-replay-args';
 
 export class TabrixChooseContextInputError extends Error {
   public readonly code: 'TABRIX_CHOOSE_CONTEXT_BAD_INPUT';
@@ -414,20 +415,24 @@ function pickExperienceHit(
  *   1. the operator has opted into the `experience_replay` capability,
  *   2. the row's `pageRole` is in the v1 GitHub-only allowlist,
  *   3. every step's `toolName` is in the v1 supported step-kind set, AND
- *   4. every step actually carries non-empty `args` — i.e. the
- *      aggregator has populated the bridged-tool input shape so the
- *      replay engine can re-dispatch verbatim.
+ *   4. every step's persisted `args` are PORTABLE across sessions
+ *      under the per-tool allowlist in
+ *      `experience-replay-args.ts::extractPortableReplayArgs`.
  *
- * The `args` check is the V24-01 "stop the bleeding" fix: rows
- * aggregated before the aggregator started writing `args` have
- * `step.args === undefined`, and `experience_replay`'s engine
- * `applySubstitutions()` would fail closed with `unsupported_step_kind`
- * the moment we tried. Routing such rows to `experience_replay` would
- * starve the more reliable `experience_reuse` branch and surface as a
- * deterministic per-call failure, so the chooser now refuses up front.
+ * Why "portable", not just "non-empty": an earlier closeout of this
+ * function only checked that `step.args` existed and had >= 1 key.
+ * Codex's follow-up review pointed out that an aggregator written
+ * before the portability work could happily persist
+ * `{ tabId: 7, ref: 'ref_xyz' }` (well-formed JSON, non-empty) and
+ * the chooser would route it to `experience_replay`; the engine
+ * would then either click the wrong element in the operator's tab
+ * or hit a dead per-snapshot ref. The portability check is the
+ * actual safety property - "non-empty" was a proxy for it.
  *
- * Any other case stays on the existing `experience_reuse` branch — the
- * recorded plan still advises the upstream LLM, just without
+ * Any failure (capability off, wrong pageRole, unsupported step
+ * kind, OR `extractPortableReplayArgs(...)` returns `undefined` for
+ * any step) keeps the row on the existing `experience_reuse` branch:
+ * the recorded plan still advises the upstream LLM, just without
  * Tabrix-side dispatch.
  */
 function isReplayEligible(row: ExperienceActionPathRow, capabilityEnabled: boolean): boolean {
@@ -436,7 +441,12 @@ function isReplayEligible(row: ExperienceActionPathRow, capabilityEnabled: boole
   if (row.stepSequence.length === 0) return false;
   for (const step of row.stepSequence) {
     if (!TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS.has(step.toolName)) return false;
-    if (!step.args || Object.keys(step.args).length === 0) return false;
+    // Defense in depth: even if the aggregator persisted args, those
+    // args MUST satisfy the same portability rules the aggregator
+    // applies on write. A `ref_*` targetRef that somehow slipped past
+    // (manual SQL, older code path, future regression) gets caught
+    // here and routed to `experience_reuse`.
+    if (!extractPortableReplayArgs(step.toolName, step.args)) return false;
   }
   return true;
 }
