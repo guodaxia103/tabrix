@@ -300,6 +300,23 @@ describe('V24-01 closeout: real-aggregated-row → chooser → replay handler', 
       ]);
 
       // ---- 3. Chooser routes to experience_replay --------------------
+      // V24-03 bumped the chooser thresholds to require
+      // `successCount >= EXPERIENCE_REPLAY_MIN_SUCCESS_COUNT` (=3).
+      // The single freshly-aggregated session above only seeds
+      // `successCount=1`, so we top it up via two extra `upsertActionPath`
+      // calls to keep the V24-01 invariant ("aggregator-produced row is
+      // routed to experience_replay") under V24-03's stricter gate.
+      experienceRepo.upsertActionPath({
+        actionPathId: aggregatedRow.actionPathId,
+        pageRole: aggregatedRow.pageRole,
+        intentSignature: aggregatedRow.intentSignature,
+        stepSequence: aggregatedRow.stepSequence,
+        successDelta: 2,
+        failureDelta: 0,
+        lastUsedAt: '2026-04-22T00:00:11.000Z',
+        createdAt: aggregatedRow.createdAt,
+        updatedAt: '2026-04-22T00:00:11.000Z',
+      });
       const decision = runTabrixChooseContext(
         { intent: 'open repo issues tab', pageRole: 'issues_list' },
         {
@@ -312,6 +329,8 @@ describe('V24-01 closeout: real-aggregated-row → chooser → replay handler', 
       expect(decision.strategy).toBe('experience_replay');
       expect(decision.fallbackStrategy).toBe('experience_reuse');
       expect(decision.artifacts?.[0]?.ref).toBe(aggregatedRow.actionPathId);
+      expect(decision.artifacts?.[0]?.kind).toBe('experience_ranked');
+      expect(decision.replayEligibleBlockedBy).toBe('none');
 
       // ---- 4. Replay handler successfully runs the real row ---------
       const recorder = makeRecorder();
@@ -489,6 +508,19 @@ describe('V24-01 closeout: real-aggregated-row → chooser → replay handler', 
         },
       });
 
+      // V24-03: top up `successCount` past the new chooser threshold
+      // (see the analogous note in the previous test for context).
+      experienceRepo.upsertActionPath({
+        actionPathId: aggregatedRow.actionPathId,
+        pageRole: aggregatedRow.pageRole,
+        intentSignature: aggregatedRow.intentSignature,
+        stepSequence: aggregatedRow.stepSequence,
+        successDelta: 2,
+        failureDelta: 0,
+        lastUsedAt: '2026-04-22T00:00:11.000Z',
+        createdAt: aggregatedRow.createdAt,
+        updatedAt: '2026-04-22T00:00:11.000Z',
+      });
       const decision = runTabrixChooseContext(
         { intent: 'click with mixed ref+selector', pageRole: 'issues_list' },
         {

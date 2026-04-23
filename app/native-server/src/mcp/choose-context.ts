@@ -32,12 +32,12 @@ import {
   MARKDOWN_FRIENDLY_PAGE_ROLES,
   MAX_TABRIX_CHOOSE_CONTEXT_INTENT_CHARS,
   MAX_TABRIX_CHOOSE_CONTEXT_PAGE_ROLE_CHARS,
-  TABRIX_EXPERIENCE_REPLAY_GITHUB_PAGE_ROLES,
-  TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS,
   type ContextStrategyName,
+  type ReplayEligibilityBlockReason,
   type TabrixChooseContextArtifact,
   type TabrixChooseContextInput,
   type TabrixChooseContextOutcome,
+  type TabrixChooseContextRankedCandidate,
   type TabrixChooseContextRecordOutcomeResult,
   type TabrixChooseContextResult,
   type TabrixContextSiteFamily,
@@ -49,7 +49,7 @@ import type { KnowledgeApiRepository } from '../memory/knowledge/knowledge-api-r
 import type { ExperienceQueryService } from '../memory/experience';
 import type { ExperienceActionPathRow } from '../memory/experience/experience-repository';
 import type { ChooseContextTelemetryRepository } from '../memory/telemetry/choose-context-telemetry';
-import { extractPortableReplayArgs } from './experience-replay-args';
+import { rankExperienceCandidates } from './choose-context-replay-rules';
 
 export class TabrixChooseContextInputError extends Error {
   public readonly code: 'TABRIX_CHOOSE_CONTEXT_BAD_INPUT';
@@ -217,11 +217,29 @@ export interface ChooseContextFacts {
      *     `TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS`,
      *   - the row's `successRate >= EXPERIENCE_HIT_MIN_SUCCESS_RATE`
      *     (already true if `experienceHit` exists).
-     * v1 keeps the branch narrow on purpose: ranked-candidates and
-     * fallback ladders are V24-03's job, not this PR's.
+     * V24-03 widens the AND set with the stricter
+     * `EXPERIENCE_REPLAY_MIN_SUCCESS_RATE` /
+     * `EXPERIENCE_REPLAY_MIN_SUCCESS_COUNT` thresholds; the legacy
+     * `experience_reuse` gate (`EXPERIENCE_HIT_MIN_SUCCESS_RATE`) is
+     * unchanged.
      */
     replayEligible?: boolean;
   };
+  /**
+   * V24-03 — ranked replay candidates surfaced as a single
+   * `experience_ranked` artifact. Populated whenever the chooser
+   * has Experience rows in scope (regardless of which strategy it
+   * ultimately picks); empty when no rows came back. The ordering
+   * is the deterministic ranking from `rankExperienceCandidates`.
+   */
+  rankedReplayCandidates?: TabrixChooseContextRankedCandidate[];
+  /**
+   * V24-03 — first reason the top-1 ranked candidate was refused
+   * routing to `experience_replay`. `'none'` when the chooser
+   * actually picked `experience_replay`; absent when the chooser
+   * never had a candidate to consider.
+   */
+  rankedTopBlockedBy?: ReplayEligibilityBlockReason;
   /**
    * Knowledge catalog summary, populated only when the capability gate
    * is on AND there is at least one captured endpoint for the resolved
@@ -240,6 +258,12 @@ interface StrategyDecision {
   fallbackStrategy?: ContextStrategyName;
   reasoning: string;
   artifacts: TabrixChooseContextArtifact[];
+  /** V24-03 — first eligibility blocker for the top-1 candidate (if any). */
+  replayEligibleBlockedBy?: ReplayEligibilityBlockReason;
+  /** V24-03 — chooser-side fallback depth (`0` when a candidate surfaced; `'cold'` otherwise). */
+  replayFallbackDepth: 0 | 'cold';
+  /** V24-03 — number of candidates in the ranked artifact. */
+  rankedCandidateCount: number;
 }
 
 /**
@@ -248,6 +272,17 @@ interface StrategyDecision {
  * without updating the doc + the strategy-set guard test.
  */
 export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecision {
+  // V24-03: when the chooser has ranked replay candidates available we
+  // ALWAYS surface them as a single `experience_ranked` artifact, even
+  // on the `experience_reuse` downgrade branch. This keeps post-mortem
+  // analysis grouped by `rankedCandidateCount` regardless of which
+  // strategy we pick. `rankedCandidateCount === 0` when no candidates
+  // surfaced (no Experience rows OR the legacy `experienceHit` path
+  // was taken with no ranking input).
+  const rankedCandidates = facts.rankedReplayCandidates ?? [];
+  const rankedCandidateCount = rankedCandidates.length;
+  const replayFallbackDepth: 0 | 'cold' = rankedCandidateCount > 0 ? 0 : 'cold';
+
   if (facts.experienceHit) {
     const hit = facts.experienceHit;
     // V24-01: route the hit to `experience_replay` only when the
@@ -257,44 +292,82 @@ export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecisi
     // a per-step abort, after which the reusing branch can still try
     // the recorded plan as plain advice instead of dispatched steps.
     if (hit.replayEligible) {
+      const top = rankedCandidates[0];
+      const topScoreLabel = top !== undefined ? ` topScore=${top.score.toFixed(3)}` : '';
       const reasoning =
         `experience replay: actionPath=${hit.actionPathId}, ` +
         `successRate=${hit.successRate.toFixed(2)} ` +
-        `(>= ${EXPERIENCE_HIT_MIN_SUCCESS_RATE.toFixed(2)}); ` +
+        `(>= ${EXPERIENCE_HIT_MIN_SUCCESS_RATE.toFixed(2)});` +
+        `${topScoreLabel} ranked=${rankedCandidateCount}; ` +
         `experience_replay capability enabled; all step kinds + pageRole supported in v1`;
       return {
         strategy: 'experience_replay',
         fallbackStrategy: 'experience_reuse',
         reasoning,
-        artifacts: [
-          {
-            kind: 'experience',
-            ref: hit.actionPathId,
-            summary:
-              `Experience action path ${hit.actionPathId} ` +
-              `(${hit.successCount} ok / ${hit.failureCount} fail) — replay-eligible`,
-          },
-        ],
+        artifacts:
+          rankedCandidateCount > 0
+            ? [
+                {
+                  kind: 'experience_ranked',
+                  ref: hit.actionPathId,
+                  summary:
+                    `Experience action path ${hit.actionPathId} ` +
+                    `(${hit.successCount} ok / ${hit.failureCount} fail) — replay-eligible; ` +
+                    `${rankedCandidateCount} ranked candidate(s)`,
+                  ranked: rankedCandidates,
+                },
+              ]
+            : [
+                {
+                  kind: 'experience',
+                  ref: hit.actionPathId,
+                  summary:
+                    `Experience action path ${hit.actionPathId} ` +
+                    `(${hit.successCount} ok / ${hit.failureCount} fail) — replay-eligible`,
+                },
+              ],
+        replayEligibleBlockedBy: 'none',
+        replayFallbackDepth,
+        rankedCandidateCount,
       };
     }
 
     const reasoning =
       `experience hit: actionPath=${hit.actionPathId}, ` +
       `successRate=${hit.successRate.toFixed(2)} ` +
-      `(>= ${EXPERIENCE_HIT_MIN_SUCCESS_RATE.toFixed(2)})`;
+      `(>= ${EXPERIENCE_HIT_MIN_SUCCESS_RATE.toFixed(2)})` +
+      (rankedCandidateCount > 0
+        ? `; ranked=${rankedCandidateCount} (top blocked by ${facts.rankedTopBlockedBy ?? 'unknown'})`
+        : '');
     return {
       strategy: 'experience_reuse',
       fallbackStrategy: 'read_page_required',
       reasoning,
-      artifacts: [
-        {
-          kind: 'experience',
-          ref: hit.actionPathId,
-          summary:
-            `Experience action path ${hit.actionPathId} ` +
-            `(${hit.successCount} ok / ${hit.failureCount} fail)`,
-        },
-      ],
+      artifacts:
+        rankedCandidateCount > 0
+          ? [
+              {
+                kind: 'experience_ranked',
+                ref: hit.actionPathId,
+                summary:
+                  `Experience action path ${hit.actionPathId} ` +
+                  `(${hit.successCount} ok / ${hit.failureCount} fail); ` +
+                  `${rankedCandidateCount} ranked candidate(s)`,
+                ranked: rankedCandidates,
+              },
+            ]
+          : [
+              {
+                kind: 'experience',
+                ref: hit.actionPathId,
+                summary:
+                  `Experience action path ${hit.actionPathId} ` +
+                  `(${hit.successCount} ok / ${hit.failureCount} fail)`,
+              },
+            ],
+      replayEligibleBlockedBy: facts.rankedTopBlockedBy,
+      replayFallbackDepth,
+      rankedCandidateCount,
     };
   }
 
@@ -318,6 +391,8 @@ export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecisi
           summary,
         },
       ],
+      replayFallbackDepth,
+      rankedCandidateCount,
     };
   }
 
@@ -359,6 +434,8 @@ export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecisi
           summary: `Use chrome_read_page(render='markdown') for this ${facts.pageRole} page.`,
         },
       ],
+      replayFallbackDepth,
+      rankedCandidateCount,
     };
   }
 
@@ -366,89 +443,36 @@ export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecisi
     strategy: 'read_page_required',
     reasoning: 'no experience match and no usable api_knowledge — fall back to read_page (json)',
     artifacts: [],
+    replayFallbackDepth,
+    rankedCandidateCount,
   };
 }
 
 /**
- * Pick the best surviving plan from a list of `experience_suggest_plan`
- * rows: highest `successRate`, ties broken by `successCount`. Returns
- * `undefined` when every row is below the threshold.
+ * V24-03: pick the legacy `experienceHit` shape from the top-1 ranked
+ * candidate, applying the legacy `EXPERIENCE_HIT_MIN_SUCCESS_RATE`
+ * gate so the existing `experience_reuse` branch keeps its v1.5
+ * threshold behaviour. Replay eligibility is the strict V24-03 AND
+ * (the row's eligibility result is already in `topReplayEligible`).
  *
- * Mirrors the ordering `experience_suggest_plan` would have applied
- * server-side; we re-derive the rate here because the row carries raw
- * counts, not the projected DTO.
+ * Returns `undefined` when no row is above the legacy threshold; the
+ * chooser then falls through to `knowledge_light` / markdown / read.
  */
-function pickExperienceHit(
-  rows: ExperienceActionPathRow[],
-  options: { replayCapabilityEnabled: boolean },
+function projectExperienceHit(
+  topRow: ExperienceActionPathRow | undefined,
+  topReplayEligible: boolean,
 ): ChooseContextFacts['experienceHit'] {
-  let best: ChooseContextFacts['experienceHit'];
-  let bestRow: ExperienceActionPathRow | undefined;
-  let bestRate = -1;
-  let bestSuccess = -1;
-  for (const row of rows) {
-    const total = row.successCount + row.failureCount;
-    const rate = total > 0 ? row.successCount / total : 0;
-    if (rate < EXPERIENCE_HIT_MIN_SUCCESS_RATE) continue;
-    if (rate > bestRate || (rate === bestRate && row.successCount > bestSuccess)) {
-      best = {
-        actionPathId: row.actionPathId,
-        successRate: rate,
-        successCount: row.successCount,
-        failureCount: row.failureCount,
-      };
-      bestRow = row;
-      bestRate = rate;
-      bestSuccess = row.successCount;
-    }
-  }
-
-  if (best && bestRow) {
-    best.replayEligible = isReplayEligible(bestRow, options.replayCapabilityEnabled);
-  }
-  return best;
-}
-
-/**
- * V24-01 / Brief §8.1 strategy guard. The chooser may only route a
- * row to `experience_replay` when:
- *   1. the operator has opted into the `experience_replay` capability,
- *   2. the row's `pageRole` is in the v1 GitHub-only allowlist,
- *   3. every step's `toolName` is in the v1 supported step-kind set, AND
- *   4. every step's persisted `args` are PORTABLE across sessions
- *      under the per-tool allowlist in
- *      `experience-replay-args.ts::extractPortableReplayArgs`.
- *
- * Why "portable", not just "non-empty": an earlier closeout of this
- * function only checked that `step.args` existed and had >= 1 key.
- * Codex's follow-up review pointed out that an aggregator written
- * before the portability work could happily persist
- * `{ tabId: 7, ref: 'ref_xyz' }` (well-formed JSON, non-empty) and
- * the chooser would route it to `experience_replay`; the engine
- * would then either click the wrong element in the operator's tab
- * or hit a dead per-snapshot ref. The portability check is the
- * actual safety property - "non-empty" was a proxy for it.
- *
- * Any failure (capability off, wrong pageRole, unsupported step
- * kind, OR `extractPortableReplayArgs(...)` returns `undefined` for
- * any step) keeps the row on the existing `experience_reuse` branch:
- * the recorded plan still advises the upstream LLM, just without
- * Tabrix-side dispatch.
- */
-function isReplayEligible(row: ExperienceActionPathRow, capabilityEnabled: boolean): boolean {
-  if (!capabilityEnabled) return false;
-  if (!TABRIX_EXPERIENCE_REPLAY_GITHUB_PAGE_ROLES.has(row.pageRole)) return false;
-  if (row.stepSequence.length === 0) return false;
-  for (const step of row.stepSequence) {
-    if (!TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS.has(step.toolName)) return false;
-    // Defense in depth: even if the aggregator persisted args, those
-    // args MUST satisfy the same portability rules the aggregator
-    // applies on write. A `ref_*` targetRef that somehow slipped past
-    // (manual SQL, older code path, future regression) gets caught
-    // here and routed to `experience_reuse`.
-    if (!extractPortableReplayArgs(step.toolName, step.args)) return false;
-  }
-  return true;
+  if (!topRow) return undefined;
+  const total = topRow.successCount + topRow.failureCount;
+  const rate = total > 0 ? topRow.successCount / total : 0;
+  if (rate < EXPERIENCE_HIT_MIN_SUCCESS_RATE) return undefined;
+  return {
+    actionPathId: topRow.actionPathId,
+    successRate: rate,
+    successCount: topRow.successCount,
+    failureCount: topRow.failureCount,
+    replayEligible: topReplayEligible,
+  };
 }
 
 export interface RunTabrixChooseContextDeps {
@@ -502,22 +526,34 @@ export function runTabrixChooseContext(
   const { input, intentSignature } = parsed;
   const siteFamily = resolveSiteFamily(input);
 
+  // V24-03: chooser-side ranking. We always do the single
+  // `experience.suggestActionPaths` read (the Memory-not-read invariant
+  // applies to per-step Memory tables, NOT to this aggregator-only
+  // query). The ranked list, eligibility blocker and top-1 row all
+  // come from the pure ranking module so tests can pin the matrix
+  // without standing up the full IO orchestrator.
+  const nowIso = (deps.now ?? (() => new Date().toISOString()))();
   let experienceHit: ChooseContextFacts['experienceHit'];
+  let rankedReplayCandidates: TabrixChooseContextRankedCandidate[] | undefined;
+  let rankedTopBlockedBy: ReplayEligibilityBlockReason | undefined;
   if (deps.experience) {
-    // `ExperienceQueryService.suggestActionPaths` accepts the public
-    // `ExperienceSuggestPlanInput` shape, which carries both raw
-    // `intent` and the normalized `intentSignature`. The repository
-    // only consumes the signature; passing both keeps us inside the
-    // existing public contract without a private overload.
     const rows = deps.experience.suggestActionPaths({
       intent: input.intent,
       intentSignature,
       pageRole: input.pageRole,
       limit: EXPERIENCE_LOOKUP_LIMIT,
     });
-    experienceHit = pickExperienceHit(rows, {
-      replayCapabilityEnabled: isCapabilityEnabled('experience_replay', deps.capabilityEnv),
+    const ranking = rankExperienceCandidates({
+      rows,
+      capabilityEnabled: isCapabilityEnabled('experience_replay', deps.capabilityEnv),
+      nowIso,
+      pageRole: input.pageRole,
     });
+    if (ranking.ranked.length > 0) {
+      rankedReplayCandidates = ranking.ranked;
+      rankedTopBlockedBy = ranking.topBlockedBy;
+    }
+    experienceHit = projectExperienceHit(ranking.topRow, ranking.topReplayEligible);
   }
 
   let knowledgeCatalog: ChooseContextFacts['knowledgeCatalog'];
@@ -555,6 +591,8 @@ export function runTabrixChooseContext(
     siteFamily,
     experienceHit,
     knowledgeCatalog,
+    rankedReplayCandidates,
+    rankedTopBlockedBy,
   });
 
   // V23-04 / B-018 v1.5 — telemetry write-back. We attempt to record
@@ -563,10 +601,15 @@ export function runTabrixChooseContext(
   // result: a SQLite write that throws (disk full, locked DB, …)
   // becomes a missing `decisionId` field, not a tool error. The
   // caller treats "no decisionId" the same as "telemetry off".
+  //
+  // V24-03 closeout: the new ranked / blocker / fallback-depth fields
+  // are intentionally NOT persisted to `tabrix_choose_context_decisions`
+  // in v2.4. The v2.3 telemetry table schema stays frozen so the
+  // existing release gate cannot regress; long-term ranked-depth
+  // statistics are deferred to v2.5 (see plan §2.3 telemetry note).
   let decisionId: string | undefined;
   if (deps.telemetry) {
     const newId = deps.newDecisionId ?? randomUUID;
-    const now = deps.now ?? (() => new Date().toISOString());
     const candidateId = newId();
     try {
       deps.telemetry.recordDecision({
@@ -576,7 +619,7 @@ export function runTabrixChooseContext(
         siteFamily: siteFamily ?? null,
         strategy: decision.strategy,
         fallbackStrategy: decision.fallbackStrategy ?? null,
-        createdAt: now(),
+        createdAt: nowIso,
       });
       decisionId = candidateId;
     } catch (error) {
@@ -601,6 +644,9 @@ export function runTabrixChooseContext(
       siteFamily,
     },
     decisionId,
+    rankedCandidateCount: decision.rankedCandidateCount,
+    replayEligibleBlockedBy: decision.replayEligibleBlockedBy,
+    replayFallbackDepth: decision.replayFallbackDepth,
   };
 }
 

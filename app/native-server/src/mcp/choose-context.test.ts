@@ -1054,3 +1054,217 @@ describe('runTabrixChooseContextRecordOutcome (V23-04)', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// V24-03 — `tabrix_choose_context` v2 ranked replay-aware fields
+// ---------------------------------------------------------------------------
+
+describe('runTabrixChooseContext ranked replay (V24-03)', () => {
+  const NOW = '2026-04-22T12:00:00.000Z';
+
+  it('emits an experience_ranked artifact with top-N when capability + thresholds pass', () => {
+    const replayable = (id: string, score: number) =>
+      fakeRow({
+        actionPathId: id,
+        pageRole: 'issues_list',
+        stepSequence: [replayableStep('chrome_click_element')],
+        successCount: 9,
+        failureCount: 1,
+        lastReplayAt: NOW,
+        compositeScoreDecayed: score,
+      });
+    const { service } = fakeExperience([
+      replayable('action_path_' + 'a'.repeat(64), 0.6),
+      replayable('action_path_' + 'b'.repeat(64), 0.9),
+      replayable('action_path_' + 'c'.repeat(64), 0.8),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+        now: () => NOW,
+      },
+    );
+    expect(result.status).toBe('ok');
+    expect(result.strategy).toBe('experience_replay');
+    expect(result.fallbackStrategy).toBe('experience_reuse');
+    expect(result.replayEligibleBlockedBy).toBe('none');
+    expect(result.replayFallbackDepth).toBe(0);
+    expect(result.rankedCandidateCount).toBe(3);
+    const artifact = result.artifacts?.[0];
+    expect(artifact?.kind).toBe('experience_ranked');
+    expect(artifact?.ranked?.map((c) => c.ref)).toEqual([
+      'action_path_' + 'b'.repeat(64),
+      'action_path_' + 'c'.repeat(64),
+      'action_path_' + 'a'.repeat(64),
+    ]);
+    expect(artifact?.ranked?.every((c) => c.replayEligible)).toBe(true);
+  });
+
+  it('downgrades to experience_reuse with capability_off blocker when capability is off', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'action_path_' + 'd'.repeat(64),
+        pageRole: 'issues_list',
+        stepSequence: [replayableStep('chrome_click_element')],
+        successCount: 9,
+        failureCount: 1,
+        compositeScoreDecayed: 0.9,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: {},
+        now: () => NOW,
+      },
+    );
+    expect(result.strategy).toBe('experience_reuse');
+    expect(result.replayEligibleBlockedBy).toBe('capability_off');
+    expect(result.rankedCandidateCount).toBe(1);
+    expect(result.replayFallbackDepth).toBe(0);
+    const artifact = result.artifacts?.[0];
+    expect(artifact?.kind).toBe('experience_ranked');
+    expect(artifact?.ranked?.[0]?.replayEligible).toBe(false);
+    expect(artifact?.ranked?.[0]?.blockedBy).toBe('capability_off');
+  });
+
+  it('downgrades with non_portable_args when args carry only session-local handles', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'action_path_' + 'e'.repeat(64),
+        pageRole: 'issues_list',
+        stepSequence: [
+          {
+            toolName: 'chrome_click_element',
+            status: 'completed',
+            historyRef: null,
+            args: { ref: 'ref_per_snapshot' },
+          },
+        ],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+        now: () => NOW,
+      },
+    );
+    expect(result.strategy).toBe('experience_reuse');
+    expect(result.replayEligibleBlockedBy).toBe('non_portable_args');
+  });
+
+  it('downgrades with below_threshold blocker when successCount is too small', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'action_path_' + 'f'.repeat(64),
+        pageRole: 'issues_list',
+        stepSequence: [replayableStep('chrome_click_element')],
+        successCount: 2,
+        failureCount: 0,
+        compositeScoreDecayed: 0.99,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+        now: () => NOW,
+      },
+    );
+    // successRate = 1 ≥ 0.5 (legacy gate) so reuse still surfaces;
+    // V24-03 below_threshold blocker pins the reason for telemetry.
+    expect(result.strategy).toBe('experience_reuse');
+    expect(result.replayEligibleBlockedBy).toBe('below_threshold');
+  });
+
+  it('reports rankedCandidateCount=0 when no Experience rows are returned', () => {
+    const { service } = fakeExperience([]);
+    const result = runTabrixChooseContext(
+      { intent: 'do something' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: {},
+        now: () => NOW,
+      },
+    );
+    expect(result.rankedCandidateCount).toBe(0);
+    expect(result.replayFallbackDepth).toBe('cold');
+    expect(result.replayEligibleBlockedBy).toBeUndefined();
+  });
+
+  it('does NOT touch step-repository / session-repository (Memory-not-read invariant)', () => {
+    // The chooser must only call `experience.suggestActionPaths`. Any
+    // import or call into per-step Memory tables would cross the
+    // chooser-hot-path boundary documented in the V24-03 plan.
+    // Inspect the actual import graph of `choose-context.ts` so a
+    // future refactor that adds an unintended Memory dependency is
+    // caught by this test instead of by a downstream regression.
+
+    const fs = require('node:fs');
+
+    const path = require('node:path');
+    const source = fs.readFileSync(path.join(__dirname, 'choose-context.ts'), 'utf-8') as string;
+    expect(source).not.toMatch(/step-repository/);
+    expect(source).not.toMatch(/session-repository/);
+    const rules = fs.readFileSync(
+      path.join(__dirname, 'choose-context-replay-rules.ts'),
+      'utf-8',
+    ) as string;
+    expect(rules).not.toMatch(/step-repository/);
+    expect(rules).not.toMatch(/session-repository/);
+  });
+
+  it('telemetry table schema is unchanged (no V24-03 fields persisted)', () => {
+    // V24-03 plan §2.3 explicitly defers persisting ranked fields to
+    // v2.5 to avoid v23 telemetry-table drift. The recordDecision
+    // call must still receive the v23 shape verbatim.
+    const tele = fakeTelemetry();
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'action_path_' + 'g'.repeat(64),
+        pageRole: 'issues_list',
+        stepSequence: [replayableStep('chrome_click_element')],
+        successCount: 9,
+        failureCount: 1,
+        compositeScoreDecayed: 0.9,
+      }),
+    ]);
+    runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+        telemetry: tele.repo,
+        newDecisionId: () => 'dc-v24-3',
+        now: () => NOW,
+      },
+    );
+    expect(tele.decisions).toHaveLength(1);
+    const recorded = tele.decisions[0];
+    expect(Object.keys(recorded ?? {}).sort()).toEqual(
+      [
+        'createdAt',
+        'decisionId',
+        'fallbackStrategy',
+        'intentSignature',
+        'pageRole',
+        'siteFamily',
+        'strategy',
+      ].sort(),
+    );
+  });
+});

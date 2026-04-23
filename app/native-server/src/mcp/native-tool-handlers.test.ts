@@ -200,7 +200,17 @@ describe('native-tool-handlers · tabrix_choose_context (B-018 v1)', () => {
     const body = callTextPayload(result);
     expect(body.strategy).toBe('experience_reuse');
     expect(body.fallbackStrategy).toBe('read_page_required');
-    expect(body.artifacts[0]).toMatchObject({ kind: 'experience', ref: 'ap-experience' });
+    // V24-03 promoted the chooser artifact to the `experience_ranked`
+    // shape whenever any Experience row surfaces — even when the
+    // chooser ultimately picks `experience_reuse`. The legacy `kind:
+    // 'experience'` shape is now reserved for the (vanishing) corner
+    // case where ranking returned zero candidates but the legacy
+    // `experienceHit` projection kept one in scope; on this test
+    // fixture the row IS the top-1 ranked candidate.
+    expect(body.artifacts[0]).toMatchObject({
+      kind: 'experience_ranked',
+      ref: 'ap-experience',
+    });
   });
 
   it('routes to knowledge_light only when capability is enabled and repo non-empty', async () => {
