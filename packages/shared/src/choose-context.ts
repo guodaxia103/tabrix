@@ -38,6 +38,72 @@ export const EXPERIENCE_HIT_MIN_SUCCESS_RATE = 0.5;
  */
 export const EXPERIENCE_LOOKUP_LIMIT = 3;
 
+// ---------------------------------------------------------------------------
+// V24-03 — ranked replay constants
+// ---------------------------------------------------------------------------
+
+/**
+ * V24-03 / `tabrix_choose_context` v2 — number of replay candidates the
+ * chooser surfaces in the `experience_ranked` artifact. Three is large
+ * enough to give a real ladder (top-1 + two backups) and small enough
+ * that the upstream LLM will actually attempt them all before giving
+ * up. Treat as a closed knob: bumping requires a brief amendment +
+ * re-checking the per-tool token budget.
+ */
+export const EXPERIENCE_RANKED_TOP_N = 3;
+
+/**
+ * V24-03 — minimum `successRate` (success / (success+failure)) a row
+ * must clear to be considered replay-eligible. This is STRICTER than
+ * {@link EXPERIENCE_HIT_MIN_SUCCESS_RATE} (which is the v1 reuse
+ * gate): replay actually dispatches the recorded steps against the
+ * live page, so the bar to take that risk is higher than the bar to
+ * surface a recorded plan as advice.
+ */
+export const EXPERIENCE_REPLAY_MIN_SUCCESS_RATE = 0.8;
+
+/**
+ * V24-03 — minimum absolute success count. Pairs with
+ * {@link EXPERIENCE_REPLAY_MIN_SUCCESS_RATE}: 1 success / 0 failures
+ * is a perfect rate but a single sample, which is not enough evidence
+ * to dispatch a recorded plan. Three matches MKEP §3.2's "min sample
+ * count for ranked surfacing".
+ */
+export const EXPERIENCE_REPLAY_MIN_SUCCESS_COUNT = 3;
+
+/**
+ * V24-03 — recency-decay half-life in days for chooser-side ranking.
+ * Mirrors `EXPERIENCE_SCORE_STEP_RECENCY_HALF_LIFE_DAYS` so the
+ * read-side ranking and the write-side `compositeScoreDecayed` cache
+ * use the same time constant; if these ever drift, the chooser's
+ * ordering will not match the persisted score.
+ */
+export const EXPERIENCE_RECENCY_DECAY_DAYS = 30;
+
+/**
+ * V24-03 — closed enum for `TabrixChooseContextResult.replayEligibleBlockedBy`.
+ *
+ * Each value is a single, deterministic reason the chooser can give
+ * for refusing to route a candidate to `experience_replay`. The
+ * `'none'` value is reserved for the success branch (i.e. the chooser
+ * actually emitted `experience_replay`); a downgraded result must
+ * always carry a non-`'none'` reason so a post-mortem can say
+ * "Codex's MCP saw N decisions, X% were blocked by reason Y".
+ *
+ * Order is: capability gate → step kind → portability → page role →
+ * threshold → stale locator. Multiple reasons may apply; the chooser
+ * reports the FIRST one in this order so the post-mortem signal is
+ * stable across runs.
+ */
+export type ReplayEligibilityBlockReason =
+  | 'capability_off'
+  | 'unsupported_step_kind'
+  | 'non_portable_args'
+  | 'non_github_pageRole'
+  | 'below_threshold'
+  | 'stale_locator'
+  | 'none';
+
 /**
  * Maximum number of endpoint signatures echoed in the `knowledge_light`
  * artifact summary. Keeps payload bounded even when a site has many
@@ -119,16 +185,48 @@ export interface TabrixChooseContextInput {
 }
 
 /**
+ * V24-03 — single ranked replay candidate inside the
+ * `experience_ranked` artifact. `score` is the deterministic composite
+ * (accuracy / speed / token / stability with recency decay; see
+ * `composite-score.ts`); `replayEligible` is the AND of every
+ * eligibility gate (capability, step kinds, portable args, pageRole,
+ * thresholds). A non-eligible candidate stays in the ranked list with
+ * `replayEligible: false` + a `blockedBy` reason so the post-mortem
+ * stays grouped per actionPathId; the chooser still picks
+ * `experience_reuse` if the top-ranked is non-eligible.
+ */
+export interface TabrixChooseContextRankedCandidate {
+  ref: string;
+  score: number;
+  replayEligible: boolean;
+  blockedBy?: ReplayEligibilityBlockReason;
+}
+
+/**
  * One reusable artifact reference returned alongside the chosen
  * strategy. `ref` is opaque to the caller — it is owned by whichever
  * native subsystem produced it (Experience action-path id; site name
  * for the Knowledge catalog; etc.).
+ *
+ * V24-03 added `'experience_ranked'`: the chooser emits a single
+ * artifact of this kind whenever it surfaces a ranked candidate list
+ * (whether or not it ultimately routes to `experience_replay`). The
+ * top-1 is `ref`; the full list (top-N up to {@link EXPERIENCE_RANKED_TOP_N})
+ * is in `ranked`. `summary` echoes a short description of the top-1.
  */
 export interface TabrixChooseContextArtifact {
-  kind: 'experience' | 'knowledge_api' | 'read_page';
+  kind: 'experience' | 'experience_ranked' | 'knowledge_api' | 'read_page';
   ref: string;
   /** Compact human-readable label, ≤ 200 chars. Not a UI string. */
   summary: string;
+  /**
+   * V24-03 — populated only on `kind === 'experience_ranked'`. List
+   * length is in `[1, EXPERIENCE_RANKED_TOP_N]`; ordering is the
+   * deterministic ranking from `rankExperienceCandidates`
+   * (composite score DESC, then `successCount` DESC, then
+   * `lastReplayAt` DESC NULLS LAST, then `actionPathId` ASC).
+   */
+  ranked?: TabrixChooseContextRankedCandidate[];
 }
 
 /**
@@ -179,6 +277,39 @@ export interface TabrixChooseContextResult {
    * The id has no semantics beyond being a primary key; do NOT parse it.
    */
   decisionId?: string;
+  /**
+   * V24-03 — number of replay candidates in the
+   * `experience_ranked` artifact (0 when none surfaced). Present on
+   * any ok result, regardless of strategy: a non-replay strategy
+   * still sets this to `0` so post-hoc analysis can cleanly group
+   * "we had ranked candidates but went elsewhere" vs "we never had
+   * any". A non-zero value implies one artifact of kind
+   * `'experience_ranked'`.
+   */
+  rankedCandidateCount?: number;
+  /**
+   * V24-03 — first reason the chooser refused to route the top-1
+   * candidate to `experience_replay`. `'none'` is set on the
+   * success branch (chooser actually emitted `experience_replay`);
+   * any other value is the FIRST blocker in the closed
+   * {@link ReplayEligibilityBlockReason} order so the post-mortem
+   * signal is stable. Absent on result branches that never even
+   * looked at Experience (e.g. `read_page_required` when no
+   * candidate row existed at all).
+   */
+  replayEligibleBlockedBy?: ReplayEligibilityBlockReason;
+  /**
+   * V24-03 — replay-engine fallback depth the chooser THINKS the
+   * caller will hit. The chooser itself can only declare `0` (we
+   * surfaced a candidate) or `'cold'` (no candidates surfaced, so
+   * the caller will pay full read-page cost). The actual `1 | 2 | 3`
+   * values are written by the replay engine on outcome write-back
+   * (V24-02) and surface in telemetry; the chooser never claims to
+   * know the post-execution depth. Numeric encoding intentionally
+   * matches the per-pair K7 metric in V24-05 so analysis joins
+   * across surfaces without translation.
+   */
+  replayFallbackDepth?: 0 | 1 | 2 | 3 | 'cold';
 }
 
 /**
