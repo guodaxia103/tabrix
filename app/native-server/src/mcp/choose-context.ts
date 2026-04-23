@@ -412,8 +412,19 @@ function pickExperienceHit(
  * V24-01 / Brief §8.1 strategy guard. The chooser may only route a
  * row to `experience_replay` when:
  *   1. the operator has opted into the `experience_replay` capability,
- *   2. the row's `pageRole` is in the v1 GitHub-only allowlist, and
- *   3. every step's `toolName` is in the v1 supported step-kind set.
+ *   2. the row's `pageRole` is in the v1 GitHub-only allowlist,
+ *   3. every step's `toolName` is in the v1 supported step-kind set, AND
+ *   4. every step actually carries non-empty `args` — i.e. the
+ *      aggregator has populated the bridged-tool input shape so the
+ *      replay engine can re-dispatch verbatim.
+ *
+ * The `args` check is the V24-01 "stop the bleeding" fix: rows
+ * aggregated before the aggregator started writing `args` have
+ * `step.args === undefined`, and `experience_replay`'s engine
+ * `applySubstitutions()` would fail closed with `unsupported_step_kind`
+ * the moment we tried. Routing such rows to `experience_replay` would
+ * starve the more reliable `experience_reuse` branch and surface as a
+ * deterministic per-call failure, so the chooser now refuses up front.
  *
  * Any other case stays on the existing `experience_reuse` branch — the
  * recorded plan still advises the upstream LLM, just without
@@ -425,6 +436,7 @@ function isReplayEligible(row: ExperienceActionPathRow, capabilityEnabled: boole
   if (row.stepSequence.length === 0) return false;
   for (const step of row.stepSequence) {
     if (!TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS.has(step.toolName)) return false;
+    if (!step.args || Object.keys(step.args).length === 0) return false;
   }
   return true;
 }

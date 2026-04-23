@@ -42,6 +42,26 @@ function fakeRow(overrides: Partial<ExperienceActionPathRow> = {}): ExperienceAc
   };
 }
 
+/**
+ * V24-01 isReplayEligible() requires every step to carry non-empty
+ * `args`. Tests that intend to assert "routes to experience_replay"
+ * must use steps minted via this helper (or supply args inline);
+ * tests that assert "stays on experience_reuse because args are
+ * missing" should keep using the bare `{toolName,status,historyRef}`
+ * shape.
+ */
+function replayableStep(toolName: 'chrome_click_element' | 'chrome_fill_or_select') {
+  return {
+    toolName,
+    status: 'completed',
+    historyRef: null,
+    args:
+      toolName === 'chrome_fill_or_select'
+        ? { selector: '#search', value: 'tabrix' }
+        : { selector: '#issues-tab' },
+  };
+}
+
 function fakeEndpoint(overrides: Partial<KnowledgeApiEndpoint> = {}): KnowledgeApiEndpoint {
   return {
     endpointId: 'ep-1',
@@ -469,8 +489,8 @@ describe('runTabrixChooseContext (orchestrator)', () => {
         actionPathId: 'ap-replay-ok',
         pageRole: 'issues_list',
         stepSequence: [
-          { toolName: 'chrome_click_element', status: 'completed', historyRef: null },
-          { toolName: 'chrome_fill_or_select', status: 'completed', historyRef: null },
+          replayableStep('chrome_click_element'),
+          replayableStep('chrome_fill_or_select'),
         ],
         successCount: 9,
         failureCount: 1,
@@ -495,7 +515,7 @@ describe('runTabrixChooseContext (orchestrator)', () => {
       fakeRow({
         actionPathId: 'ap-replay-cap-off',
         pageRole: 'issues_list',
-        stepSequence: [{ toolName: 'chrome_click_element', status: 'completed', historyRef: null }],
+        stepSequence: [replayableStep('chrome_click_element')],
         successCount: 9,
         failureCount: 1,
       }),
@@ -518,9 +538,14 @@ describe('runTabrixChooseContext (orchestrator)', () => {
         actionPathId: 'ap-replay-bad-step',
         pageRole: 'issues_list',
         stepSequence: [
-          { toolName: 'chrome_click_element', status: 'completed', historyRef: null },
+          replayableStep('chrome_click_element'),
           // Out of replay's v1 supported set:
-          { toolName: 'chrome_navigate', status: 'completed', historyRef: null },
+          {
+            toolName: 'chrome_navigate',
+            status: 'completed',
+            historyRef: null,
+            args: { url: 'x' },
+          },
         ],
         successCount: 9,
         failureCount: 1,
@@ -542,7 +567,7 @@ describe('runTabrixChooseContext (orchestrator)', () => {
       fakeRow({
         actionPathId: 'ap-replay-bad-role',
         pageRole: 'mystery_role',
-        stepSequence: [{ toolName: 'chrome_click_element', status: 'completed', historyRef: null }],
+        stepSequence: [replayableStep('chrome_click_element')],
         successCount: 9,
         failureCount: 1,
       }),
@@ -558,12 +583,69 @@ describe('runTabrixChooseContext (orchestrator)', () => {
     expect(result.strategy).toBe('experience_reuse');
   });
 
+  // V24-01 closeout: the chooser MUST NOT route to `experience_replay`
+  // when any step is missing replay args. This is the "stop the
+  // bleeding" guard for rows aggregated before V24-01 (or for any row
+  // a future regression silently strips `args` from). Without this
+  // check the chooser would happily pick `experience_replay`, the
+  // engine would immediately fail-closed inside `applySubstitutions`
+  // (`!step.args`), and the user would see a deterministic
+  // `unsupported_step_kind` while the more reliable `experience_reuse`
+  // branch went unused. See `experience-replay.ts::applySubstitutions`.
+  it('stays on experience_reuse when a step has no replay args (V24-01 closeout)', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-no-args',
+        pageRole: 'issues_list',
+        // Bare step shape: in-bounds toolName, but no args populated -
+        // this is the historical aggregator output that V24-01 must
+        // refuse to route to dispatch-side replay.
+        stepSequence: [{ toolName: 'chrome_click_element', status: 'completed', historyRef: null }],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+      },
+    );
+    expect(result.strategy).toBe('experience_reuse');
+    expect(result.fallbackStrategy).toBe('read_page_required');
+  });
+
+  it('stays on experience_reuse when a step has empty {} args (V24-01 closeout)', () => {
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-empty-args',
+        pageRole: 'issues_list',
+        stepSequence: [
+          { toolName: 'chrome_click_element', status: 'completed', historyRef: null, args: {} },
+        ],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+      },
+    );
+    expect(result.strategy).toBe('experience_reuse');
+  });
+
   it('the "all" capability token enables experience_replay routing', () => {
     const { service } = fakeExperience([
       fakeRow({
         actionPathId: 'ap-replay-all',
         pageRole: 'issues_list',
-        stepSequence: [{ toolName: 'chrome_click_element', status: 'completed', historyRef: null }],
+        stepSequence: [replayableStep('chrome_click_element')],
         successCount: 9,
         failureCount: 1,
       }),
