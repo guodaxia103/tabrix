@@ -15,6 +15,8 @@ import {
   type ReadPagePageType,
   type ReadPagePrimaryRegionConfidence,
   type ReadPageRenderMode,
+  type ReadPageRequestedLayer,
+  READ_PAGE_REQUESTED_LAYER_VALUES,
 } from '@tabrix/shared';
 import { TOOL_MESSAGE_TYPES } from '@/common/message-types';
 import { ERROR_MESSAGES } from '@/common/constants';
@@ -47,6 +49,11 @@ interface ReadPageParams {
   refId?: string; // focus on subtree rooted at this refId
   tabId?: number; // target existing tab id
   windowId?: number; // when no tabId, pick active tab from this window
+  // V25-02 layer envelope. When omitted preserves the legacy full
+  // L0+L1+L2 payload. The stable HVO targetRef registry is ALWAYS
+  // written (even at 'L0') so chrome_click_element resolution stays
+  // deterministic — see V25-04 click-resolution-l0 contract.
+  requestedLayer?: ReadPageRequestedLayer;
 }
 
 interface SchemeGuardSummary {
@@ -538,6 +545,8 @@ function buildExtensionLayer(params: {
   candidateActions: CandidateActionSeed[];
   interactiveElements: SnapshotInteractiveElement[];
   pageContext: ReadPagePageContext;
+  /** V25-02 — when 'L0' or 'L0+L1', strip detail layers below the requested envelope. */
+  requestedLayer: ReadPageRequestedLayer;
 }): ReadPageExtensionFields {
   const markdownArtifact = params.artifactRefs.find((item) => item.kind === MARKDOWN_ARTIFACT_KIND);
   const taskProtocol = buildTaskProtocol({
@@ -587,8 +596,16 @@ function buildExtensionLayer(params: {
     markdown = projected || null;
   }
 
+  // V25-02 layer envelope — strip detail layers per `requestedLayer`.
+  // Stable HVO `targetRef` registry stays untouched (registered in
+  // buildModeOutput) so `chrome_click_element` keeps resolving via the
+  // same `tgt_*` even at `'L0'`. Markdown stays available because it
+  // is a separate render contract (B-015) and is intentionally
+  // ref-free.
+  const includeL1 = params.requestedLayer !== 'L0';
+  const includeL2 = params.requestedLayer === 'L0+L1+L2';
   return {
-    candidateActions: params.candidateActions,
+    candidateActions: includeL1 ? params.candidateActions : [],
     pageContext: params.pageContext,
     // T3.2: reserved extension fields (not locked as long-term schema yet).
     frameContext: null,
@@ -599,8 +616,8 @@ function buildExtensionLayer(params: {
     sourceKind: taskProtocol.sourceKind,
     highValueObjects: taskProtocol.highValueObjects,
     L0: taskProtocol.L0,
-    L1: taskProtocol.L1,
-    L2: taskProtocol.L2,
+    L1: includeL1 ? taskProtocol.L1 : undefined,
+    L2: includeL2 ? taskProtocol.L2 : undefined,
     renderMode: params.renderMode,
     markdown,
   };
@@ -642,6 +659,8 @@ function buildModeOutput(params: {
   tips: string;
   refMap: any[];
   candidateActions: CandidateActionSeed[];
+  /** V25-02 — layer envelope; defaults to 'L0+L1+L2' for legacy callers. */
+  requestedLayer: ReadPageRequestedLayer;
 }): ReadPageCompactSnapshot | ReadPageNormalSnapshot | ReadPageFullSnapshot {
   const interactiveLimit = params.mode === 'compact' ? 24 : 80;
   const interactiveElements = buildInteractiveElements(
@@ -694,6 +713,7 @@ function buildModeOutput(params: {
     candidateActions,
     interactiveElements,
     pageContext,
+    requestedLayer: params.requestedLayer,
   });
 
   // B-011: feed the per-tab stable-targetRef registry so the click bridge
@@ -765,7 +785,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
 
   // Execute read page
   async execute(args: ReadPageParams): Promise<ToolResult> {
-    const { filter, depth, refId, mode, render } = args || {};
+    const { filter, depth, refId, mode, render, requestedLayer } = args || {};
 
     // Validate refId parameter
     const focusRefId = typeof refId === 'string' ? refId.trim() : '';
@@ -804,6 +824,24 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       );
     }
     const selectedRender = selectedRenderRaw as ReadPageRenderMode;
+
+    // V25-02 — validate requestedLayer. Default to the legacy
+    // `'L0+L1+L2'` envelope so older callers see byte-identical
+    // payloads. Unknown values fail closed for the same reason
+    // `render` does: the upstream client almost certainly speaks a
+    // newer contract than this extension can satisfy.
+    let selectedLayer: ReadPageRequestedLayer = 'L0+L1+L2';
+    if (requestedLayer !== undefined) {
+      if (
+        typeof requestedLayer !== 'string' ||
+        !(READ_PAGE_REQUESTED_LAYER_VALUES as readonly string[]).includes(requestedLayer)
+      ) {
+        return createErrorResponse(
+          `${ERROR_MESSAGES.INVALID_PARAMETERS}: requestedLayer must be one of ${READ_PAGE_REQUESTED_LAYER_VALUES.join(' | ')}`,
+        );
+      }
+      selectedLayer = requestedLayer;
+    }
 
     // Track if user explicitly controlled the output (skip sparse heuristics)
     const userControlled = requestedDepth !== undefined || !!focusRefId;
@@ -871,6 +909,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
                   tips: standardTips,
                   refMap: [],
                   candidateActions: [],
+                  requestedLayer: selectedLayer,
                 }),
                 reason: 'unsupported_page_type',
                 pageType: schemeGuard.pageType,
@@ -1019,6 +1058,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
           tips: basePayload.tips,
           refMap: basePayload.refMap,
           candidateActions: basePayload.candidateActions,
+          requestedLayer: selectedLayer,
         });
         return {
           content: [{ type: 'text', text: JSON.stringify(modePayload) }],
@@ -1097,6 +1137,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
             tips: basePayload.tips,
             refMap: basePayload.refMap,
             candidateActions: basePayload.candidateActions,
+            requestedLayer: selectedLayer,
           });
 
           return {

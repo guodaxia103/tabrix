@@ -31,7 +31,14 @@
 
 import { randomUUID } from 'node:crypto';
 import type { SqliteDatabase } from '../db/client';
-import type { ContextStrategyName, TabrixChooseContextOutcome } from '@tabrix/shared';
+import type {
+  ContextStrategyName,
+  LayerDispatchReason,
+  LayerSourceRoute,
+  ReadPageRequestedLayer,
+  ReplayEligibilityBlockReason,
+  TabrixChooseContextOutcome,
+} from '@tabrix/shared';
 
 export interface RecordChooseContextDecisionInput {
   /** Pre-generated decision id. Caller owns it so it can echo the same id back to the MCP caller without an extra round-trip. */
@@ -43,6 +50,32 @@ export interface RecordChooseContextDecisionInput {
   fallbackStrategy: ContextStrategyName | null;
   /** ISO timestamp. Caller-supplied so tests stay deterministic. */
   createdAt: string;
+  // ---------------------------------------------------------------
+  // V25-02 layer-dispatch telemetry. All optional so callers that
+  // pre-date V25-02 (and ad-hoc tests) keep working unchanged.
+  // ---------------------------------------------------------------
+  /** Selected layer envelope. Mirrors `read_page.requestedLayer`. */
+  chosenLayer?: ReadPageRequestedLayer | null;
+  /** Closed reason key from the V25-02 Strategy Table. */
+  layerDispatchReason?: LayerDispatchReason | null;
+  /** Locked 4-value source route. */
+  sourceRoute?: LayerSourceRoute | null;
+  /** Free-text reason recorded only on the dispatcher fail-safe path. */
+  fallbackCause?: string | null;
+  /** ceil(byteLength/4) for the chosen layer envelope. */
+  tokenEstimateChosen?: number | null;
+  /** ceil(byteLength/4) for the full L0+L1+L2 read. */
+  tokenEstimateFullRead?: number | null;
+  /** `tokenEstimateFullRead - tokenEstimateChosen`, never negative. */
+  tokensSavedEstimate?: number | null;
+  /** Telemetry-only knowledge family hint. MUST NOT drive routing. */
+  knowledgeEndpointFamily?: string | null;
+  // ---------------------------------------------------------------
+  // V24-03 ranked-replay audit fields persisted in V25-02 (M2 binding).
+  // ---------------------------------------------------------------
+  rankedCandidateCount?: number | null;
+  replayEligibleBlockedBy?: ReplayEligibilityBlockReason | null;
+  replayFallbackDepth?: number | 'cold' | null;
 }
 
 export interface RecordChooseContextOutcomeInput {
@@ -120,12 +153,23 @@ export class ChooseContextTelemetryRepository {
    * Throws on PK collision so we never silently drop a decision id.
    */
   recordDecision(input: RecordChooseContextDecisionInput): void {
+    const blockedByValue = input.replayEligibleBlockedBy ?? null;
+    const fallbackDepthValue =
+      input.replayFallbackDepth === undefined || input.replayFallbackDepth === null
+        ? null
+        : input.replayFallbackDepth === 'cold'
+          ? -1 // sentinel for "no candidates surfaced"; chosen so positive depths stay 1:1 with V24-05 K7
+          : input.replayFallbackDepth;
     this.db
       .prepare(
         `INSERT INTO tabrix_choose_context_decisions (
            decision_id, intent_signature, page_role, site_family,
-           strategy, fallback_strategy, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           strategy, fallback_strategy, created_at,
+           chosen_layer, layer_dispatch_reason, source_route, fallback_cause,
+           token_estimate_chosen, token_estimate_full_read, tokens_saved_estimate,
+           knowledge_endpoint_family,
+           ranked_candidate_count, replay_eligible_blocked_by, replay_fallback_depth
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.decisionId,
@@ -135,6 +179,17 @@ export class ChooseContextTelemetryRepository {
         input.strategy,
         input.fallbackStrategy,
         input.createdAt,
+        input.chosenLayer ?? null,
+        input.layerDispatchReason ?? null,
+        input.sourceRoute ?? null,
+        input.fallbackCause ?? null,
+        input.tokenEstimateChosen ?? null,
+        input.tokenEstimateFullRead ?? null,
+        input.tokensSavedEstimate ?? null,
+        input.knowledgeEndpointFamily ?? null,
+        input.rankedCandidateCount ?? null,
+        blockedByValue,
+        fallbackDepthValue,
       );
   }
 

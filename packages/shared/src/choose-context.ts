@@ -1,3 +1,9 @@
+import type {
+  LayerDispatchReason,
+  LayerSourceRoute,
+  ReadPageRequestedLayer,
+} from './read-page-contract';
+
 /**
  * Tabrix MKEP Stage 3h — `tabrix_choose_context` v1 minimal slice (B-018).
  *
@@ -310,6 +316,58 @@ export interface TabrixChooseContextResult {
    * across surfaces without translation.
    */
   replayFallbackDepth?: 0 | 1 | 2 | 3 | 'cold';
+  /**
+   * V25-02 — chosen layer envelope the dispatcher selected for this
+   * decision. Optional so older callers / tests that mock the result
+   * stay valid; populated whenever `status === 'ok'` and the v25
+   * dispatcher ran.
+   */
+  chosenLayer?: ReadPageRequestedLayer;
+  /**
+   * V25-02 — closed-enum reason that maps 1:1 to the V25-02 Layer
+   * Dispatch Strategy Table row. See {@link
+   * ./read-page-contract.LayerDispatchReason}.
+   */
+  layerDispatchReason?: LayerDispatchReason;
+  /**
+   * V25-02 — closed-enum routing instruction telling the caller
+   * whether `chrome_read_page` is required, the experience replay
+   * skip-read shortcut applies, knowledge supports the read, or the
+   * dispatcher fell back. See {@link
+   * ./read-page-contract.LayerSourceRoute}.
+   */
+  sourceRoute?: LayerSourceRoute;
+  /**
+   * V25-02 — short rationale string for the dispatcher's fallback
+   * branch. Empty / omitted on non-fallback branches. Intended for
+   * post-mortems and the v25 release report.
+   */
+  fallbackCause?: string;
+  /**
+   * V25-02 — `ceil(byteLength/4)` token estimate of the layer the
+   * dispatcher chose to ask for. `0` means the dispatcher did not
+   * derive an estimate (e.g. unknown page size).
+   */
+  tokenEstimateChosen?: number;
+  /**
+   * V25-02 — `ceil(byteLength/4)` token estimate of the equivalent
+   * full `L0+L1+L2` read. `0` when unknown. Always `>= tokenEstimateChosen`
+   * when both are known.
+   */
+  tokenEstimateFullRead?: number;
+  /**
+   * V25-02 — `max(0, tokenEstimateFullRead - tokenEstimateChosen)`.
+   * Pre-computed for telemetry ergonomics. Always `0` when either side
+   * is unknown.
+   */
+  tokensSavedEstimate?: number;
+  /**
+   * V25-02 — when the dispatcher routes the caller through
+   * `experience_replay_skip_read`, the caller is expected to skip
+   * `chrome_read_page` entirely. This flag is `true` ONLY in that
+   * exact branch; the chooser never claims a generic "do not read".
+   */
+  readPageAvoided?: boolean;
 }
 
 /**

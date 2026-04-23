@@ -50,6 +50,11 @@ import type { ExperienceQueryService } from '../memory/experience';
 import type { ExperienceActionPathRow } from '../memory/experience/experience-repository';
 import type { ChooseContextTelemetryRepository } from '../memory/telemetry/choose-context-telemetry';
 import { rankExperienceCandidates } from './choose-context-replay-rules';
+import {
+  dispatchLayer,
+  type LayerDispatchTaskType,
+  type LayerDispatchUserIntentHint,
+} from './choose-context-layer-dispatch';
 
 export class TabrixChooseContextInputError extends Error {
   public readonly code: 'TABRIX_CHOOSE_CONTEXT_BAD_INPUT';
@@ -448,6 +453,81 @@ export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecisi
   };
 }
 
+// ---------------------------------------------------------------------------
+// V25-02 — pure intent classifier for layer dispatch
+// ---------------------------------------------------------------------------
+
+/**
+ * V25-02: bucket the free-text `intent` into the closed
+ * {@link LayerDispatchUserIntentHint} enum. Pure function — uses
+ * regex/keyword scans only, no Memory / Knowledge / network. Order
+ * mirrors the V25-02 Strategy Table priority-2 row block; a hit on a
+ * higher-priority bucket short-circuits.
+ *
+ * `'unknown'` means the dispatcher should fall through to task type /
+ * page complexity. We never invent a bucket from the intent string.
+ */
+export function classifyIntentForLayerDispatch(intent: string): LayerDispatchUserIntentHint {
+  if (typeof intent !== 'string' || intent.trim().length === 0) return 'unknown';
+  const normalized = intent.toLowerCase();
+  // priority 2.1 — summary / overview / gist / "what is this page"
+  if (
+    /(总结|重点|摘要|概要|简述)/.test(intent) ||
+    /\b(overview|gist|summary|summari[sz]e|what\s+is\s+this\s+page|main\s+entry\s+points?)\b/.test(
+      normalized,
+    )
+  ) {
+    return 'summary';
+  }
+  // priority 2.4 — details / logs / tables / compare / debug / row-level inspection
+  if (
+    /(展开细看|详细|详情|展开|细节|对比|对照|调试)/.test(intent) ||
+    /\b(detail|details|drill\s*into|expand|logs?|tables?|evidence|compare|diff|debug|row[- ]level|inspect)\b/.test(
+      normalized,
+    )
+  ) {
+    return 'details';
+  }
+  // priority 2.3 — fill / search / submit / replay / form-like
+  if (
+    /(填写|提交|搜索|查询|表单|回放|重放|重播)/.test(intent) ||
+    /\b(fill|search|submit|replay|form|input)\b/.test(normalized)
+  ) {
+    return 'form_or_submit';
+  }
+  // priority 2.2 — open / click / select a specific entry
+  if (
+    /(打开|点击|进入|选择|去到|跳转)/.test(intent) ||
+    /\b(open|click|select|find|go\s+to|navigate)\b/.test(normalized)
+  ) {
+    return 'open_or_select';
+  }
+  return 'unknown';
+}
+
+/**
+ * V25-02: derive task-type bucket from the user intent classification.
+ * Exposed as a separate helper so unit tests can pin the matrix
+ * without re-running the classifier. Pure function.
+ */
+export function deriveTaskTypeForLayerDispatch(
+  hint: LayerDispatchUserIntentHint,
+): LayerDispatchTaskType {
+  switch (hint) {
+    case 'summary':
+      return 'reading_only';
+    case 'details':
+      return 'reading_only';
+    case 'open_or_select':
+      return 'action';
+    case 'form_or_submit':
+      return 'action';
+    case 'unknown':
+    default:
+      return 'unknown';
+  }
+}
+
 /**
  * V24-03: pick the legacy `experienceHit` shape from the top-1 ranked
  * candidate, applying the legacy `EXPERIENCE_HIT_MIN_SUCCESS_RATE`
@@ -595,6 +675,29 @@ export function runTabrixChooseContext(
     rankedTopBlockedBy,
   });
 
+  // V25-02: layer dispatcher — runs once per chooser decision after
+  // the strategy is picked. The dispatcher is pure (no IO) so this
+  // adds zero hot-path Memory traffic. We feed it the same facts the
+  // strategy used so rule alignment is auditable from telemetry.
+  const intentHint = classifyIntentForLayerDispatch(input.intent);
+  const layerDispatch = dispatchLayer({
+    pageRole: input.pageRole ?? null,
+    userIntent: intentHint,
+    taskType: deriveTaskTypeForLayerDispatch(intentHint),
+    candidateActionsCount: 0,
+    hvoCount: 0,
+    knowledgeAvailable: !!knowledgeCatalog && knowledgeCatalog.totalEndpoints > 0,
+    experienceReplayAvailable: decision.strategy === 'experience_replay',
+    safetyRequiresFullLayers: false,
+    fullReadByteLength: 0,
+  });
+  const tokensSavedEstimate = Math.max(
+    0,
+    layerDispatch.fullReadTokenEstimate - layerDispatch.tokenEstimate,
+  );
+  const knowledgeEndpointFamily =
+    siteFamily === 'github' && knowledgeCatalog ? 'github.api.github.com' : null;
+
   // V23-04 / B-018 v1.5 — telemetry write-back. We attempt to record
   // the decision ONLY when telemetry is wired and we have a usable
   // result to record. Failures here MUST NOT poison the chooser
@@ -620,6 +723,19 @@ export function runTabrixChooseContext(
         strategy: decision.strategy,
         fallbackStrategy: decision.fallbackStrategy ?? null,
         createdAt: nowIso,
+        // V25-02 layer-dispatch telemetry
+        chosenLayer: layerDispatch.chosenLayer,
+        layerDispatchReason: layerDispatch.reason,
+        sourceRoute: layerDispatch.sourceRoute,
+        fallbackCause: layerDispatch.fallbackCause ?? null,
+        tokenEstimateChosen: layerDispatch.tokenEstimate,
+        tokenEstimateFullRead: layerDispatch.fullReadTokenEstimate,
+        tokensSavedEstimate,
+        knowledgeEndpointFamily,
+        // V25-02 (M2 binding) — V24-03 ranked-replay audit fields
+        rankedCandidateCount: decision.rankedCandidateCount ?? null,
+        replayEligibleBlockedBy: decision.replayEligibleBlockedBy ?? null,
+        replayFallbackDepth: decision.replayFallbackDepth ?? null,
       });
       decisionId = candidateId;
     } catch (error) {
@@ -647,6 +763,16 @@ export function runTabrixChooseContext(
     rankedCandidateCount: decision.rankedCandidateCount,
     replayEligibleBlockedBy: decision.replayEligibleBlockedBy,
     replayFallbackDepth: decision.replayFallbackDepth,
+    // V25-02 layer-dispatch fields. Always present; safe defaults so
+    // callers built before V25-02 still type-check.
+    chosenLayer: layerDispatch.chosenLayer,
+    layerDispatchReason: layerDispatch.reason,
+    sourceRoute: layerDispatch.sourceRoute,
+    fallbackCause: layerDispatch.fallbackCause ?? undefined,
+    tokenEstimateChosen: layerDispatch.tokenEstimate,
+    tokenEstimateFullRead: layerDispatch.fullReadTokenEstimate,
+    tokensSavedEstimate,
+    readPageAvoided: layerDispatch.sourceRoute === 'experience_replay_skip_read',
   };
 }
 

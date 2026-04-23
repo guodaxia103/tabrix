@@ -161,6 +161,44 @@ function ensureExperienceReplayWritebackColumns(db: SqliteDatabase): void {
 }
 
 /**
+ * V25-02 additive migration for legacy DBs that pre-date the
+ * layer-dispatch telemetry columns on `tabrix_choose_context_decisions`.
+ * Each ALTER is guarded by a `hasColumn` probe so a virgin DB (where
+ * the columns are already present from `CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL`)
+ * is a no-op. Same partial-failure recovery contract as
+ * `ensureExperienceReplayWritebackColumns`.
+ *
+ * Audit reference for V24-03 ranked-replay fields not yet persisted
+ * before this migration:
+ *   - `ranked_candidate_count` — top-K size after rank
+ *   - `replay_eligible_blocked_by` — comma-joined block reasons
+ *   - `replay_fallback_depth` — 0=top-1 reuse, ≥1=ranked fallback
+ *
+ * `knowledge_endpoint_family` is **telemetry-only** per V25-02
+ * binding; it MUST NOT drive any v2.5 routing.
+ */
+function ensureChooseContextDecisionLayerColumns(db: SqliteDatabase): void {
+  const additions: Array<[string, string]> = [
+    ['chosen_layer', 'TEXT'],
+    ['layer_dispatch_reason', 'TEXT'],
+    ['source_route', 'TEXT'],
+    ['fallback_cause', 'TEXT'],
+    ['token_estimate_chosen', 'INTEGER'],
+    ['token_estimate_full_read', 'INTEGER'],
+    ['tokens_saved_estimate', 'INTEGER'],
+    ['knowledge_endpoint_family', 'TEXT'],
+    ['ranked_candidate_count', 'INTEGER'],
+    ['replay_eligible_blocked_by', 'TEXT'],
+    ['replay_fallback_depth', 'INTEGER'],
+  ];
+  for (const [name, type] of additions) {
+    if (!hasColumn(db, 'tabrix_choose_context_decisions', name)) {
+      db.exec(`ALTER TABLE tabrix_choose_context_decisions ADD COLUMN ${name} ${type}`);
+    }
+  }
+}
+
+/**
  * Open (or create) the Memory DB. Caller owns the returned handle and
  * must call `.close()` when done. Re-throws a
  * `TabrixMemoryDbBindingError` if the native binding is missing.
@@ -194,6 +232,11 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   // Memory persistence gate the rest of the native server uses, so a DB
   // running with persistence='off' will not accumulate telemetry rows.
   db.exec(CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL);
+  // V25-02: legacy-DB additive migration for layer-dispatch telemetry
+  // columns. Runs after the CHOOSE_CONTEXT CREATE so virgin DBs see
+  // the columns from the CREATE statement and the helper is a pure
+  // no-op; legacy DBs pick up the columns via the guarded ALTERs.
+  ensureChooseContextDecisionLayerColumns(db);
   // V24-02: isolation telemetry table. Same idempotent CREATE IF NOT
   // EXISTS pattern. Lives outside `EXPERIENCE_CREATE_TABLES_SQL` so
   // the legacy-migration probe order stays stable (Experience first,

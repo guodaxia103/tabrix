@@ -313,13 +313,31 @@ CREATE INDEX IF NOT EXISTS knowledge_api_endpoints_last_seen_at_idx
  */
 export const CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS tabrix_choose_context_decisions (
-  decision_id        TEXT PRIMARY KEY,
-  intent_signature   TEXT NOT NULL,
-  page_role          TEXT,
-  site_family        TEXT,
-  strategy           TEXT NOT NULL,
-  fallback_strategy  TEXT,
-  created_at         TEXT NOT NULL
+  decision_id              TEXT PRIMARY KEY,
+  intent_signature         TEXT NOT NULL,
+  page_role                TEXT,
+  site_family              TEXT,
+  strategy                 TEXT NOT NULL,
+  fallback_strategy        TEXT,
+  created_at               TEXT NOT NULL,
+  -- V25-02 layer-dispatch telemetry. All NULLABLE so legacy DBs and
+  -- pre-V25 callers stay valid. See
+  -- docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md section 11 and the
+  -- V25-02 Strategy Table for value semantics. knowledge_endpoint_family
+  -- is a derived telemetry-only label and MUST NOT drive any v2.5 route.
+  chosen_layer             TEXT,
+  layer_dispatch_reason    TEXT,
+  source_route             TEXT,
+  fallback_cause           TEXT,
+  token_estimate_chosen    INTEGER,
+  token_estimate_full_read INTEGER,
+  tokens_saved_estimate    INTEGER,
+  knowledge_endpoint_family TEXT,
+  -- V24-03 ranked-replay audit fields persisted in V25-02 (per V3.1 M2
+  -- binding). Append-only; nullable for legacy rows.
+  ranked_candidate_count       INTEGER,
+  replay_eligible_blocked_by   TEXT,
+  replay_fallback_depth        INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS tabrix_choose_context_decisions_strategy_idx

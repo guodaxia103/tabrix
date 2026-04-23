@@ -290,6 +290,12 @@ export const TOOL_SCHEMAS: Tool[] = [
           description:
             "V23-03/B-015 render mode. 'json' (default) emits the structured DOM-semantic snapshot whose HVOs/candidateActions/targetRef are the click/fill execution truth. 'markdown' adds a low-token Markdown projection (`markdown` field) of the top objects + interactive labels for text-heavy reading; the JSON HVOs/candidateActions/targetRef are still emitted unchanged so locator resolution is unaffected. Per docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md §4.3 Markdown is a READING surface, NOT an execution surface — never use it for click targeting.",
         },
+        requestedLayer: {
+          type: 'string',
+          enum: ['L0', 'L0+L1', 'L0+L1+L2'],
+          description:
+            "V25-02 layer envelope. Optional; when omitted preserves the legacy full L0+L1+L2 payload. 'L0' returns only the summary task layer (taskMode/pageRole/primaryRegion/focusObjectIds plus stable HVO targetRef registry); L1 and L2 task fields are dropped from the response. 'L0+L1' returns the L0 + L1 overview (highValueObjectIds + candidateActionIds) but suppresses L2 detail refs. 'L0+L1+L2' returns the full controlled expansion (current default behaviour). Stable HVO targetRef registry is ALWAYS written even at 'L0' so chrome_click_element resolution stays deterministic. Source: docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md §11; rule table: V25-02 Layer Dispatch Strategy Table.",
+        },
         depth: {
           type: 'number',
           description:

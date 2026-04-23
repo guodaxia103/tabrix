@@ -910,6 +910,21 @@ describe('runTabrixChooseContext telemetry (V23-04)', () => {
         strategy: 'read_page_markdown',
         fallbackStrategy: 'read_page_required',
         createdAt: '2026-04-22T10:00:00.000Z',
+        // V25-02 layer-dispatch telemetry. "open issues" classifies
+        // as user_intent_open_or_select; with no full-read byte length
+        // the token estimates land at 0.
+        chosenLayer: 'L0+L1',
+        layerDispatchReason: 'user_intent_open_or_select',
+        sourceRoute: 'read_page_required',
+        fallbackCause: '',
+        tokenEstimateChosen: 0,
+        tokenEstimateFullRead: 0,
+        tokensSavedEstimate: 0,
+        knowledgeEndpointFamily: null,
+        // V25-02 (M2 binding) — V24-03 ranked-replay audit fields.
+        rankedCandidateCount: 0,
+        replayEligibleBlockedBy: null,
+        replayFallbackDepth: 'cold',
       },
     ]);
   });
@@ -1227,10 +1242,12 @@ describe('runTabrixChooseContext ranked replay (V24-03)', () => {
     expect(rules).not.toMatch(/session-repository/);
   });
 
-  it('telemetry table schema is unchanged (no V24-03 fields persisted)', () => {
-    // V24-03 plan §2.3 explicitly defers persisting ranked fields to
-    // v2.5 to avoid v23 telemetry-table drift. The recordDecision
-    // call must still receive the v23 shape verbatim.
+  it('V25-02 persists V24-03 ranked fields + layer-dispatch telemetry', () => {
+    // V24-03 plan §2.3 deferred persisting ranked fields to v2.5; the
+    // V25-02 M2 binding lands them on `tabrix_choose_context_decisions`
+    // alongside the new layer-dispatch telemetry. The recordDecision
+    // payload must carry every field — strict shape check guards
+    // against silent additions slipping past the v25 release gate.
     const tele = fakeTelemetry();
     const { service } = fakeExperience([
       fakeRow({
@@ -1257,14 +1274,30 @@ describe('runTabrixChooseContext ranked replay (V24-03)', () => {
     const recorded = tele.decisions[0];
     expect(Object.keys(recorded ?? {}).sort()).toEqual(
       [
+        'chosenLayer',
         'createdAt',
         'decisionId',
+        'fallbackCause',
         'fallbackStrategy',
         'intentSignature',
+        'knowledgeEndpointFamily',
+        'layerDispatchReason',
         'pageRole',
+        'rankedCandidateCount',
+        'replayEligibleBlockedBy',
+        'replayFallbackDepth',
         'siteFamily',
+        'sourceRoute',
         'strategy',
+        'tokenEstimateChosen',
+        'tokenEstimateFullRead',
+        'tokensSavedEstimate',
       ].sort(),
     );
+    // Spot-check ranked + layer values lined up with the strategy.
+    expect(recorded?.rankedCandidateCount).toBeGreaterThan(0);
+    expect(recorded?.chosenLayer).toBeDefined();
+    expect(recorded?.layerDispatchReason).toBeDefined();
+    expect(recorded?.sourceRoute).toBeDefined();
   });
 });

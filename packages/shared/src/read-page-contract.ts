@@ -361,3 +361,138 @@ export const READ_PAGE_TASK_PROTOCOL_FIELDS = [
   'L1',
   'L2',
 ] as const;
+
+// ---------------------------------------------------------------------------
+// V25-02 — Layer Dispatch Runtime contract
+// ---------------------------------------------------------------------------
+
+/**
+ * V25-02 / B-LAYER-DISPATCH: which layer envelope the caller wants
+ * `chrome_read_page` to materialize. `L0+L1+L2` is the legacy default
+ * shape that callers see when this field is omitted; the two narrower
+ * shapes are opt-in by the chooser through the layer dispatcher.
+ *
+ * The values are intentionally serialization-stable strings (not bit
+ * flags) so they can land in the MCP schema and the SQLite telemetry
+ * column without a side index. Order of the values mirrors §11 of
+ * `docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md` (smallest first).
+ */
+export type ReadPageRequestedLayer = 'L0' | 'L0+L1' | 'L0+L1+L2';
+
+export const READ_PAGE_REQUESTED_LAYER_VALUES = ['L0', 'L0+L1', 'L0+L1+L2'] as const;
+
+/**
+ * V25-02: closed enum of dispatcher reasons. Each value corresponds to
+ * one row of the V25-02 Layer Dispatch Strategy Table (V3.1 §V25-02).
+ * Stable for telemetry; new reasons MUST be appended, not reordered or
+ * renamed, because v2.5 release-gate aggregates against these names.
+ */
+export type LayerDispatchReason =
+  // priority 1: safety override
+  | 'safety_required_full_layers'
+  // priority 2: user intent override
+  | 'user_intent_summary'
+  | 'user_intent_open_or_select'
+  | 'user_intent_form_or_submit'
+  | 'user_intent_details_or_compare'
+  // priority 3: task type
+  | 'task_type_reading_only'
+  | 'task_type_action'
+  // priority 4: page complexity
+  | 'simple_page_low_density'
+  | 'medium_page_overview'
+  | 'complex_page_detail_required'
+  // priority 5: MKEP support
+  | 'experience_replay_executable'
+  | 'knowledge_supports_summary'
+  | 'knowledge_with_action'
+  // priority 6: fail-safe
+  | 'dispatcher_fallback_safe';
+
+export const LAYER_DISPATCH_REASON_VALUES: readonly LayerDispatchReason[] = [
+  'safety_required_full_layers',
+  'user_intent_summary',
+  'user_intent_open_or_select',
+  'user_intent_form_or_submit',
+  'user_intent_details_or_compare',
+  'task_type_reading_only',
+  'task_type_action',
+  'simple_page_low_density',
+  'medium_page_overview',
+  'complex_page_detail_required',
+  'experience_replay_executable',
+  'knowledge_supports_summary',
+  'knowledge_with_action',
+  'dispatcher_fallback_safe',
+] as const;
+
+/**
+ * V25-02 kickoff binding — locked 4-value `LayerSourceRoute` enum.
+ * Source of truth for both telemetry and the v25 release gate.
+ *
+ * - `read_page_required` — caller MUST call `chrome_read_page` with
+ *   the chosen layer; the chooser cannot pre-build context for it.
+ * - `experience_replay_skip_read` — caller can replay a recorded path
+ *   directly. `chrome_read_page` is NOT required ahead of replay.
+ * - `knowledge_supported_read` — caller should call `chrome_read_page`
+ *   but the chooser surfaced API Knowledge shape evidence as well.
+ * - `dispatcher_fallback_safe` — dispatcher could not classify the
+ *   input; fall back to `L0+L1+L2` and call `chrome_read_page`.
+ *
+ * Adding a fifth value requires a full v2.5 → v2.6 enum migration in
+ * the release gate library, the telemetry column allow-list, and the
+ * benchmark transformer's `KNOWN_SOURCE_ROUTES`.
+ */
+export type LayerSourceRoute =
+  | 'read_page_required'
+  | 'experience_replay_skip_read'
+  | 'knowledge_supported_read'
+  | 'dispatcher_fallback_safe';
+
+export const LAYER_SOURCE_ROUTE_VALUES: readonly LayerSourceRoute[] = [
+  'read_page_required',
+  'experience_replay_skip_read',
+  'knowledge_supported_read',
+  'dispatcher_fallback_safe',
+] as const;
+
+/**
+ * V25-02 token estimate helper — `ceil(byteLength / 4)`. Pure, no
+ * dependencies. Mirrors the locked decision in V3.1 §V25-02 so the
+ * dispatcher, the read-page tool, and the release gate all derive the
+ * same numbers from the same source string.
+ *
+ * `null`/`undefined` input → 0. Callers MUST pass the UTF-8 byte
+ * length explicitly when they have it (so rendered token counts stay
+ * stable across surrogate pairs).
+ */
+export function estimateTokensFromBytes(byteLength: number | null | undefined): number {
+  if (typeof byteLength !== 'number' || !Number.isFinite(byteLength) || byteLength <= 0) {
+    return 0;
+  }
+  return Math.ceil(byteLength / 4);
+}
+
+/**
+ * Convenience wrapper — most callers have a serialized JSON string.
+ * Uses TextEncoder when available (browser + node 20+); falls back to
+ * Buffer in plain Node.js test environments. Pure besides the global
+ * lookup.
+ */
+export function estimateTokensFromString(serialized: string | null | undefined): number {
+  if (typeof serialized !== 'string' || serialized.length === 0) {
+    return 0;
+  }
+  let bytes: number;
+  // Prefer the platform-native path so chrome-extension and native-server
+  // agree on the count without pulling Buffer into the bundler graph.
+  if (typeof TextEncoder !== 'undefined') {
+    bytes = new TextEncoder().encode(serialized).length;
+  } else {
+    // Fallback: Node.js Buffer. Only reached in legacy test runners.
+
+    const buf = (globalThis as { Buffer?: { byteLength(s: string, enc: string): number } }).Buffer;
+    bytes = buf ? buf.byteLength(serialized, 'utf8') : serialized.length;
+  }
+  return estimateTokensFromBytes(bytes);
+}
