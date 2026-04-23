@@ -23,6 +23,20 @@ const {
   loadAndEvaluateBenchmarkReportV24,
   requireBaselineComparisonTable,
 } = require('./lib/v24-benchmark-gate.cjs');
+// V25-05: independent v2.5.0+ gate. Same mutual-exclusion shape as v24
+// preempts v23: when `benchmarkGateAppliesV25` is true (v2.5.0+) the
+// script runs ONLY the v25 gate. v2.4.x routes to the v24 branch only;
+// v2.3.x routes to the v23 branch only. Order matters because the v23
+// helper `benchmarkGateApplies` returns true for v2.3.0+ (it has no
+// upper bound) and the v24 helper `benchmarkGateAppliesV24` returns
+// true for v2.4.0+ (also no upper bound) — the if/else if/else if
+// chain below preempts in version-descending order so each tag uses
+// exactly one gate, never two.
+const {
+  benchmarkGateAppliesV25,
+  loadAndEvaluateBenchmarkReportV25,
+  requireBaselineComparisonTableV25,
+} = require('./lib/v25-benchmark-gate.cjs');
 
 const ROOT = process.cwd();
 
@@ -195,7 +209,92 @@ const BENCHMARK_REPORT_MAX_AGE_DAYS = 7;
 // report just by passing `--allow-missing-notes`. The soft warning at
 // the bottom of this block is already self-guarded on `selectedNotesFile`
 // existing, so it stays harmless under `--allow-missing-notes`.
-if (benchmarkGateAppliesV24(nativePkg.version)) {
+if (benchmarkGateAppliesV25(nativePkg.version)) {
+  // V25-05: v2.5.0+ release gate. Same shape as the v2.4 branch —
+  // presence + recency + hard content gate via the canonical CJS
+  // module, baseline-comparison table embed in the notes, and a soft
+  // assertion that the notes reference the canonical report file.
+  // `--allow-missing-notes` deliberately does NOT bypass the content
+  // gate, the baseline-comparison-table embed, or the
+  // `__V25_TBD__` placeholder rejection (mirrors V23-06 / V24-05
+  // closeouts).
+  const benchmarkDir = path.join(ROOT, 'docs', 'benchmarks', 'v25');
+  if (!fs.existsSync(benchmarkDir)) {
+    errors.push(
+      `v2.5.0+ release gate: missing benchmark directory ${path.relative(ROOT, benchmarkDir)}. ` +
+        `Run \`pnpm run benchmark:v25 -- --input <run.ndjson> --gate\` first; see docs/RELEASE_NOTES_v${nativePkg.version}.md "Maintainer command list".`,
+    );
+  } else {
+    const reports = fs
+      .readdirSync(benchmarkDir)
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => {
+        const fullPath = path.join(benchmarkDir, name);
+        const stat = fs.statSync(fullPath);
+        return { name, fullPath, mtimeMs: stat.mtimeMs };
+      })
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+    if (reports.length === 0) {
+      errors.push(
+        `v2.5.0+ release gate: no benchmark reports under ${path.relative(ROOT, benchmarkDir)}. ` +
+          `Run \`pnpm run benchmark:v25 -- --input <run.ndjson> --gate\` first.`,
+      );
+    } else {
+      const newest = reports[0];
+      const ageDays = (Date.now() - newest.mtimeMs) / (1000 * 60 * 60 * 24);
+      if (ageDays > BENCHMARK_REPORT_MAX_AGE_DAYS) {
+        errors.push(
+          `v2.5.0+ release gate: newest benchmark report ${newest.name} is ${ageDays.toFixed(1)} days old (max ${BENCHMARK_REPORT_MAX_AGE_DAYS}). ` +
+            `Re-run \`pnpm run benchmark:v25 -- --input <run.ndjson> --gate\`.`,
+        );
+      }
+
+      const gateResult = loadAndEvaluateBenchmarkReportV25(newest.fullPath);
+      for (const reason of gateResult.hardReasons || []) {
+        errors.push(
+          `v2.5.0+ release gate: benchmark report ${newest.name} failed gate — ${reason}`,
+        );
+      }
+      for (const reason of gateResult.softReasons || []) {
+        warnings.push(
+          `v2.5.0+ release gate: benchmark report ${newest.name} ${reason}`,
+        );
+      }
+
+      // Baseline comparison table + `__V25_TBD__` placeholder
+      // rejection — both implemented inside `requireBaselineComparisonTableV25`.
+      // The v25 canonical header is `metric | v2.4 baseline | v2.5
+      // median | delta | direction` (vs the v24 gate's v2.3-baseline
+      // header). `--allow-missing-notes` does NOT bypass either check.
+      if (selectedNotesFile && fileExists(selectedNotesFile)) {
+        const tableResult = requireBaselineComparisonTableV25(
+          path.join(ROOT, selectedNotesFile),
+          benchmarkDir,
+        );
+        for (const reason of tableResult.reasons || []) {
+          errors.push(`v2.5.0+ release gate: ${reason}`);
+        }
+      } else {
+        errors.push(
+          `v2.5.0+ release gate: cannot verify baseline comparison table embed because no notes file is available.`,
+        );
+      }
+
+      // Soft assertion: release notes should reference some
+      // `docs/benchmarks/v25/` JSON report.
+      if (fileExists(selectedNotesFile)) {
+        const notes = fs.readFileSync(path.join(ROOT, selectedNotesFile), 'utf8');
+        if (!notes.includes('benchmarks/v25')) {
+          warnings.push(
+            `Release notes ${selectedNotesFile} do not reference any \`docs/benchmarks/v25/\` report. ` +
+              `Recommend pointing readers at the specific report committed for this tag.`,
+          );
+        }
+      }
+    }
+  }
+} else if (benchmarkGateAppliesV24(nativePkg.version)) {
   const benchmarkDir = path.join(ROOT, 'docs', 'benchmarks', 'v24');
   if (!fs.existsSync(benchmarkDir)) {
     errors.push(
