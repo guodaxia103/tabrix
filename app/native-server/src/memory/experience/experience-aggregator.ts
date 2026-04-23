@@ -115,20 +115,47 @@ function toStepSequence(
 /**
  * Tools whose Memory sessions must NOT be projected into Experience.
  *
- * These are read-side native MCP tools that query Experience itself
- * (B-013). They legitimately produce audit-trail Memory sessions, but
- * if the aggregator turned each call into an `experience_action_paths`
- * row we would seed bogus `(pageRole='unknown', intent='run mcp tool
- * experience_suggest_plan')` buckets every time an upstream agent asks
- * for suggestions — corrupting the very dataset the suggestions are
- * read from.
+ * These are native/internal MCP tools that read or write Experience /
+ * Knowledge themselves. They legitimately emit audit-trail Memory
+ * sessions, but if the aggregator turned each call into an
+ * `experience_action_paths` row we would seed bogus
+ * `(pageRole='unknown', intent='run mcp tool <internal-tool>')`
+ * buckets every time an upstream agent invoked them — corrupting the
+ * very dataset the chooser/suggester reads from. This is the v2.4.0
+ * closeout review finding "Experience self-pollution".
  *
  * Sessions whose entire step list belongs to this set are marked
  * `aggregated_at` (so the pending-aggregation scan does not keep
- * re-encountering them) but skipped from upsert.
+ * re-encountering them) but skipped from upsert. Mixed sessions —
+ * where any step is a real Memory-touching tool — still aggregate
+ * normally; the exclusion is per-session, not per-step.
+ *
+ * Why a hand-maintained allowlist instead of "anything starting with
+ * `experience_` / `tabrix_choose_context`": being explicit makes
+ * future tool additions a deliberate choice (touch this list in the
+ * same PR that adds the tool, document why) rather than an emergent
+ * silent skip when someone names a new tool unfortunately. The set
+ * mirrors `packages/shared/src/tools.ts` `EXPERIENCE_TOOL_NAMES` and
+ * `CHOOSER_TOOL_NAMES`; if a future tool joins those, it must also
+ * join this list (or an Experience-pollution test will catch it).
  */
 const EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS: ReadonlySet<string> = new Set([
+  // Read-side Experience query tool (B-013).
   'experience_suggest_plan',
+  // V24-02 write-back tool: records replay outcome onto an EXISTING
+  // experience_action_paths row. Aggregating its session would create
+  // a parallel `(unknown, 'run mcp tool experience_score_step')` row
+  // that has no relationship to the real action path being scored.
+  'experience_score_step',
+  // V24-03 chooser entry-point: ranks Experience candidates for the
+  // upstream agent. Each invocation is a read of Experience, not a
+  // candidate to learn from.
+  'tabrix_choose_context',
+  // V24-03 chooser outcome write-back: records which strategy the
+  // caller actually used. Same self-pollution concern as the chooser
+  // itself — it touches the chooser telemetry table, not real page
+  // actions.
+  'tabrix_choose_context_record_outcome',
 ]);
 
 /**
@@ -219,10 +246,16 @@ export class ExperienceAggregator {
       const sessionSteps = this.steps.listBySession(session.sessionId);
       const markTime = nowIso ?? new Date().toISOString();
 
-      // B-013 P1 fix: read-side Experience MCP tools (e.g.
-      // `experience_suggest_plan`) keep their Memory session for audit
-      // purposes but must not feed back into Experience itself. Mark
-      // them aggregated so the pending-scan moves on, then continue.
+      // B-013 P1 fix + v2.4.0 closeout review-fix: native/internal
+      // Experience- and chooser-facing MCP tools (see
+      // `EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS` above) keep their
+      // Memory session for audit purposes but must not feed back into
+      // Experience itself. Sessions whose ENTIRE step list is in the
+      // exclusion set get marked aggregated — both completed AND
+      // failed sessions, so a failure of `experience_score_step`
+      // doesn't leak in via `failure_count++` either — and skipped
+      // from upsert. Mixed sessions (any step is a real tool) still
+      // aggregate via the normal path below.
       if (isExcludedFromAggregation(sessionSteps)) {
         this.sessions.markAggregated(session.sessionId, markTime);
         continue;

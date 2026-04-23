@@ -399,6 +399,211 @@ describe('ExperienceAggregator (B-012 v1)', () => {
     }
   });
 
+  // v2.4.0 closeout review finding: Experience self-pollution must
+  // include V24-02 (`experience_score_step`) and V24-03 chooser tools
+  // (`tabrix_choose_context`, `tabrix_choose_context_record_outcome`).
+  // These tests pin the expanded exclusion set so a future contributor
+  // cannot shrink it back to a single tool.
+  describe('H2: v2.4.0 closeout — Experience self-pollution exclusion set', () => {
+    const internalOnlyCases: Array<{
+      label: string;
+      tool: string;
+    }> = [
+      { label: 'experience_score_step (V24-02 write-back)', tool: 'experience_score_step' },
+      { label: 'tabrix_choose_context (V24-03 chooser)', tool: 'tabrix_choose_context' },
+      {
+        label: 'tabrix_choose_context_record_outcome (V24-03 outcome write-back)',
+        tool: 'tabrix_choose_context_record_outcome',
+      },
+    ];
+
+    for (const { label, tool } of internalOnlyCases) {
+      it(`successful ${label} session is marked aggregated but never upserted`, () => {
+        const { db, taskRepo, sessionRepo, stepRepo, aggregator, experienceRepo, close } =
+          bootstrap();
+        try {
+          insertTask(taskRepo, {
+            taskId: `task-${tool}-ok`,
+            intent: `Run MCP tool ${tool}`,
+          });
+          insertSession(sessionRepo, {
+            sessionId: `s-${tool}-ok`,
+            taskId: `task-${tool}-ok`,
+            status: 'completed',
+          });
+          insertStep(stepRepo, {
+            stepId: `${tool}-ok-step`,
+            sessionId: `s-${tool}-ok`,
+            index: 1,
+            toolName: tool,
+            status: 'completed',
+          });
+
+          const result = aggregator.projectPendingSessions('2026-04-23T00:00:00.000Z');
+          expect(result).toEqual({ scanned: 1, projected: 0 });
+          expect(experienceRepo.listActionPaths()).toEqual([]);
+
+          const marker = db
+            .prepare('SELECT aggregated_at FROM memory_sessions WHERE session_id = ?')
+            .get(`s-${tool}-ok`) as { aggregated_at: string | null } | undefined;
+          expect(marker?.aggregated_at).toBe('2026-04-23T00:00:00.000Z');
+
+          const replay = aggregator.projectPendingSessions('2026-04-23T00:00:01.000Z');
+          expect(replay).toEqual({ scanned: 0, projected: 0 });
+          expect(experienceRepo.listActionPaths()).toEqual([]);
+        } finally {
+          close();
+        }
+      });
+
+      it(`failed ${label} session also bypasses Experience (no failure_count++)`, () => {
+        const { db, taskRepo, sessionRepo, stepRepo, aggregator, experienceRepo, close } =
+          bootstrap();
+        try {
+          insertTask(taskRepo, {
+            taskId: `task-${tool}-fail`,
+            intent: `Run MCP tool ${tool}`,
+          });
+          insertSession(sessionRepo, {
+            sessionId: `s-${tool}-fail`,
+            taskId: `task-${tool}-fail`,
+            status: 'failed',
+          });
+          insertStep(stepRepo, {
+            stepId: `${tool}-fail-step`,
+            sessionId: `s-${tool}-fail`,
+            index: 1,
+            toolName: tool,
+            status: 'failed',
+          });
+
+          const result = aggregator.projectPendingSessions('2026-04-23T00:01:00.000Z');
+          expect(result).toEqual({ scanned: 1, projected: 0 });
+          expect(experienceRepo.listActionPaths()).toEqual([]);
+
+          const marker = db
+            .prepare('SELECT aggregated_at FROM memory_sessions WHERE session_id = ?')
+            .get(`s-${tool}-fail`) as { aggregated_at: string | null } | undefined;
+          expect(marker?.aggregated_at).toBe('2026-04-23T00:01:00.000Z');
+
+          const replay = aggregator.projectPendingSessions('2026-04-23T00:01:01.000Z');
+          expect(replay).toEqual({ scanned: 0, projected: 0 });
+        } finally {
+          close();
+        }
+      });
+    }
+
+    it('a session whose ENTIRE step list mixes multiple internal tools is excluded', () => {
+      const { db, taskRepo, sessionRepo, stepRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, {
+          taskId: 'task-mixed-internal',
+          intent: 'multi-tool internal flow',
+        });
+        insertSession(sessionRepo, {
+          sessionId: 's-mixed-internal',
+          taskId: 'task-mixed-internal',
+          status: 'completed',
+        });
+        insertStep(stepRepo, {
+          stepId: 'mixed-internal-step-1',
+          sessionId: 's-mixed-internal',
+          index: 1,
+          toolName: 'tabrix_choose_context',
+          status: 'completed',
+        });
+        insertStep(stepRepo, {
+          stepId: 'mixed-internal-step-2',
+          sessionId: 's-mixed-internal',
+          index: 2,
+          toolName: 'experience_score_step',
+          status: 'completed',
+        });
+        insertStep(stepRepo, {
+          stepId: 'mixed-internal-step-3',
+          sessionId: 's-mixed-internal',
+          index: 3,
+          toolName: 'tabrix_choose_context_record_outcome',
+          status: 'completed',
+        });
+
+        const result = aggregator.projectPendingSessions('2026-04-23T00:02:00.000Z');
+        expect(result).toEqual({ scanned: 1, projected: 0 });
+        expect(experienceRepo.listActionPaths()).toEqual([]);
+
+        const marker = db
+          .prepare('SELECT aggregated_at FROM memory_sessions WHERE session_id = ?')
+          .get('s-mixed-internal') as { aggregated_at: string | null } | undefined;
+        expect(marker?.aggregated_at).toBe('2026-04-23T00:02:00.000Z');
+      } finally {
+        close();
+      }
+    });
+
+    it('a session that mixes an internal tool with a real Memory tool STILL aggregates (per-session, not per-step)', () => {
+      // Pins the documented "per-session" semantics: as long as ANY
+      // step is a real Memory-touching tool, the session is treated
+      // as a normal action-path candidate. Otherwise we would silently
+      // drop legitimate flows that happen to start with a chooser
+      // call (e.g. a real action sequence prefixed by
+      // `tabrix_choose_context`), which is a much worse failure mode
+      // than the self-pollution we are guarding against.
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, {
+          taskId: 'task-prefixed',
+          intent: 'open issues after chooser call',
+        });
+        insertSession(sessionRepo, {
+          sessionId: 's-prefixed',
+          taskId: 'task-prefixed',
+          status: 'completed',
+        });
+        insertStep(stepRepo, {
+          stepId: 's-prefixed-step-1',
+          sessionId: 's-prefixed',
+          index: 1,
+          toolName: 'tabrix_choose_context',
+          status: 'completed',
+        });
+        insertStep(stepRepo, {
+          stepId: 's-prefixed-step-2',
+          sessionId: 's-prefixed',
+          index: 2,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          inputSummary: JSON.stringify({ selector: '#issues-tab' }),
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'prefixed-snap',
+          stepId: 's-prefixed-step-2',
+          pageRole: 'repo_home',
+          capturedAt: '2026-04-23T00:03:00.500Z',
+        });
+
+        const result = aggregator.projectPendingSessions('2026-04-23T00:03:01.000Z');
+        expect(result).toEqual({ scanned: 1, projected: 1 });
+
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].pageRole).toBe('repo_home');
+        expect(rows[0].intentSignature).toBe('open issues after chooser call');
+        // The internal step is preserved verbatim in the step_sequence
+        // (it's the recorder-side audit trail), but the row itself is
+        // a real action-path candidate keyed off the real click.
+        expect(rows[0].stepSequence.map((s) => s.toolName)).toEqual([
+          'tabrix_choose_context',
+          'chrome_click_element',
+        ]);
+      } finally {
+        close();
+      }
+    });
+  });
+
   // V24-01 (brief §7) — replay sessions compound on the original row.
   describe('V24-01: experience_replay session special-case (brief §7)', () => {
     function seedOriginalRow(
