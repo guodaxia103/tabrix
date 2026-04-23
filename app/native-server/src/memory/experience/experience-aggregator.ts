@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { getTaskWeightsFor, type TabrixTaskWeights } from '@tabrix/shared';
 import type { SqliteDatabase } from '../db';
 import type { PageSnapshotRepository } from '../db/page-snapshot-repository';
 import type { PendingAggregationSession, SessionRepository } from '../db/session-repository';
@@ -6,6 +7,7 @@ import type { StepRepository } from '../db/step-repository';
 import type { ExperienceActionPathStep } from './experience-repository';
 import { ExperienceRepository } from './experience-repository';
 import { extractPortableReplayArgs } from '../../mcp/experience-replay-args';
+import { SessionCompositeScoreWriter, projectCompositeComponents } from './composite-score';
 
 export interface ExperienceAggregationResult {
   scanned: number;
@@ -161,6 +163,12 @@ function toCounterDelta(status: PendingAggregationSession['status']): {
 
 export class ExperienceAggregator {
   private readonly upsertAndMarkTxn;
+  // V24-02 — session-end composite score writer. Isolation-aware:
+  // a SQLite failure during composite write does NOT prevent
+  // `aggregated_at` from being marked (that lock belongs to B-012
+  // idempotent aggregation, not to V24-02 retry). The writer logs a
+  // structured warning row instead.
+  private readonly compositeScoreWriter: SessionCompositeScoreWriter;
 
   constructor(
     private readonly db: SqliteDatabase,
@@ -169,6 +177,9 @@ export class ExperienceAggregator {
     private readonly snapshots: PageSnapshotRepository,
     private readonly experience: ExperienceRepository = new ExperienceRepository(db),
   ) {
+    this.compositeScoreWriter = new SessionCompositeScoreWriter({
+      repository: this.experience,
+    });
     this.upsertAndMarkTxn = this.db.transaction(
       (input: {
         actionPathId: string;
@@ -242,6 +253,7 @@ export class ExperienceAggregator {
           continue;
         }
         const { successDelta, failureDelta } = toCounterDelta(session.status);
+        const replayLastUsedAt = session.endedAt ?? session.startedAt;
         this.upsertAndMarkTxn({
           actionPathId: replayedActionPathId,
           pageRole: original.pageRole,
@@ -249,9 +261,34 @@ export class ExperienceAggregator {
           stepSequence: original.stepSequence,
           successDelta,
           failureDelta,
-          lastUsedAt: session.endedAt ?? session.startedAt,
+          lastUsedAt: replayLastUsedAt,
           nowIso: markTime,
           sessionId: session.sessionId,
+        });
+        // V24-02: session-end composite score for the replay
+        // session. Written OUTSIDE the upsertAndMarkTxn transaction
+        // because failure here MUST NOT roll back `aggregated_at`
+        // (per the V24-02 isolation policy: aggregated_at belongs
+        // to B-012 idempotent aggregation, not to V24-02 retry).
+        // The writer swallows SQLite errors and logs a structured
+        // warning row instead. Components are projected from session
+        // step counts; a richer projection (token-saving, real
+        // benchmark elapsed) lands with V24-05's benchmark wiring.
+        const replaySteps = sessionSteps;
+        const successSteps = replaySteps.filter((step) => step.status === 'completed').length;
+        const failureSteps = replaySteps.length - successSteps;
+        const components = projectCompositeComponents({
+          successCount: successSteps,
+          failureCount: failureSteps,
+        });
+        const weights: TabrixTaskWeights = getTaskWeightsFor('github', original.pageRole);
+        this.compositeScoreWriter.write({
+          sessionId: session.sessionId,
+          actionPathId: replayedActionPathId,
+          components,
+          weights,
+          lastReplayAt: replayLastUsedAt,
+          nowIso: markTime,
         });
         projected += 1;
         continue;
