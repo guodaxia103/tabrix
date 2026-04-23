@@ -37,6 +37,28 @@ export type ClickObservedOutcome =
   | 'verification_unavailable';
 
 /**
+ * The full closed enum as a runtime tuple. Consumers (e.g. the V24-02
+ * `experience_score_step` parser) build a Set from this for O(1)
+ * membership checks. Keep in lockstep with {@link ClickObservedOutcome}
+ * — the unit test in `click.test.ts` enforces parity.
+ */
+export const CLICK_OBSERVED_OUTCOMES: readonly ClickObservedOutcome[] = [
+  'cross_document_navigation',
+  'spa_route_change',
+  'hash_change',
+  'new_tab_opened',
+  'dialog_opened',
+  'menu_opened',
+  'state_toggled',
+  'selection_changed',
+  'dom_changed',
+  'focus_changed',
+  'download_intercepted',
+  'no_observed_change',
+  'verification_unavailable',
+];
+
+/**
  * Raw evidence booleans, kept separate from the verdict so that callers
  * who disagree with Tabrix's outcome mapping can build their own view.
  */

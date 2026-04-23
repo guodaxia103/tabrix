@@ -84,6 +84,15 @@ export const TOOL_NAMES = {
      * by `experience_replay`. SoT: `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`.
      */
     REPLAY: 'experience_replay',
+    /**
+     * V24-02: per-step replay outcome write-back. Records one
+     * (success | failure) observation against the named action path,
+     * keyed by `(actionPathId, stepIndex)`. Native-handled, gated by
+     * the same `experience_replay` capability so the score-step
+     * channel is always governed by the capability that controls the
+     * replay tool itself. SoT: `.claude/TABRIX_V2_4_0_PLAN.md` §V24-02.
+     */
+    SCORE_STEP: 'experience_score_step',
   },
   /**
    * MKEP context selector (Stage 3h, B-018 v1 minimal slice).
@@ -1888,6 +1897,74 @@ export const TOOL_SCHEMAS: Tool[] = [
     },
   },
   {
+    name: TOOL_NAMES.EXPERIENCE.SCORE_STEP,
+    description:
+      'Tabrix MKEP Experience write-back (V24-02): record one replay step outcome (success or failure) against a NAMED `actionPathId` and `stepIndex`. Re-uses the `ClickObservedOutcome` taxonomy (no parallel outcome enum). Native-handled, capability-gated by `experience_replay` (same gate as `experience_replay`). The replay engine calls this automatically per step; upstream callers normally do NOT need to invoke it. Failure of the underlying SQLite write is isolated and surfaced via a structured `experience_writeback_warnings` row instead of being thrown back to the caller — `status: "isolated"` indicates that path. See `.claude/TABRIX_V2_4_0_PLAN.md` §V24-02.',
+    annotations: {
+      readOnlyHint: false,
+      idempotentHint: false,
+    },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        actionPathId: {
+          type: 'string',
+          description:
+            'The action-path being scored. Must match `^action_path_[0-9a-f]{64}$` — the same shape the aggregator emits and `experience_replay` consumes.',
+          minLength: 1,
+          maxLength: 256,
+          pattern: '^action_path_[0-9a-f]{64}$',
+        },
+        stepIndex: {
+          type: 'integer',
+          description:
+            '0-based index inside `experience_action_paths.step_sequence`. Bounded by the same step budget the replay engine enforces ([0, 15]).',
+          minimum: 0,
+          maximum: 15,
+        },
+        observedOutcome: {
+          type: 'string',
+          description:
+            'Closed enum from `ClickObservedOutcome`. The persistence layer projects this onto a {success | failure} delta via `isClickSuccessOutcome`.',
+          enum: [
+            'click_recorded',
+            'navigation_completed',
+            'element_focused',
+            'no_op',
+            'invalid_target',
+            'target_disappeared',
+            'navigation_failed',
+            'rejected_by_safety',
+            'unknown_failure',
+          ],
+        },
+        historyRef: {
+          type: 'string',
+          description:
+            'Optional Memory `historyRef` (e.g. the per-step ref returned by the Chrome extension). Persisted on the warning row when isolation fires so an operator can grep correlated logs.',
+          maxLength: 256,
+        },
+        replayId: {
+          type: 'string',
+          description:
+            'Optional Memory replay session id (`memory_sessions.session_id`). Same audit purpose as `historyRef`.',
+          maxLength: 256,
+        },
+        evidence: {
+          type: 'object',
+          description:
+            'Optional structured evidence. `code` is a short identifier (e.g. a `TabrixReplayFailureCode`); `message` is short free text. Both are bounded.',
+          properties: {
+            code: { type: 'string', maxLength: 128 },
+            message: { type: 'string', maxLength: 512 },
+          },
+          additionalProperties: false,
+        },
+      },
+      required: ['actionPathId', 'stepIndex', 'observedOutcome'],
+    },
+  },
+  {
     name: TOOL_NAMES.CONTEXT.CHOOSE,
     description:
       'Tabrix MKEP context selector (v1 minimal slice, B-018). Given an `intent` (free text) and optional `url` / `pageRole` / `siteId`, deterministically pick which existing native asset to use as context: `experience_reuse` (a previously-successful action path), `knowledge_light` (the captured site API catalog as shape evidence — Tabrix CANNOT call those endpoints in v1), or `read_page_required` (fallback: caller should issue `chrome_read_page`). Pure SELECT against local SQLite. GitHub-first; non-GitHub URLs always resolve to `read_page_required`. See `docs/B_018_CONTEXT_SELECTOR_V1.md` for the contract and the v2 deferrals.',
@@ -2026,6 +2103,12 @@ export const TOOL_RISK_TIERS: Readonly<Record<string, TabrixRiskTier>> = Object.
   // (CAPABILITY_GATED_TOOLS below) so listing + dispatch require an
   // explicit operator opt-in independent of `TABRIX_POLICY_ALLOW_P3`.
   [TOOL_NAMES.EXPERIENCE.REPLAY]: 'P1',
+  // V24-02 write-back tool. P1 because it persists outcome facts
+  // (counter delta + audit warning row) that influence subsequent
+  // chooser ranking; capability-gated via the same
+  // `experience_replay` gate so the score-step channel is governed
+  // by exactly the capability that controls the replay it serves.
+  [TOOL_NAMES.EXPERIENCE.SCORE_STEP]: 'P1',
 
   // ---- MKEP Context selector (read-only SELECT against native SQLite) ----
   [TOOL_NAMES.CONTEXT.CHOOSE]: 'P0',
@@ -2088,7 +2171,15 @@ export function isExplicitOptInTool(toolName: string): boolean {
 export const CAPABILITY_GATED_TOOLS: ReadonlyMap<string, TabrixCapability> = new Map<
   string,
   TabrixCapability
->([[TOOL_NAMES.EXPERIENCE.REPLAY, 'experience_replay']]);
+>([
+  [TOOL_NAMES.EXPERIENCE.REPLAY, 'experience_replay'],
+  // V24-02: re-uses the `experience_replay` capability — one capability
+  // gates the whole replay/score-step write-back family. Gating both
+  // the engine-side write-back (called from `experience_replay`) and
+  // any direct upstream call to `experience_score_step` with the same
+  // env knob keeps the operator surface uniform.
+  [TOOL_NAMES.EXPERIENCE.SCORE_STEP, 'experience_replay'],
+]);
 
 /** True when the tool requires a Tabrix capability to be enabled. */
 export function isCapabilityGatedTool(toolName: string): boolean {
