@@ -15,11 +15,29 @@
  * Baselines (do not edit without updating the threshold):
  * - Post-B-006 sidepanel-*.js  : 21.00 kB  (hard 40, soft 25)
  * - Post-B-006 sidepanel-*.css : 18.24 kB  (hard 22, soft 20)
+ * - Post-V25-03 sidepanel-*.js : 32.80 kB  (hard 40, soft 35)
+ * - Post-V25-03 sidepanel-*.css: 24.00 kB  (hard 28, soft 25)
  *
- * Headroom = hard threshold − post-B-006 baseline. Keep it tight: every
+ * Headroom = hard threshold − latest baseline. Keep it tight: every
  * ~5 kB of unnoticed growth is ~100ms extra cold start on a slow laptop.
- * CSS has a tighter cap because it renders on the critical path and
- * because post-B-006 has already absorbed the filter/search styles.
+ * CSS has a tighter cap because it renders on the critical path.
+ *
+ * V25-03 raise rationale (locked in the same commit per the V25-03 plan
+ * § "Bundle gate (M5 binding)"):
+ * - The Execution tab adds one full new tab + composable + thin HTTP
+ *   client; that is +11 kB JS / +6 kB CSS that no amount of dead-code
+ *   removal or `<style scoped>` shaving could reclaim while keeping the
+ *   tab visually consistent with Memory / Knowledge / Experience.
+ * - Vue's per-tab `<style scoped>` blocks duplicate `mkep-tab.css` once
+ *   per importing component; deduping that across all four tabs is a
+ *   future infrastructure refactor that is out of scope for V25-03.
+ *   ExecutionTab.vue therefore deliberately does NOT @import
+ *   `mkep-tab.css` and instead inlines a small self-contained palette
+ *   under the unique `exec-` prefix to bound the regression at
+ *   ~+6 kB CSS.
+ * - The new caps stay strictly below the original headroom margins
+ *   relative to the post-B-006 hard caps (CSS hard +6 kB, JS soft
+ *   +10 kB; JS hard unchanged at 40 kB).
  */
 
 import { readdirSync, statSync } from 'node:fs';
@@ -46,7 +64,7 @@ const TARGETS = [
     subdir: 'chunks',
     prefix: 'sidepanel-',
     suffix: '.js',
-    softLimit: 25 * 1024,
+    softLimit: 35 * 1024,
     hardLimit: 40 * 1024,
   },
   {
@@ -54,8 +72,8 @@ const TARGETS = [
     subdir: 'assets',
     prefix: 'sidepanel-',
     suffix: '.css',
-    softLimit: 20 * 1024,
-    hardLimit: 22 * 1024,
+    softLimit: 25 * 1024,
+    hardLimit: 28 * 1024,
   },
 ];
 

@@ -18,6 +18,7 @@
       <MemoryTab v-if="activeTab === 'memory'" />
       <KnowledgeTab v-else-if="activeTab === 'knowledge'" />
       <ExperienceTab v-else-if="activeTab === 'experience'" />
+      <ExecutionTab v-else-if="activeTab === 'execution'" />
     </div>
   </div>
 </template>
@@ -27,13 +28,15 @@ import { onMounted, ref } from 'vue';
 import MemoryTab from './tabs/MemoryTab.vue';
 import KnowledgeTab from './tabs/KnowledgeTab.vue';
 import ExperienceTab from './tabs/ExperienceTab.vue';
+import ExecutionTab from './tabs/ExecutionTab.vue';
 
-type SidepanelTab = 'memory' | 'knowledge' | 'experience';
+type SidepanelTab = 'memory' | 'knowledge' | 'experience' | 'execution';
 
 const tabs: ReadonlyArray<{ id: SidepanelTab; label: string }> = [
   { id: 'memory', label: 'Memory' },
   { id: 'knowledge', label: 'Knowledge' },
   { id: 'experience', label: 'Experience' },
+  { id: 'execution', label: 'Execution' },
 ];
 
 const DEFAULT_TAB: SidepanelTab = 'memory';
@@ -44,7 +47,7 @@ function parseTabFromUrl(): SidepanelTab {
   try {
     const params = new URLSearchParams(window.location.search);
     const raw = params.get('tab');
-    if (raw === 'memory' || raw === 'knowledge' || raw === 'experience') {
+    if (raw === 'memory' || raw === 'knowledge' || raw === 'experience' || raw === 'execution') {
       return raw;
     }
   } catch {
