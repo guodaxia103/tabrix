@@ -34,9 +34,11 @@ import type { SessionManager } from '../execution/session-manager';
 import {
   experienceReplayNativeHandler,
   type DispatchBridgedFn,
+  type ReplayOutcomeWriter,
   type ReplayStepRecorder,
   type UpdateTaskIntentFn,
 } from './experience-replay';
+import { experienceScoreStepNativeHandler } from './experience-score-step';
 
 export interface NativeToolHandlerDeps {
   sessionManager: Pick<
@@ -69,6 +71,11 @@ export interface NativeToolHandlerDeps {
    * triggers.
    */
   updateTaskIntent?: UpdateTaskIntentFn;
+  /**
+   * V24-02: per-step write-back hook used by the replay engine.
+   * Optional so existing handler tests stay source-compatible.
+   */
+  outcomeWriter?: ReplayOutcomeWriter;
 }
 
 export type NativeToolHandler = (
@@ -176,9 +183,27 @@ const handleExperienceReplayBridged: NativeToolHandler = async (args, deps) => {
   return await experienceReplayNativeHandler(args, reshaped);
 };
 
+/**
+ * V24-02 adapter. Same plumbing as `handleExperienceReplayBridged` —
+ * the score-step handler reads `experience` (write-back capable) and
+ * `persistenceMode` from `deps` via a structural cast. No bridge /
+ * recorder / intent re-tagger needed: the tool only writes to
+ * SQLite, never to the extension-side dispatch path.
+ */
+const handleExperienceScoreStepBridged: NativeToolHandler = async (args, deps) => {
+  const persistenceMode = deps.sessionManager.getPersistenceStatus().mode;
+  const reshaped = {
+    ...deps,
+    experience: deps.sessionManager.experience,
+    persistenceMode,
+  } as unknown as Parameters<typeof experienceScoreStepNativeHandler>[1];
+  return await experienceScoreStepNativeHandler(args, reshaped);
+};
+
 const NATIVE_HANDLERS: ReadonlyMap<string, NativeToolHandler> = new Map([
   [TOOL_NAMES.EXPERIENCE.SUGGEST_PLAN, handleExperienceSuggestPlan],
   [TOOL_NAMES.EXPERIENCE.REPLAY, handleExperienceReplayBridged],
+  [TOOL_NAMES.EXPERIENCE.SCORE_STEP, handleExperienceScoreStepBridged],
   [TOOL_NAMES.CONTEXT.CHOOSE, handleTabrixChooseContext],
   [TOOL_NAMES.CONTEXT.RECORD_OUTCOME, handleTabrixChooseContextRecordOutcome],
 ]);

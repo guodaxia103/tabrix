@@ -38,6 +38,7 @@ import {
   TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS,
   TABRIX_REPLAY_PLACEHOLDERS,
   TOOL_NAMES,
+  type ClickObservedOutcome,
   type TabrixExperienceReplayErrorBody,
   type TabrixExperienceReplayResolved,
   type TabrixExperienceReplayResult,
@@ -218,10 +219,36 @@ export function parseExperienceReplayInput(raw: unknown): ParsedExperienceReplay
   return { actionPathId: idValue, variableSubstitutions, maxSteps, targetTabId };
 }
 
+/**
+ * V24-02 — per-step write-back hook. Invoked AFTER `recorder.startStep`
+ * + dispatch, regardless of outcome. The engine maps the step's
+ * `(success | failure + failureCode)` into a {@link ClickObservedOutcome}
+ * using the same projection the chooser-side ranking already trusts.
+ *
+ * Failure isolation: implementations MUST NOT throw — by V24-02
+ * policy a write-back I/O failure cannot stall the user's replay path.
+ * The production wiring binds this to
+ * `ExperienceQueryService.recordReplayStepOutcome` wrapped in a
+ * try/catch that emits an `experience_writeback_warnings` row instead.
+ */
+export interface ReplayOutcomeWriter {
+  recordReplayStepOutcome(input: {
+    actionPathId: string;
+    stepIndex: number;
+    observedOutcome: ClickObservedOutcome;
+  }): void;
+}
+
 interface ReplayEngineDeps {
   experience: Pick<ExperienceRepository, 'findActionPathById'>;
   dispatch: DispatchBridgedFn;
   recorder: ReplayStepRecorder;
+  /**
+   * Optional V24-02 hook. Existing tests pass `ReplayEngineDeps`
+   * without this field and continue to compile / pass; production
+   * wires it to the V24-02 write-back path.
+   */
+  outcomeWriter?: ReplayOutcomeWriter;
 }
 
 interface ReplayEngineExecutionContext {
@@ -249,6 +276,30 @@ interface ReplayEngineExecutionContext {
  */
 export class ReplayEngine {
   constructor(private readonly deps: ReplayEngineDeps) {}
+
+  /**
+   * V24-02 — guarded per-step write-back. Returns void; never throws.
+   * The production `outcomeWriter` binding (in `register-tools.ts`)
+   * already wraps the write in try/catch + warning-row, so this
+   * second `try` is defense-in-depth: even if a future binding
+   * forgets to isolate, the replay user path still survives.
+   */
+  private tryWriteOutcome(
+    actionPathId: string,
+    stepIndex: number,
+    observedOutcome: ClickObservedOutcome,
+  ): void {
+    if (!this.deps.outcomeWriter) return;
+    try {
+      this.deps.outcomeWriter.recordReplayStepOutcome({
+        actionPathId,
+        stepIndex,
+        observedOutcome,
+      });
+    } catch {
+      // Isolation by contract — never propagate.
+    }
+  }
 
   public async execute(input: ParsedExperienceReplayInput): Promise<TabrixExperienceReplayResult> {
     const ctx: ReplayEngineExecutionContext = { input };
@@ -324,6 +375,14 @@ export class ReplayEngine {
           historyRef: null,
           failureCode: 'step_target_not_found',
         });
+        // V24-02: per-step write-back. Isolation: never throw out of
+        // the writer (the production binding wraps it in try/catch +
+        // structured warning row); we still defensively swallow here.
+        this.tryWriteOutcome(
+          row.actionPathId,
+          stepIndex,
+          mapFailureToOutcome('step_target_not_found'),
+        );
         // Terminal: brief §6 forbids retry / re-locator / re-plan.
         return {
           status: stepIndex === 0 ? 'failed' : 'partial',
@@ -346,6 +405,8 @@ export class ReplayEngine {
           historyRef: null,
           failureCode,
         });
+        // V24-02: per-step write-back (failure path).
+        this.tryWriteOutcome(row.actionPathId, stepIndex, mapFailureToOutcome(failureCode));
         return {
           status: stepIndex === 0 ? 'failed' : 'partial',
           replayId: undefined,
@@ -365,6 +426,13 @@ export class ReplayEngine {
         status: 'ok',
         historyRef,
       });
+      // V24-02: per-step write-back (success path). The engine has
+      // no fine-grained ClickObservedOutcome signal to forward — the
+      // bridged tool's response shape is generic — so we use the
+      // success-like generic `state_toggled`. The chooser-side
+      // ranking (V24-03) only branches on
+      // `isClickSuccessOutcome(outcome)`, so this loses no fidelity.
+      this.tryWriteOutcome(row.actionPathId, stepIndex, 'state_toggled');
     }
 
     return {
@@ -624,6 +692,25 @@ function extractHistoryRef(result: CallToolResult): string | null {
  * dialog-intercepted / navigation-drift signals once the underlying
  * tools surface them in the response payload.
  */
+/**
+ * V24-02 — coarse projection from {@link TabrixReplayFailureCode} to a
+ * {@link ClickObservedOutcome}. v1 keeps it conservative: every
+ * failure projects to a non-success outcome, so the chooser-side
+ * ranking (V24-03) sees a clean failure delta.
+ *
+ * `verification_unavailable` is reserved for "we never observed
+ * anything"; for actual failures we use `no_observed_change` because
+ * it is the only failure-side outcome whose semantics map cleanly to
+ * "the click did not produce the intended downstream effect".
+ */
+function mapFailureToOutcome(_failureCode: TabrixReplayFailureCode): ClickObservedOutcome {
+  // v1 collapses every failure to the same "no observable change"
+  // outcome. V24-03 will refine this once the bridged tools surface
+  // tighter signals (verifier-red vs dialog-intercepted vs
+  // navigation-drift) into their CallToolResult payload.
+  return 'no_observed_change';
+}
+
 function inferStepFailureCode(result: CallToolResult): TabrixReplayFailureCode {
   const text = extractFirstTextContent(result);
   if (!text) return 'step_target_not_found';
@@ -675,6 +762,12 @@ export interface ExperienceReplayHandlerDeps {
   capabilityEnv?: CapabilityEnv;
   /** Memory persistence mode; replay refuses to run when `'off'` (no audit trail possible). */
   persistenceMode?: 'disk' | 'memory' | 'off';
+  /**
+   * V24-02 — optional per-step write-back hook. Production wires it to
+   * `ExperienceQueryService.recordReplayStepOutcome`; tests inject a
+   * spy. Absent in pre-V24-02 unit tests, which still pass.
+   */
+  outcomeWriter?: ReplayOutcomeWriter;
 }
 
 /** Brief §7 / aggregator-special-case prefix. Kept here as the single source. */
@@ -778,6 +871,7 @@ export async function handleExperienceReplay(
     experience: deps.experience,
     dispatch: deps.dispatchBridged,
     recorder: deps.recorder,
+    outcomeWriter: deps.outcomeWriter,
   });
   return await engine.execute(parsed);
 }

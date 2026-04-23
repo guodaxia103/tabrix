@@ -28,6 +28,7 @@ import { runPostProcessor } from './tool-post-processors';
 import { getNativeToolHandler } from './native-tool-handlers';
 import type {
   DispatchBridgedFn,
+  ReplayOutcomeWriter,
   ReplayStepRecorder,
   SupportedReplayToolName,
 } from './experience-replay';
@@ -174,6 +175,7 @@ function buildReplayDeps(wrapperSessionId: string): {
   dispatchBridged: DispatchBridgedFn;
   recorder: ReplayStepRecorder;
   updateTaskIntent: (intent: string) => void;
+  outcomeWriter: ReplayOutcomeWriter;
 } {
   const dispatchBridged: DispatchBridgedFn = async (toolName, toolArgs) => {
     const { response, bridgeFailure } = await callWithBridgeRecovery(
@@ -247,7 +249,55 @@ function buildReplayDeps(wrapperSessionId: string): {
     }
   };
 
-  return { dispatchBridged, recorder, updateTaskIntent };
+  // V24-02: per-step write-back hook. Isolation is enforced TWICE:
+  //   1. here, where any thrown SQLite error is caught and downgraded
+  //      to a structured warning row (so the user's replay path stays
+  //      alive); and
+  //   2. inside `ReplayEngine.tryWriteOutcome`, which already wraps
+  //      the call in its own try/catch as defense-in-depth.
+  // We deliberately swallow the inner `recordWritebackWarning` failure
+  // for the same reason the V24-02 handler does — at that point even
+  // the warning row could not land, but throwing would defeat the
+  // isolation contract.
+  const outcomeWriter: ReplayOutcomeWriter = {
+    recordReplayStepOutcome(input) {
+      const experience = sessionManager.experience;
+      if (!experience) return;
+      const nowIso = new Date().toISOString();
+      try {
+        experience.recordReplayStepOutcome({
+          actionPathId: input.actionPathId,
+          stepIndex: input.stepIndex,
+          observedOutcome: input.observedOutcome,
+          nowIso,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const warningId = `warn_replay_outcome_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+        try {
+          experience.recordWritebackWarning({
+            warningId,
+            source: 'experience_score_step',
+            actionPathId: input.actionPathId,
+            stepIndex: input.stepIndex,
+            sessionId: wrapperSessionId,
+            replayId: null,
+            observedOutcome: input.observedOutcome,
+            errorCode: 'replay_outcome_write_failed',
+            errorMessage: message.slice(0, 512),
+            payloadBlob: null,
+            createdAt: nowIso,
+          });
+        } catch {
+          // Warning row also failed — stay silent by isolation
+          // contract. Operator-side telemetry will surface the
+          // underlying SQLite issue separately.
+        }
+      }
+    },
+  };
+
+  return { dispatchBridged, recorder, updateTaskIntent, outcomeWriter };
 }
 
 function createCapabilityDeniedResult(toolName: string, capability: string): CallToolResult {
