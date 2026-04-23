@@ -47,7 +47,7 @@ Wave 2 —— 需 Wave 1 至少 Beta。
   Stage 3c · Recovery Watchdog 统一                [B-014 pool]
 
 Wave 3 —— 战略兑现，依赖 Wave 1+2。
-  Stage 3h · Context Strategy Selector             [B-018 v1 slice done]  ← K1 最大杠杆（规划侧）；v1 = 规则版选择器，完整 Stage 3h 仍在 pool
+  Stage 3h · Context Strategy Selector             [B-018 v1 + v1.5 + v2 ranked replay-aware 已落地（V23-04 + V24-03）]  ← K1 最大杠杆（规划侧）；规则版选择器现已消费 V24-02 复合评分，完整 Stage 3h DoD（多站点决策表）仍在 pool
   Stage 3e · Run History UI                        [B-001..B-006 Sprint 1+2 已落地]
   Stage 3i · Memory Insights 表                    [B-019 pool]
 
@@ -154,7 +154,7 @@ v2.3.0 主线的 `V23-03` 包首次落地了 `read_page(render='markdown')` 与 
 - **层**：`E`（读 `M`）
 - **KPI**：`省 token` · `更快` · `懂用户`
 - **优先级**：`P0` · **规模**：`L` · **依赖**：`Stage 3a`
-- **状态**：**schema 已落、聚合器已落、读侧 MCP 工具已落；写侧 `experience_replay` v1 + `experience_score_step` v1 + 复合会话评分 已在 v2.4.0 (V24-01 / V24-02) 落地** —— `B-005`（schema）Sprint 2 落地；`B-012`（聚合器）+ `B-013` 的只读 `experience_suggest_plan` 已在 Sprint 3 落地；`experience_replay` v1（bridged、P1、capability-gated、仅 GitHub）2026-04-22 经 V24-01 落地；`experience_score_step` v1 + replay 引擎逐步写回钩子 + session-end 复合评分（按 `taskWeights` v1，写回失败采用隔离策略）2026-04-23 经 V24-02 落地；候选排序 / fallback ladder 仍在 pool（V24-03）。
+- **状态**：**schema 已落、聚合器已落、读侧 MCP 工具已落；写侧 `experience_replay` v1 + `experience_score_step` v1 + 复合会话评分 + chooser 侧 ranked replay artifact（`tabrix_choose_context` v2）已在 v2.4.0 (V24-01 / V24-02 / V24-03) 落地** —— `B-005`（schema）Sprint 2 落地；`B-012`（聚合器）+ `B-013` 的只读 `experience_suggest_plan` 已在 Sprint 3 落地；`experience_replay` v1（bridged、P1、capability-gated、仅 GitHub）2026-04-22 经 V24-01 落地；`experience_score_step` v1 + replay 引擎逐步写回钩子 + session-end 复合评分（按 `taskWeights` v1，写回失败采用隔离策略）2026-04-23 经 V24-02 落地；**chooser 侧 ranked artifact（`experience_ranked`，按 V24-02 复合评分给出确定性 top-3 排序）+ `replayEligibleBlockedBy` 复盘字段 2026-04-23 经 V24-03 落地**（`tabrix_choose_context` v2 —— 详见 §9 Stage 3h 状态块）。仅余上游多站点决策表 + 模型版打分等后续项。
 
 ### 范围
 
@@ -424,7 +424,7 @@ v2.3.0 主线的 `V23-03` 包首次落地了 `read_page(render='markdown')` 与 
 - **层**：`K` + `E`
 - **KPI**：`省 token`（**最大**）· `更快` · `懂用户`
 - **优先级**：`P0` · **规模**：`L` · **依赖**：`Stage 3a` + `Stage 3b` + `Stage 3d` + `Stage 3g` 都至少 Beta
-- **状态**：v1 最小切片 2026-04-22 落地 —— `B-018`（规则版 selector 作为 native `tabrix_choose_context` 接入；详见 `docs/B_018_CONTEXT_SELECTOR_V1.md`）。完整 Stage 3h DoD（决策表、telemetry、多站点）仍在 pool。
+- **状态**：v1 最小切片 2026-04-22 落地 —— `B-018`（规则版 selector 作为 native `tabrix_choose_context` 接入；详见 `docs/B_018_CONTEXT_SELECTOR_V1.md`）。v1.5（V23-04，2026-04-22）补上 telemetry + outcome 回写 + markdown 分支。**v2（V24-03，2026-04-23）补上确定性 ranked Experience artifact（`experience_ranked` artifact kind，按 V24-02 复合评分给出确定性 top-3 排序）、`replayEligibleBlockedBy` 复盘字段，以及一个 chooser 侧只会写 `0` / `'cold'` 的 `replayFallbackDepth` 槽位（真正的 ladder 深度由 replay 引擎在下游维护）。** telemetry 表结构在 v2.4 **冻结在 v1.5 的形态** 以保住现有 release gate；ranked 深度统计延后到 v2.5 落库。完整 Stage 3h DoD（多站点决策表、模型版打分）仍在 pool。
 
 ### 范围
 
@@ -473,7 +473,7 @@ v2.3.0 主线的 `V23-03` 包首次落地了 `read_page(render='markdown')` 与 
 
 ### 关联 `B-*`
 
-- 🟡 `B-018` —— `tabrix_choose_context` v1 最小切片落地（规则版选择器，GitHub-first，三策略）；seed 决策表 + 多站点仍未做。详见 `docs/B_018_CONTEXT_SELECTOR_V1.md`。
+- 🟡 `B-018` —— `tabrix_choose_context` v1 最小切片落地（规则版选择器，GitHub-first，三策略）；**v1.5（V23-04）** 补 telemetry + outcome 回写 + markdown 分支；**v2（V24-03）** 补 ranked Experience artifact + replay-eligibility 复盘字段。seed 决策表 + 多站点仍未做。详见 `docs/B_018_CONTEXT_SELECTOR_V1.md`。
 
 ### 给接手 AI 的提示
 
@@ -801,7 +801,7 @@ Memory 加 `user_preferences { key, value, sourceSessionId, confidence }` ——
 1. `B-015` 后续项 —— Stage 3d 范围 2 + 3（`memory_page_snapshots.readable_markdown` 懒列 + `agentStep` envelope JSON schema 发布）。`B-015` v1（`render='markdown'` 参数本体）已于 2026-04-22 落地（V23-03），只剩可选的持久化 + envelope 尾巴。
 2. `B-018` v2 —— 在 v1 选择器之上完成 Stage 3h 完整 DoD（现已可消费 `B-011` 的稳定 `targetRef`）。
 3. Stage 3a 后续项 —— `candidate-action.ts` 的 UI Map 消费切换（Stage 3a item 6，`B-011` 留下来的尾巴）。
-4. Stage 3b 写侧后续项 —— `experience_replay` v1 **已在 v2.4.0 (V24-01) 落地**；`experience_score_step` + 复合会话评分 **已在 v2.4.0 (V24-02, 2026-04-23) 落地**（capability 复用 + 写回隔离）；候选排序 / fallback ladder（V24-03）仍是后续项。
+4. Stage 3b 写侧后续项 —— `experience_replay` v1 **已在 v2.4.0 (V24-01) 落地**；`experience_score_step` + 复合会话评分 **已在 v2.4.0 (V24-02, 2026-04-23) 落地**（capability 复用 + 写回隔离）；**chooser 侧 ranked replay artifact（`tabrix_choose_context` v2）已在 v2.4.0 (V24-03, 2026-04-23) 落地** —— `experience_ranked` artifact、确定性 top-3 排序、`replayEligibleBlockedBy` 复盘字段。真正的 replay 引擎 `replay_fallback_depth` ladder（`0 → 1 → 2 → 3 → 'cold'`）作为 V24-04 候选保留（依赖 Codex 在 V24-05 真实 benchmark 中提供的证据决策）。
 
 `B-011` v1 已于 2026-04-22 落地（HVO 稳定 `targetRef` 端到端：扩展端产出 `tgt_<10-hex>`，click 桥经 per-tab registry 还原 stable→snapshot ref，真实浏览器黄金链路 `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` 已绿）。
 

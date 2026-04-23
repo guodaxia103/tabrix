@@ -47,7 +47,7 @@ Wave 2 — needs Wave 1 to be at least Beta.
   Stage 3c · Recovery Watchdog consolidation          [B-014 pool]
 
 Wave 3 — strategic payoff; needs Waves 1+2.
-  Stage 3h · Context Strategy Selector                [B-018 v1 slice done]  ← biggest K1 lever (planning side); v1 = rule-based selector, full Stage 3h DoD still open
+  Stage 3h · Context Strategy Selector                [B-018 v1 + v1.5 + v2 ranked replay-aware landed (V23-04 + V24-03)]  ← biggest K1 lever (planning side); rule-based selector now consumes V24-02 composite scores; full Stage 3h DoD (multi-site decision table) still open
   Stage 3e · Run History UI                           [B-001..B-006 DONE; Sprint 1+2]
   Stage 3i · Memory Insights table                    [B-019 pool]
 
@@ -154,7 +154,7 @@ The `V23-04` package extends `tabrix_choose_context` from a stateless v1 chooser
 - **Layer**: `E` (+ reads `M`)
 - **KPI**: `省 token` · `更快` · `懂用户`
 - **Priority**: `P0` · **Size**: `L` · **Dependencies**: `Stage 3a`
-- **Status**: **schema done, aggregator done, read-side MCP tool done; write-side `experience_replay` v1 + `experience_score_step` v1 + composite session score landed in v2.4.0 (V24-01 / V24-02)** — `B-005` (schema) done in Sprint 2; `B-012` (aggregator) and `B-013` read-only `experience_suggest_plan` landed in Sprint 3; `experience_replay` v1 (bridged, P1, capability-gated, GitHub-only) shipped via V24-01 on 2026-04-22; `experience_score_step` v1 + replay-engine outcome write-back hook + session-end composite score (per-`taskWeights` v1, write-back isolation strategy) shipped via V24-02 on 2026-04-23; only the ranked-candidate fallback ladder remains pool (V24-03).
+- **Status**: **schema done, aggregator done, read-side MCP tool done; write-side `experience_replay` v1 + `experience_score_step` v1 + composite session score + chooser-side ranked replay artifact (`tabrix_choose_context` v2) landed in v2.4.0 (V24-01 / V24-02 / V24-03)** — `B-005` (schema) done in Sprint 2; `B-012` (aggregator) and `B-013` read-only `experience_suggest_plan` landed in Sprint 3; `experience_replay` v1 (bridged, P1, capability-gated, GitHub-only) shipped via V24-01 on 2026-04-22; `experience_score_step` v1 + replay-engine outcome write-back hook + session-end composite score (per-`taskWeights` v1, write-back isolation strategy) shipped via V24-02 on 2026-04-23; **chooser-side ranked artifact (`experience_ranked`, top-3 deterministic ranking from V24-02 composite scores) + `replayEligibleBlockedBy` post-mortem field shipped via V24-03 on 2026-04-23** (`tabrix_choose_context` v2 — see §9 Stage 3h status). Only the upstream multi-site decision table + model-based scoring follow-ups remain pool.
 
 ### Scope
 
@@ -424,7 +424,7 @@ The `V23-04` package extends `tabrix_choose_context` from a stateless v1 chooser
 - **Layer**: `K` + `E`
 - **KPI**: `省 token` (largest) · `更快` · `懂用户`
 - **Priority**: `P0` · **Size**: `L` · **Dependencies**: `Stage 3a` + `Stage 3b` + `Stage 3d` + `Stage 3g` all at least `Beta`
-- **Status**: v1 minimal slice landed 2026-04-22 — `B-018` (rule-based selector wired as native `tabrix_choose_context`; details in `docs/B_018_CONTEXT_SELECTOR_V1.md`). Full Stage 3h DoD (decision table, telemetry, multi-site) still pool.
+- **Status**: v1 minimal slice landed 2026-04-22 — `B-018` (rule-based selector wired as native `tabrix_choose_context`; details in `docs/B_018_CONTEXT_SELECTOR_V1.md`). v1.5 (V23-04, 2026-04-22) added telemetry + outcome write-back + markdown branch. **v2 (V24-03, 2026-04-23) added the deterministic ranked Experience artifact (`experience_ranked` artifact kind, top-3 deterministic ranking from V24-02 composite scores), `replayEligibleBlockedBy` post-mortem field, and a chooser-side `replayFallbackDepth` slot (chooser only ever reports `0` / `'cold'`; the actual ladder depth is maintained downstream by the replay engine).** Telemetry table schema is intentionally frozen at the v2.3 v1.5 form in v2.4 to keep the existing release gate intact; ranked-depth statistics persist in v2.5. Full Stage 3h DoD (multi-site decision table, model-based scoring) still pool.
 
 ### Scope
 
@@ -473,7 +473,7 @@ The `V23-04` package extends `tabrix_choose_context` from a stateless v1 chooser
 
 ### Linked `B-*`
 
-- 🟡 `B-018` — `tabrix_choose_context` v1 minimal slice landed (rule-based selector, GitHub-first, three strategies). Seed decision table + multi-site coverage still open. See `docs/B_018_CONTEXT_SELECTOR_V1.md`.
+- 🟡 `B-018` — `tabrix_choose_context` v1 minimal slice landed (rule-based selector, GitHub-first, three strategies); **v1.5 (V23-04)** added telemetry + outcome write-back + markdown branch; **v2 (V24-03)** added ranked Experience artifact + replay-eligibility post-mortem fields. Seed decision table + multi-site coverage still open. See `docs/B_018_CONTEXT_SELECTOR_V1.md`.
 
 ### Notes for incoming AI
 
@@ -801,7 +801,7 @@ Pick in this order unless something blocks:
 1. `B-015` follow-on — Stage 3d Scope items 2 + 3 (`memory_page_snapshots.readable_markdown` lazy column + `agentStep` envelope JSON schema publish). `B-015` v1 (the `render='markdown'` parameter) landed 2026-04-22 (V23-03); only the optional persistence + envelope tail remains.
 2. `B-018` v2 — full Stage 3h DoD on top of the v1 selector (now also able to consume `B-011` stable `targetRef`).
 3. Stage 3a follow-up — UI Map consumer cutover inside `candidate-action.ts` (Stage 3a item 6, deferred from `B-011`).
-4. Stage 3b write-side follow-up — `experience_replay` v1 **landed in v2.4.0 (V24-01)**; `experience_score_step` + composite session score **landed in v2.4.0 (V24-02, 2026-04-23)** with capability-reuse + write-back isolation; only the ranked-candidate fallback ladder (V24-03) remains a follow-up.
+4. Stage 3b write-side follow-up — `experience_replay` v1 **landed in v2.4.0 (V24-01)**; `experience_score_step` + composite session score **landed in v2.4.0 (V24-02, 2026-04-23)** with capability-reuse + write-back isolation; **chooser-side ranked replay artifact (`tabrix_choose_context` v2) landed in v2.4.0 (V24-03, 2026-04-23)** — `experience_ranked` artifact, top-3 deterministic ranking, `replayEligibleBlockedBy` post-mortem field. The actual replay-engine `replay_fallback_depth` ladder (`0 → 1 → 2 → 3 → 'cold'`) is left as a downstream V24-04 candidate (gated on Codex's V24-05 benchmark evidence).
 
 `B-011` v1 landed 2026-04-22 (stable HVO `targetRef` end-to-end: extension emits `tgt_<10-hex>`, click bridge resolves stable→snapshot ref via per-tab registry, real-browser golden path `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` green).
 
