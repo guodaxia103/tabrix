@@ -207,7 +207,16 @@ V24-01 (`experience_replay` v1) 引入了 Phase 0 第一个 **非 P3** 但仍需
 - **拒绝码与 P3 区分**：capability 未启用时返回的失败码是 `'capability_off'`（不是 `TABRIX_POLICY_DENIED_P3`）。两个码故意分开，因为运维动作不同——`capability_off` 提示"在启动环境里把 capability 加进 `TABRIX_POLICY_CAPABILITIES`"，`TABRIX_POLICY_DENIED_P3` 提示"在启动环境里设置 `TABRIX_POLICY_ALLOW_P3`"。
 - **被拒绝时不开 Memory session**：与 P3 拒绝路径一致，capability 拒绝在 dispatch 之前发生，不会写入任何 `memory_sessions` / `memory_steps`，避免污染 Experience 聚合。
 
-这一模式为后续 P0/P1/P2 的可选高敏感工具（如未来的 `experience_score_step`、`knowledge_*` 写侧扩展）提供了独立于 P3 通道的可见性 + 调用门控；P3 通道继续承载"无条件高风险"工具。
+这一模式为后续 P0/P1/P2 的可选高敏感工具（如未来的 `knowledge_*` 写侧扩展）提供了独立于 P3 通道的可见性 + 调用门控；P3 通道继续承载"无条件高风险"工具。
+
+## 6.6 Phase 0 增量（v2.4.0 / V24-02）：capability 复用 + 写回隔离
+
+V24-02 (`experience_score_step` v1) 落地了 Stage 3b 写侧的 step 级 / session 级写回路径。Policy 关键决定：
+
+- **capability 复用，不新增**：`experience_score_step` 不申请新 capability，而是与 `experience_replay` 共用同一把钥匙 `experience_replay`（`packages/shared/src/tools.ts::CAPABILITY_GATED_TOOLS` 同时把这两个工具映射到同一个 capability）。语义：能 replay 的会话本来就要把 step 结果写回 Experience，把这两步绑成一个 capability 决策可以避免 "能跑、不能写" 的尴尬中间态。`riskTier = 'P1'`、`annotations.readOnlyHint = false` / `idempotentHint = false`、`requiresExplicitOptIn = true`，与 V24-01 对齐。
+- **写回失败采用"隔离"策略**：`experience_score_step` 的 SQLite 写失败 / `SessionCompositeScoreWriter` 的 session-end 写失败都不会向上抛出，而是写入新表 `experience_writeback_warnings`（`source ∈ {experience_score_step, session_composite_score}`、`error_code` / `error_message` / `payload_blob` / `created_at`）作为结构化告警，调用方收到 `status = 'isolated'` 后照常推进 replay。设计动机：V24-01 的 replay 是用户路径，I/O 抖动导致的写回失败不应中断回放；丢失的 Experience 学习以独立的 retry/outbox 路径补偿（v2.5 范围）。
+- **`aggregated_at` 不是重试钩子**：聚合器仍然在 `upsertAndMarkTxn` 之外、写回失败之后照常打 `aggregated_at`，避免下一次扫描重复触发同一个 session 的写回；隔离策略明确不复用 `aggregated_at` 做退避。
+- **被拒绝时仍不开 Memory session**：capability 关闭时，`experience_score_step` 在 dispatch 之前返回 `capability_off`，与 V24-01 的 `experience_replay` 完全一致；persistence 关闭时返回 `invalid_input`（"Memory persistence is disabled; nothing to write"），让上游知道这是配置缺失而不是 capability 问题。
 
 ---
 

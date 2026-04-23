@@ -200,7 +200,7 @@ Tabrix 是一个四层学习闭环，架在工具面和传输层之上。
 
 **差距**：
 
-- `experience_replay` v1 **已在 v2.4.0 (V24-01) 落地**——bridged MCP 工具，通过现有 extension 派发管线复跑录制好的 action path；由 capability `experience_replay` + `requiresExplicitOptIn` 双重门控，仅支持 GitHub `pageRole`，支持步骤集合 = `chrome_click_element` / `chrome_fill_or_select`。`experience_score_step` 与更复杂的候选排序 / fallback ladder 仍属 Stage 3b 后续（V24-02 / V24-03）；
+- `experience_replay` v1 **已在 v2.4.0 (V24-01) 落地**——bridged MCP 工具，通过现有 extension 派发管线复跑录制好的 action path；由 capability `experience_replay` + `requiresExplicitOptIn` 双重门控，仅支持 GitHub `pageRole`，支持步骤集合 = `chrome_click_element` / `chrome_fill_or_select`。`experience_score_step` v1 **已在 v2.4.0 (V24-02) 落地**——native MCP 工具，将每个 step 的 `ClickObservedOutcome` 写回 `experience_action_paths`；复用 `experience_replay` capability；replay 引擎在每一步执行后也会调用同一条写回路径（V24-01 的会话现在能自动累计 success/failure 计数）；session-end 复合评分（确定性、按 `taskWeights` v1）由 aggregator 在 replay session 上写入。SQLite 写失败采用 **隔离** 策略（`experience_writeback_warnings` 表），用户 replay 路径绝不会因 I/O 抖动中断。更复杂的候选排序 / fallback ladder 仍属 Stage 3b 后续（V24-03）；
 - 导入导出还没（Stage 4a 的 `B-020`）。
 
 **代码触点**：
@@ -310,13 +310,13 @@ Tabrix 是一个四层学习闭环，架在工具面和传输层之上。
 
 ### 7.2 规划中工具（本 PRD 点名的未来原语）
 
-| 工具                     | 规划 Stage                    | 层                     | 用途                                                                                                                                                                                            |
-| ------------------------ | ----------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tabrix_choose_context`  | 3h（`B-018`）                 | Knowledge + Experience | 给 `(intent, url?)`，返回最小 token 的 `ContextBundle` —— **最大 K1 杠杆**。                                                                                                                    |
-| `experience_replay`      | **已在 v2.4.0 (V24-01) 落地** | Experience             | 用变量替换重放历史 action path。`P1` + `requiresExplicitOptIn` + 新 capability `experience_replay`；仅支持 GitHub `pageRole`；支持步骤集合 = `chrome_click_element` / `chrome_fill_or_select`。 |
-| `experience_score_step`  | 3b（`B-013` 之后）            | Experience             | 让上游 LLM 把步骤结果写回 Memory。暴露前需先做 Policy review。                                                                                                                                  |
-| `knowledge_describe_api` | 3g（`B-017`）                 | Knowledge              | 列出某站点已捕获的 `KnowledgeApiEndpoint[]`。                                                                                                                                                   |
-| `knowledge_call_api`     | 3g（`B-017`）                 | Knowledge              | 用用户真实 Chrome cookie 调用站点 API。                                                                                                                                                         |
+| 工具                     | 规划 Stage                    | 层                     | 用途                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------ | ----------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tabrix_choose_context`  | 3h（`B-018`）                 | Knowledge + Experience | 给 `(intent, url?)`，返回最小 token 的 `ContextBundle` —— **最大 K1 杠杆**。                                                                                                                                                                                                                                                                 |
+| `experience_replay`      | **已在 v2.4.0 (V24-01) 落地** | Experience             | 用变量替换重放历史 action path。`P1` + `requiresExplicitOptIn` + 新 capability `experience_replay`；仅支持 GitHub `pageRole`；支持步骤集合 = `chrome_click_element` / `chrome_fill_or_select`。                                                                                                                                              |
+| `experience_score_step`  | **已在 v2.4.0 (V24-02) 落地** | Experience             | 让上游 LLM（或 replay 引擎本身）把每个 step 的 `ClickObservedOutcome` 写回 Memory，并触发 session-end 复合评分写回。`P1` + `requiresExplicitOptIn`；**复用** `experience_replay` capability（不新开钥匙，捕获/使用绑定）。失败模式 = 隔离 + 写入 `experience_writeback_warnings` 结构化告警行（replay 路径绝不会因 SQLite I/O 抖动而中断）。 |
+| `knowledge_describe_api` | 3g（`B-017`）                 | Knowledge              | 列出某站点已捕获的 `KnowledgeApiEndpoint[]`。                                                                                                                                                                                                                                                                                                |
+| `knowledge_call_api`     | 3g（`B-017`）                 | Knowledge              | 用用户真实 Chrome cookie 调用站点 API。                                                                                                                                                                                                                                                                                                      |
 
 ### 7.3 工具面不变式
 
