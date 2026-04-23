@@ -197,6 +197,33 @@ function okBridge(): DispatchBridgedFn {
   });
 }
 
+/**
+ * V24-01 portability follow-up helper: a bridge that records every
+ * `(toolName, args)` it was dispatched with. Lets the
+ * "portable extraction succeeded" tests assert exactly what reached
+ * the bridged tool, so we can fail loudly if a per-snapshot `ref`
+ * ever leaks through the aggregator → chooser → engine chain.
+ */
+function recordingBridge(): {
+  dispatch: DispatchBridgedFn;
+  calls: Array<{ toolName: string; args: Record<string, unknown> }>;
+} {
+  const calls: Array<{ toolName: string; args: Record<string, unknown> }> = [];
+  const dispatch: DispatchBridgedFn = async (toolName, args) => {
+    calls.push({ toolName, args });
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify({ historyRef: 'h_e2e' }),
+        },
+      ],
+      isError: false,
+    };
+  };
+  return { dispatch, calls };
+}
+
 describe('V24-01 closeout: real-aggregated-row → chooser → replay handler', () => {
   it('aggregator-produced row is routed to experience_replay and the engine succeeds', async () => {
     const {
@@ -317,6 +344,199 @@ describe('V24-01 closeout: real-aggregated-row → chooser → replay handler', 
       // Recorder discipline (brief §6): one row per attempted step.
       expect(recorder.startCalls).toBe(2);
       expect(recorder.completeCalls).toBe(2);
+      expect(recorder.failCalls).toBe(0);
+    } finally {
+      close();
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // V24-01 portability follow-up. Codex's second-pass review insisted
+  // we cover real `inputSummary` payloads that carry the legacy
+  // `ref`-style accessibility handles - not just hand-crafted rows.
+  // The brief permits two correct outcomes for such rows; both are
+  // pinned below as deterministic e2e cases:
+  //
+  //   A) "ref-only" payload (no portable target after stripping):
+  //      the chooser MUST fall back to `experience_reuse` rather
+  //      than route to `experience_replay`. Otherwise replay would
+  //      re-dispatch a per-snapshot ref into a brand-new session
+  //      and either misclick or hit a dead handle.
+  //
+  //   B) "selector + ref" payload (portable selector survives):
+  //      the chooser routes to `experience_replay` AND the engine's
+  //      bridge call reaches `chrome_click_element` WITHOUT the
+  //      session-local `ref` / `tabId` / `windowId` fields.
+  //
+  // Both are end-to-end through the real aggregator + chooser +
+  // handler stack - no synthetic `ExperienceActionPathRow` fixtures.
+  // ---------------------------------------------------------------------------
+
+  it('downgrades a ref-only inputSummary row to experience_reuse (no portable target)', async () => {
+    const {
+      taskRepo,
+      sessionRepo,
+      stepRepo,
+      snapshotRepo,
+      experienceRepo,
+      experienceQuery,
+      aggregator,
+      close,
+    } = bootstrap();
+    try {
+      insertTask(taskRepo, 'click via ref only');
+      insertCompletedSession(sessionRepo, 'e2e-session-ref');
+      // Realistic legacy payload: tabId + per-snapshot `ref`. No
+      // selector, no candidateAction. After portability filtering
+      // there is NO portable target field, so the aggregator must
+      // refuse to write `args` and the chooser must NOT route this
+      // row to `experience_replay`.
+      insertStep(stepRepo, {
+        stepId: 'e2e-step-ref',
+        sessionId: 'e2e-session-ref',
+        index: 1,
+        toolName: 'chrome_click_element',
+        inputSummary: JSON.stringify({ tabId: 13, ref: 'ref_per_snapshot_xyz' }),
+        artifactRefs: ['history://e2e-ref'],
+      });
+      insertSnapshot(snapshotRepo, {
+        snapshotId: 'e2e-snap-ref',
+        stepId: 'e2e-step-ref',
+        pageRole: 'issues_list',
+      });
+
+      aggregator.projectPendingSessions('2026-04-22T00:00:10.000Z');
+      const rows = experienceRepo.listActionPaths();
+      expect(rows).toHaveLength(1);
+      // Aggregator boundary: portable allowlist refused the payload,
+      // so `args` stays absent.
+      expect(rows[0].stepSequence[0]).not.toHaveProperty('args');
+
+      const decision = runTabrixChooseContext(
+        { intent: 'click via ref only', pageRole: 'issues_list' },
+        {
+          experience: experienceQuery,
+          knowledgeApi: null,
+          capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+        },
+      );
+      expect(decision.status).toBe('ok');
+      // Chooser boundary: same allowlist rejects the row even with
+      // the capability ON, so we drop to the read-only reuse branch.
+      expect(decision.strategy).toBe('experience_reuse');
+      expect(decision.fallbackStrategy).toBe('read_page_required');
+      expect(decision.artifacts?.[0]?.ref).toBe(rows[0].actionPathId);
+    } finally {
+      close();
+    }
+  });
+
+  it('strips ref/tabId from inputSummary and replays without leaking them to the bridge', async () => {
+    const {
+      taskRepo,
+      sessionRepo,
+      stepRepo,
+      snapshotRepo,
+      experienceRepo,
+      experienceQuery,
+      aggregator,
+      close,
+    } = bootstrap();
+    try {
+      insertTask(taskRepo, 'click with mixed ref+selector');
+      insertCompletedSession(sessionRepo, 'e2e-session-mixed');
+      // Realistic legacy payload: portable selector survives, but
+      // session-local `ref` / `tabId` / `windowId` MUST NOT make it
+      // through to the bridge call - replaying a per-snapshot ref in
+      // a brand-new session is the exact bug this PR fixes.
+      insertStep(stepRepo, {
+        stepId: 'e2e-step-mixed',
+        sessionId: 'e2e-session-mixed',
+        index: 1,
+        toolName: 'chrome_click_element',
+        inputSummary: JSON.stringify({
+          tabId: 13,
+          windowId: 4,
+          ref: 'ref_per_snapshot_xyz',
+          selector: '#issues-tab',
+          candidateAction: {
+            targetRef: 'ref_per_snapshot_xyz',
+            locatorChain: [
+              { type: 'css', value: '#issues-tab' },
+              { type: 'ref', value: 'ref_per_snapshot_xyz' },
+            ],
+          },
+        }),
+        artifactRefs: ['history://e2e-mixed'],
+      });
+      insertSnapshot(snapshotRepo, {
+        snapshotId: 'e2e-snap-mixed',
+        stepId: 'e2e-step-mixed',
+        pageRole: 'issues_list',
+      });
+
+      aggregator.projectPendingSessions('2026-04-22T00:00:10.000Z');
+      const rows = experienceRepo.listActionPaths();
+      expect(rows).toHaveLength(1);
+      const aggregatedRow = rows[0];
+      // Aggregator boundary: ref / tabId / windowId / legacy
+      // candidateAction.targetRef / type=ref locator entries are all
+      // dropped; selector + the css half of locatorChain survive.
+      expect(aggregatedRow.stepSequence[0].args).toEqual({
+        selector: '#issues-tab',
+        candidateAction: {
+          locatorChain: [{ type: 'css', value: '#issues-tab' }],
+        },
+      });
+
+      const decision = runTabrixChooseContext(
+        { intent: 'click with mixed ref+selector', pageRole: 'issues_list' },
+        {
+          experience: experienceQuery,
+          knowledgeApi: null,
+          capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+        },
+      );
+      expect(decision.strategy).toBe('experience_replay');
+
+      const recorder = makeRecorder();
+      const bridge = recordingBridge();
+      const replayResult = await handleExperienceReplay(
+        {
+          actionPathId: aggregatedRow.actionPathId,
+          targetTabId: 999,
+        },
+        {
+          experience: experienceRepo,
+          dispatchBridged: bridge.dispatch,
+          recorder,
+          updateTaskIntent: () => {},
+          capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+          persistenceMode: 'memory',
+        },
+      );
+
+      expect(replayResult.status).toBe('ok');
+      expect(bridge.calls).toHaveLength(1);
+      // The actual safety property: the dispatched args carry ONLY
+      // the portable subset plus the operator-supplied `targetTabId`
+      // (re-injected by `withTargetTab` because the recorded `tabId`
+      // was stripped). No `ref`, no original `tabId: 13`, no
+      // `windowId`, no legacy `ref_*` candidateAction.
+      expect(bridge.calls[0]).toEqual({
+        toolName: 'chrome_click_element',
+        args: {
+          selector: '#issues-tab',
+          candidateAction: {
+            locatorChain: [{ type: 'css', value: '#issues-tab' }],
+          },
+          tabId: 999,
+        },
+      });
+      expect(bridge.calls[0].args).not.toHaveProperty('ref');
+      expect(bridge.calls[0].args).not.toHaveProperty('windowId');
+      expect(recorder.startCalls).toBe(1);
+      expect(recorder.completeCalls).toBe(1);
       expect(recorder.failCalls).toBe(0);
     } finally {
       close();
