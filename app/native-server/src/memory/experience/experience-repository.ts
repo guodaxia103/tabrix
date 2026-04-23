@@ -6,12 +6,24 @@ export interface ExperienceActionPathStep {
   status: string;
   historyRef: string | null;
   /**
-   * V24-01 forward-compat: original step args, captured at aggregation
-   * time. `experience_replay` v1 reads these to replay the step. Today
-   * the aggregator does NOT populate this field (kept narrow to avoid
-   * widening the on-disk JSON shape on existing rows); a future PR
-   * (V24-02 capture path) will start populating it. When absent, the
-   * replay engine fails closed for that step (`step_target_not_found`).
+   * V24-01: the captured tool-call args lifted from
+   * `memory_steps.input_summary` for the v1 replay-supported step
+   * kinds (`chrome_click_element` / `chrome_fill_or_select`).
+   *
+   * Population is performed by the aggregator
+   * (`experience-aggregator.ts::extractReplayArgs`) and is bounded:
+   * - only the v1 supported step kinds get args populated; everything
+   *   else stays on the historical `{toolName,status,historyRef}`
+   *   shape and the chooser refuses to route the row to
+   *   `experience_replay` (`isReplayEligible()`),
+   * - non-portable session-local keys (today: `tabId`) are stripped
+   *   so the replay engine's `withTargetTab` can re-target the
+   *   operator-supplied tab, and
+   * - extremely large captures are skipped to bound on-disk JSON.
+   *
+   * When absent the replay engine fails closed for that step
+   * (`unsupported_step_kind` from `applySubstitutions`); the chooser
+   * is expected to never even pick `experience_replay` in that case.
    */
   args?: Record<string, unknown>;
   /**

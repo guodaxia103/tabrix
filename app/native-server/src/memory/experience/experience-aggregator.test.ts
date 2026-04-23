@@ -677,4 +677,244 @@ describe('ExperienceAggregator (B-012 v1)', () => {
       close();
     }
   });
+
+  // ---------------------------------------------------------------------------
+  // V24-01 closeout: aggregator lifts captured args from
+  // `memory_steps.input_summary` onto Experience rows for the v1 replay
+  // supported step kinds (`chrome_click_element` / `chrome_fill_or_select`),
+  // strips session-local `tabId`, and stays a no-op for everything else.
+  // This is the "real closure" half of Codex's V24-01 follow-up: without
+  // this the chooser never sees a row that satisfies the args-presence
+  // guard in `isReplayEligible()` and dispatch-side replay is dead in the
+  // wild.
+  // ---------------------------------------------------------------------------
+  describe('V24-01 closeout: replay args lifted from input_summary', () => {
+    it('populates args for chrome_click_element and strips session-local tabId', () => {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, { intent: 'open issues' });
+        insertSession(sessionRepo, { sessionId: 's-click', status: 'completed' });
+        insertStep(stepRepo, {
+          stepId: 's-click-step-1',
+          sessionId: 's-click',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          inputSummary: JSON.stringify({ tabId: 42, selector: '#issues-tab' }),
+          artifactRefs: ['history://click'],
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'snap-click',
+          stepId: 's-click-step-1',
+          pageRole: 'repo_home',
+          capturedAt: '2026-04-20T00:00:01.500Z',
+        });
+
+        aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].stepSequence).toEqual([
+          {
+            toolName: 'chrome_click_element',
+            status: 'completed',
+            historyRef: 'history://click',
+            args: { selector: '#issues-tab' },
+          },
+        ]);
+      } finally {
+        close();
+      }
+    });
+
+    it('populates args for chrome_fill_or_select preserving the recorded value', () => {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, { intent: 'search repo' });
+        insertSession(sessionRepo, { sessionId: 's-fill', status: 'completed' });
+        insertStep(stepRepo, {
+          stepId: 's-fill-step-1',
+          sessionId: 's-fill',
+          index: 1,
+          toolName: 'chrome_fill_or_select',
+          status: 'completed',
+          inputSummary: JSON.stringify({
+            tabId: 7,
+            selector: '#search-input',
+            value: 'tabrix',
+          }),
+          artifactRefs: [],
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'snap-fill',
+          stepId: 's-fill-step-1',
+          pageRole: 'issues_list',
+          capturedAt: '2026-04-20T00:00:01.500Z',
+        });
+
+        aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].stepSequence[0].args).toEqual({
+          selector: '#search-input',
+          value: 'tabrix',
+        });
+        // tabId is the only stripped key today.
+        expect(rows[0].stepSequence[0].args).not.toHaveProperty('tabId');
+      } finally {
+        close();
+      }
+    });
+
+    it('does NOT populate args for unsupported step kinds (preserves historical shape)', () => {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, { intent: 'navigate' });
+        insertSession(sessionRepo, { sessionId: 's-nav', status: 'completed' });
+        insertStep(stepRepo, {
+          stepId: 's-nav-step-1',
+          sessionId: 's-nav',
+          index: 1,
+          // Out of v1 replay supported set:
+          toolName: 'chrome_navigate',
+          status: 'completed',
+          inputSummary: JSON.stringify({ tabId: 1, url: 'https://github.com' }),
+          artifactRefs: [],
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'snap-nav',
+          stepId: 's-nav-step-1',
+          pageRole: 'repo_home',
+          capturedAt: '2026-04-20T00:00:01.500Z',
+        });
+
+        aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].stepSequence[0]).not.toHaveProperty('args');
+      } finally {
+        close();
+      }
+    });
+
+    it('skips args when input_summary is missing, malformed, or non-object', () => {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, { intent: 'malformed inputs' });
+        insertSession(sessionRepo, { sessionId: 's-malformed', status: 'completed' });
+        insertStep(stepRepo, {
+          stepId: 's-malformed-1',
+          sessionId: 's-malformed',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          inputSummary: undefined, // missing
+          artifactRefs: [],
+        });
+        insertStep(stepRepo, {
+          stepId: 's-malformed-2',
+          sessionId: 's-malformed',
+          index: 2,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          inputSummary: 'not-json',
+          artifactRefs: [],
+        });
+        insertStep(stepRepo, {
+          stepId: 's-malformed-3',
+          sessionId: 's-malformed',
+          index: 3,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          inputSummary: JSON.stringify(['array', 'not', 'object']),
+          artifactRefs: [],
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'snap-malformed',
+          stepId: 's-malformed-1',
+          pageRole: 'repo_home',
+          capturedAt: '2026-04-20T00:00:01.500Z',
+        });
+
+        aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        for (const step of rows[0].stepSequence) {
+          expect(step).not.toHaveProperty('args');
+        }
+      } finally {
+        close();
+      }
+    });
+
+    it('skips args when stripping tabId would leave the object empty', () => {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, { intent: 'tabid only' });
+        insertSession(sessionRepo, { sessionId: 's-empty', status: 'completed' });
+        insertStep(stepRepo, {
+          stepId: 's-empty-1',
+          sessionId: 's-empty',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          inputSummary: JSON.stringify({ tabId: 99 }),
+          artifactRefs: [],
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'snap-empty',
+          stepId: 's-empty-1',
+          pageRole: 'repo_home',
+          capturedAt: '2026-04-20T00:00:01.500Z',
+        });
+
+        aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].stepSequence[0]).not.toHaveProperty('args');
+      } finally {
+        close();
+      }
+    });
+
+    it('skips args when input_summary exceeds the size cap', () => {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        // 9 KB > 8 KB MAX_REPLAY_ARGS_INPUT_SUMMARY_BYTES cap.
+        const oversize = JSON.stringify({
+          selector: '#x',
+          padding: 'A'.repeat(9 * 1024),
+        });
+        insertTask(taskRepo, { intent: 'oversized' });
+        insertSession(sessionRepo, { sessionId: 's-large', status: 'completed' });
+        insertStep(stepRepo, {
+          stepId: 's-large-1',
+          sessionId: 's-large',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          inputSummary: oversize,
+          artifactRefs: [],
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'snap-large',
+          stepId: 's-large-1',
+          pageRole: 'repo_home',
+          capturedAt: '2026-04-20T00:00:01.500Z',
+        });
+
+        aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].stepSequence[0]).not.toHaveProperty('args');
+      } finally {
+        close();
+      }
+    });
+  });
 });

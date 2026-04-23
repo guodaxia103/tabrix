@@ -416,19 +416,26 @@ function applySubstitutions(
   step: ExperienceActionPathStep,
   substitutions: Partial<Record<TabrixReplayPlaceholder, string>>,
 ): SubstitutionAppliedOk | SubstitutionAppliedError {
-  // Without recorded args we cannot reconstruct the underlying tool
-  // call. Today the aggregator does NOT populate args (see
-  // `experience-repository.ts::ExperienceActionPathStep`); a future
-  // capture-side PR will. For v1 we treat an unknown shape as
-  // unreplayable rather than guessing — fail-closed (brief §2 item 3).
+  // Defensive guard: chooser-side `isReplayEligible()` already
+  // refuses to route rows whose steps lack `args`, so in steady
+  // state we should never reach this branch from the chooser.
+  // Direct callers of `experience_replay` (operator opt-in path)
+  // can still hit it; we fail-closed rather than guessing - brief
+  // §2 item 3.
+  //
+  // V24-01 closeout: the aggregator now populates `args` for the
+  // v1 supported step kinds (see
+  // `experience-aggregator.ts::extractReplayArgs`). `templateFields`
+  // capture-side write path remains deferred to V24-02+, so until
+  // then `templates.length === 0` always holds and this engine just
+  // re-dispatches the recorded args verbatim.
   if (!step.args) {
     return {
       kind: 'precondition_error',
       // Re-using `unsupported_step_kind` keeps the closed enum tight;
-      // semantically the row is "structurally unreplayable". A future
-      // capture-side PR removes this branch entirely.
+      // semantically the row is "structurally unreplayable".
       failureCode: 'unsupported_step_kind',
-      message: `experience_replay: step '${step.toolName}' has no recorded args (unreplayable until capture-side V24-02 lands)`,
+      message: `experience_replay: step '${step.toolName}' has no recorded args (row is not replay-eligible)`,
     };
   }
 

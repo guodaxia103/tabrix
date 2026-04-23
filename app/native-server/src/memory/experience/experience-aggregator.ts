@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS } from '@tabrix/shared';
 import type { SqliteDatabase } from '../db';
 import type { PageSnapshotRepository } from '../db/page-snapshot-repository';
 import type { PendingAggregationSession, SessionRepository } from '../db/session-repository';
@@ -37,14 +38,96 @@ function pickFirstHistoryRef(artifactRefs: string[]): string | null {
   return null;
 }
 
+/**
+ * V24-01 closeout (replay closure): which top-level keys in a captured
+ * `inputSummary` are session-local and MUST be stripped before we
+ * persist them onto an `experience_action_paths` row.
+ *
+ * - `tabId`: bound to the recorder's browser session. Replaying that
+ *   number against a future session would either hit a dead tab or,
+ *   worse, the wrong tab. The replay engine's `withTargetTab` injects
+ *   the operator-supplied `targetTabId` whenever `args.tabId` is
+ *   absent (see `experience-replay.ts::withTargetTab`), so omitting
+ *   it here is exactly what the engine expects.
+ *
+ * Anything else (selector, candidateAction, targetRef, value, ...) is
+ * preserved verbatim. `value` may carry user-typed text and is the
+ * same data already on disk in `memory_steps.input_summary`; the
+ * future capture-side PR (V24-02+) will introduce `templateFields` so
+ * the operator can re-parameterise such values at replay time.
+ */
+const NON_PORTABLE_REPLAY_ARG_KEYS: ReadonlySet<string> = new Set(['tabId']);
+
+/**
+ * V24-01 closeout: strict bound on captured-args size, in bytes of
+ * stringified JSON. The aggregator silently skips populating `args`
+ * when a supported step kind's `inputSummary` is unexpectedly large -
+ * better to fall back to "row aggregated, just not replay-eligible"
+ * than to bloat the on-disk Experience JSON with multi-KB fixtures.
+ * 8 KB comfortably covers selector + candidateAction + value for
+ * realistic GitHub interactions while bounding worst-case row size.
+ */
+const MAX_REPLAY_ARGS_INPUT_SUMMARY_BYTES = 8 * 1024;
+
+/**
+ * V24-01 closeout (replay closure): for the v1 supported step kinds
+ * (`chrome_click_element` / `chrome_fill_or_select`) we lift the
+ * captured tool args from `memory_steps.input_summary` onto the
+ * Experience row so `experience_replay` can re-dispatch verbatim.
+ *
+ * Everything else returns `undefined`, preserving the historical
+ * `{toolName, status, historyRef}` shape and matching the
+ * fail-closed behaviour `experience-replay.ts::applySubstitutions`
+ * relies on for non-replayable rows.
+ */
+function extractReplayArgs(
+  toolName: string,
+  inputSummary: string | undefined,
+): Record<string, unknown> | undefined {
+  if (!TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS.has(toolName)) {
+    return undefined;
+  }
+  if (typeof inputSummary !== 'string' || inputSummary.length === 0) {
+    return undefined;
+  }
+  if (inputSummary.length > MAX_REPLAY_ARGS_INPUT_SUMMARY_BYTES) {
+    return undefined;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(inputSummary);
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return undefined;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (NON_PORTABLE_REPLAY_ARG_KEYS.has(key)) continue;
+    out[key] = value;
+  }
+  // After stripping non-portable keys (e.g. `tabId`) there may be
+  // nothing left worth replaying — surface that as "no args" rather
+  // than persisting an empty object that the chooser would still
+  // refuse via `isReplayEligible()`.
+  if (Object.keys(out).length === 0) return undefined;
+  return out;
+}
+
 function toStepSequence(
   steps: ReturnType<StepRepository['listBySession']>,
 ): ExperienceActionPathStep[] {
-  return steps.map((step) => ({
-    toolName: step.toolName,
-    status: step.status,
-    historyRef: pickFirstHistoryRef(step.artifactRefs),
-  }));
+  return steps.map((step) => {
+    const out: ExperienceActionPathStep = {
+      toolName: step.toolName,
+      status: step.status,
+      historyRef: pickFirstHistoryRef(step.artifactRefs),
+    };
+    const args = extractReplayArgs(step.toolName, step.inputSummary);
+    if (args) out.args = args;
+    return out;
+  });
 }
 
 /**
