@@ -18,8 +18,14 @@ export {
   ExperienceRepository,
   type ExperienceActionPathRow,
   type ExperienceActionPathStep,
+  type RecordReplayStepOutcomeInput,
+  type RecordReplayStepOutcomeResult,
+  type RecordWritebackWarningInput,
   type SuggestActionPathsInput,
+  type UpdateActionPathCompositeScoreInput,
+  type UpdateMemorySessionCompositeScoreInput,
   type UpsertActionPathInput,
+  type WritebackWarningRow,
 } from './experience-repository';
 export {
   ExperienceSuggestPlanInputError,
@@ -27,3 +33,14 @@ export {
   parseExperienceSuggestPlanInput,
 } from './experience-suggest';
 export { ExperienceQueryService } from './experience-query-service';
+export {
+  SessionCompositeScoreWriter,
+  applyRecencyDecay,
+  computeDecayedComposite,
+  computeRawComposite,
+  projectCompositeComponents,
+  type CompositeScoreComponents,
+  type SessionCompositeScoreWriteInput,
+  type SessionCompositeScoreWriteResult,
+  type SessionCompositeScoreWriterDeps,
+} from './composite-score';

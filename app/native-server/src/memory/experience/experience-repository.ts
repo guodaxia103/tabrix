@@ -1,5 +1,10 @@
 import type { SqliteDatabase } from '../db';
-import type { TabrixReplayPlaceholder } from '@tabrix/shared';
+import type {
+  ClickObservedOutcome,
+  TabrixExperienceScoreStepStatus,
+  TabrixReplayPlaceholder,
+} from '@tabrix/shared';
+import { isClickSuccessOutcome } from '@tabrix/shared';
 
 export interface ExperienceActionPathStep {
   toolName: string;
@@ -64,6 +69,14 @@ export interface ExperienceActionPathRow {
   successCount: number;
   failureCount: number;
   lastUsedAt?: string;
+  /** V24-02 — last replay write-back timestamp. */
+  lastReplayAt?: string;
+  /** V24-02 — last `ClickObservedOutcome` recorded against this row. */
+  lastReplayOutcome?: ClickObservedOutcome;
+  /** V24-02 — projected status (success vs failure) for the last replay. */
+  lastReplayStatus?: TabrixExperienceScoreStepStatus;
+  /** V24-02 — recency-decayed composite score (chooser ranking input). */
+  compositeScoreDecayed?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -76,6 +89,10 @@ interface ExperienceActionPathDbRow {
   success_count: number;
   failure_count: number;
   last_used_at: string | null;
+  last_replay_at: string | null;
+  last_replay_outcome: string | null;
+  last_replay_status: string | null;
+  composite_score_decayed: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -141,6 +158,55 @@ export interface SuggestActionPathsInput {
   limit: number;
 }
 
+/**
+ * V24-02 — per-step replay outcome write-back input. Counter delta
+ * is derived from {@link ClickObservedOutcome} via
+ * `isClickSuccessOutcome`; the caller does NOT pre-compute it so
+ * the projection rule lives in exactly one place.
+ */
+export interface RecordReplayStepOutcomeInput {
+  actionPathId: string;
+  stepIndex: number;
+  observedOutcome: ClickObservedOutcome;
+  /** ISO 8601 — used for `last_replay_at` AND `updated_at`. */
+  nowIso: string;
+}
+
+export interface RecordReplayStepOutcomeResult {
+  status: 'ok' | 'no_match';
+  successDelta: number;
+  failureDelta: number;
+  lastReplayStatus: TabrixExperienceScoreStepStatus;
+}
+
+/** V24-02 — composite-score writers. Pure data, no business logic. */
+export interface UpdateActionPathCompositeScoreInput {
+  actionPathId: string;
+  compositeScoreDecayed: number;
+  nowIso: string;
+}
+
+export interface UpdateMemorySessionCompositeScoreInput {
+  sessionId: string;
+  compositeScoreRaw: number;
+  components: Record<string, number>;
+}
+
+/** V24-02 — isolation-warning writer (append-only). */
+export interface RecordWritebackWarningInput {
+  warningId: string;
+  source: 'experience_score_step' | 'session_composite_score';
+  actionPathId: string | null;
+  stepIndex: number | null;
+  sessionId: string | null;
+  replayId: string | null;
+  observedOutcome: string | null;
+  errorCode: string;
+  errorMessage: string;
+  payloadBlob: string | null;
+  createdAt: string;
+}
+
 export class ExperienceRepository {
   private readonly upsertStmt;
   private readonly listStmt;
@@ -148,6 +214,13 @@ export class ExperienceRepository {
   private readonly suggestStmt;
   private readonly suggestForRoleStmt;
   private readonly clearStmt;
+  // V24-02 prepared statements. Each is single-purpose; isolation is
+  // intentional so a future refactor can re-target one without
+  // touching the legacy aggregator path.
+  private readonly recordReplayStepOutcomeStmt;
+  private readonly updateActionPathCompositeStmt;
+  private readonly updateMemorySessionCompositeStmt;
+  private readonly insertWritebackWarningStmt;
 
   constructor(private readonly db: SqliteDatabase) {
     this.upsertStmt = db.prepare(
@@ -187,6 +260,10 @@ export class ExperienceRepository {
               success_count,
               failure_count,
               last_used_at,
+              last_replay_at,
+              last_replay_outcome,
+              last_replay_status,
+              composite_score_decayed,
               created_at,
               updated_at
          FROM experience_action_paths
@@ -209,6 +286,10 @@ export class ExperienceRepository {
               success_count,
               failure_count,
               last_used_at,
+              last_replay_at,
+              last_replay_outcome,
+              last_replay_status,
+              composite_score_decayed,
               created_at,
               updated_at
          FROM experience_action_paths
@@ -235,6 +316,10 @@ export class ExperienceRepository {
               success_count,
               failure_count,
               last_used_at,
+              last_replay_at,
+              last_replay_outcome,
+              last_replay_status,
+              composite_score_decayed,
               created_at,
               updated_at
          FROM experience_action_paths
@@ -255,6 +340,10 @@ export class ExperienceRepository {
               success_count,
               failure_count,
               last_used_at,
+              last_replay_at,
+              last_replay_outcome,
+              last_replay_status,
+              composite_score_decayed,
               created_at,
               updated_at
          FROM experience_action_paths
@@ -269,6 +358,47 @@ export class ExperienceRepository {
         LIMIT ?`,
     );
     this.clearStmt = db.prepare('DELETE FROM experience_action_paths');
+
+    // V24-02 — replay outcome write-back. UPDATE-only so the row
+    // must exist (caller distinguishes `'no_match'` via `changes`).
+    // Counter delta is decided by the caller (`isClickSuccessOutcome`
+    // projection) and applied in a single UPDATE so the read-side
+    // never observes a partial update.
+    this.recordReplayStepOutcomeStmt = db.prepare(
+      `UPDATE experience_action_paths
+          SET success_count       = success_count + @success_delta,
+              failure_count       = failure_count + @failure_delta,
+              last_replay_at      = @last_replay_at,
+              last_replay_outcome = @observed_outcome,
+              last_replay_status  = @last_replay_status,
+              last_used_at        = CASE
+                WHEN last_used_at IS NULL THEN @last_replay_at
+                WHEN @last_replay_at >= last_used_at THEN @last_replay_at
+                ELSE last_used_at
+              END,
+              updated_at          = @last_replay_at
+        WHERE action_path_id = @action_path_id`,
+    );
+    this.updateActionPathCompositeStmt = db.prepare(
+      `UPDATE experience_action_paths
+          SET composite_score_decayed = @composite_score_decayed,
+              updated_at              = @now_iso
+        WHERE action_path_id = @action_path_id`,
+    );
+    this.updateMemorySessionCompositeStmt = db.prepare(
+      `UPDATE memory_sessions
+          SET composite_score_raw = @composite_score_raw,
+              components_blob     = @components_blob
+        WHERE session_id = @session_id`,
+    );
+    this.insertWritebackWarningStmt = db.prepare(
+      `INSERT INTO experience_writeback_warnings
+        (warning_id, source, action_path_id, step_index, session_id, replay_id,
+         observed_outcome, error_code, error_message, payload_blob, created_at)
+       VALUES
+        (@warning_id, @source, @action_path_id, @step_index, @session_id, @replay_id,
+         @observed_outcome, @error_code, @error_message, @payload_blob, @created_at)`,
+    );
   }
 
   public upsertActionPath(input: UpsertActionPathInput): void {
@@ -336,10 +466,154 @@ export class ExperienceRepository {
   public clear(): void {
     this.clearStmt.run();
   }
+
+  /**
+   * V24-02 — record one replay step outcome. Returns:
+   *   - `{status: 'no_match'}` if the row does not exist (caller
+   *     should treat as race-with-deletion, NOT as failure);
+   *   - `{status: 'ok'}` with the applied delta otherwise.
+   *
+   * The outcome→delta projection lives here (single source of truth)
+   * so any future caller — `experience_score_step` MCP handler, the
+   * replay engine's per-step hook, a future scripted backfill — uses
+   * the exact same mapping.
+   *
+   * Re-throws SQLite errors (write-side I/O failure). The handler is
+   * responsible for catching them and writing
+   * `experience_writeback_warnings` (isolation rule from V24-02
+   * §failure-handling).
+   */
+  public recordReplayStepOutcome(
+    input: RecordReplayStepOutcomeInput,
+  ): RecordReplayStepOutcomeResult {
+    const isSuccess = isClickSuccessOutcome(input.observedOutcome);
+    const successDelta = isSuccess ? 1 : 0;
+    const failureDelta = isSuccess ? 0 : 1;
+    const lastReplayStatus: TabrixExperienceScoreStepStatus = isSuccess ? 'ok' : 'failed';
+    const result = this.recordReplayStepOutcomeStmt.run({
+      action_path_id: input.actionPathId,
+      success_delta: successDelta,
+      failure_delta: failureDelta,
+      last_replay_at: input.nowIso,
+      observed_outcome: input.observedOutcome,
+      last_replay_status: lastReplayStatus,
+    });
+    // `changes` is `0` when the WHERE clause matched no row.
+    if ((result.changes ?? 0) === 0) {
+      return { status: 'no_match', successDelta: 0, failureDelta: 0, lastReplayStatus };
+    }
+    return { status: 'ok', successDelta, failureDelta, lastReplayStatus };
+  }
+
+  /**
+   * V24-02 — write the pre-computed decayed composite score onto the
+   * action-path row. Pure UPDATE; missing row is silently a no-op
+   * (caller decides whether that is meaningful — usually it means a
+   * race with deletion).
+   */
+  public updateCompositeScoreForActionPath(input: UpdateActionPathCompositeScoreInput): void {
+    this.updateActionPathCompositeStmt.run({
+      action_path_id: input.actionPathId,
+      composite_score_decayed: input.compositeScoreDecayed,
+      now_iso: input.nowIso,
+    });
+  }
+
+  /**
+   * V24-02 — write the raw composite score and its component
+   * breakdown onto the originating Memory session row.
+   */
+  public updateMemorySessionCompositeScore(input: UpdateMemorySessionCompositeScoreInput): void {
+    this.updateMemorySessionCompositeStmt.run({
+      session_id: input.sessionId,
+      composite_score_raw: input.compositeScoreRaw,
+      components_blob: JSON.stringify(input.components),
+    });
+  }
+
+  /**
+   * V24-02 — append-only isolation telemetry. Used by the
+   * `experience_score_step` handler when the per-step UPDATE throws,
+   * and by `SessionCompositeScoreWriter` when the session-end write
+   * throws.
+   */
+  public recordWritebackWarning(input: RecordWritebackWarningInput): void {
+    this.insertWritebackWarningStmt.run({
+      warning_id: input.warningId,
+      source: input.source,
+      action_path_id: input.actionPathId,
+      step_index: input.stepIndex,
+      session_id: input.sessionId,
+      replay_id: input.replayId,
+      observed_outcome: input.observedOutcome,
+      error_code: input.errorCode,
+      error_message: input.errorMessage,
+      payload_blob: input.payloadBlob,
+      created_at: input.createdAt,
+    });
+  }
+
+  /**
+   * V24-02 — read-side helper for tests + handoff verification. Reads
+   * the most recent N warnings (newest first). Pure SELECT.
+   */
+  public listRecentWritebackWarnings(limit: number = 100): WritebackWarningRow[] {
+    const safeLimit = Math.max(1, Math.floor(limit));
+    const rows = this.db
+      .prepare(
+        `SELECT warning_id, source, action_path_id, step_index, session_id, replay_id,
+                observed_outcome, error_code, error_message, payload_blob, created_at
+           FROM experience_writeback_warnings
+          ORDER BY created_at DESC, warning_id DESC
+          LIMIT ?`,
+      )
+      .all(safeLimit) as WritebackWarningDbRow[];
+    return rows.map((row) => ({
+      warningId: row.warning_id,
+      source: row.source as WritebackWarningRow['source'],
+      actionPathId: row.action_path_id ?? undefined,
+      stepIndex: row.step_index ?? undefined,
+      sessionId: row.session_id ?? undefined,
+      replayId: row.replay_id ?? undefined,
+      observedOutcome: row.observed_outcome ?? undefined,
+      errorCode: row.error_code,
+      errorMessage: row.error_message,
+      payloadBlob: row.payload_blob ?? undefined,
+      createdAt: row.created_at,
+    }));
+  }
+}
+
+export interface WritebackWarningRow {
+  warningId: string;
+  source: 'experience_score_step' | 'session_composite_score';
+  actionPathId?: string;
+  stepIndex?: number;
+  sessionId?: string;
+  replayId?: string;
+  observedOutcome?: string;
+  errorCode: string;
+  errorMessage: string;
+  payloadBlob?: string;
+  createdAt: string;
+}
+
+interface WritebackWarningDbRow {
+  warning_id: string;
+  source: string;
+  action_path_id: string | null;
+  step_index: number | null;
+  session_id: string | null;
+  replay_id: string | null;
+  observed_outcome: string | null;
+  error_code: string;
+  error_message: string;
+  payload_blob: string | null;
+  created_at: string;
 }
 
 function rowToActionPath(row: ExperienceActionPathDbRow): ExperienceActionPathRow {
-  return {
+  const out: ExperienceActionPathRow = {
     actionPathId: row.action_path_id,
     pageRole: row.page_role,
     intentSignature: row.intent_signature,
@@ -350,4 +624,15 @@ function rowToActionPath(row: ExperienceActionPathDbRow): ExperienceActionPathRo
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+  if (row.last_replay_at) out.lastReplayAt = row.last_replay_at;
+  if (row.last_replay_outcome) {
+    out.lastReplayOutcome = row.last_replay_outcome as ClickObservedOutcome;
+  }
+  if (row.last_replay_status === 'ok' || row.last_replay_status === 'failed') {
+    out.lastReplayStatus = row.last_replay_status;
+  }
+  if (row.composite_score_decayed !== null && row.composite_score_decayed !== undefined) {
+    out.compositeScoreDecayed = row.composite_score_decayed;
+  }
+  return out;
 }

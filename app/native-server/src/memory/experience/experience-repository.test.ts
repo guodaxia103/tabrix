@@ -123,3 +123,223 @@ describe('ExperienceRepository#findActionPathById (V24-01)', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// V24-02 — write-back surface
+// ---------------------------------------------------------------------------
+
+describe('ExperienceRepository#recordReplayStepOutcome (V24-02)', () => {
+  it('applies +1 success delta and writes last_replay_at on a success-like outcome', () => {
+    const fx = fresh();
+    try {
+      seedRow(fx.repo, VALID_ID_A, '2026-04-22T00:00:00.000Z');
+      const result = fx.repo.recordReplayStepOutcome({
+        actionPathId: VALID_ID_A,
+        stepIndex: 0,
+        observedOutcome: 'state_toggled',
+        nowIso: '2026-04-23T01:02:03.000Z',
+      });
+      expect(result.status).toBe('ok');
+      expect(result.successDelta).toBe(1);
+      expect(result.failureDelta).toBe(0);
+      expect(result.lastReplayStatus).toBe('ok');
+      const row = fx.repo.findActionPathById(VALID_ID_A);
+      expect(row?.successCount).toBe(4); // 3 + 1
+      expect(row?.failureCount).toBe(1);
+      expect(row?.lastReplayAt).toBe('2026-04-23T01:02:03.000Z');
+      expect(row?.lastReplayOutcome).toBe('state_toggled');
+      expect(row?.lastReplayStatus).toBe('ok');
+      // Updated `last_used_at` because the new replay is more recent.
+      expect(row?.lastUsedAt).toBe('2026-04-23T01:02:03.000Z');
+      expect(row?.updatedAt).toBe('2026-04-23T01:02:03.000Z');
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('applies +1 failure delta on a non-success outcome', () => {
+    const fx = fresh();
+    try {
+      seedRow(fx.repo, VALID_ID_A, '2026-04-22T00:00:00.000Z');
+      const result = fx.repo.recordReplayStepOutcome({
+        actionPathId: VALID_ID_A,
+        stepIndex: 1,
+        observedOutcome: 'no_observed_change',
+        nowIso: '2026-04-23T01:02:03.000Z',
+      });
+      expect(result.status).toBe('ok');
+      expect(result.successDelta).toBe(0);
+      expect(result.failureDelta).toBe(1);
+      expect(result.lastReplayStatus).toBe('failed');
+      const row = fx.repo.findActionPathById(VALID_ID_A);
+      expect(row?.successCount).toBe(3);
+      expect(row?.failureCount).toBe(2);
+      expect(row?.lastReplayOutcome).toBe('no_observed_change');
+      expect(row?.lastReplayStatus).toBe('failed');
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('returns no_match without touching counters when the row is missing', () => {
+    const fx = fresh();
+    try {
+      const result = fx.repo.recordReplayStepOutcome({
+        actionPathId: VALID_ID_A,
+        stepIndex: 0,
+        observedOutcome: 'state_toggled',
+        nowIso: '2026-04-23T00:00:00.000Z',
+      });
+      expect(result.status).toBe('no_match');
+      expect(result.successDelta).toBe(0);
+      expect(result.failureDelta).toBe(0);
+      expect(fx.repo.findActionPathById(VALID_ID_A)).toBeUndefined();
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('does not regress lastUsedAt when an older replay timestamp is supplied', () => {
+    const fx = fresh();
+    try {
+      seedRow(fx.repo, VALID_ID_A, '2026-04-22T00:00:00.000Z');
+      fx.repo.recordReplayStepOutcome({
+        actionPathId: VALID_ID_A,
+        stepIndex: 0,
+        observedOutcome: 'state_toggled',
+        // Older than the seed row's last_used_at.
+        nowIso: '2026-04-21T00:00:00.000Z',
+      });
+      const row = fx.repo.findActionPathById(VALID_ID_A);
+      // last_used_at must NOT regress (chooser-side ranking depends
+      // on the freshness ordering staying monotonic).
+      expect(row?.lastUsedAt).toBe('2026-04-22T00:00:00.000Z');
+      // last_replay_at always reflects the most recent attempt though.
+      expect(row?.lastReplayAt).toBe('2026-04-21T00:00:00.000Z');
+    } finally {
+      fx.close();
+    }
+  });
+});
+
+describe('ExperienceRepository#updateCompositeScoreForActionPath (V24-02)', () => {
+  it('updates composite_score_decayed and updated_at', () => {
+    const fx = fresh();
+    try {
+      seedRow(fx.repo, VALID_ID_A);
+      fx.repo.updateCompositeScoreForActionPath({
+        actionPathId: VALID_ID_A,
+        compositeScoreDecayed: 0.42,
+        nowIso: '2026-04-23T05:00:00.000Z',
+      });
+      const row = fx.repo.findActionPathById(VALID_ID_A);
+      expect(row?.compositeScoreDecayed).toBeCloseTo(0.42, 5);
+      expect(row?.updatedAt).toBe('2026-04-23T05:00:00.000Z');
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('is a no-op when the row does not exist', () => {
+    const fx = fresh();
+    try {
+      // Should not throw.
+      fx.repo.updateCompositeScoreForActionPath({
+        actionPathId: VALID_ID_A,
+        compositeScoreDecayed: 0.42,
+        nowIso: '2026-04-23T05:00:00.000Z',
+      });
+      expect(fx.repo.findActionPathById(VALID_ID_A)).toBeUndefined();
+    } finally {
+      fx.close();
+    }
+  });
+});
+
+describe('ExperienceRepository#recordWritebackWarning + listRecentWritebackWarnings (V24-02)', () => {
+  it('persists and reads back the structured warning row', () => {
+    const fx = fresh();
+    try {
+      fx.repo.recordWritebackWarning({
+        warningId: 'warn_score_step_test',
+        source: 'experience_score_step',
+        actionPathId: VALID_ID_A,
+        stepIndex: 0,
+        sessionId: null,
+        replayId: null,
+        observedOutcome: 'no_observed_change',
+        errorCode: 'score_step_write_failed',
+        errorMessage: 'SQLITE_BUSY',
+        payloadBlob: '{}',
+        createdAt: '2026-04-23T00:00:00.000Z',
+      });
+      const rows = fx.repo.listRecentWritebackWarnings(10);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        warningId: 'warn_score_step_test',
+        source: 'experience_score_step',
+        actionPathId: VALID_ID_A,
+        stepIndex: 0,
+        observedOutcome: 'no_observed_change',
+        errorCode: 'score_step_write_failed',
+        errorMessage: 'SQLITE_BUSY',
+      });
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('returns the most recent warnings first', () => {
+    const fx = fresh();
+    try {
+      fx.repo.recordWritebackWarning({
+        warningId: 'warn_a',
+        source: 'experience_score_step',
+        actionPathId: VALID_ID_A,
+        stepIndex: 0,
+        sessionId: null,
+        replayId: null,
+        observedOutcome: null,
+        errorCode: 'x',
+        errorMessage: 'a',
+        payloadBlob: null,
+        createdAt: '2026-04-22T00:00:00.000Z',
+      });
+      fx.repo.recordWritebackWarning({
+        warningId: 'warn_b',
+        source: 'session_composite_score',
+        actionPathId: VALID_ID_A,
+        stepIndex: null,
+        sessionId: 'sess_1',
+        replayId: null,
+        observedOutcome: null,
+        errorCode: 'y',
+        errorMessage: 'b',
+        payloadBlob: null,
+        createdAt: '2026-04-23T00:00:00.000Z',
+      });
+      const rows = fx.repo.listRecentWritebackWarnings(10);
+      expect(rows.map((r) => r.warningId)).toEqual(['warn_b', 'warn_a']);
+    } finally {
+      fx.close();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Migration idempotence — opening the same DB twice must not error out
+// ---------------------------------------------------------------------------
+
+describe('ExperienceRepository — V24-02 migration idempotence', () => {
+  it('is safe to re-open the same DB twice (additive ALTER TABLE only)', () => {
+    const { db } = openMemoryDb({ dbPath: ':memory:' });
+    // First open already created the V24-02 columns; second open
+    // must not throw despite the columns already existing.
+    expect(() => {
+      const repo = new ExperienceRepository(db);
+      // Smoke-check the new columns are queryable.
+      expect(repo.listRecentWritebackWarnings(1)).toEqual([]);
+    }).not.toThrow();
+    db.close();
+  });
+});
