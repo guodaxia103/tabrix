@@ -302,14 +302,26 @@ function findBaselineComparisonTable(benchmarkDir) {
 }
 
 /**
- * Verify that the release notes file embeds the v24-vs-v23 baseline
- * comparison table. The embed contract is loose by design (a maintainer
- * can paste the table inline OR link to it), so we accept either:
- *   - The notes file contains the canonical column header
- *     `metric | v2.3.0 baseline | v2.4.0 median | delta | direction`
- *     (case-sensitive, whitespace-tolerant), OR
- *   - The notes file references the table file path under
- *     `docs/benchmarks/v24/`.
+ * Verify that the release notes file INLINES the v24-vs-v23 baseline
+ * comparison table.
+ *
+ * v2.4.0 closeout review-fix (finding 3 of 3): the previous "header OR
+ * a `docs/benchmarks/v24/` reference is fine" rule let a release ship
+ * with nothing but a file link in the notes — readers had to chase a
+ * separate file to see the actual numbers. The release-evidence
+ * contract for v2.4 is now strict: the canonical markdown table header
+ *
+ *   `metric | v2.3.0 baseline | v2.4.0 median | delta | direction`
+ *
+ * MUST appear inline in the notes (case-insensitive, whitespace-
+ * tolerant), AND it must be followed by at least one body row that
+ * actually carries data — i.e. a markdown table separator line
+ * (`| --- | --- | ...`) and at least one `| K… |`-style data row. A
+ * notes file that only references `docs/benchmarks/v24/<file>.md`
+ * without the inline table is REJECTED.
+ *
+ * Returns `{ ok, reasons[], tablePath? }`. The `reasons` array is
+ * non-empty iff `ok === false`.
  */
 function requireBaselineComparisonTable(notesPath, benchmarkDir) {
   const tableResult = findBaselineComparisonTable(benchmarkDir);
@@ -324,20 +336,74 @@ function requireBaselineComparisonTable(notesPath, benchmarkDir) {
     };
   }
   const notes = fs.readFileSync(notesPath, 'utf8');
-  const headerRegex =
-    /metric\s*\|\s*v2\.3\.0\s+baseline\s*\|\s*v2\.4\.0\s+median\s*\|\s*delta\s*\|\s*direction/i;
-  const hasHeader = headerRegex.test(notes);
-  const hasFileLink = notes.includes('docs/benchmarks/v24/');
-  if (!hasHeader && !hasFileLink) {
+  const lines = notes.split(/\r?\n/);
+
+  // Locate the canonical header row. Anchored on `^\s*\|?` so the
+  // markdown leading pipe is optional but the column order is fixed.
+  const headerLineRegex =
+    /^\s*\|?\s*metric\s*\|\s*v2\.3\.0\s+baseline\s*\|\s*v2\.4\.0\s+median\s*\|\s*delta\s*\|\s*direction\s*\|?\s*$/i;
+
+  let headerLineIndex = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (headerLineRegex.test(lines[i])) {
+      headerLineIndex = i;
+      break;
+    }
+  }
+
+  if (headerLineIndex === -1) {
     return {
       ok: false,
       reasons: [
-        `release notes ${path.basename(notesPath)} does not embed the v24-vs-v23 baseline comparison table ` +
-          `(expected header "metric | v2.3.0 baseline | v2.4.0 median | delta | direction" or a docs/benchmarks/v24/ reference)`,
+        `release notes ${path.basename(notesPath)} does NOT inline the v24-vs-v23 baseline comparison table ` +
+          `(expected canonical header "metric | v2.3.0 baseline | v2.4.0 median | delta | direction"). ` +
+          `A bare reference to docs/benchmarks/v24/*.md is not sufficient — the table itself must be inlined.`,
       ],
       tablePath: tableResult.tablePath,
     };
   }
+
+  // Require a markdown separator on the next non-blank line (a row
+  // that is only pipes, dashes, colons, and whitespace, with at least
+  // one dash). This is what distinguishes a real markdown table from
+  // a stray sentence that happens to mention the column names.
+  let cursor = headerLineIndex + 1;
+  while (cursor < lines.length && lines[cursor].trim() === '') cursor += 1;
+  const separatorLine = cursor < lines.length ? lines[cursor] : '';
+  const separatorOk = /^\s*\|?[\s\-|:]*-[\s\-|:]*\|?\s*$/.test(separatorLine);
+
+  if (!separatorOk) {
+    return {
+      ok: false,
+      reasons: [
+        `release notes ${path.basename(notesPath)} mentions the baseline comparison header but does not follow it with a markdown table separator (\`| --- |\`-style row). The table must be inlined as real markdown.`,
+      ],
+      tablePath: tableResult.tablePath,
+    };
+  }
+
+  // Require at least one data row underneath the separator. A data
+  // row begins with a `|` and contains at least one non-separator cell.
+  let hasDataRow = false;
+  for (let i = cursor + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.trim() === '') continue;
+    if (!line.trim().startsWith('|')) break;
+    if (/^\s*\|?[\s\-|:]*\|?\s*$/.test(line)) continue;
+    hasDataRow = true;
+    break;
+  }
+
+  if (!hasDataRow) {
+    return {
+      ok: false,
+      reasons: [
+        `release notes ${path.basename(notesPath)} has the baseline comparison header + separator but no body rows — the inline table is empty.`,
+      ],
+      tablePath: tableResult.tablePath,
+    };
+  }
+
   return { ok: true, reasons: [], tablePath: tableResult.tablePath };
 }
 

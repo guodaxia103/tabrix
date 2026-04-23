@@ -259,14 +259,14 @@ describe('release-gate v24 — baseline comparison table requirement', () => {
     expect(result.reasons.some((r) => r.includes('release notes file missing'))).toBe(true);
   });
 
-  it('claim 5d: notes without canonical header AND without docs/benchmarks/v24 link is rejected', () => {
+  it('claim 5d: notes with neither canonical header nor an inline table are rejected', () => {
     fs.writeFileSync(notesPath, '# Some unrelated content', 'utf8');
     const result = gateModule.requireBaselineComparisonTable(notesPath, bDir);
     expect(result.ok).toBe(false);
-    expect(result.reasons.some((r) => r.includes('does not embed'))).toBe(true);
+    expect(result.reasons.some((r) => r.includes('does NOT inline'))).toBe(true);
   });
 
-  it('claim 5e: notes with canonical header is accepted', () => {
+  it('claim 5e: notes with canonical header + separator + data row are accepted (full inline table)', () => {
     fs.writeFileSync(
       notesPath,
       [
@@ -274,17 +274,94 @@ describe('release-gate v24 — baseline comparison table requirement', () => {
         '',
         '| metric | v2.3.0 baseline | v2.4.0 median | delta | direction |',
         '| --- | --- | --- | --- | --- |',
+        '| K3 task success | 1.000 | 1.000 | 0.000 | flat |',
       ].join('\n'),
       'utf8',
     );
     const result = gateModule.requireBaselineComparisonTable(notesPath, bDir);
     expect(result.ok).toBe(true);
+    expect(result.reasons).toEqual([]);
   });
 
-  it('claim 5f: notes referencing docs/benchmarks/v24/ path is also accepted', () => {
+  it('closeout finding 3 — claim 5f: link-only reference WITHOUT an inline table is REJECTED', () => {
+    // Pre-closeout, a maintainer could ship release notes that only
+    // pointed at `docs/benchmarks/v24/...md` and the gate would pass.
+    // Reviewers had to chase the file. Under the v2.4.0 closeout
+    // contract the table must be inlined.
     fs.writeFileSync(
       notesPath,
       '# Notes\n\nSee `docs/benchmarks/v24/v24-vs-v23-baseline-2026-04-23.md` for the comparison.\n',
+      'utf8',
+    );
+    const result = gateModule.requireBaselineComparisonTable(notesPath, bDir);
+    expect(result.ok).toBe(false);
+    expect(result.reasons.some((r) => r.includes('does NOT inline'))).toBe(true);
+  });
+
+  it('closeout finding 3 — claim 5g: link-only is STILL rejected even when the link is rendered as a markdown link', () => {
+    // The previous loose rule keyed off the substring
+    // `docs/benchmarks/v24/`. Verify both inline-code and rendered-
+    // link forms now fail without an actual inline table.
+    fs.writeFileSync(
+      notesPath,
+      '# Notes\n\nSee [baseline](docs/benchmarks/v24/v24-vs-v23-baseline-2026-04-23.md).\n',
+      'utf8',
+    );
+    const result = gateModule.requireBaselineComparisonTable(notesPath, bDir);
+    expect(result.ok).toBe(false);
+  });
+
+  it('closeout finding 3 — claim 5h: header-only (no separator, no rows) is REJECTED', () => {
+    // A maintainer might paste only the header sentence-style. That
+    // is not a markdown table; reject it explicitly.
+    fs.writeFileSync(
+      notesPath,
+      '# Notes\n\nThe metric | v2.3.0 baseline | v2.4.0 median | delta | direction columns are TBD.\n',
+      'utf8',
+    );
+    const result = gateModule.requireBaselineComparisonTable(notesPath, bDir);
+    expect(result.ok).toBe(false);
+    expect(
+      result.reasons.some((r) => r.includes('separator') || r.includes('does NOT inline')),
+    ).toBe(true);
+  });
+
+  it('closeout finding 3 — claim 5i: header + separator but no data rows is REJECTED', () => {
+    // A skeleton-only inline table is not "evidence". Require at
+    // least one body row so the gate can distinguish a placeholder
+    // skeleton from a populated table.
+    fs.writeFileSync(
+      notesPath,
+      [
+        '# Notes',
+        '',
+        '| metric | v2.3.0 baseline | v2.4.0 median | delta | direction |',
+        '| --- | --- | --- | --- | --- |',
+        '',
+        'TBD by maintainer.',
+      ].join('\n'),
+      'utf8',
+    );
+    const result = gateModule.requireBaselineComparisonTable(notesPath, bDir);
+    expect(result.ok).toBe(false);
+    expect(result.reasons.some((r) => r.includes('inline table is empty'))).toBe(true);
+  });
+
+  it('closeout finding 3 — claim 5j: inline table + a docs/benchmarks/v24/ link is accepted', () => {
+    // Maintainers are encouraged to ALSO link the canonical file —
+    // make sure we do not regress on the both-present case.
+    fs.writeFileSync(
+      notesPath,
+      [
+        '# Notes',
+        '',
+        'See `docs/benchmarks/v24/v24-vs-v23-baseline-2026-04-23.md` for the canonical copy.',
+        '',
+        '| metric | v2.3.0 baseline | v2.4.0 median | delta | direction |',
+        '| --- | --- | --- | --- | --- |',
+        '| K3 task success | 1.000 | 0.95 | -0.05 | regress |',
+        '| K8 token saving (median) | n/a | 0.42 | — | — |',
+      ].join('\n'),
       'utf8',
     );
     const result = gateModule.requireBaselineComparisonTable(notesPath, bDir);

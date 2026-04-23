@@ -245,12 +245,17 @@ if (benchmarkGateAppliesV24(nativePkg.version)) {
       }
 
       // Baseline comparison table is a HARD requirement. The release
-      // notes file (or the CHANGELOG fallback selected above) must
-      // either (a) embed the canonical column header inline OR
-      // (b) reference the table file under docs/benchmarks/v24/.
-      // `--allow-missing-notes` only opens the notes-fallback path
-      // (handled in the release-notes block above); it does NOT
-      // bypass this content check (mirrors the V23-06 closeout).
+      // notes file (or the CHANGELOG fallback selected above) MUST
+      // INLINE the canonical baseline-comparison table — header
+      // (`metric | v2.3.0 baseline | v2.4.0 median | delta | direction`)
+      // + markdown separator + at least one body row. v2.4.0 closeout
+      // review-fix (finding 3): a bare reference to the
+      // `docs/benchmarks/v24/<file>.md` is no longer sufficient; the
+      // table itself must be in the notes so reviewers do not have to
+      // chase a separate file. `--allow-missing-notes` only opens the
+      // notes-fallback path (handled in the release-notes block above);
+      // it does NOT bypass this content check (mirrors the V23-06
+      // closeout).
       if (selectedNotesFile && fileExists(selectedNotesFile)) {
         const tableResult = requireBaselineComparisonTable(
           path.join(ROOT, selectedNotesFile),
