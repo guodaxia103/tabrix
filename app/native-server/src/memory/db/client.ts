@@ -22,6 +22,7 @@ import { getTabrixDataDir } from '../../shared/data-dirs';
 import {
   CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL,
   EXPERIENCE_CREATE_TABLES_SQL,
+  EXPERIENCE_WRITEBACK_WARNINGS_CREATE_TABLES_SQL,
   KNOWLEDGE_CREATE_TABLES_SQL,
   MEMORY_CREATE_TABLES_SQL,
 } from './schema';
@@ -121,6 +122,45 @@ function ensureSessionAggregatedAtColumn(db: SqliteDatabase): void {
 }
 
 /**
+ * V24-02 additive migration for legacy DBs that pre-date the
+ * replay-outcome write-back columns. Each ALTER is guarded by a
+ * `hasColumn` probe so re-opening a fresh DB (where the columns are
+ * already present from `EXPERIENCE_CREATE_TABLES_SQL`) is a no-op.
+ *
+ * Splitting per-column keeps the migration shape uniform with the
+ * B-012 helper above; it also means a partial-failure mid-migration
+ * (e.g. disk full between two ALTERs) leaves the DB in a recoverable
+ * state — the next `openMemoryDb()` resumes from where it stopped.
+ */
+function ensureExperienceReplayWritebackColumns(db: SqliteDatabase): void {
+  if (!hasColumn(db, 'experience_action_paths', 'last_replay_at')) {
+    db.exec('ALTER TABLE experience_action_paths ADD COLUMN last_replay_at TEXT');
+  }
+  if (!hasColumn(db, 'experience_action_paths', 'last_replay_outcome')) {
+    db.exec('ALTER TABLE experience_action_paths ADD COLUMN last_replay_outcome TEXT');
+  }
+  if (!hasColumn(db, 'experience_action_paths', 'last_replay_status')) {
+    db.exec('ALTER TABLE experience_action_paths ADD COLUMN last_replay_status TEXT');
+  }
+  if (!hasColumn(db, 'experience_action_paths', 'composite_score_decayed')) {
+    db.exec('ALTER TABLE experience_action_paths ADD COLUMN composite_score_decayed REAL');
+  }
+  // V24-02 partial index — created idempotently so legacy DBs pick it
+  // up after the column exists.
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS experience_action_paths_composite_score_idx
+       ON experience_action_paths(composite_score_decayed)
+       WHERE composite_score_decayed IS NOT NULL`,
+  );
+  if (!hasColumn(db, 'memory_sessions', 'composite_score_raw')) {
+    db.exec('ALTER TABLE memory_sessions ADD COLUMN composite_score_raw REAL');
+  }
+  if (!hasColumn(db, 'memory_sessions', 'components_blob')) {
+    db.exec('ALTER TABLE memory_sessions ADD COLUMN components_blob TEXT');
+  }
+}
+
+/**
  * Open (or create) the Memory DB. Caller owns the returned handle and
  * must call `.close()` when done. Re-throws a
  * `TabrixMemoryDbBindingError` if the native binding is missing.
@@ -138,6 +178,11 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   db.exec(MEMORY_CREATE_TABLES_SQL);
   ensureSessionAggregatedAtColumn(db);
   db.exec(EXPERIENCE_CREATE_TABLES_SQL);
+  // V24-02: legacy-DB additive migration for replay-outcome write-back
+  // columns. Runs after `EXPERIENCE_CREATE_TABLES_SQL` so a virgin DB
+  // sees the columns from the CREATE statement and the helper is a
+  // pure no-op; legacy DBs pick up the columns via the guarded ALTERs.
+  ensureExperienceReplayWritebackColumns(db);
   // B-017: Knowledge tables. Idempotent CREATE IF NOT EXISTS — same
   // contract as Memory / Experience. The table exists regardless of
   // capability state so writes from a freshly-enabled capability do
@@ -149,6 +194,12 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   // Memory persistence gate the rest of the native server uses, so a DB
   // running with persistence='off' will not accumulate telemetry rows.
   db.exec(CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL);
+  // V24-02: isolation telemetry table. Same idempotent CREATE IF NOT
+  // EXISTS pattern. Lives outside `EXPERIENCE_CREATE_TABLES_SQL` so
+  // the legacy-migration probe order stays stable (Experience first,
+  // then warnings — a warning row that references `action_path_id`
+  // is meaningful even if the FK target row was never created).
+  db.exec(EXPERIENCE_WRITEBACK_WARNINGS_CREATE_TABLES_SQL);
 
   return {
     db,

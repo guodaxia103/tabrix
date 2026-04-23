@@ -40,17 +40,24 @@ CREATE INDEX IF NOT EXISTS memory_tasks_created_at_idx ON memory_tasks(created_a
 CREATE INDEX IF NOT EXISTS memory_tasks_status_idx     ON memory_tasks(status);
 
 CREATE TABLE IF NOT EXISTS memory_sessions (
-  session_id        TEXT PRIMARY KEY,
-  task_id           TEXT NOT NULL REFERENCES memory_tasks(task_id) ON DELETE CASCADE,
-  transport         TEXT NOT NULL,
-  client_name       TEXT NOT NULL,
-  workspace_context TEXT,
-  browser_context   TEXT,
-  summary           TEXT,
-  status            TEXT NOT NULL,
-  started_at        TEXT NOT NULL,
-  ended_at          TEXT,
-  aggregated_at     TEXT
+  session_id          TEXT PRIMARY KEY,
+  task_id             TEXT NOT NULL REFERENCES memory_tasks(task_id) ON DELETE CASCADE,
+  transport           TEXT NOT NULL,
+  client_name         TEXT NOT NULL,
+  workspace_context   TEXT,
+  browser_context     TEXT,
+  summary             TEXT,
+  status              TEXT NOT NULL,
+  started_at          TEXT NOT NULL,
+  ended_at            TEXT,
+  aggregated_at       TEXT,
+  -- V24-02: deterministic session-end composite score (raw, before
+  -- recency decay) and the JSON breakdown of its component values
+  -- ({accuracy, speed, token, stability}). Both nullable because
+  -- the aggregator only fills them on replay sessions; non-replay
+  -- sessions keep them NULL so reads can short-circuit.
+  composite_score_raw REAL,
+  components_blob     TEXT
 );
 
 CREATE INDEX IF NOT EXISTS memory_sessions_task_id_idx    ON memory_sessions(task_id);
@@ -168,21 +175,41 @@ CREATE INDEX IF NOT EXISTS memory_actions_captured_at_idx ON memory_actions(capt
  */
 export const EXPERIENCE_CREATE_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS experience_action_paths (
-  action_path_id    TEXT PRIMARY KEY,
-  page_role         TEXT NOT NULL,
-  intent_signature  TEXT NOT NULL,
-  step_sequence     TEXT NOT NULL,          -- JSON: ordered [{ toolName, status, historyRef }]
-  success_count     INTEGER NOT NULL DEFAULT 0,
-  failure_count     INTEGER NOT NULL DEFAULT 0,
-  last_used_at      TEXT,
-  created_at        TEXT NOT NULL,
-  updated_at        TEXT NOT NULL
+  action_path_id           TEXT PRIMARY KEY,
+  page_role                TEXT NOT NULL,
+  intent_signature         TEXT NOT NULL,
+  step_sequence            TEXT NOT NULL,    -- JSON: ordered [{ toolName, status, historyRef }]
+  success_count            INTEGER NOT NULL DEFAULT 0,
+  failure_count            INTEGER NOT NULL DEFAULT 0,
+  last_used_at             TEXT,
+  -- V24-02 replay-outcome write-back fields. All nullable because
+  -- they are only populated once a replay (or a direct
+  -- experience_score_step call) has run against the row.
+  --   last_replay_at        : ISO 8601 timestamp the writer used.
+  --   last_replay_outcome   : last ClickObservedOutcome recorded.
+  --   last_replay_status    : projected {ok|failed} the writer
+  --                           chose via isClickSuccessOutcome.
+  --   composite_score_decayed : deterministic recency-decayed
+  --                             composite score (see
+  --                             composite-score.ts).
+  last_replay_at           TEXT,
+  last_replay_outcome      TEXT,
+  last_replay_status       TEXT,
+  composite_score_decayed  REAL,
+  created_at               TEXT NOT NULL,
+  updated_at               TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS experience_action_paths_role_intent_idx
   ON experience_action_paths(page_role, intent_signature);
 CREATE INDEX IF NOT EXISTS experience_action_paths_last_used_at_idx
   ON experience_action_paths(last_used_at);
+-- V24-02: lets the chooser (V24-03) ORDER BY composite_score_decayed
+-- without a full table scan. Partial index condition is safe under
+-- SQLite; rows that have not been scored yet drop out of the index.
+CREATE INDEX IF NOT EXISTS experience_action_paths_composite_score_idx
+  ON experience_action_paths(composite_score_decayed)
+  WHERE composite_score_decayed IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS experience_locator_prefs (
   locator_pref_id          TEXT PRIMARY KEY,
@@ -311,4 +338,49 @@ CREATE INDEX IF NOT EXISTS tabrix_choose_context_outcomes_decision_id_idx
   ON tabrix_choose_context_outcomes(decision_id);
 CREATE INDEX IF NOT EXISTS tabrix_choose_context_outcomes_recorded_at_idx
   ON tabrix_choose_context_outcomes(recorded_at);
+`;
+
+/**
+ * V24-02 isolation telemetry — `experience_score_step` write-back warnings.
+ *
+ * Every row represents one Experience write-back attempt that the
+ * runtime caught and isolated (see `.claude/TABRIX_V2_4_0_PLAN.md`
+ * §V24-02 — failure handling). Two callers write here:
+ *  - per-step `experience_score_step` MCP handler (when the per-step
+ *    counter delta SQL throws),
+ *  - session-end `SessionCompositeScoreWriter` (when the composite
+ *    score / aggregated-at update fails).
+ *
+ * Hard rules baked into the schema:
+ *  - Append-only — no UPDATE / DELETE in the writer; auditors rely on
+ *    full row history.
+ *  - `payload_blob` is small JSON (cap enforced at write time) so the
+ *    table stays bounded even under bridge-flap conditions.
+ *  - No FK to `memory_sessions` / `experience_action_paths` because
+ *    the warning has to outlive an aggressive Memory rotation.
+ *  - The table exists regardless of capability state (idempotent
+ *    CREATE) so a write that races a freshly-disabled persistence
+ *    knob still has somewhere to land.
+ */
+export const EXPERIENCE_WRITEBACK_WARNINGS_CREATE_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS experience_writeback_warnings (
+  warning_id        TEXT PRIMARY KEY,
+  source            TEXT NOT NULL,            -- 'experience_score_step' | 'session_composite_score'
+  action_path_id    TEXT,
+  step_index        INTEGER,
+  session_id        TEXT,
+  replay_id         TEXT,
+  observed_outcome  TEXT,
+  error_code        TEXT,
+  error_message     TEXT,
+  payload_blob      TEXT,                     -- JSON: { historyRef?, evidence?, components? } — bounded
+  created_at        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS experience_writeback_warnings_source_idx
+  ON experience_writeback_warnings(source);
+CREATE INDEX IF NOT EXISTS experience_writeback_warnings_action_path_idx
+  ON experience_writeback_warnings(action_path_id);
+CREATE INDEX IF NOT EXISTS experience_writeback_warnings_created_at_idx
+  ON experience_writeback_warnings(created_at);
 `;
