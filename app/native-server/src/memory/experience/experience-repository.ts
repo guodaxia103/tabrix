@@ -11,19 +11,33 @@ export interface ExperienceActionPathStep {
    * kinds (`chrome_click_element` / `chrome_fill_or_select`).
    *
    * Population is performed by the aggregator
-   * (`experience-aggregator.ts::extractReplayArgs`) and is bounded:
-   * - only the v1 supported step kinds get args populated; everything
-   *   else stays on the historical `{toolName,status,historyRef}`
+   * (`experience-aggregator.ts::extractReplayArgs`) and is gated by
+   * the per-tool **portable allowlist** in
+   * `mcp/experience-replay-args.ts::extractPortableReplayArgs`:
+   * - only the v1 supported step kinds get args populated; every
+   *   other step kind keeps the historical `{toolName,status,historyRef}`
    *   shape and the chooser refuses to route the row to
    *   `experience_replay` (`isReplayEligible()`),
-   * - non-portable session-local keys (today: `tabId`) are stripped
-   *   so the replay engine's `withTargetTab` can re-target the
-   *   operator-supplied tab, and
+   * - session-local handles are dropped: top-level `tabId` /
+   *   `windowId` / `frameId` (the replay engine's `withTargetTab`
+   *   re-injects the operator-supplied `targetTabId`), top-level
+   *   `ref` and viewport `coordinates` (per-snapshot, not
+   *   replayable across sessions),
+   * - `candidateAction.targetRef` is kept ONLY when it carries the
+   *   `tgt_*` stable-target-ref prefix (`STABLE_TARGET_REF_PREFIX`);
+   *   legacy per-snapshot `ref_xyz` values are dropped,
+   * - `candidateAction.locatorChain` keeps only `type === 'css'`
+   *   entries; `type === 'ref'` items are dropped for the same
+   *   reason, and
    * - extremely large captures are skipped to bound on-disk JSON.
    *
-   * When absent the replay engine fails closed for that step
-   * (`unsupported_step_kind` from `applySubstitutions`); the chooser
-   * is expected to never even pick `experience_replay` in that case.
+   * When absent the chooser refuses to route the row in the first
+   * place (`isReplayEligible()` returns false); as defense in depth
+   * the replay engine itself also fails the step closed
+   * (`applySubstitutions()` returns `failureCode:
+   * 'unsupported_step_kind'` with message "row is not
+   * replay-eligible") so a direct caller of `experience_replay`
+   * cannot bypass the gate either.
    */
   args?: Record<string, unknown>;
   /**

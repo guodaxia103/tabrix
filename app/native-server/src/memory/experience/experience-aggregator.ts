@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import { TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS } from '@tabrix/shared';
 import type { SqliteDatabase } from '../db';
 import type { PageSnapshotRepository } from '../db/page-snapshot-repository';
 import type { PendingAggregationSession, SessionRepository } from '../db/session-repository';
 import type { StepRepository } from '../db/step-repository';
 import type { ExperienceActionPathStep } from './experience-repository';
 import { ExperienceRepository } from './experience-repository';
+import { extractPortableReplayArgs } from '../../mcp/experience-replay-args';
 
 export interface ExperienceAggregationResult {
   scanned: number;
@@ -39,26 +39,6 @@ function pickFirstHistoryRef(artifactRefs: string[]): string | null {
 }
 
 /**
- * V24-01 closeout (replay closure): which top-level keys in a captured
- * `inputSummary` are session-local and MUST be stripped before we
- * persist them onto an `experience_action_paths` row.
- *
- * - `tabId`: bound to the recorder's browser session. Replaying that
- *   number against a future session would either hit a dead tab or,
- *   worse, the wrong tab. The replay engine's `withTargetTab` injects
- *   the operator-supplied `targetTabId` whenever `args.tabId` is
- *   absent (see `experience-replay.ts::withTargetTab`), so omitting
- *   it here is exactly what the engine expects.
- *
- * Anything else (selector, candidateAction, targetRef, value, ...) is
- * preserved verbatim. `value` may carry user-typed text and is the
- * same data already on disk in `memory_steps.input_summary`; the
- * future capture-side PR (V24-02+) will introduce `templateFields` so
- * the operator can re-parameterise such values at replay time.
- */
-const NON_PORTABLE_REPLAY_ARG_KEYS: ReadonlySet<string> = new Set(['tabId']);
-
-/**
  * V24-01 closeout: strict bound on captured-args size, in bytes of
  * stringified JSON. The aggregator silently skips populating `args`
  * when a supported step kind's `inputSummary` is unexpectedly large -
@@ -70,23 +50,33 @@ const NON_PORTABLE_REPLAY_ARG_KEYS: ReadonlySet<string> = new Set(['tabId']);
 const MAX_REPLAY_ARGS_INPUT_SUMMARY_BYTES = 8 * 1024;
 
 /**
- * V24-01 closeout (replay closure): for the v1 supported step kinds
- * (`chrome_click_element` / `chrome_fill_or_select`) we lift the
+ * V24-01 closeout (replay-args portability): for the v1 supported step
+ * kinds (`chrome_click_element` / `chrome_fill_or_select`) we lift the
  * captured tool args from `memory_steps.input_summary` onto the
- * Experience row so `experience_replay` can re-dispatch verbatim.
+ * Experience row so `experience_replay` can re-dispatch them in a
+ * fresh session.
  *
- * Everything else returns `undefined`, preserving the historical
- * `{toolName, status, historyRef}` shape and matching the
- * fail-closed behaviour `experience-replay.ts::applySubstitutions`
- * relies on for non-replayable rows.
+ * The earlier closeout used a "parse JSON, strip a denylist of
+ * session keys (today: `tabId`)" strategy. Codex's follow-up review
+ * called that out as unsound: a denylist that misses any
+ * per-snapshot accessibility ref (`ref`, `candidateAction.targetRef`
+ * like `ref_xyz`, `candidateAction.locatorChain[*].type === 'ref'`)
+ * silently leaks it into replay, which then either clicks the wrong
+ * element or hits a dead handle in the new session.
+ *
+ * Replaced with a per-tool **portable allowlist** (single source of
+ * truth: `experience-replay-args.ts::extractPortableReplayArgs`).
+ * The chooser's `isReplayEligible()` calls the same helper so the
+ * persisted contract and the routing gate cannot drift.
+ *
+ * Returns `undefined` to mean "row is NOT replay-eligible"; callers
+ * MUST omit `args` entirely in that case rather than persisting an
+ * empty object.
  */
 function extractReplayArgs(
   toolName: string,
   inputSummary: string | undefined,
 ): Record<string, unknown> | undefined {
-  if (!TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS.has(toolName)) {
-    return undefined;
-  }
   if (typeof inputSummary !== 'string' || inputSummary.length === 0) {
     return undefined;
   }
@@ -99,20 +89,10 @@ function extractReplayArgs(
   } catch {
     return undefined;
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return undefined;
-  }
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-    if (NON_PORTABLE_REPLAY_ARG_KEYS.has(key)) continue;
-    out[key] = value;
-  }
-  // After stripping non-portable keys (e.g. `tabId`) there may be
-  // nothing left worth replaying — surface that as "no args" rather
-  // than persisting an empty object that the chooser would still
-  // refuse via `isReplayEligible()`.
-  if (Object.keys(out).length === 0) return undefined;
-  return out;
+  // The supported-tool gate, the object-shape gate, and the
+  // session-local-key strip all live in `extractPortableReplayArgs` so
+  // chooser and aggregator share exactly one allowlist.
+  return extractPortableReplayArgs(toolName, parsed);
 }
 
 function toStepSequence(

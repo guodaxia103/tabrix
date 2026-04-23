@@ -881,6 +881,226 @@ describe('ExperienceAggregator (B-012 v1)', () => {
       }
     });
 
+    // V24-01 portability follow-up: per-tool portable allowlist. The
+    // earlier "strip tabId only" approach silently kept per-snapshot
+    // accessibility refs (`ref`, `candidateAction.targetRef === 'ref_*'`,
+    // `locatorChain[*].type === 'ref'`) and viewport coordinates,
+    // either of which would cause replay against a fresh session to
+    // misfire. These tests pin the allowlist behaviour at the
+    // aggregator boundary so a future refactor can't quietly widen
+    // what gets persisted.
+
+    it('strips top-level per-snapshot ref but keeps the portable selector', () => {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, { intent: 'click with ref' });
+        insertSession(sessionRepo, { sessionId: 's-ref', status: 'completed' });
+        insertStep(stepRepo, {
+          stepId: 's-ref-1',
+          sessionId: 's-ref',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          inputSummary: JSON.stringify({
+            tabId: 7,
+            windowId: 3,
+            frameId: 2,
+            ref: 'ref_per_snapshot_xyz',
+            selector: '#issues-tab',
+          }),
+          artifactRefs: [],
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'snap-ref',
+          stepId: 's-ref-1',
+          pageRole: 'repo_home',
+          capturedAt: '2026-04-20T00:00:01.500Z',
+        });
+
+        aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        const args = rows[0].stepSequence[0].args;
+        expect(args).toEqual({ selector: '#issues-tab' });
+        expect(args).not.toHaveProperty('ref');
+        expect(args).not.toHaveProperty('windowId');
+        expect(args).not.toHaveProperty('frameId');
+      } finally {
+        close();
+      }
+    });
+
+    it('drops args when only viewport coordinates are recorded (no portable target)', () => {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, { intent: 'click coords' });
+        insertSession(sessionRepo, { sessionId: 's-coord', status: 'completed' });
+        insertStep(stepRepo, {
+          stepId: 's-coord-1',
+          sessionId: 's-coord',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          // Coordinates are session-state-dependent (viewport
+          // scroll, layout shifts...), so a row with ONLY coordinates
+          // is non-portable - aggregator must refuse to mark it
+          // replayable.
+          inputSummary: JSON.stringify({ tabId: 7, coordinates: { x: 100, y: 200 } }),
+          artifactRefs: [],
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'snap-coord',
+          stepId: 's-coord-1',
+          pageRole: 'repo_home',
+          capturedAt: '2026-04-20T00:00:01.500Z',
+        });
+
+        aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].stepSequence[0]).not.toHaveProperty('args');
+      } finally {
+        close();
+      }
+    });
+
+    it('keeps tgt_* candidateAction.targetRef but drops legacy ref_* targetRef', () => {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, { intent: 'two clicks' });
+        insertSession(sessionRepo, { sessionId: 's-tgt', status: 'completed' });
+        insertStep(stepRepo, {
+          stepId: 's-tgt-1',
+          sessionId: 's-tgt',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          // Stable B-011 targetRef survives intact.
+          inputSummary: JSON.stringify({
+            tabId: 7,
+            candidateAction: { targetRef: 'tgt_0123456789' },
+          }),
+          artifactRefs: [],
+        });
+        insertStep(stepRepo, {
+          stepId: 's-tgt-2',
+          sessionId: 's-tgt',
+          index: 2,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          // Per-snapshot ref_* targetRef is non-portable. With NO
+          // other portable target field on this step, the whole
+          // candidateAction is empty after filtering, so args itself
+          // becomes non-portable and must be omitted.
+          inputSummary: JSON.stringify({
+            tabId: 7,
+            candidateAction: { targetRef: 'ref_per_snapshot' },
+          }),
+          artifactRefs: [],
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'snap-tgt',
+          stepId: 's-tgt-1',
+          pageRole: 'repo_home',
+          capturedAt: '2026-04-20T00:00:01.500Z',
+        });
+
+        aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].stepSequence[0].args).toEqual({
+          candidateAction: { targetRef: 'tgt_0123456789' },
+        });
+        expect(rows[0].stepSequence[1]).not.toHaveProperty('args');
+      } finally {
+        close();
+      }
+    });
+
+    it('keeps css locatorChain entries but drops type=ref entries', () => {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, { intent: 'mixed locator chain' });
+        insertSession(sessionRepo, { sessionId: 's-chain', status: 'completed' });
+        insertStep(stepRepo, {
+          stepId: 's-chain-1',
+          sessionId: 's-chain',
+          index: 1,
+          toolName: 'chrome_click_element',
+          status: 'completed',
+          inputSummary: JSON.stringify({
+            tabId: 7,
+            candidateAction: {
+              locatorChain: [
+                { type: 'css', value: '.issues-tab' },
+                { type: 'ref', value: 'ref_zzz' },
+                { type: 'css', value: 'a[data-tab=issues]' },
+              ],
+            },
+          }),
+          artifactRefs: [],
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'snap-chain',
+          stepId: 's-chain-1',
+          pageRole: 'repo_home',
+          capturedAt: '2026-04-20T00:00:01.500Z',
+        });
+
+        aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].stepSequence[0].args).toEqual({
+          candidateAction: {
+            locatorChain: [
+              { type: 'css', value: '.issues-tab' },
+              { type: 'css', value: 'a[data-tab=issues]' },
+            ],
+          },
+        });
+      } finally {
+        close();
+      }
+    });
+
+    it('refuses chrome_fill_or_select when the recorded value is missing', () => {
+      const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
+        bootstrap();
+      try {
+        insertTask(taskRepo, { intent: 'fill no value' });
+        insertSession(sessionRepo, { sessionId: 's-noval', status: 'completed' });
+        insertStep(stepRepo, {
+          stepId: 's-noval-1',
+          sessionId: 's-noval',
+          index: 1,
+          toolName: 'chrome_fill_or_select',
+          status: 'completed',
+          // Without `value` the fill bridge has nothing to type;
+          // chrome_fill_or_select's input schema marks `value` as
+          // required, so the row is structurally non-portable.
+          inputSummary: JSON.stringify({ tabId: 7, selector: '#search' }),
+          artifactRefs: [],
+        });
+        insertSnapshot(snapshotRepo, {
+          snapshotId: 'snap-noval',
+          stepId: 's-noval-1',
+          pageRole: 'issues_list',
+          capturedAt: '2026-04-20T00:00:01.500Z',
+        });
+
+        aggregator.projectPendingSessions('2026-04-21T00:00:00.000Z');
+        const rows = experienceRepo.listActionPaths();
+        expect(rows).toHaveLength(1);
+        expect(rows[0].stepSequence[0]).not.toHaveProperty('args');
+      } finally {
+        close();
+      }
+    });
+
     it('skips args when input_summary exceeds the size cap', () => {
       const { taskRepo, sessionRepo, stepRepo, snapshotRepo, aggregator, experienceRepo, close } =
         bootstrap();

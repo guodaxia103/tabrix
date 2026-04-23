@@ -417,15 +417,18 @@ function applySubstitutions(
   substitutions: Partial<Record<TabrixReplayPlaceholder, string>>,
 ): SubstitutionAppliedOk | SubstitutionAppliedError {
   // Defensive guard: chooser-side `isReplayEligible()` already
-  // refuses to route rows whose steps lack `args`, so in steady
-  // state we should never reach this branch from the chooser.
+  // refuses to route rows whose steps lack PORTABLE `args` (the
+  // shared portability check lives in
+  // `experience-replay-args.ts::extractPortableReplayArgs`), so in
+  // steady state we should never reach this branch from the chooser.
   // Direct callers of `experience_replay` (operator opt-in path)
   // can still hit it; we fail-closed rather than guessing - brief
   // §2 item 3.
   //
-  // V24-01 closeout: the aggregator now populates `args` for the
-  // v1 supported step kinds (see
-  // `experience-aggregator.ts::extractReplayArgs`). `templateFields`
+  // V24-01 closeout: the aggregator populates `args` for the v1
+  // supported step kinds via the same per-tool portable allowlist
+  // (see `experience-aggregator.ts::extractReplayArgs` which
+  // delegates to `extractPortableReplayArgs`). `templateFields`
   // capture-side write path remains deferred to V24-02+, so until
   // then `templates.length === 0` always holds and this engine just
   // re-dispatches the recorded args verbatim.
