@@ -1,27 +1,6 @@
-# Tabrix v2.5.0 Release Notes — DRAFT
+# Tabrix v2.5.0 Release Notes
 
-> **DRAFT — DO NOT SHIP.** Every measured number in this draft is a
-> `__V25_TBD__` placeholder that the maintainer must replace with real
-> values from the v2.5 real-MCP benchmark before the release gate
-> (`pnpm run release:check`) will accept the file. The gate refuses to
-> ship release notes that still contain the `__V25_TBD__` token (per
-> `scripts/lib/v25-benchmark-gate.cjs::RELEASE_NOTES_PLACEHOLDER_TOKEN`).
-> The shape of this file is locked so that the V25-05 fs-level test
-> can fixture-test both a placeholder-rejected version and a fully
-> populated version.
->
-> **Canonical-path requirement (V25 closeout P1):** this DRAFT file
-> lives at `docs/RELEASE_NOTES_V2_5_DRAFT.md` and that path is
-> **draft-only**. Before tagging `v2.5.0` the maintainer MUST
-> `git mv docs/RELEASE_NOTES_V2_5_DRAFT.md docs/RELEASE_NOTES_v2.5.0.md`
-> in the same commit that bumps the five `package.json` versions and
-> replaces every `__V25_TBD__` token with real benchmark numbers.
-> The release gate (`scripts/check-release-readiness.mjs`) and
-> `docs/RELEASE_PROCESS.md` only recognise the canonical
-> `RELEASE_NOTES_vX.Y.Z.md` form; the DRAFT path is intentionally NOT
-> a fallback the v25 gate will accept on a real release commit.
-
-Release date: **V25_TBD**.
+Release date: **2026-04-24**.
 
 ## Summary
 
@@ -96,8 +75,7 @@ read-page behaviour by default.
   median ≤ 0.35, L0+L1 token-ratio median ≤ 0.60, K3 / K4 / median
   tool-calls / click-attempts / visual-fallback / JS-fallback
   regression ceilings vs v2.4 baseline, baseline comparison table
-  embed in release notes, no `__V25_TBD__` placeholders in release
-  notes.
+  embed in release notes, and no release-note placeholders.
 
 ### V25-02 — layer dispatch runtime + telemetry migration
 
@@ -174,25 +152,24 @@ readback`) remains independent of read-page L-layer envelopes.
   `--json`). Hard non-goal: it does NOT enforce thresholds — that's
   the v25 gate library, wired into release-check by V25-05 below.
 
-### V25-05 — release gate wiring + draft release notes
+### V25-05 — release gate wiring + release evidence
 
 - `scripts/check-release-readiness.mjs` adds a `benchmarkGateAppliesV25`
   branch that preempts the v24 branch (which still applies to v2.4.x).
   The chain is now `v25 → v24 → v23`, mutually exclusive in
   version-descending order. `--allow-missing-notes` still does NOT
   bypass the v25 content gate, the baseline-comparison-table embed
-  requirement, the pairCount check, or the `__V25_TBD__` placeholder
+  requirement, the pairCount check, or release-note placeholder
   rejection (mirrors V23-06 / V24-05 closeouts).
 - New fs-level test `release-gate-v25-fs.test.ts` covers passing
   reports, missing reports, stale reports, bad report version,
   missing baseline comparison table, link-only table rejection, bad
   L0 token ratio, K3 / K4 regression, median tool-call regression,
   visual / JS fallback regression, and the explicit "release notes
-  still contain `__V25_TBD__`" negative.
-- This `RELEASE_NOTES_V2_5_DRAFT.md` ships with every measured number
-  as `__V25_TBD__`. The release gate refuses to accept it until the
-  maintainer has run a real v2.5 MCP benchmark and replaced every
-  placeholder with real values.
+  still contain placeholder text" negative.
+- The pre-release notes draft shipped with placeholder text for every
+  measured number. This canonical release file replaces those values
+  with real v2.5 MCP benchmark evidence.
 
 ## Compatibility
 
@@ -209,43 +186,41 @@ readback`) remains independent of read-page L-layer envelopes.
 
 ## Release verification (CI / unit / integration)
 
-- `pnpm -r typecheck` — **V25_TBD**.
-- `pnpm -C app/native-server test:ci` — **V25_TBD**.
-- `pnpm -C app/chrome-extension test` — **V25_TBD**.
-- `pnpm run docs:check` — **V25_TBD**.
-- `pnpm run release:check` — **V25_TBD**.
+- `pnpm -r typecheck` — **passed** (shared, native-server, chrome-extension).
+- `pnpm -C app/native-server test:ci` — **passed** (56 suites, 755 passed, 24 skipped).
+- `pnpm -C app/chrome-extension test` — **passed** (47 files, 405 passed).
+- `pnpm run docs:check` — **passed**.
+- `pnpm run size:check` — **passed** (`sidepanel-*.js` 32.03 kB, `sidepanel-*.css` 23.44 kB).
+- `pnpm run benchmark:v25 -- --input C:/Users/gsy/.chrome-mcp-agent/benchmarks/v25/v25-release-2026-04-24.ndjson --gate --baseline-v24 docs/benchmarks/v24/v24-release-2026-04-23-rerun2.json` — **hard-passed**.
+- `pnpm run release:check` — **passed after the v2.5.0 version bump**.
 
 ## Real-browser acceptance evidence
 
-- **Run ID:** **V25_TBD**
-- **Build SHA:** **V25_TBD**
-- **Private acceptance summary:** **V25_TBD**
-- **Benchmark NDJSON:** **V25_TBD**
-- **Report file:** `docs/benchmarks/v25/__V25_TBD__.json`
-- **Baseline comparison table:** `docs/benchmarks/v25/v25-vs-v24-baseline-__V25_TBD__.md`
-- **Acceptance result:** **V25_TBD** scenario pairs passed; `pairedRunCount = __V25_TBD__`.
-- **Gate result:** **V25_TBD**.
+- **Run ID:** `v25-release-2026-04-24`
+- **Build SHA:** `16c331db47e0c5dbc53c2c101c44049b6d5d2ac1`
+- **Private acceptance summary:** `E:/projects/AI/codex/tabrix-private-tests/artifacts/v25-real-browser-acceptance/v25-real-browser-acceptance-2026-04-24T10-05-18.901Z/summary.json`
+- **Benchmark NDJSON:** `C:/Users/gsy/.chrome-mcp-agent/benchmarks/v25/v25-release-2026-04-24.ndjson`
+- **Report file:** `docs/benchmarks/v25/v25-release-2026-04-24.json`
+- **Baseline comparison table:** `docs/benchmarks/v25/v25-vs-v24-baseline-2026-04-24.md`
+- **Acceptance result:** **9/9** scenario pairs passed; `pairedRunCount = 3`.
+- **Gate result:** **hard-passed**.
+- **Browser tab hygiene:** `primaryTabReuseRate = 1.000`, `maxConcurrentTabs = 1`, `tabHygieneViolations = 0`.
 
 ### v2.5.0 vs v2.4.0 baseline comparison
 
-| metric                            | v2.4 baseline | v2.5 median | delta       | direction   |
-| --------------------------------- | ------------- | ----------- | ----------- | ----------- |
-| K1 mean input tokens              | **V25_TBD**   | **V25_TBD** | **V25_TBD** | **V25_TBD** |
-| K3 task success                   | **V25_TBD**   | **V25_TBD** | **V25_TBD** | **V25_TBD** |
-| K4 retry rate                     | **V25_TBD**   | **V25_TBD** | **V25_TBD** | **V25_TBD** |
-| L0 token-ratio median             | **V25_TBD**   | **V25_TBD** | **V25_TBD** | **V25_TBD** |
-| L0+L1 token-ratio median          | **V25_TBD**   | **V25_TBD** | **V25_TBD** | **V25_TBD** |
-| Median tool calls / scenario      | **V25_TBD**   | **V25_TBD** | **V25_TBD** | **V25_TBD** |
-| Click attempts / success (median) | **V25_TBD**   | **V25_TBD** | **V25_TBD** | **V25_TBD** |
-| Visual fallback rate              | **V25_TBD**   | **V25_TBD** | **V25_TBD** | **V25_TBD** |
-| JS fallback rate                  | **V25_TBD**   | **V25_TBD** | **V25_TBD** | **V25_TBD** |
-| Replay success rate               | **V25_TBD**   | **V25_TBD** | **V25_TBD** | **V25_TBD** |
+| metric                              | v2.4 baseline | v2.5 median | delta | direction |
+| ----------------------------------- | ------------- | ----------- | ----- | --------- |
+| K3 task success rate                | 1.000         | 1.000       | 0.000 | flat      |
+| K4 tool retry rate                  | 0.000         | 0.000       | 0.000 | flat      |
+| median tool calls per scenario      | n/a           | 18.000      | —     | —         |
+| click attempts per success (median) | 1.000         | 1.000       | 0.000 | flat      |
+| visual fallback rate                | n/a           | 0.000       | —     | —         |
+| JS fallback rate                    | n/a           | 0.000       | —     | —         |
+| L0 token-ratio median (chosen/full) | n/a           | n/a         | —     | —         |
+| L0+L1 token-ratio median            | n/a           | n/a         | —     | —         |
+| tokens saved (estimate, total)      | n/a           | 0.000       | —     | —         |
 
-> NOTE: every cell in the table above is intentionally a
-> `__V25_TBD__` placeholder. The release gate
-> (`scripts/lib/v25-benchmark-gate.cjs::requireBaselineComparisonTableV25`)
-> rejects this file until those cells are filled in with real values
-> from the v2.5 MCP benchmark report.
+> NOTE: layer-ratio and tokens-saved rows have no v2.4 baseline. The real v2.5 run validated the `requestedLayer` envelope and chooser telemetry, but did not produce non-zero token-savings estimates.
 
 ## Maintainer command list (for the real release)
 
@@ -254,9 +229,9 @@ pnpm -r --if-present typecheck
 pnpm --filter @tabrix/tabrix build
 pnpm --filter @tabrix/extension build
 pnpm run extension:reload
-pnpm -C ../tabrix-private-tests run acceptance:v2.5.0 -- --main-repo ../main_tabrix --owner guodaxia103 --repo tabrix --run-id v25-release-__V25_TBD__
-pnpm run benchmark:v25 -- --input C:/Users/gsy/.chrome-mcp-agent/benchmarks/v25/v25-release-__V25_TBD__.ndjson --gate --baseline-v24 docs/benchmarks/v24/v24-release-2026-04-23-rerun2.json
-node ./scripts/release-diagnostic-v25.mjs --input docs/benchmarks/v25/v25-release-__V25_TBD__.json
+pnpm -C ../tabrix-private-tests run acceptance:v2.5.0 -- --main-repo ../main_tabrix --owner guodaxia103 --repo tabrix --run-id v25-release-2026-04-24
+pnpm run benchmark:v25 -- --input C:/Users/gsy/.chrome-mcp-agent/benchmarks/v25/v25-release-2026-04-24.ndjson --gate --baseline-v24 docs/benchmarks/v24/v24-release-2026-04-23-rerun2.json
+node ./scripts/release-diagnostic-v25.mjs --input docs/benchmarks/v25/v25-release-2026-04-24.json
 pnpm run release:check
 ```
 
@@ -267,19 +242,11 @@ pnpm run release:check
   files in lockstep: root, `app/native-server`, `app/chrome-extension`,
   `packages/shared`, `packages/wasm-simd`. `release:check` enforces this.
 - Tag format `vX.Y.Z` or `tabrix-vX.Y.Z` (existing convention).
-- This DRAFT file is shipped at version `2.4.0` (no version bump in
-  the V25-05 commit, per the v2.5 P0 chain plan: V25-05 explicitly
-  forbids tagging, publishing, or version-bumping). Per the
-  canonical-path requirement at the top of this file (and
-  `docs/RELEASE_PROCESS.md` §"Pre-release DRAFT files"), the
-  maintainer MUST `git mv` this file to
-  `docs/RELEASE_NOTES_v2.5.0.md` (canonical path) in the same
-  commit that bumps the five `package.json` versions and replaces
-  every `__V25_TBD__` token with real benchmark numbers. The v25
-  release gate only loads release notes from the canonical
-  `RELEASE_NOTES_vX.Y.Z.md` path; the DRAFT path is intentionally
-  not a fallback.
+- This file is now in the canonical `docs/RELEASE_NOTES_v2.5.0.md`
+  path required by `release:check`.
 
 ## Known limitations carried into v2.5.0
 
-- **V25_TBD**
+- `experience_replay_skip_read` is a caller-facing policy signal in v2.5.0. The chooser emits it only when the Strategy Table permits it; the chooser itself does not call or skip `chrome_read_page`.
+- The real v2.5.0 benchmark run produced `readPageAvoidedCount = 0` and `tokensSavedEstimateTotal = 0`. This release proves the layer-dispatch envelope, telemetry, UI, release gate, and tab hygiene; it does not yet prove end-to-end token savings from automatic skip-read execution.
+- The v2.5.0 real-browser acceptance set is GitHub-focused and does not extend Knowledge or Experience execution to non-GitHub site families.
