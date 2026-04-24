@@ -275,10 +275,12 @@ describe('observeNewTabUntil', () => {
     createdListeners[0]!({ windowId: 7 } as chrome.tabs.Tab);
     resolveInteraction();
     await Promise.resolve();
-    expect(createdListeners).toHaveLength(1);
+    expect(createdListeners).toHaveLength(0);
 
-    await vi.advanceTimersByTimeAsync(50);
-    await expect(observedPromise).resolves.toEqual({ newTabOpened: true });
+    await expect(observedPromise).resolves.toMatchObject({
+      newTabOpened: true,
+      waitDiagnostics: { newTabObservation: { reason: 'new_tab_created' } },
+    });
     expect(createdListeners).toHaveLength(0);
   });
 
@@ -291,8 +293,10 @@ describe('observeNewTabUntil', () => {
 
     createdListeners[0]!({ windowId: 9 } as chrome.tabs.Tab);
 
-    await vi.advanceTimersByTimeAsync(50);
-    await expect(observedPromise).resolves.toEqual({ newTabOpened: true });
+    await expect(observedPromise).resolves.toMatchObject({
+      newTabOpened: true,
+      waitDiagnostics: { newTabObservation: { reason: 'new_tab_created' } },
+    });
     expect(createdListeners).toHaveLength(0);
   });
 
@@ -306,7 +310,36 @@ describe('observeNewTabUntil', () => {
     createdListeners[0]!({ windowId: 4 } as chrome.tabs.Tab);
 
     await vi.advanceTimersByTimeAsync(20);
-    await expect(observedPromise).resolves.toEqual({ newTabOpened: false });
+    await expect(observedPromise).resolves.toMatchObject({
+      newTabOpened: false,
+      waitDiagnostics: { newTabObservation: { reason: 'ambiguous_cap_elapsed' } },
+    });
+  });
+
+  it('returns immediately when page-local signals already prove an outcome', async () => {
+    const observedPromise = observeNewTabUntil(
+      3,
+      Promise.resolve({
+        signals: {
+          beforeUnloadFired: false,
+          urlBefore: 'https://example.com/a',
+          urlAfter: 'https://example.com/a#done',
+          hashBefore: '',
+          hashAfter: '#done',
+          domChanged: false,
+          domAddedDialog: false,
+          domAddedMenu: false,
+          focusChanged: false,
+          targetStateDelta: null,
+        },
+      }),
+      { maxMs: 75, verifierRequested: false },
+    );
+
+    await expect(observedPromise).resolves.toMatchObject({
+      newTabOpened: false,
+      waitDiagnostics: { newTabObservation: { reason: 'page_outcome_observed' } },
+    });
   });
 });
 
@@ -422,11 +455,36 @@ describe('click-helper signals (end-to-end through jsdom)', () => {
 
     expect(response.signals.domChanged).toBe(true);
     expect(response.signals.domAddedDialog).toBe(true);
+    expect(response.signals.waitDiagnostics.verification.reason).toBe('dialog_opened');
+    expect(response.signals.waitDiagnostics.verification.waitedMs).toBeLessThan(400);
+    expect(response.elementInfo.waitDiagnostics.scroll.reason).toBe('ready');
+    expect(response.elementInfo.waitDiagnostics.scroll.waitedMs).toBeLessThan(150);
 
     const merged = mergeClickSignals(response.dispatchSucceeded, response.signals, {
       newTabOpened: false,
     });
     expect(merged.observedOutcome).toBe('dialog_opened');
     expect(merged.success).toBe(true);
+  });
+
+  it('hash changes end the click outcome window before the 400ms cap', async () => {
+    document.body.innerHTML = '<button id="btn">Hash</button>';
+    const button = document.getElementById('btn') as HTMLButtonElement;
+    setRect(button, { left: 20, top: 30, width: 120, height: 32 });
+    document.elementFromPoint = vi.fn(() => button);
+    button.addEventListener('click', () => {
+      window.location.hash = 'clicked';
+    });
+
+    const response = await sendClickRequest({
+      action: 'clickElement',
+      selector: '#btn',
+      waitForNavigation: false,
+      timeout: 1000,
+    });
+
+    expect(response.signals.hashAfter).toBe('#clicked');
+    expect(response.signals.waitDiagnostics.verification.reason).toBe('hash_changed');
+    expect(response.signals.waitDiagnostics.verification.waitedMs).toBeLessThan(400);
   });
 });

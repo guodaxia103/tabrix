@@ -2,11 +2,13 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CLICK_VERIFIER_READBACK_MAX_MS,
   CLICK_VERIFIER_SETTLE_DELAY_MS,
   evaluateClickVerifier,
   isVerifierContextActive,
   isVerifierContextRequested,
   runClickVerifier,
+  waitForPostClickReadbackReady,
 } from '@/entrypoints/background/tools/browser/click-verifier';
 import {
   clickTool,
@@ -267,9 +269,19 @@ describe('runClickVerifier (IO wrapper)', () => {
     tabs: { get: ReturnType<typeof vi.fn> };
     scripting?: { executeScript: ReturnType<typeof vi.fn> };
   };
+  let updatedListeners: Array<
+    (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => void
+  > = [];
 
   beforeEach(() => {
     vi.useFakeTimers();
+    updatedListeners = [];
+    chrome.tabs.onUpdated.addListener = vi.fn((listener) => {
+      updatedListeners.push(listener as (typeof updatedListeners)[number]);
+    }) as any;
+    chrome.tabs.onUpdated.removeListener = vi.fn((listener) => {
+      updatedListeners = updatedListeners.filter((entry) => entry !== listener);
+    }) as any;
     mockChrome.scripting = {
       executeScript: vi.fn(),
     };
@@ -314,6 +326,46 @@ describe('runClickVerifier (IO wrapper)', () => {
     // turn this into a poll.
     expect(mockChrome.scripting!.executeScript).toHaveBeenCalledTimes(1);
     expect(mockChrome.tabs.get).toHaveBeenCalledTimes(1);
+    expect(result!.waitDiagnostics?.postClickReadback.reason).toBe('url_changed');
+    expect(result!.waitDiagnostics?.postClickReadback.waitedMs).toBeLessThan(
+      CLICK_VERIFIER_READBACK_MAX_MS,
+    );
+  });
+
+  it('reads back immediately when the tab is already complete', async () => {
+    mockChrome.tabs.get.mockResolvedValueOnce({
+      id: 1,
+      url: 'https://github.com/octocat/hello',
+      title: 'Repo',
+      status: 'complete',
+    } as chrome.tabs.Tab);
+
+    const readiness = await waitForPostClickReadbackReady(1, 'https://github.com/octocat/hello', {
+      maxMs: 250,
+    });
+
+    expect(readiness.reason).toBe('tab_complete');
+    expect(readiness.waitedMs).toBeLessThan(250);
+    expect(chrome.tabs.onUpdated.addListener).not.toHaveBeenCalled();
+  });
+
+  it('uses the max cap only when no observable tab condition appears', async () => {
+    mockChrome.tabs.get.mockResolvedValueOnce({
+      id: 1,
+      url: 'https://github.com/octocat/hello',
+      title: 'Repo',
+      status: 'loading',
+    } as chrome.tabs.Tab);
+
+    const promise = waitForPostClickReadbackReady(1, 'https://github.com/octocat/hello', {
+      maxMs: 250,
+    });
+    await Promise.resolve();
+    expect(updatedListeners).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(250);
+    await expect(promise).resolves.toMatchObject({ reason: 'timeout' });
+    expect(chrome.tabs.onUpdated.removeListener).toHaveBeenCalledTimes(1);
   });
 
   it('falls back gracefully when scripting injection throws', async () => {

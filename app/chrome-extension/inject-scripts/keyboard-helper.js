@@ -50,6 +50,45 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
     cmd: 'metaKey',
   };
 
+  function nowMs() {
+    return window.performance && typeof window.performance.now === 'function'
+      ? window.performance.now()
+      : Date.now();
+  }
+
+  function waitForFocusReady(element, { maxMs = 100 } = {}) {
+    const startedAt = nowMs();
+    if (document.activeElement === element) {
+      return Promise.resolve({ waitedMs: 0, reason: 'already_focused', ready: true });
+    }
+    return new Promise((resolve) => {
+      const deadline = startedAt + Math.max(0, maxMs);
+      const finish = (reason, ready) => {
+        resolve({
+          waitedMs: Math.max(0, Math.round(nowMs() - startedAt)),
+          reason,
+          ready,
+        });
+      };
+      const tick = () => {
+        if (document.activeElement === element) {
+          finish('focused', true);
+          return;
+        }
+        if (nowMs() >= deadline) {
+          finish('timeout', false);
+          return;
+        }
+        if (typeof window.requestAnimationFrame !== 'function') {
+          finish('raf_unavailable', false);
+          return;
+        }
+        window.requestAnimationFrame(tick);
+      };
+      tick();
+    });
+  }
+
   /**
    * Parses a key string (e.g., "Ctrl+Shift+A", "Enter") into a main key and modifiers.
    * @param {string} keyString - String representation of a single key press (can include modifiers).
@@ -183,10 +222,11 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
   async function simulateKeyboard(keysSequenceString, targetElement = null, delay = 0) {
     try {
       const element = targetElement || document.activeElement || document.body;
+      let focusWait = null;
 
       if (element !== document.activeElement && typeof element.focus === 'function') {
         element.focus();
-        await new Promise((resolve) => setTimeout(resolve, 50)); // Small delay for focus
+        focusWait = await waitForFocusReady(element);
       }
 
       const keyCombinations = keysSequenceString
@@ -241,6 +281,9 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
           id: element.id,
           className: element.className,
           type: element.type, // if applicable e.g. for input
+          waitDiagnostics: {
+            focus: focusWait || { waitedMs: 0, reason: 'already_focused', ready: true },
+          },
         },
       };
     } catch (error) {

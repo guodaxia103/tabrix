@@ -13,7 +13,7 @@ import { prearmDialogHandling } from './dialog-prearm';
 import { type CandidateActionInput, resolveCandidateActionTarget } from './candidate-action';
 import { lookupStableTargetRef } from './stable-target-ref-registry';
 import {
-  CLICK_VERIFIER_SETTLE_DELAY_MS,
+  CLICK_VERIFIER_READBACK_MAX_MS,
   type ClickVerifierContext,
   type ClickVerifierResult,
   isVerifierContextRequested,
@@ -30,19 +30,10 @@ import {
  */
 const TABRIX_OWNED_LANE = 'tabrix_owned';
 
-/**
- * V23-01: the post-dispatch new-tab observation window must cover the
- * verifier's settle window when a verifier is requested, otherwise a
- * `_blank` click that opens its tab inside the verifier settle window
- * will be reported with `verification.newTabOpened === false` even
- * though the verifier itself detects the URL change. Add a small drain
- * buffer (50 ms) on top so that the listener does not race the settle
- * timeout itself.
- */
-const NEW_TAB_OBSERVE_DRAIN_BASE_MS = 75;
-const NEW_TAB_OBSERVE_DRAIN_VERIFIER_BUFFER_MS = 50;
+const NEW_TAB_OBSERVE_AMBIGUOUS_CAP_MS = 75;
+const NEW_TAB_OBSERVE_VERIFIER_CAP_BUFFER_MS = 50;
 export const NEW_TAB_OBSERVE_DRAIN_VERIFIER_MS =
-  CLICK_VERIFIER_SETTLE_DELAY_MS + NEW_TAB_OBSERVE_DRAIN_VERIFIER_BUFFER_MS;
+  CLICK_VERIFIER_READBACK_MAX_MS + NEW_TAB_OBSERVE_VERIFIER_CAP_BUFFER_MS;
 
 interface Coordinates {
   x: number;
@@ -190,6 +181,9 @@ export interface ClickPageSignals {
   domAddedMenu: boolean;
   focusChanged: boolean;
   targetStateDelta: Record<string, unknown> | null;
+  waitDiagnostics?: {
+    verification?: { waitedMs: number; reason: string };
+  };
 }
 
 /**
@@ -198,6 +192,18 @@ export interface ClickPageSignals {
  */
 export interface ClickBrowserSignals {
   newTabOpened: boolean;
+  waitDiagnostics?: {
+    newTabObservation: {
+      waitedMs: number;
+      reason:
+        | 'new_tab_created'
+        | 'tab_query_delta'
+        | 'page_outcome_observed'
+        | 'ambiguous_cap_elapsed'
+        | 'listener_unavailable';
+      maxMs: number;
+    };
+  };
 }
 
 /**
@@ -320,36 +326,126 @@ function stripHash(url: string): string {
 export function observeNewTabUntil(
   originWindowId: number | undefined,
   interactionPromise: Promise<unknown>,
-  drainMs = 75,
+  options:
+    | number
+    | { maxMs?: number; verifierRequested?: boolean } = NEW_TAB_OBSERVE_AMBIGUOUS_CAP_MS,
 ): Promise<ClickBrowserSignals> {
   return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const maxMs =
+      typeof options === 'number'
+        ? Math.max(0, options)
+        : Math.max(0, options.maxMs ?? NEW_TAB_OBSERVE_AMBIGUOUS_CAP_MS);
+    const verifierRequested =
+      typeof options === 'object' && options != null && options.verifierRequested === true;
     let newTabOpened = false;
-    let settled = false;
+    let interactionSettled = false;
+    let resolved = false;
+    let baselineTabIds: Set<number> | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const listener = (tab: chrome.tabs.Tab) => {
       if (originWindowId == null || tab.windowId === originWindowId) {
         newTabOpened = true;
+        if (interactionSettled) {
+          finalize('new_tab_created');
+        }
       }
     };
-    const finalize = () => {
-      if (settled) return;
-      settled = true;
+    const finalize = (
+      reason: NonNullable<ClickBrowserSignals['waitDiagnostics']>['newTabObservation']['reason'],
+    ) => {
+      if (resolved) return;
+      resolved = true;
+      if (timeoutId != null) clearTimeout(timeoutId);
       try {
         chrome.tabs.onCreated.removeListener(listener);
       } catch {
         // ignore
       }
-      resolve({ newTabOpened });
+      resolve({
+        newTabOpened,
+        waitDiagnostics: {
+          newTabObservation: {
+            waitedMs: Math.max(0, Date.now() - startedAt),
+            reason,
+            maxMs,
+          },
+        },
+      });
     };
     try {
       chrome.tabs.onCreated.addListener(listener);
     } catch {
-      resolve({ newTabOpened: false });
+      resolve({
+        newTabOpened: false,
+        waitDiagnostics: {
+          newTabObservation: {
+            waitedMs: Math.max(0, Date.now() - startedAt),
+            reason: 'listener_unavailable',
+            maxMs,
+          },
+        },
+      });
       return;
     }
-    const scheduleFinalize = () => {
-      setTimeout(finalize, Math.max(0, drainMs));
+    const captureBaseline = async () => {
+      try {
+        const tabs = await chrome.tabs.query(
+          originWindowId == null ? {} : { windowId: originWindowId },
+        );
+        baselineTabIds = new Set(
+          tabs.map((tab) => tab.id).filter((id): id is number => typeof id === 'number'),
+        );
+      } catch {
+        baselineTabIds = null;
+      }
     };
-    void interactionPromise.then(scheduleFinalize, scheduleFinalize);
+    void captureBaseline();
+    const pageSignalsHaveOutcome = (value: unknown): boolean => {
+      const page =
+        value && typeof value === 'object' && 'signals' in value
+          ? ((value as { signals?: ClickPageSignals | null }).signals ?? null)
+          : null;
+      if (!page) return false;
+      return (
+        page.beforeUnloadFired ||
+        page.urlBefore !== page.urlAfter ||
+        page.hashBefore !== page.hashAfter ||
+        page.domAddedDialog ||
+        page.domAddedMenu ||
+        page.targetStateDelta != null ||
+        page.focusChanged
+      );
+    };
+    const checkTabDelta = async (): Promise<boolean> => {
+      if (!baselineTabIds) return false;
+      try {
+        const tabs = await chrome.tabs.query(
+          originWindowId == null ? {} : { windowId: originWindowId },
+        );
+        return tabs.some((tab) => typeof tab.id === 'number' && !baselineTabIds!.has(tab.id));
+      } catch {
+        return false;
+      }
+    };
+    const afterInteraction = async (value: unknown) => {
+      interactionSettled = true;
+      if (newTabOpened) {
+        finalize('new_tab_created');
+        return;
+      }
+      if (!verifierRequested && pageSignalsHaveOutcome(value)) {
+        finalize('page_outcome_observed');
+        return;
+      }
+      if (await checkTabDelta()) {
+        newTabOpened = true;
+        finalize('tab_query_delta');
+        return;
+      }
+      timeoutId = setTimeout(() => finalize('ambiguous_cap_elapsed'), maxMs);
+    };
+    void interactionPromise.then(afterInteraction, () => afterInteraction(null));
   });
 }
 
@@ -638,16 +734,14 @@ class ClickTool extends BaseBrowserToolExecutor {
         },
         frameId,
       );
-      // V23-01: when a family-aware verifier is requested, extend the
-      // browser-level new-tab observation drain so it covers the verifier
-      // settle delay. Without this, a `_blank` click that opened its
-      // tab between the helper-resolve and the verifier readback would
-      // report `verification.newTabOpened === false` even though the
-      // verifier itself saw the URL change.
-      const newTabDrainMs = isVerifierContextRequested(args.verifierContext)
+      const verifierRequested = isVerifierContextRequested(args.verifierContext);
+      const newTabObservationMaxMs = verifierRequested
         ? NEW_TAB_OBSERVE_DRAIN_VERIFIER_MS
-        : NEW_TAB_OBSERVE_DRAIN_BASE_MS;
-      const browserSignalsPromise = observeNewTabUntil(tab.windowId, resultPromise, newTabDrainMs);
+        : NEW_TAB_OBSERVE_AMBIGUOUS_CAP_MS;
+      const browserSignalsPromise = observeNewTabUntil(tab.windowId, resultPromise, {
+        maxMs: newTabObservationMaxMs,
+        verifierRequested,
+      });
 
       // Send click message to content script
       const result = await resultPromise;

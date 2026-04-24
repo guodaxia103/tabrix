@@ -1,4 +1,5 @@
- 
+/* global chrome, window, document, Element, HTMLInputElement, HTMLTextAreaElement, HTMLSelectElement */
+
 // fill-helper.js
 // This script is injected into the page to handle form filling operations
 
@@ -6,6 +7,107 @@ if (window.__FILL_HELPER_INITIALIZED__) {
   // Already initialized, skip
 } else {
   window.__FILL_HELPER_INITIALIZED__ = true;
+
+  const SCROLL_READY_MAX_MS = 150;
+  const RECT_STABLE_EPSILON_PX = 1;
+
+  function nowMs() {
+    return window.performance && typeof window.performance.now === 'function'
+      ? window.performance.now()
+      : Date.now();
+  }
+
+  function rectIntersectsViewport(rect) {
+    return (
+      rect.bottom >= 0 &&
+      rect.top <= window.innerHeight &&
+      rect.right >= 0 &&
+      rect.left <= window.innerWidth
+    );
+  }
+
+  function rectsBasicallyEqual(left, right) {
+    if (!left || !right) return false;
+    return (
+      Math.abs(left.left - right.left) <= RECT_STABLE_EPSILON_PX &&
+      Math.abs(left.top - right.top) <= RECT_STABLE_EPSILON_PX &&
+      Math.abs(left.right - right.right) <= RECT_STABLE_EPSILON_PX &&
+      Math.abs(left.bottom - right.bottom) <= RECT_STABLE_EPSILON_PX &&
+      Math.abs(left.width - right.width) <= RECT_STABLE_EPSILON_PX &&
+      Math.abs(left.height - right.height) <= RECT_STABLE_EPSILON_PX
+    );
+  }
+
+  function waitForElementReadyAfterScroll(element, { maxMs = SCROLL_READY_MAX_MS } = {}) {
+    const startedAt = nowMs();
+    try {
+      element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
+    } catch {
+      return Promise.resolve({ waitedMs: 0, reason: 'scroll_failed', ready: false });
+    }
+
+    return new Promise((resolve) => {
+      let lastRect = null;
+      let stableFrames = 0;
+      const deadline = startedAt + Math.max(0, maxMs);
+      const finish = (reason, ready) => {
+        resolve({
+          waitedMs: Math.max(0, Math.round(nowMs() - startedAt)),
+          reason,
+          ready,
+          stableFrames,
+        });
+      };
+      const requestNextFrame = (callback) => {
+        if (typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(callback);
+          return true;
+        }
+        return false;
+      };
+      const check = () => {
+        if (!(element instanceof Element) || !element.isConnected) {
+          if (nowMs() >= deadline) {
+            finish('timeout_disconnected', false);
+            return;
+          }
+          if (!requestNextFrame(check)) finish('raf_unavailable', false);
+          return;
+        }
+        const rect = element.getBoundingClientRect();
+        const usable =
+          Number.isFinite(rect.width) &&
+          Number.isFinite(rect.height) &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rectIntersectsViewport(rect);
+        if (usable && rectsBasicallyEqual(rect, lastRect)) {
+          stableFrames += 1;
+        } else {
+          stableFrames = usable ? 1 : 0;
+        }
+        lastRect = {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+        };
+        if (stableFrames >= 2) {
+          finish('ready', true);
+          return;
+        }
+        if (nowMs() >= deadline) {
+          finish('timeout', false);
+          return;
+        }
+        if (!requestNextFrame(check)) finish('raf_unavailable', false);
+      };
+      check();
+    });
+  }
+
   /**
    * Fill an input element with the specified value
    * @param {string} selector - CSS selector for the element to fill
@@ -149,9 +251,8 @@ if (window.__FILL_HELPER_INITIALIZED__) {
         };
       }
 
-      // Scroll element into view
-      element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      const scrollWait = await waitForElementReadyAfterScroll(element);
+      elementInfo.waitDiagnostics = { scroll: scrollWait };
 
       // Focus the element
       element.focus();

@@ -7,6 +7,120 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
   // Already initialized, skip
 } else {
   window.__CLICK_HELPER_INITIALIZED__ = true;
+
+  const SCROLL_READY_MAX_MS = 150;
+  const RECT_STABLE_EPSILON_PX = 1;
+
+  function nowMs() {
+    return window.performance && typeof window.performance.now === 'function'
+      ? window.performance.now()
+      : Date.now();
+  }
+
+  function rectToPlain(rect) {
+    return {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      left: rect.left,
+    };
+  }
+
+  function rectsBasicallyEqual(left, right) {
+    if (!left || !right) return false;
+    return (
+      Math.abs(left.left - right.left) <= RECT_STABLE_EPSILON_PX &&
+      Math.abs(left.top - right.top) <= RECT_STABLE_EPSILON_PX &&
+      Math.abs(left.right - right.right) <= RECT_STABLE_EPSILON_PX &&
+      Math.abs(left.bottom - right.bottom) <= RECT_STABLE_EPSILON_PX &&
+      Math.abs(left.width - right.width) <= RECT_STABLE_EPSILON_PX &&
+      Math.abs(left.height - right.height) <= RECT_STABLE_EPSILON_PX
+    );
+  }
+
+  function rectIntersectsViewport(rect) {
+    return (
+      rect.bottom >= 0 &&
+      rect.top <= window.innerHeight &&
+      rect.right >= 0 &&
+      rect.left <= window.innerWidth
+    );
+  }
+
+  function requestNextFrame(callback) {
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(callback);
+      return true;
+    }
+    return false;
+  }
+
+  function waitForElementReadyAfterScroll(element, { maxMs = SCROLL_READY_MAX_MS } = {}) {
+    const startedAt = nowMs();
+    try {
+      element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
+    } catch {
+      return Promise.resolve({ waitedMs: 0, reason: 'scroll_failed', ready: false });
+    }
+
+    return new Promise((resolve) => {
+      let lastRect = null;
+      let stableFrames = 0;
+      const deadline = startedAt + Math.max(0, maxMs);
+
+      const finish = (reason, ready) => {
+        resolve({
+          waitedMs: Math.max(0, Math.round(nowMs() - startedAt)),
+          reason,
+          ready,
+          stableFrames,
+        });
+      };
+
+      const check = () => {
+        if (!(element instanceof Element) || !element.isConnected) {
+          if (nowMs() >= deadline) {
+            finish('timeout_disconnected', false);
+            return;
+          }
+          if (!requestNextFrame(check)) finish('raf_unavailable', false);
+          return;
+        }
+
+        const rect = element.getBoundingClientRect();
+        const usable =
+          Number.isFinite(rect.width) &&
+          Number.isFinite(rect.height) &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rectIntersectsViewport(rect);
+
+        if (usable && rectsBasicallyEqual(rect, lastRect)) {
+          stableFrames += 1;
+        } else {
+          stableFrames = usable ? 1 : 0;
+        }
+        lastRect = rectToPlain(rect);
+
+        if (stableFrames >= 2) {
+          finish('ready', true);
+          return;
+        }
+        if (nowMs() >= deadline) {
+          finish('timeout', false);
+          return;
+        }
+        if (!requestNextFrame(check)) finish('raf_unavailable', false);
+      };
+
+      check();
+    });
+  }
+
   /**
    * Click on an element matching the selector or at specific coordinates
    * @param {string} selector - CSS selector for the element to click
@@ -117,8 +231,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         }
 
         element = resolvePreferredClickTarget(target);
-        element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
-        await new Promise((resolve) => setTimeout(resolve, 80));
+        const scrollWait = await waitForElementReadyAfterScroll(element);
 
         const rect = element.getBoundingClientRect();
         clickX = rect.left + rect.width / 2;
@@ -143,6 +256,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
           },
           clickMethod: 'ref',
           ref,
+          waitDiagnostics: { scroll: scrollWait },
         };
       } else if (
         coordinates &&
@@ -214,10 +328,10 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
           clickMethod: 'selector',
         };
 
-        // First sroll so that the element is in view, then check visibility.
-        element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        // First scroll so that the element is in view, then check visibility.
+        const scrollWait = await waitForElementReadyAfterScroll(element);
         elementInfo.isVisible = isElementVisible(element);
+        elementInfo.waitDiagnostics = { scroll: scrollWait };
         if (!elementInfo.isVisible) {
           return {
             error: `Element with selector "${selector}" is not visible`,
@@ -372,8 +486,20 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         dispatchSucceeded = false;
       }
 
-      // Wait up to verifyWindowMs, but short-circuit on beforeunload.
-      await waitForVerificationWindow(verifyWindowMs, () => beforeUnloadFired);
+      const outcomeWait = await waitForClickOutcomeWindow(verifyWindowMs, () => {
+        const hrefNow = String(window.location.href || '');
+        const hashNow = String(window.location.hash || '');
+        if (beforeUnloadFired) return 'beforeunload';
+        if (hrefNow !== urlBefore) return hashNow !== hashBefore ? 'hash_changed' : 'url_changed';
+        if (hashNow !== hashBefore) return 'hash_changed';
+        if (domAddedDialog) return 'dialog_opened';
+        if (domAddedMenu) return 'menu_opened';
+        if (diffTargetState(stateBefore, snapshotTargetState(element)) != null) {
+          return 'target_state_changed';
+        }
+        if (document.activeElement !== focusBefore) return 'focus_changed';
+        return null;
+      });
 
       window.removeEventListener('beforeunload', beforeUnloadListener);
       try {
@@ -413,6 +539,9 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
           domAddedMenu,
           focusChanged,
           targetStateDelta,
+          waitDiagnostics: {
+            verification: outcomeWait,
+          },
         },
       };
     } catch (error) {
@@ -461,24 +590,32 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
     return anyChanged ? changed : null;
   }
 
-  function waitForVerificationWindow(ms, earlyExit) {
+  function waitForClickOutcomeWindow(ms, earlyExitCheck) {
     return new Promise((resolve) => {
-      if (earlyExit && earlyExit()) {
-        resolve();
+      const startedAt = nowMs();
+      const finish = (reason) => {
+        resolve({
+          waitedMs: Math.max(0, Math.round(nowMs() - startedAt)),
+          reason,
+        });
+      };
+      const initialReason = earlyExitCheck ? earlyExitCheck() : null;
+      if (initialReason) {
+        finish(initialReason);
         return;
       }
-      const deadline = Date.now() + Math.max(0, ms);
+      const deadline = startedAt + Math.max(0, ms);
       const tick = () => {
-        if (earlyExit && earlyExit()) {
-          resolve();
+        const reason = earlyExitCheck ? earlyExitCheck() : null;
+        if (reason) {
+          finish(reason);
           return;
         }
-        const remaining = deadline - Date.now();
-        if (remaining <= 0) {
-          resolve();
+        if (nowMs() >= deadline) {
+          finish('timeout');
           return;
         }
-        setTimeout(tick, Math.min(remaining, 50));
+        if (!requestNextFrame(tick)) finish('raf_unavailable');
       };
       tick();
     });

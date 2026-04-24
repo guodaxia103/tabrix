@@ -64,6 +64,15 @@ export interface ClickVerifierResult {
   beforeUrl: string | null;
   afterUrl: string | null;
   pageRoleAfter: string | null;
+  waitDiagnostics?: {
+    postClickReadback: PostClickReadbackReady;
+  };
+}
+
+export interface PostClickReadbackReady {
+  waitedMs: number;
+  reason: 'url_changed' | 'tab_complete' | 'tab_unavailable' | 'timeout';
+  tab: chrome.tabs.Tab | null;
 }
 
 interface VerifierRule {
@@ -254,36 +263,101 @@ export function isVerifierContextRequested(ctx: ClickVerifierContext | undefined
 const BODY_SAMPLE_MAX_CHARS = 20_000;
 
 /**
- * Milliseconds to wait before sampling the post-click state. Gives SPA
- * route changes a chance to settle without introducing a retry loop.
- *
- * The brief says at most ONE compact readback in v1, so we do NOT poll
- * for pageRole convergence here — if this fixed wait is too short for a
- * slow SPA, the verifier fails honestly rather than hiding the cost.
- *
- * V23-01: exported so the click pipeline in `interaction.ts` can keep
- * its `chrome.tabs.onCreated` observation window aligned with the
- * verifier's settle window. Before V23-01, browser-level new-tab
- * observation drained 75 ms after the click-helper resolved, but the
- * verifier then waited another 250 ms — meaning a `_blank` click that
- * actually opened a new tab inside that 175 ms gap would be observed by
- * the verifier (URL change) but missed by `observeNewTabUntil`. That
- * inconsistency made `verification.newTabOpened` falsely false on slow
- * `_blank` clicks. Now both windows live behind one constant.
+ * Maximum milliseconds to wait for an observable post-click readback
+ * condition. This is a cap, not a fixed settle delay: URL changes and
+ * complete tab status return immediately.
  */
-export const CLICK_VERIFIER_SETTLE_DELAY_MS = 250;
-const SETTLE_DELAY_MS = CLICK_VERIFIER_SETTLE_DELAY_MS;
+export const CLICK_VERIFIER_READBACK_MAX_MS = 250;
+export const CLICK_VERIFIER_SETTLE_DELAY_MS = CLICK_VERIFIER_READBACK_MAX_MS;
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+function nowMs(): number {
+  return Date.now();
 }
 
-async function readPostClickSnapshot(tabId: number): Promise<ClickPostClickReadback> {
-  let tab: chrome.tabs.Tab | null = null;
+export async function waitForPostClickReadbackReady(
+  tabId: number,
+  beforeUrl: string | null,
+  { maxMs = CLICK_VERIFIER_READBACK_MAX_MS }: { maxMs?: number } = {},
+): Promise<PostClickReadbackReady> {
+  const startedAt = nowMs();
+  const elapsed = () => Math.max(0, nowMs() - startedAt);
+
+  const classifyTab = (tab: chrome.tabs.Tab | null): PostClickReadbackReady['reason'] | null => {
+    if (!tab) return 'tab_unavailable';
+    const url = typeof tab.url === 'string' ? tab.url : null;
+    if (url && beforeUrl && url !== beforeUrl) return 'url_changed';
+    if (url && !beforeUrl) return 'url_changed';
+    if (tab.status === 'complete') return 'tab_complete';
+    return null;
+  };
+
   try {
-    tab = await chrome.tabs.get(tabId);
+    const initialTab = await chrome.tabs.get(tabId);
+    const initialReason = classifyTab(initialTab);
+    if (initialReason) {
+      return { waitedMs: elapsed(), reason: initialReason, tab: initialTab ?? null };
+    }
   } catch {
-    return { url: null, title: null, bodyText: null };
+    return { waitedMs: elapsed(), reason: 'tab_unavailable', tab: null };
+  }
+
+  return await new Promise<PostClickReadbackReady>((resolve) => {
+    let done = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const finish = (reason: PostClickReadbackReady['reason'], tab: chrome.tabs.Tab | null) => {
+      if (done) return;
+      done = true;
+      if (timeoutId != null) clearTimeout(timeoutId);
+      try {
+        chrome.tabs.onUpdated.removeListener(listener);
+      } catch {
+        // ignore
+      }
+      resolve({ waitedMs: elapsed(), reason, tab });
+    };
+
+    const listener = (
+      updatedTabId: number,
+      changeInfo: chrome.tabs.TabChangeInfo,
+      tab: chrome.tabs.Tab,
+    ) => {
+      if (updatedTabId !== tabId) return;
+      if (typeof changeInfo.url === 'string' && (!beforeUrl || changeInfo.url !== beforeUrl)) {
+        finish('url_changed', { ...tab, url: changeInfo.url });
+        return;
+      }
+      if (changeInfo.status === 'complete' || tab.status === 'complete') {
+        finish('tab_complete', tab);
+      }
+    };
+
+    try {
+      chrome.tabs.onUpdated.addListener(listener);
+    } catch {
+      finish('timeout', null);
+      return;
+    }
+
+    timeoutId = setTimeout(
+      () => {
+        finish('timeout', null);
+      },
+      Math.max(0, maxMs),
+    );
+  });
+}
+
+async function readPostClickSnapshot(
+  tabId: number,
+  observedTab: chrome.tabs.Tab | null = null,
+): Promise<ClickPostClickReadback> {
+  let tab: chrome.tabs.Tab | null = observedTab;
+  if (!tab) {
+    try {
+      tab = await chrome.tabs.get(tabId);
+    } catch {
+      return { url: null, title: null, bodyText: null };
+    }
   }
 
   const url = typeof tab?.url === 'string' ? tab.url : null;
@@ -326,9 +400,15 @@ export async function runClickVerifier(
     return null;
   }
   try {
-    await delay(SETTLE_DELAY_MS);
-    const readback = await readPostClickSnapshot(tabId);
-    return evaluateClickVerifier(ctx, beforeUrl, readback);
+    const readiness = await waitForPostClickReadbackReady(tabId, beforeUrl);
+    const readback = await readPostClickSnapshot(tabId, readiness.tab);
+    const result = evaluateClickVerifier(ctx, beforeUrl, readback);
+    return {
+      ...result,
+      waitDiagnostics: {
+        postClickReadback: readiness,
+      },
+    };
   } catch {
     return null;
   }
