@@ -1301,3 +1301,204 @@ describe('runTabrixChooseContext ranked replay (V24-03)', () => {
     expect(recorded?.sourceRoute).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// V25 closeout — P2 (Codex review)
+//
+// Pin the *chooser-level* invariant that `runTabrixChooseContext` emits a
+// stable, deterministic layer-dispatch policy SIGNAL when the dispatcher's
+// priority order actually selects the `experience_replay_executable` rule.
+// This complements the dispatcher unit tests in
+// `choose-context-layer-dispatch.test.ts` by going through the real chooser
+// entry point — proving the wiring inside `choose-context.ts`
+// (`experienceReplayAvailable: decision.strategy === 'experience_replay'`)
+// reliably reaches priority 5 of the strategy table.
+//
+// Honest accounting (V25 closeout P2 finding): the dispatcher places the
+// `experience_replay_executable` rule at priority 5, AFTER user-intent
+// overrides (priority 2), task-type overrides (priority 3), and page-
+// complexity overrides (priority 4). Because `runTabrixChooseContext`
+// hard-codes `candidateActionsCount = 0` and `hvoCount = 0` when calling
+// `dispatchLayer` (it does not yet feed real per-page facts), priority 4's
+// `simple_page_low_density` rule fires for ANY non-empty `pageRole`. So
+// `experience_replay_skip_read` only actually surfaces through the chooser
+// when BOTH of the following hold:
+//
+//   1. `intent` classifies to the `'unknown'` user-intent bucket
+//      (i.e. it does NOT contain summary / details / form / open
+//      keywords from `classifyIntentForLayerDispatch`), AND
+//   2. `pageRole` is empty / absent (so priority-4 page-complexity
+//      rules cannot match).
+//
+// This is the configuration this test exercises. The signal contract
+// itself remains: when those two conditions hold and an
+// experience_replay strategy is available, the dispatcher MUST emit
+// `chosenLayer='L0'` + `sourceRoute='experience_replay_skip_read'` +
+// `readPageAvoided=true`. The signal is advisory — the chooser never
+// calls or skips `chrome_read_page` itself; the upstream caller decides
+// whether to honour it.
+// ---------------------------------------------------------------------------
+
+describe('runTabrixChooseContext layer-dispatch signal stability (V25 closeout P2)', () => {
+  // Inputs that satisfy both conditions above (vague intent + no
+  // pageRole) so priority 5 is reached. The intent string here must
+  // NOT classify to summary / details / open_or_select /
+  // form_or_submit per `classifyIntentForLayerDispatch`, otherwise
+  // priority 2 wins.
+  const REPLAY_ELIGIBLE_VAGUE_INPUTS = [
+    { intent: 'do work', sourceRowPageRole: 'issues_list' },
+    { intent: 'general task', sourceRowPageRole: 'repo_home' },
+    { intent: 'general task', sourceRowPageRole: 'pull_requests_list' },
+  ] as const;
+
+  it.each(REPLAY_ELIGIBLE_VAGUE_INPUTS)(
+    'vague intent="$intent" with replay-eligible row (sourceRow.pageRole=$sourceRowPageRole) → experience_replay_skip_read',
+    ({ intent, sourceRowPageRole }) => {
+      const { service } = fakeExperience([
+        fakeRow({
+          actionPathId: `ap-${sourceRowPageRole}`,
+          pageRole: sourceRowPageRole,
+          intentSignature: intent,
+          stepSequence: [
+            replayableStep('chrome_click_element'),
+            replayableStep('chrome_fill_or_select'),
+          ],
+          successCount: 9,
+          failureCount: 1,
+        }),
+      ]);
+      // NOTE: caller-side `pageRole` is intentionally omitted —
+      // see the describe-block comment for why.
+      const result = runTabrixChooseContext(
+        { intent },
+        {
+          experience: service,
+          knowledgeApi: null,
+          capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+        },
+      );
+
+      expect(result.status).toBe('ok');
+      // Sanity: the replay strategy itself must actually fire for
+      // this row. If the chooser starts downgrading these rows the
+      // signal contract changes and this test should fail loudly.
+      expect(result.strategy).toBe('experience_replay');
+
+      // The actual V25 closeout P2 invariant.
+      expect(result.chosenLayer).toBe('L0');
+      expect(result.layerDispatchReason).toBe('experience_replay_executable');
+      expect(result.sourceRoute).toBe('experience_replay_skip_read');
+      expect(result.readPageAvoided).toBe(true);
+    },
+  );
+
+  it('emits the SAME signal across 5 repeated invocations of the same replay-eligible vague input', () => {
+    // Stability across calls: the chooser is deterministic and
+    // side-effect-free for a fixed input set. Five back-to-back calls
+    // must yield bit-identical layer-dispatch signals (no internal
+    // counter / RNG / timestamp leak).
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-stability',
+        pageRole: 'issues_list',
+        intentSignature: 'do work',
+        stepSequence: [replayableStep('chrome_click_element')],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+
+    const signals = Array.from({ length: 5 }, () =>
+      runTabrixChooseContext(
+        { intent: 'do work' },
+        {
+          experience: service,
+          knowledgeApi: null,
+          capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+        },
+      ),
+    ).map((r) => ({
+      strategy: r.strategy,
+      chosenLayer: r.chosenLayer,
+      layerDispatchReason: r.layerDispatchReason,
+      sourceRoute: r.sourceRoute,
+      readPageAvoided: r.readPageAvoided,
+    }));
+
+    const expected = {
+      strategy: 'experience_replay',
+      chosenLayer: 'L0',
+      layerDispatchReason: 'experience_replay_executable',
+      sourceRoute: 'experience_replay_skip_read',
+      readPageAvoided: true,
+    } as const;
+    for (const s of signals) {
+      expect(s).toEqual(expected);
+    }
+  });
+
+  it('explicit user-intent override wins over experience_replay_skip_read (priority order pin)', () => {
+    // Honest-accounting pin: even when the strategy resolves to
+    // `experience_replay`, an explicit user-intent override
+    // (`intent='open issues'` → `open_or_select`) takes priority 2 and
+    // emits `read_page_required`, NOT `experience_replay_skip_read`.
+    // This is the V25-04 stability binding (caller wanted explicit
+    // detail / open semantics, so the chooser respects it). Locking
+    // this in test form prevents a future "optimization" that
+    // promotes priority 5 above priority 2 and silently changes the
+    // signal in the most common production input shape.
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-priority-pin',
+        pageRole: 'issues_list',
+        intentSignature: 'open issues',
+        stepSequence: [replayableStep('chrome_click_element')],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', pageRole: 'issues_list' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+      },
+    );
+    expect(result.strategy).toBe('experience_replay');
+    expect(result.layerDispatchReason).toBe('user_intent_open_or_select');
+    expect(result.sourceRoute).toBe('read_page_required');
+    expect(result.chosenLayer).toBe('L0+L1');
+    expect(result.readPageAvoided).toBe(false);
+  });
+
+  it('downgrade to experience_reuse drops the skip-read signal (negative control)', () => {
+    // Negative control: when the chooser cannot route to
+    // `experience_replay` (capability env is empty), the dispatcher
+    // MUST NOT emit `experience_replay_skip_read`. This pins the
+    // chooser-side wiring
+    // (`experienceReplayAvailable: decision.strategy === 'experience_replay'`)
+    // so a regression that hard-codes that flag to `true` fails loudly.
+    const { service } = fakeExperience([
+      fakeRow({
+        actionPathId: 'ap-replay-cap-off',
+        pageRole: 'issues_list',
+        intentSignature: 'do work',
+        stepSequence: [replayableStep('chrome_click_element')],
+        successCount: 9,
+        failureCount: 1,
+      }),
+    ]);
+    const result = runTabrixChooseContext(
+      { intent: 'do work' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: {}, // capability OFF → strategy=experience_reuse
+      },
+    );
+    expect(result.strategy).toBe('experience_reuse');
+    expect(result.sourceRoute).not.toBe('experience_replay_skip_read');
+    expect(result.readPageAvoided).toBe(false);
+  });
+});

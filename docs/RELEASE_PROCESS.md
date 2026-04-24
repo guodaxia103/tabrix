@@ -20,6 +20,33 @@ Each release must include:
 
 Release workflow will block publication if this file is missing.
 
+### Pre-release DRAFT files
+
+Some release lines (e.g. v2.5) accumulate notes incrementally while a
+multi-package P0 chain lands across several commits before any
+version bump. During that window, the draft can live at a path of
+the form `docs/RELEASE_NOTES_V<MAJOR>_<MINOR>_DRAFT.md` (for
+example, `docs/RELEASE_NOTES_V2_5_DRAFT.md`).
+
+The DRAFT path is **draft-only**:
+
+- The release gate (`scripts/check-release-readiness.mjs`) only ever
+  loads release notes from the canonical
+  `docs/RELEASE_NOTES_vX.Y.Z.md` path. The DRAFT path is
+  intentionally not a fallback.
+- Before the release commit (the commit that bumps the five
+  `package.json` versions and produces the tag), the maintainer MUST
+  `git mv` the draft to the canonical path
+  (`docs/RELEASE_NOTES_v<MAJOR>.<MINOR>.<PATCH>.md`) in the same
+  commit.
+- The draft MAY contain `__V25_TBD__` (or analogous) placeholders
+  while the chain is in flight. The v2.5+ benchmark gate
+  (`scripts/lib/v25-benchmark-gate.cjs::RELEASE_NOTES_PLACEHOLDER_TOKEN`)
+  rejects any release notes file that still contains the
+  `__V25_TBD__` token, so the rename step has the side effect of
+  forcing the maintainer to confront every placeholder before the
+  gate will pass.
+
 ## Pre-Release Checks
 
 Run from repository root:

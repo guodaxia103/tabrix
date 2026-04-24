@@ -9,26 +9,72 @@
 > The shape of this file is locked so that the V25-05 fs-level test
 > can fixture-test both a placeholder-rejected version and a fully
 > populated version.
+>
+> **Canonical-path requirement (V25 closeout P1):** this DRAFT file
+> lives at `docs/RELEASE_NOTES_V2_5_DRAFT.md` and that path is
+> **draft-only**. Before tagging `v2.5.0` the maintainer MUST
+> `git mv docs/RELEASE_NOTES_V2_5_DRAFT.md docs/RELEASE_NOTES_v2.5.0.md`
+> in the same commit that bumps the five `package.json` versions and
+> replaces every `__V25_TBD__` token with real benchmark numbers.
+> The release gate (`scripts/check-release-readiness.mjs`) and
+> `docs/RELEASE_PROCESS.md` only recognise the canonical
+> `RELEASE_NOTES_vX.Y.Z.md` form; the DRAFT path is intentionally NOT
+> a fallback the v25 gate will accept on a real release commit.
 
 Release date: **V25_TBD**.
 
 ## Summary
 
-v2.5.0 is the first release whose **layer dispatch decision is a
-runtime policy**, not a per-call default. `tabrix_choose_context`
-delegates the L0 / L0+L1 / L0+L1+L2 selection to a new pure dispatcher
-(`choose-context-layer-dispatch.ts`) that linearly scans the strategy
-table from V3.1 §11; `chrome_read_page` accepts the new
-`requestedLayer` field and only emits the layers that were asked for;
-and the chosen layer + dispatch reason + source route are persisted to
-`tabrix_choose_context_decisions` so the new sidepanel `Execution` tab
-and the v25 release gate can both consume the same evidence.
+v2.5.0 is the first release in which `tabrix_choose_context` emits a
+**deterministic, caller-facing layer-dispatch policy signal** (chosen
+layer, dispatch reason, source route) computed at chooser time. The
+chooser delegates the L0 / L0+L1 / L0+L1+L2 selection to a new pure
+dispatcher (`choose-context-layer-dispatch.ts`) that linearly scans
+the strategy table from V3.1 §11; `chrome_read_page` accepts the new
+optional `requestedLayer` field and only emits the layers that were
+asked for; and the chosen layer + dispatch reason + source route are
+persisted to `tabrix_choose_context_decisions` so the new sidepanel
+`Execution` tab and the v25 release gate can both consume the same
+evidence.
+
+The signal is advisory: the chooser does **not** itself call
+`chrome_read_page` and does **not** itself skip it. The upstream
+caller (LLM / agent) reads the chooser's output and decides whether
+to honour the signal — for example, when `sourceRoute` is
+`'experience_replay_skip_read'`, the caller is expected (per the
+contract documented in
+`packages/shared/src/read-page-contract.ts`) to replay the recorded
+path directly without first calling `chrome_read_page`. If the
+caller ignores the signal and still calls `chrome_read_page`, the
+extension still serves the request — only the token-saving and
+latency-reduction goals captured in the v25 KPIs are forfeited for
+that turn.
+
+**v2.5.0 dispatcher priority — honest accounting.** The strategy
+table inside `dispatchLayer` places the
+`experience_replay_executable` rule at priority 5, AFTER user-intent
+overrides (priority 2), task-type overrides (priority 3), and
+page-complexity overrides (priority 4). In v2.5.0 the chooser hard-
+codes `candidateActionsCount = 0` and `hvoCount = 0` when calling
+`dispatchLayer`, which means priority-4's `simple_page_low_density`
+rule fires for any non-empty `pageRole`. As a consequence,
+`sourceRoute = 'experience_replay_skip_read'` only actually surfaces
+through `tabrix_choose_context` when BOTH (a) the caller's `intent`
+classifies to the `'unknown'` user-intent bucket (it does NOT match
+summary / details / open / select / form / submit keywords), AND
+(b) the caller's `pageRole` is empty. This is intentional — the
+chooser respects an explicit user-intent override even when an
+Experience candidate is replay-eligible (V25-04 stability binding).
+Future versions may extend the chooser to feed real per-page facts
+into `dispatchLayer` (lifting the hard-coded zeros) and may
+re-evaluate the priority order; v2.5 does not.
 
 The release is backward compatible with v2.4.x. Every new field on
-existing tools is optional. The dispatcher's `experience_replay_skip_read`
-route only fires when an Experience candidate is replay-eligible AND
-safe, so previous-version callers keep their existing read-page
-behaviour.
+existing tools is optional. The dispatcher's
+`experience_replay_skip_read` source route only fires when an
+Experience candidate is replay-eligible AND safe, so previous-version
+callers (which never read the new fields) keep their existing
+read-page behaviour by default.
 
 ## Highlights
 
@@ -63,10 +109,13 @@ behaviour.
   priority-ordered linear scan (safety override → user intent override
   → task type → page complexity → MKEP support → fail-safe default).
   Strategy Table row 8 is locked to `chosenLayer = 'L0'`,
-  `sourceRoute = 'experience_replay_skip_read'`. Internal errors fall
-  back safely to `chosenLayer = 'L0+L1+L2'`, `sourceRoute =
-'dispatcher_fallback_safe'` instead of throwing into
-  `tabrix_choose_context`.
+  `sourceRoute = 'experience_replay_skip_read'`. The dispatcher
+  produces a **caller-facing signal only**; whether
+  `chrome_read_page` is actually skipped is the upstream caller's
+  call (the chooser itself never calls or skips read_page).
+  Internal errors fall back safely to `chosenLayer = 'L0+L1+L2'`,
+  `sourceRoute = 'dispatcher_fallback_safe'` instead of throwing
+  into `tabrix_choose_context`.
 - `chrome_read_page` schema gains an optional `requestedLayer`. The
   background tool respects the request: `L0` returns no L1
   `candidateActions` and no L2 details but still populates
@@ -220,10 +269,16 @@ pnpm run release:check
 - Tag format `vX.Y.Z` or `tabrix-vX.Y.Z` (existing convention).
 - This DRAFT file is shipped at version `2.4.0` (no version bump in
   the V25-05 commit, per the v2.5 P0 chain plan: V25-05 explicitly
-  forbids tagging, publishing, or version-bumping). The maintainer
-  bumps the five package.json versions and renames this file to
-  `RELEASE_NOTES_v2.5.0.md` only after the real benchmark + acceptance
-  evidence is in place and every `__V25_TBD__` token is replaced.
+  forbids tagging, publishing, or version-bumping). Per the
+  canonical-path requirement at the top of this file (and
+  `docs/RELEASE_PROCESS.md` §"Pre-release DRAFT files"), the
+  maintainer MUST `git mv` this file to
+  `docs/RELEASE_NOTES_v2.5.0.md` (canonical path) in the same
+  commit that bumps the five `package.json` versions and replaces
+  every `__V25_TBD__` token with real benchmark numbers. The v25
+  release gate only loads release notes from the canonical
+  `RELEASE_NOTES_vX.Y.Z.md` path; the DRAFT path is intentionally
+  not a fallback.
 
 ## Known limitations carried into v2.5.0
 
