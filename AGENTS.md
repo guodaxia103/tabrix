@@ -110,6 +110,21 @@ Read:
 - [docs/PLATFORM_SUPPORT.md](./docs/PLATFORM_SUPPORT.md)
 - [SECURITY.md](./SECURITY.md)
 
+### Test / acceptance ownership
+
+`main_tabrix` owns product code, public contracts, deterministic unit/integration tests, benchmark transformers, release gates, report schemas, and regression tests that do not depend on real accounts, private repositories, live browser state, or external-site stability.
+
+Keep these in `main_tabrix`:
+
+- Pure functions, DTO/schema validation, repository/handler tests, policy gates, release-readiness checks, bundle/docs/typecheck/audit gates, and fixture-level benchmark tests.
+- Public baseline tests that protect Tabrix's declared open surface and can run deterministically in CI.
+
+Keep these in the sibling `tabrix-private-tests` repository:
+
+- Real MCP browser runs, live-site scenarios, login/private-account flows, private repository/account cases, benchmark NDJSON producers, screenshots, and release evidence artifacts.
+
+Passing `main_tabrix` tests is not product-level acceptance for claims about real browser behavior, version benchmark evidence, or release readiness. Those claims require the matching `tabrix-private-tests` lane.
+
 ## MKEP Code Map (post-pruning)
 
 Use this map when you need to locate where a layer lives. If a task does not fit any of the four layers cleanly, stop and surface the mismatch instead of inventing a new home.
