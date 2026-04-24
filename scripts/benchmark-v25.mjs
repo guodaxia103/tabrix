@@ -19,9 +19,16 @@
  *                   be `{ kind: "header", runId, runStartedAt,
  *                     runEndedAt, buildSha, kpiScenarioIds?: string[] }`.
  *                   Subsequent lines are `{ kind: "tool_call", ... }`,
- *                   `{ kind: "scenario", ... }`, or
+ *                   `{ kind: "scenario", ... }`,
  *                   `{ kind: "pair", pairIndex, scenarioId, role,
- *                      toolCallSeqs: number[] }`.
+ *                      toolCallSeqs: number[] }`, or at most one
+ *                   `{ kind: "tab_hygiene", primaryTabId, baselineTabIds,
+ *                      observedTabIds, openedTabIds, closedTabIds,
+ *                      maxConcurrentTabs, samePrimaryTabNavigations,
+ *                      expectedPrimaryTabNavigations,
+ *                      allowsNewTabScenarioIds?, violations: [...] }`
+ *                   record emitted by the v25 real MCP runner via
+ *                   `scripts/lib/v25-primary-tab-session.cjs`.
  *   --out           Optional. Output JSON path. Defaults to
  *                   `docs/benchmarks/v25/<runId>.json`.
  *   --gate          Optional. Exit non-zero on HARD gate failure; the
@@ -156,6 +163,7 @@ function shapeRecords(records, extraKpiIds) {
   const toolCalls = [];
   const scenarios = [];
   const pairs = [];
+  let tabHygiene = null;
   for (const [i, record] of rest.entries()) {
     if (!record || typeof record !== 'object') {
       throw new Error(`record at line ${i + 2} is not an object`);
@@ -183,9 +191,17 @@ function shapeRecords(records, extraKpiIds) {
         throw new Error(`pair record at line ${i + 2} missing toolCallSeqs[]`);
       }
       pairs.push(rest4);
+    } else if (record.kind === 'tab_hygiene') {
+      if (tabHygiene !== null) {
+        throw new Error(
+          `tab_hygiene record at line ${i + 2} is the second one — only one tab_hygiene record per NDJSON file is allowed`,
+        );
+      }
+      const { kind: _k4, ...rest5 } = record;
+      tabHygiene = rest5;
     } else {
       throw new Error(
-        `record at line ${i + 2} has unknown kind="${record.kind}". Expected "tool_call" | "scenario" | "pair".`,
+        `record at line ${i + 2} has unknown kind="${record.kind}". Expected "tool_call" | "scenario" | "pair" | "tab_hygiene".`,
       );
     }
   }
@@ -198,6 +214,7 @@ function shapeRecords(records, extraKpiIds) {
     toolCalls,
     scenarios,
     pairs,
+    tabHygiene,
   };
 }
 
@@ -368,6 +385,11 @@ async function main() {
   console.log(
     `- visual fallback: ${summary.stabilityMetrics.visualFallbackRate ?? 'n/a'} | js fallback: ${summary.stabilityMetrics.jsFallbackRate ?? 'n/a'} | replay success: ${summary.stabilityMetrics.replaySuccessRate ?? 'n/a'}`,
   );
+  if (summary.tabHygiene) {
+    console.log(
+      `- tab hygiene: primary=${summary.tabHygiene.primaryTabId ?? 'n/a'} reuse=${summary.tabHygiene.primaryTabReuseRate ?? 'n/a'} maxConcurrent=${summary.tabHygiene.maxConcurrentTabs} opened=${summary.tabHygiene.openedTabsCount} closed=${summary.tabHygiene.closedTabsCount} violations=${summary.tabHygiene.tabHygieneViolations.length}`,
+    );
+  }
   console.log(`- out: ${path.relative(ROOT, outPath)}`);
   if (baselineTablePath) {
     console.log(`- baseline comparison: ${path.relative(ROOT, baselineTablePath)}`);

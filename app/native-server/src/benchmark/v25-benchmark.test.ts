@@ -922,3 +922,215 @@ describe('benchmarkGateAppliesV25', () => {
     expect(V24_REPORT_VERSION).toBe(1);
   });
 });
+
+describe('summariseBenchmarkRunV25 — tabHygiene block (V25-05 closeout)', () => {
+  it('omits tabHygiene when input does not provide it', () => {
+    const summary = summariseBenchmarkRunV25(run());
+    expect(summary.tabHygiene).toBeNull();
+  });
+
+  it('passes through a clean tabHygiene block and computes primaryTabReuseRate', () => {
+    const summary = summariseBenchmarkRunV25(
+      run({
+        tabHygiene: {
+          primaryTabId: 42,
+          baselineTabIds: [1, 2],
+          observedTabIds: [1, 2, 42],
+          openedTabIds: [42],
+          closedTabIds: [],
+          maxConcurrentTabs: 3,
+          samePrimaryTabNavigations: 8,
+          expectedPrimaryTabNavigations: 8,
+          allowsNewTabScenarioIds: ['GH-NEW-TAB-LINK'],
+          violations: [],
+        },
+      }),
+    );
+    expect(summary.tabHygiene).not.toBeNull();
+    expect(summary.tabHygiene).toEqual({
+      primaryTabId: 42,
+      baselineTabCount: 2,
+      observedTabCount: 3,
+      openedTabsCount: 1,
+      closedTabsCount: 0,
+      maxConcurrentTabs: 3,
+      primaryTabReuseRate: 1,
+      samePrimaryTabNavigations: 8,
+      expectedPrimaryTabNavigations: 8,
+      allowsNewTabScenarioIds: ['GH-NEW-TAB-LINK'],
+      tabHygieneViolations: [],
+    });
+  });
+
+  it('returns primaryTabReuseRate=null when there are no expected navigations', () => {
+    const summary = summariseBenchmarkRunV25(
+      run({
+        tabHygiene: {
+          primaryTabId: null,
+          baselineTabIds: [],
+          observedTabIds: [],
+          openedTabIds: [],
+          closedTabIds: [],
+          maxConcurrentTabs: 0,
+          samePrimaryTabNavigations: 0,
+          expectedPrimaryTabNavigations: 0,
+          violations: [],
+        },
+      }),
+    );
+    expect(summary.tabHygiene?.primaryTabReuseRate).toBeNull();
+  });
+
+  it('preserves violation entries verbatim (kind + scenarioId + detail)', () => {
+    const summary = summariseBenchmarkRunV25(
+      run({
+        tabHygiene: {
+          primaryTabId: 42,
+          baselineTabIds: [],
+          observedTabIds: [42, 99],
+          openedTabIds: [42, 99],
+          closedTabIds: [],
+          maxConcurrentTabs: 2,
+          samePrimaryTabNavigations: 0,
+          expectedPrimaryTabNavigations: 1,
+          violations: [
+            {
+              scenarioId: 'GH-ISSUES',
+              kind: 'tab_id_changed_after_navigation',
+              detail: 'returned tabId=99 but primaryTabId=42',
+            },
+          ],
+        },
+      }),
+    );
+    expect(summary.tabHygiene?.tabHygieneViolations).toEqual([
+      {
+        scenarioId: 'GH-ISSUES',
+        kind: 'tab_id_changed_after_navigation',
+        detail: 'returned tabId=99 but primaryTabId=42',
+      },
+    ]);
+  });
+
+  it('is deterministic — re-running with same tabHygiene yields equal output', () => {
+    const input: BenchmarkRunInputV25WithBaseline = run({
+      tabHygiene: {
+        primaryTabId: 42,
+        baselineTabIds: [3, 1, 2],
+        observedTabIds: [3, 1, 2, 42],
+        openedTabIds: [42],
+        closedTabIds: [],
+        maxConcurrentTabs: 4,
+        samePrimaryTabNavigations: 5,
+        expectedPrimaryTabNavigations: 5,
+        allowsNewTabScenarioIds: ['c', 'a', 'b'],
+        violations: [
+          { scenarioId: 'X', kind: 'tab_id_changed_after_navigation' },
+          { scenarioId: 'Y', kind: 'unexpected_new_tab' },
+        ],
+      },
+    });
+    const a = summariseBenchmarkRunV25(input);
+    const b = summariseBenchmarkRunV25(input);
+    expect(JSON.stringify(a.tabHygiene)).toBe(JSON.stringify(b.tabHygiene));
+    // Sorted projections (baseline tabs ascending, scenario ids alphabetical).
+    expect(a.tabHygiene?.baselineTabCount).toBe(3);
+    expect(a.tabHygiene?.allowsNewTabScenarioIds).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('evaluateBenchmarkGateV25 — tabHygiene gate (V25-05 closeout)', () => {
+  function passingHygieneInput(): BenchmarkRunInputV25WithBaseline {
+    const toolCalls: BenchmarkToolCallRecordV25[] = [];
+    const pairs: BenchmarkPairRecord[] = [];
+    let seq = 0;
+    for (let i = 0; i < 3; i += 1) {
+      const f = seq++;
+      const s = seq++;
+      toolCalls.push(
+        call({
+          seq: f,
+          scenarioId: 'KPI',
+          toolName: 'chrome_read_page',
+          status: 'ok',
+          chosenLayer: 'L0',
+          sourceRoute: 'read_page_required',
+          tokenEstimateChosen: 30,
+          tokenEstimateFullRead: 200,
+        }),
+      );
+      toolCalls.push(
+        call({
+          seq: s,
+          scenarioId: 'KPI',
+          toolName: 'chrome_click_element',
+          status: 'ok',
+          clickAttempts: 1,
+          chooserStrategy: 'experience_replay',
+        }),
+      );
+      pairs.push(pair({ pairIndex: i, scenarioId: 'KPI', role: 'first_touch', toolCallSeqs: [f] }));
+      pairs.push(
+        pair({ pairIndex: i, scenarioId: 'KPI', role: 'second_touch', toolCallSeqs: [s] }),
+      );
+    }
+    return run({
+      kpiScenarioIds: ['KPI'],
+      scenarios: [{ scenarioId: 'KPI', completed: true }],
+      toolCalls,
+      pairs,
+      tabHygiene: {
+        primaryTabId: 42,
+        baselineTabIds: [1],
+        observedTabIds: [1, 42],
+        openedTabIds: [42],
+        closedTabIds: [],
+        maxConcurrentTabs: 2,
+        samePrimaryTabNavigations: 8,
+        expectedPrimaryTabNavigations: 8,
+        violations: [],
+      },
+    });
+  }
+
+  it('passes a clean tabHygiene summary', () => {
+    const summary = summariseBenchmarkRunV25(passingHygieneInput());
+    const reasons = gateModule.evaluateBenchmarkGateV25(summary);
+    expect(reasons).toEqual([]);
+  });
+
+  it('blocks when primaryTabReuseRate falls below 0.95', () => {
+    const summary = summariseBenchmarkRunV25(passingHygieneInput());
+    summary.tabHygiene!.primaryTabReuseRate = 0.5;
+    const reasons = gateModule.evaluateBenchmarkGateV25(summary);
+    expect(reasons.some((r) => r.includes('primaryTabReuseRate'))).toBe(true);
+  });
+
+  it('blocks when maxConcurrentTabs exceeds 2', () => {
+    const summary = summariseBenchmarkRunV25(passingHygieneInput());
+    summary.tabHygiene!.maxConcurrentTabs = 5;
+    const reasons = gateModule.evaluateBenchmarkGateV25(summary);
+    expect(reasons.some((r) => r.includes('maxConcurrentTabs'))).toBe(true);
+  });
+
+  it('blocks when tabHygieneViolations is non-empty', () => {
+    const summary = summariseBenchmarkRunV25(passingHygieneInput());
+    summary.tabHygiene!.tabHygieneViolations = [
+      { scenarioId: 'GH-ISSUES', kind: 'tab_id_changed_after_navigation' },
+      { scenarioId: 'GH-LEAK', kind: 'unexpected_new_tab' },
+    ];
+    const reasons = gateModule.evaluateBenchmarkGateV25(summary);
+    const matching = reasons.filter((r) => r.includes('tabHygieneViolations'));
+    expect(matching).toHaveLength(1);
+    expect(matching[0]).toContain('tab_id_changed_after_navigation=1');
+    expect(matching[0]).toContain('unexpected_new_tab=1');
+  });
+
+  it('stays silent when tabHygiene is absent (legacy NDJSON tolerated)', () => {
+    const summary = summariseBenchmarkRunV25(passingHygieneInput());
+    summary.tabHygiene = null;
+    const reasons = gateModule.evaluateBenchmarkGateV25(summary);
+    expect(reasons.some((r) => r.includes('tabHygiene'))).toBe(false);
+    expect(reasons.some((r) => r.includes('primaryTabReuseRate'))).toBe(false);
+  });
+});

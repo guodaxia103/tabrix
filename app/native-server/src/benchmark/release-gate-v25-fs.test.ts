@@ -432,6 +432,103 @@ describe('release-gate v25 — fs-anchored content checks (V25-05 negative matri
     expect(result.ok).toBe(false);
     expect(result.reasons.some((r) => r.includes('absolute ceiling'))).toBe(true);
   });
+
+  it('tab hygiene: passing report round-trips through JSON (V25-05 closeout)', () => {
+    const summary = summariseBenchmarkRunV25({
+      ...passingRunInput(),
+      tabHygiene: {
+        primaryTabId: 42,
+        baselineTabIds: [1],
+        observedTabIds: [1, 42],
+        openedTabIds: [42],
+        closedTabIds: [],
+        maxConcurrentTabs: 2,
+        samePrimaryTabNavigations: 8,
+        expectedPrimaryTabNavigations: 8,
+        violations: [],
+      },
+    });
+    expect(summary.tabHygiene?.primaryTabReuseRate).toBe(1);
+    const filePath = writeReport('hygiene-pass.json', summary);
+    const result = gateModule.loadAndEvaluateBenchmarkReportV25(filePath);
+    expect(result.parseError).toBeNull();
+    expect(result.ok).toBe(true);
+    expect(result.hardReasons).toEqual([]);
+  });
+
+  it('tab hygiene: primaryTabReuseRate < 0.95 is rejected after round-trip', () => {
+    const summary = summariseBenchmarkRunV25({
+      ...passingRunInput(),
+      tabHygiene: {
+        primaryTabId: 42,
+        baselineTabIds: [1],
+        observedTabIds: [1, 42, 99],
+        openedTabIds: [42, 99],
+        closedTabIds: [],
+        maxConcurrentTabs: 2,
+        samePrimaryTabNavigations: 5,
+        expectedPrimaryTabNavigations: 10,
+        violations: [],
+      },
+    });
+    const filePath = writeReport('hygiene-bad-reuse.json', summary);
+    const result = gateModule.loadAndEvaluateBenchmarkReportV25(filePath);
+    expect(result.ok).toBe(false);
+    expect(result.reasons.some((r) => r.includes('primaryTabReuseRate'))).toBe(true);
+  });
+
+  it('tab hygiene: maxConcurrentTabs > 2 is rejected after round-trip', () => {
+    const summary = summariseBenchmarkRunV25({
+      ...passingRunInput(),
+      tabHygiene: {
+        primaryTabId: 42,
+        baselineTabIds: [1],
+        observedTabIds: [1, 42, 50, 60, 70],
+        openedTabIds: [42, 50, 60, 70],
+        closedTabIds: [],
+        maxConcurrentTabs: 5,
+        samePrimaryTabNavigations: 10,
+        expectedPrimaryTabNavigations: 10,
+        violations: [],
+      },
+    });
+    const filePath = writeReport('hygiene-bad-concurrent.json', summary);
+    const result = gateModule.loadAndEvaluateBenchmarkReportV25(filePath);
+    expect(result.ok).toBe(false);
+    expect(result.reasons.some((r) => r.includes('maxConcurrentTabs'))).toBe(true);
+  });
+
+  it('tab hygiene: any violation entry rejects the report', () => {
+    const summary = summariseBenchmarkRunV25({
+      ...passingRunInput(),
+      tabHygiene: {
+        primaryTabId: 42,
+        baselineTabIds: [],
+        observedTabIds: [42, 99],
+        openedTabIds: [42, 99],
+        closedTabIds: [],
+        maxConcurrentTabs: 2,
+        samePrimaryTabNavigations: 9,
+        expectedPrimaryTabNavigations: 10,
+        violations: [{ scenarioId: 'GH-LEAK', kind: 'unexpected_new_tab', detail: 'tabId=99' }],
+      },
+    });
+    const filePath = writeReport('hygiene-violation.json', summary);
+    const result = gateModule.loadAndEvaluateBenchmarkReportV25(filePath);
+    expect(result.ok).toBe(false);
+    expect(result.reasons.some((r) => r.includes('tabHygieneViolations'))).toBe(true);
+    expect(result.reasons.some((r) => r.includes('unexpected_new_tab=1'))).toBe(true);
+  });
+
+  it('tab hygiene: report without tabHygiene block is tolerated (legacy NDJSON)', () => {
+    const summary = summariseBenchmarkRunV25(passingRunInput());
+    expect(summary.tabHygiene).toBeNull();
+    const filePath = writeReport('hygiene-absent.json', summary);
+    const result = gateModule.loadAndEvaluateBenchmarkReportV25(filePath);
+    expect(result.ok).toBe(true);
+    expect(result.reasons.some((r) => r.includes('primaryTabReuseRate'))).toBe(false);
+    expect(result.reasons.some((r) => r.includes('tabHygiene'))).toBe(false);
+  });
 });
 
 describe('release-gate v25 — baseline-comparison-table requirement (release-notes-side checks)', () => {

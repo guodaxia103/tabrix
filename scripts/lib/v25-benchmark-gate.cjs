@@ -82,6 +82,24 @@ const DEFAULT_BENCHMARK_GATE_THRESHOLDS_V25 = Object.freeze({
   maxVisualFallbackRateAbsolute: 0.05,
   /** Hard: JS fallback rate ceiling, same `max(0.02, baseline)` rule. */
   maxJsFallbackRateAbsolute: 0.02,
+  /**
+   * Hard: minimum primary-tab reuse rate when the runner emits a
+   * `tabHygiene` block. V3.1 §"V25-05 Closeout Addendum: Browser
+   * Tab Hygiene" step 8. When the report omits `tabHygiene`
+   * altogether (legacy NDJSON), the gate stays silent — the runner
+   * contract is enforced by the helper module
+   * (`scripts/lib/v25-primary-tab-session.cjs`), not retroactively
+   * against pre-helper runs.
+   */
+  minPrimaryTabReuseRate: 0.95,
+  /**
+   * Hard: maximum concurrent benchmark tabs. Same V3.1 reference.
+   * Allowlisted-new-tab scenarios are factored into the runner-side
+   * `expectedPrimaryTabNavigations` denominator already; the absolute
+   * concurrency ceiling still applies (a runaway suite must not leak
+   * a tab per scenario).
+   */
+  maxConcurrentTabsAbsolute: 2,
 });
 
 const KNOWN_LANES = new Set(['tabrix_owned', 'cdp', 'debugger', 'unknown']);
@@ -308,6 +326,47 @@ function evaluateBenchmarkGateV25(summary, thresholds = DEFAULT_BENCHMARK_GATE_T
     if (isFiniteNumber(v25Js) && v25Js > thresholds.maxJsFallbackRateAbsolute) {
       reasons.push(
         `JS fallback rate ${v25Js.toFixed(3)} above absolute ceiling ${thresholds.maxJsFallbackRateAbsolute} (no baseline)`,
+      );
+    }
+  }
+
+  // Browser tab hygiene gate (V25-05 closeout addendum). Only
+  // evaluated when the runner emitted a tabHygiene block; when the
+  // report carries `tabHygiene: null` the gate is intentionally
+  // silent so legacy NDJSON without the runner helper is not
+  // retroactively rejected.
+  const hygiene = summary.tabHygiene;
+  if (hygiene && typeof hygiene === 'object') {
+    const reuse = hygiene.primaryTabReuseRate;
+    if (isFiniteNumber(reuse) && reuse < thresholds.minPrimaryTabReuseRate) {
+      reasons.push(
+        `primaryTabReuseRate ${reuse.toFixed(3)} below floor ${thresholds.minPrimaryTabReuseRate} (V25-05 tab hygiene)`,
+      );
+    }
+    const maxConcurrent = Number(hygiene.maxConcurrentTabs);
+    if (
+      Number.isFinite(maxConcurrent) &&
+      maxConcurrent > thresholds.maxConcurrentTabsAbsolute
+    ) {
+      reasons.push(
+        `maxConcurrentTabs ${maxConcurrent} above absolute ceiling ${thresholds.maxConcurrentTabsAbsolute} (V25-05 tab hygiene)`,
+      );
+    }
+    const violations = Array.isArray(hygiene.tabHygieneViolations)
+      ? hygiene.tabHygieneViolations
+      : [];
+    if (violations.length > 0) {
+      const kindCounts = new Map();
+      for (const v of violations) {
+        const kind = v && typeof v.kind === 'string' && v.kind ? v.kind : 'unknown';
+        kindCounts.set(kind, (kindCounts.get(kind) || 0) + 1);
+      }
+      const summaryStr = [...kindCounts.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([kind, n]) => `${kind}=${n}`)
+        .join(',');
+      reasons.push(
+        `tabHygieneViolations present: ${violations.length} violation(s) [${summaryStr}] (V25-05 tab hygiene)`,
       );
     }
   }

@@ -177,6 +177,87 @@ export interface BenchmarkRunInputV25 {
    * re-derive K5..K8 here (those remain v24 evidence-only metrics).
    */
   pairs: BenchmarkPairRecord[];
+  /**
+   * Optional browser tab hygiene block emitted by the v25 real MCP
+   * runner (see `scripts/lib/v25-primary-tab-session.cjs`). When
+   * present, the v25 release gate enforces:
+   *   - `primaryTabReuseRate >= 0.95`
+   *   - `maxConcurrentTabs <= 2` (unless an allowlisted scenario)
+   *   - `tabHygieneViolations.length === 0`
+   * When absent (e.g. legacy NDJSON), the transformer emits
+   * `tabHygiene: null` and the gate is silent — the runner contract
+   * still ships in the helper module, but old runs are not retroactively
+   * rejected. The runner contract is the post-implementation closeout
+   * documented in `.claude/strategy/TABRIX_V2_5_P0_CHAIN_V3_1.md`
+   * §"V25-05 Closeout Addendum: Browser Tab Hygiene".
+   */
+  tabHygiene?: BenchmarkTabHygieneInputV25 | null;
+}
+
+/**
+ * Single browser tab hygiene violation emitted by the v25 real MCP
+ * runner. Closed-enum `kind` so the gate can grow per-kind reasons
+ * without re-shaping the report. Open-ended `detail` is free-form
+ * diagnostic text and is NOT consumed by the gate.
+ */
+export type BenchmarkTabHygieneViolationKind =
+  | 'unexpected_new_tab'
+  | 'tab_id_changed_after_navigation'
+  | 'forbidden_bare_navigate_retry'
+  | 'cleanup_closed_baseline_tab'
+  | 'cleanup_failed';
+
+export interface BenchmarkTabHygieneViolation {
+  scenarioId: string | null;
+  kind: BenchmarkTabHygieneViolationKind;
+  detail?: string;
+}
+
+/**
+ * Browser tab hygiene input emitted by the v25 real MCP runner. All
+ * counts are integers >= 0; the transformer trusts the runner-supplied
+ * `samePrimaryTabNavigations` / `expectedPrimaryTabNavigations` as the
+ * canonical numerator/denominator for `primaryTabReuseRate`.
+ *
+ * Why pre-aggregated: keeping the rate numerator/denominator on the
+ * runner side prevents the transformer from having to re-walk every
+ * `chrome_navigate` tool call to decide whether a scenario was
+ * "allowsNewTab"-allowlisted. The runner already owns that decision
+ * in its session helper.
+ */
+export interface BenchmarkTabHygieneInputV25 {
+  primaryTabId: number | null;
+  baselineTabIds: number[];
+  observedTabIds: number[];
+  openedTabIds: number[];
+  closedTabIds: number[];
+  maxConcurrentTabs: number;
+  /**
+   * Numerator: navigations whose returned `tabId` matched
+   * `primaryTabId`. Excludes navigations that came from
+   * allowlisted-new-tab scenarios.
+   */
+  samePrimaryTabNavigations: number;
+  /**
+   * Denominator: navigations the runner expected to land on the
+   * primary tab (i.e. all `chrome_navigate` calls minus those issued
+   * inside an `allowsNewTab: true` scenario). 0 means "no qualifying
+   * samples" → `primaryTabReuseRate` is `null`.
+   */
+  expectedPrimaryTabNavigations: number;
+  /**
+   * Scenario ids the runner declared `allowsNewTab: true` for. Used
+   * by the gate's "max concurrent tabs" rule (when ALL violations come
+   * from allowlisted scenarios, the >2 ceiling is relaxed) and by the
+   * report consumer for auditability.
+   */
+  allowsNewTabScenarioIds?: string[];
+  /**
+   * Closed list of hygiene violations the runner detected. Empty array
+   * means the suite was clean. The gate hard-rejects when this list
+   * is non-empty.
+   */
+  violations: BenchmarkTabHygieneViolation[];
 }
 
 export interface BenchmarkScenarioSummaryV25 {
@@ -314,6 +395,28 @@ export interface BenchmarkRunInputV25WithBaseline extends BenchmarkRunInputV25 {
   comparisonBaselineV24?: BenchmarkSummaryV24 | null;
 }
 
+/**
+ * Browser tab hygiene block surfaced on the v25 release-evidence
+ * report. Mirrors `BenchmarkTabHygieneInputV25` 1:1 except the
+ * derived `primaryTabReuseRate` (numerator/denominator → ratio or
+ * null when no qualifying samples) and explicit count fields the
+ * report consumer expects.
+ */
+export interface BenchmarkTabHygieneSummaryV25 {
+  primaryTabId: number | null;
+  baselineTabCount: number;
+  observedTabCount: number;
+  openedTabsCount: number;
+  closedTabsCount: number;
+  maxConcurrentTabs: number;
+  /** `samePrimaryTabNavigations / expectedPrimaryTabNavigations` or `null`. */
+  primaryTabReuseRate: number | null;
+  samePrimaryTabNavigations: number;
+  expectedPrimaryTabNavigations: number;
+  allowsNewTabScenarioIds: string[];
+  tabHygieneViolations: BenchmarkTabHygieneViolation[];
+}
+
 export interface BenchmarkSummaryV25 {
   reportVersion: typeof BENCHMARK_REPORT_VERSION;
   runId: string;
@@ -344,6 +447,13 @@ export interface BenchmarkSummaryV25 {
   laneCounters: BenchmarkLaneCounters;
   /** Optional v24 baseline comparison. Null when no baseline was supplied. */
   comparisonToV24: BenchmarkComparisonToV24 | null;
+  /**
+   * Optional browser tab hygiene block. Null when the runner did not
+   * emit a `tabHygiene` input (legacy NDJSON, synthetic test fixtures
+   * that don't exercise tab session). When non-null, the v25 release
+   * gate enforces reuse / concurrency / violation thresholds against it.
+   */
+  tabHygiene: BenchmarkTabHygieneSummaryV25 | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -630,6 +740,74 @@ function buildPerToolLatency(toolCalls: BenchmarkToolCallRecordV25[]): Benchmark
   return out;
 }
 
+function uniqInt(values: readonly number[]): number[] {
+  const seen = new Set<number>();
+  for (const value of values) {
+    if (Number.isInteger(value)) seen.add(value);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+function isTabHygieneViolation(value: unknown): value is BenchmarkTabHygieneViolation {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Partial<BenchmarkTabHygieneViolation>;
+  return typeof v.kind === 'string' && v.kind.length > 0;
+}
+
+function buildTabHygieneSummary(
+  input: BenchmarkTabHygieneInputV25 | null | undefined,
+): BenchmarkTabHygieneSummaryV25 | null {
+  if (!input || typeof input !== 'object') return null;
+  // Defensive: tolerate runner-side malformed values rather than throw.
+  // The gate (not the transformer) is responsible for rejecting bad
+  // numbers; here we only normalise.
+  const baselineTabIds = uniqInt(Array.isArray(input.baselineTabIds) ? input.baselineTabIds : []);
+  const observedTabIds = uniqInt(Array.isArray(input.observedTabIds) ? input.observedTabIds : []);
+  const openedTabIds = uniqInt(Array.isArray(input.openedTabIds) ? input.openedTabIds : []);
+  const closedTabIds = uniqInt(Array.isArray(input.closedTabIds) ? input.closedTabIds : []);
+  const same = Number.isFinite(input.samePrimaryTabNavigations)
+    ? Math.max(0, Math.trunc(input.samePrimaryTabNavigations))
+    : 0;
+  const expected = Number.isFinite(input.expectedPrimaryTabNavigations)
+    ? Math.max(0, Math.trunc(input.expectedPrimaryTabNavigations))
+    : 0;
+  const reuse = expected > 0 ? same / expected : null;
+  const maxConcurrent = Number.isFinite(input.maxConcurrentTabs)
+    ? Math.max(0, Math.trunc(input.maxConcurrentTabs))
+    : 0;
+  const violations = (Array.isArray(input.violations) ? input.violations : []).filter(
+    isTabHygieneViolation,
+  );
+  const allowsNewTabScenarioIds = [
+    ...new Set(
+      (Array.isArray(input.allowsNewTabScenarioIds) ? input.allowsNewTabScenarioIds : []).filter(
+        (id): id is string => typeof id === 'string' && id.length > 0,
+      ),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+  const primaryTabId =
+    typeof input.primaryTabId === 'number' && Number.isInteger(input.primaryTabId)
+      ? input.primaryTabId
+      : null;
+  return {
+    primaryTabId,
+    baselineTabCount: baselineTabIds.length,
+    observedTabCount: observedTabIds.length,
+    openedTabsCount: openedTabIds.length,
+    closedTabsCount: closedTabIds.length,
+    maxConcurrentTabs: maxConcurrent,
+    primaryTabReuseRate: reuse,
+    samePrimaryTabNavigations: same,
+    expectedPrimaryTabNavigations: expected,
+    allowsNewTabScenarioIds,
+    tabHygieneViolations: violations.map((v) => ({
+      scenarioId: typeof v.scenarioId === 'string' && v.scenarioId.length > 0 ? v.scenarioId : null,
+      kind: v.kind,
+      ...(typeof v.detail === 'string' && v.detail.length > 0 ? { detail: v.detail } : {}),
+    })),
+  };
+}
+
 function buildLaneCounters(toolCalls: BenchmarkToolCallRecordV25[]): BenchmarkLaneCounters {
   const counters: BenchmarkLaneCounters = {
     tabrixOwnedCount: toolCalls.filter((c) => c.lane === 'tabrix_owned').length,
@@ -743,6 +921,7 @@ export function summariseBenchmarkRunV25(
   const stabilityMetrics = buildStabilityMetrics(toolCalls, totalToolCalls);
   const k2PerToolLatencyMs = buildPerToolLatency(toolCalls);
   const laneCounters = buildLaneCounters(toolCalls);
+  const tabHygiene = buildTabHygieneSummary(input.tabHygiene ?? null);
 
   // For the comparison table we want the SUCCESS-only median click
   // attempts (matches V25-05 gate semantics). v24's
@@ -775,6 +954,7 @@ export function summariseBenchmarkRunV25(
     stabilityMetrics,
     laneCounters,
     comparisonToV24,
+    tabHygiene,
   };
 }
 
