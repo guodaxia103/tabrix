@@ -12,6 +12,16 @@
  *   6. Non-allowlisted new tab is recorded as `unexpected_new_tab`.
  *   7. cleanup() never closes a baseline tab.
  *
+ * Plus the V25-05 closeout follow-up rules:
+ *   8. Mismatched tabId triggers exactly one switch-back retry that
+ *      passes `tabId: primaryTabId` (never bare).
+ *   9. If switch-back retry succeeds, the helper-level navigation is
+ *      a single successful primary reuse (expected +1 / same +1).
+ *  10. If switch-back retry still fails, a second violation is
+ *      recorded and the helper-level navigation counts as
+ *      `expected +1 / same +0`.
+ *  11. `maxConcurrentTabs` excludes baseline tabs.
+ *
  * Why CommonJS-require: the helper is shipped as a `.cjs` so both
  * Jest and ESM scripts can load it without a build step.
  */
@@ -176,25 +186,6 @@ describe('createPrimaryTabSession — new-tab allowlist (rules 5, 6)', () => {
     expect(report.samePrimaryTabNavigations).toBe(1);
   });
 
-  it('non-allowlisted scenario producing a new tabId records tab_id_changed_after_navigation', async () => {
-    const session = helper.createPrimaryTabSession();
-    const nav = fakeNavigator([42, 99]);
-    await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/repo');
-    await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/repo/issues', {
-      scenarioId: 'GH-ISSUES',
-    });
-    const report = session.toReportInput();
-    expect(report.primaryTabId).toBe(42);
-    expect(report.violations).toHaveLength(1);
-    expect(report.violations[0].kind).toBe(helper.HYGIENE_VIOLATION_KINDS.TAB_ID_CHANGED);
-    expect(report.violations[0].scenarioId).toBe('GH-ISSUES');
-    // First nav (no scenarioId) contributes (1, 1); the broken second nav
-    // contributes (1, 0): expected=2, same=1, reuseRate=0.5 < 0.95 → gate
-    // would block.
-    expect(report.expectedPrimaryTabNavigations).toBe(2);
-    expect(report.samePrimaryTabNavigations).toBe(1);
-  });
-
   it('recordToolCallTabId from non-allowlisted scenario records unexpected_new_tab', () => {
     const session = helper.createPrimaryTabSession();
     // Seed primary tab manually via a fake first navigation.
@@ -254,13 +245,127 @@ describe('createPrimaryTabSession — cleanup (rule 7)', () => {
   });
 });
 
-describe('createPrimaryTabSession — maxConcurrentTabs', () => {
-  it('counts live observed tabs (baseline + opened) at peak', async () => {
+describe('createPrimaryTabSession — switch-back retry (V25-05 follow-up rules 8/9/10)', () => {
+  it('mismatched tabId triggers a switch-back retry on the same primary tab', async () => {
+    const session = helper.createPrimaryTabSession();
+    // First nav lands on 42 (primary). Second nav (mismatch → 99)
+    // must trigger a switch-back retry; we don't care about the
+    // retry's outcome here, only that the retry happened with
+    // tabId: primaryTabId and was NOT bare.
+    const nav = fakeNavigator([42, 99, 42]);
+    await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/repo');
+    await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/repo/issues', {
+      scenarioId: 'GH-ISSUES',
+    });
+    expect(nav.calls).toHaveLength(3);
+    // Initial second-nav call carried tabId: primaryTabId.
+    expect(nav.calls[1].args).toEqual({
+      url: 'https://github.com/owner/repo/issues',
+      tabId: 42,
+    });
+    // Switch-back retry MUST also carry tabId: primaryTabId.
+    expect(nav.calls[2].name).toBe('chrome_navigate');
+    expect(nav.calls[2].args).toEqual({
+      url: 'https://github.com/owner/repo/issues',
+      tabId: 42,
+    });
+    expect(nav.calls[2].args).not.toEqual({ url: 'https://github.com/owner/repo/issues' });
+  });
+
+  it('switch-back retry succeeds → helper-level reuse stays at 1.0 for that navigation', async () => {
+    const session = helper.createPrimaryTabSession();
+    const nav = fakeNavigator([42, 99, 42]);
+    await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/repo');
+    await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/repo/issues', {
+      scenarioId: 'GH-ISSUES',
+    });
+    const report = session.toReportInput();
+    // Exactly one violation (the original mismatch). Switch-back
+    // recovery does NOT add a second one.
+    expect(report.violations).toHaveLength(1);
+    expect(report.violations[0].kind).toBe(helper.HYGIENE_VIOLATION_KINDS.TAB_ID_CHANGED);
+    expect(report.violations[0].scenarioId).toBe('GH-ISSUES');
+    expect(report.violations[0].detail).toContain('returned tabId=99');
+    // The whole navigateInPrimaryTab call counts as ONE successful
+    // primary reuse: expected += 1, same += 1. Combined with the
+    // first-ever nav (also +1/+1), the rate is 2/2 = 1.0.
+    expect(report.expectedPrimaryTabNavigations).toBe(2);
+    expect(report.samePrimaryTabNavigations).toBe(2);
+  });
+
+  it('switch-back retry fails again → records second violation, expected +1 / same +0', async () => {
+    const session = helper.createPrimaryTabSession();
+    // Second nav: 99 (mismatch). Retry: 99 (still wrong).
+    const nav = fakeNavigator([42, 99, 99]);
+    await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/repo');
+    await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/repo/issues', {
+      scenarioId: 'GH-ISSUES',
+    });
+    const report = session.toReportInput();
+    expect(report.violations).toHaveLength(2);
+    expect(report.violations[0].kind).toBe(helper.HYGIENE_VIOLATION_KINDS.TAB_ID_CHANGED);
+    expect(report.violations[0].detail).toContain('returned tabId=99');
+    expect(report.violations[1].kind).toBe(helper.HYGIENE_VIOLATION_KINDS.TAB_ID_CHANGED);
+    expect(report.violations[1].detail).toContain('switch-back retry failed');
+    // First nav (1,1) + failed second nav (1,0) → 2 expected, 1 same.
+    expect(report.expectedPrimaryTabNavigations).toBe(2);
+    expect(report.samePrimaryTabNavigations).toBe(1);
+    // primary tab id is unchanged.
+    expect(report.primaryTabId).toBe(42);
+    // Three chrome_navigate calls total: first-nav, broken second-nav,
+    // failed switch-back retry.
+    expect(nav.calls).toHaveLength(3);
+    expect(nav.calls[2].args).toEqual({
+      url: 'https://github.com/owner/repo/issues',
+      tabId: 42,
+    });
+  });
+
+  it('allowlisted scenario does NOT trigger switch-back retry on a new tab', async () => {
+    const session = helper.createPrimaryTabSession();
+    session.declareAllowsNewTab('GH-NEW-TAB-LINK');
+    const nav = fakeNavigator([42, 99]);
+    await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/repo');
+    await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/other-repo', {
+      scenarioId: 'GH-NEW-TAB-LINK',
+    });
+    // No switch-back call — only the two user-driven navs.
+    expect(nav.calls).toHaveLength(2);
+    const report = session.toReportInput();
+    expect(report.violations).toEqual([]);
+    // Allowlisted call is excluded from the reuse denominator.
+    expect(report.expectedPrimaryTabNavigations).toBe(1);
+    expect(report.samePrimaryTabNavigations).toBe(1);
+  });
+});
+
+describe('createPrimaryTabSession — maxConcurrentTabs (V25-05 follow-up rule 11)', () => {
+  it('excludes baseline tabs from the benchmark concurrency ceiling', async () => {
     const session = helper.createPrimaryTabSession({ baselineTabIds: [1, 2] });
     const nav = fakeNavigator([42]);
     await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/repo');
     session.recordToolCallTabId('GH-LEAK', 99);
-    // baseline 1, 2 + primary 42 + leaked 99 = 4 live
-    expect(session.maxConcurrentTabs).toBe(4);
+    // benchmark-owned live tabs = primary 42 + leaked 99 = 2.
+    // Baseline tabs 1 and 2 stay in observedTabIds (so cleanup
+    // refuses to close them) but do NOT inflate the v2.5 ceiling.
+    expect(session.maxConcurrentTabs).toBe(2);
+    const report = session.toReportInput();
+    expect(report.maxConcurrentTabs).toBe(2);
+    expect(report.baselineTabIds).toEqual([1, 2]);
+    expect(report.observedTabIds).toEqual([1, 2, 42, 99]);
+  });
+
+  it('peak counts only benchmark-owned tabs when leaks come and go', async () => {
+    const session = helper.createPrimaryTabSession({ baselineTabIds: [1, 2, 3] });
+    const nav = fakeNavigator([42]);
+    await session.navigateInPrimaryTab(nav.callTool, 'https://github.com/owner/repo');
+    // Two leaks land — benchmark-owned live = primary + 2 leaks = 3.
+    session.recordToolCallTabId('GH-LEAK-A', 99);
+    session.recordToolCallTabId('GH-LEAK-B', 100);
+    expect(session.maxConcurrentTabs).toBe(3);
+    // Baseline-only observation MUST NOT bump the ceiling above the
+    // real benchmark peak.
+    session.recordToolCallTabId(null, 1);
+    expect(session.maxConcurrentTabs).toBe(3);
   });
 });

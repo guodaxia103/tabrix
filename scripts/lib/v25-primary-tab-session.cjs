@@ -23,16 +23,35 @@
  *      `tabId: primaryTabId`. This includes retries — a retry must
  *      NOT fall back to `chrome_navigate({ url })`.
  *   3. After every navigation, the helper asserts the returned
- *      `tabId === primaryTabId`. If not, it records a
- *      `tab_id_changed_after_navigation` violation, attempts to switch
- *      back to `primaryTabId` if it still exists, and re-issues the
- *      navigation.
+ *      `tabId === primaryTabId`. For non-allowlisted scenarios, on
+ *      mismatch the helper:
+ *        a. records a first `tab_id_changed_after_navigation`
+ *           violation,
+ *        b. immediately re-issues `chrome_navigate({ url, tabId:
+ *           primaryTabId })` exactly once as a switch-back retry
+ *           (never bare),
+ *        c. if the retry returns to `primaryTabId`, the entire
+ *           helper-level navigation counts as a single successful
+ *           reuse of the primary tab (`expected +1` and `same +1`,
+ *           not split into two units),
+ *        d. if the retry still does not land on `primaryTabId`, a
+ *           second violation is recorded with `detail` describing the
+ *           failed retry and the helper-level navigation counts as
+ *           `expected +1 / same +0`.
  *   4. The runner must declare `allowsNewTab: true` per scenario whose
  *      purpose is to open a new tab. Any other scenario producing a
- *      new GitHub tab is recorded as `unexpected_new_tab`.
+ *      new GitHub tab is recorded as `unexpected_new_tab`. Allowlisted
+ *      scenarios skip the switch-back retry entirely and are excluded
+ *      from the primary-reuse denominator.
  *   5. `cleanup()` closes every non-primary tab opened by this
  *      session, leaving baseline tabs untouched. Closing a baseline
  *      tab is recorded as `cleanup_closed_baseline_tab`.
+ *   6. `baselineTabIds` are the tabs the user already had open before
+ *      the suite started. They exist purely so `cleanup()` knows what
+ *      NOT to close; they do NOT participate in
+ *      `maxConcurrentTabs` (the benchmark concurrency ceiling tracks
+ *      only tabs owned by the suite — primary plus any
+ *      benchmark-opened or benchmark-observed non-baseline tab).
  *
  * Why pure-callback design (`callTool` injected): the v25 NDJSON
  * producer has not yet shipped in this repo (Codex closeout work).
@@ -72,11 +91,16 @@ const HYGIENE_VIOLATION_KINDS = Object.freeze({
  * @param {readonly number[]} [options.baselineTabIds]
  *   Tabs the user already had open before the suite started. The
  *   helper will never close any of these in `cleanup()` and excludes
- *   them from `openedTabIds`.
+ *   them from `openedTabIds`. Baseline tabs are kept in
+ *   `observedTabIds` for cleanup safety only — they do NOT inflate
+ *   `maxConcurrentTabs` (V25-05 closeout follow-up: the v2.5 gate
+ *   ceiling `maxConcurrentTabs <= 2` measures benchmark-owned tabs,
+ *   not the user's pre-existing browser state).
  * @param {boolean} [options.recordObservedFromBaseline=true]
  *   Whether `baselineTabIds` count toward `observedTabIds` from the
- *   start. Default true so `maxConcurrentTabs` reflects the real
- *   browser state.
+ *   start. Default true so cleanup's "never close baseline" check
+ *   stays honest. NOTE: regardless of this flag, baseline tabs are
+ *   excluded from `maxConcurrentTabs`.
  * @returns A stateful session with the methods documented below.
  */
 function createPrimaryTabSession(options = {}) {
@@ -102,8 +126,9 @@ function createPrimaryTabSession(options = {}) {
 
   if (recordObservedFromBaseline) {
     for (const id of baselineTabIds) observedTabIds.add(id);
-    maxConcurrentTabs = observedTabIds.size;
   }
+  // maxConcurrentTabs intentionally starts at 0 — baseline tabs do
+  // NOT count against the benchmark concurrency ceiling.
 
   function recordViolation(scenarioId, kind, detail) {
     violations.push({
@@ -122,10 +147,15 @@ function createPrimaryTabSession(options = {}) {
       // primary itself counts as opened by the suite
       openedTabIds.add(tabId);
     }
-    // Concurrent open tabs = observed minus closed.
+    // Live BENCHMARK-OWNED tabs only. Baseline tabs the user already
+    // had open MUST NOT inflate `maxConcurrentTabs` because the v2.5
+    // gate ceiling (`<= 2`) is about how many tabs the benchmark
+    // suite itself keeps live.
     let live = 0;
     for (const id of observedTabIds) {
-      if (!closedTabIds.has(id)) live += 1;
+      if (baselineTabIds.has(id)) continue;
+      if (closedTabIds.has(id)) continue;
+      live += 1;
     }
     if (live > maxConcurrentTabs) maxConcurrentTabs = live;
   }
@@ -145,6 +175,31 @@ function createPrimaryTabSession(options = {}) {
   /**
    * Navigate to `url` in the primary tab.
    *
+   * Behaviour, in order:
+   *   1. First-ever call may go bare (`{ url }`). The returned `tabId`
+   *      becomes `primaryTabId`. Counts as expected +1 / same +1 for
+   *      the reuse rate denominator (so single-scenario runs still
+   *      have a meaningful rate).
+   *   2. Subsequent calls always send `{ url, tabId: primaryTabId }`.
+   *   3. Non-allowlisted mismatch (returned `tabId !== primaryTabId`):
+   *      records one `tab_id_changed_after_navigation` violation,
+   *      then immediately re-issues `{ url, tabId: primaryTabId }`
+   *      exactly once as a switch-back retry. The helper NEVER falls
+   *      back to a bare `chrome_navigate({ url })` — neither on
+   *      mismatch nor on caller-driven retry.
+   *      • If switch-back lands on `primaryTabId`, the helper-level
+   *        navigation as a whole is a successful primary reuse:
+   *        `expected +1 / same +1`. The earlier violation is kept in
+   *        the report.
+   *      • If switch-back still does not return `primaryTabId`, a
+   *        second violation is recorded with a `detail` of
+   *        `switch-back retry failed (...)`, and the helper-level
+   *        navigation counts as `expected +1 / same +0`.
+   *   4. Allowlisted (per-call or scenario-level) navigations are
+   *      tolerated: no switch-back retry is attempted, no violation
+   *      is recorded, and the call is excluded from the reuse-rate
+   *      denominator.
+   *
    * @param {(name: string, args: object) => Promise<{ tabId?: number } | { tabId?: number }>} callTool
    *   Async or sync function that issues `chrome_navigate` and returns
    *   the parsed result. The helper expects `result.tabId` to be the
@@ -154,14 +209,13 @@ function createPrimaryTabSession(options = {}) {
    * @param {string|null} [opts.scenarioId]
    * @param {boolean} [opts.allowsNewTab=false]
    *   Per-call override for the allowlist. If true, the call is
-   *   excluded from `expectedPrimaryTabNavigations` and the resulting
-   *   tab is tolerated (no `unexpected_new_tab` violation).
+   *   excluded from `expectedPrimaryTabNavigations`, the resulting
+   *   tab is tolerated, and switch-back retry is suppressed.
    * @param {boolean} [opts.isRetry=false]
-   *   Used purely for hygiene-violation detection: a retry that lands
-   *   on a different tab is *strictly* a `tab_id_changed_after_navigation`
-   *   violation. The helper itself never falls back to bare
-   *   `chrome_navigate({ url })` on retry — that path is intentionally
-   *   absent from this module.
+   *   Caller-provided metadata indicating that the caller considers
+   *   this their own retry attempt. Used only to label any resulting
+   *   violation `detail` — the helper still performs at most ONE
+   *   internal switch-back retry per call regardless of this flag.
    */
   async function navigateInPrimaryTab(callTool, url, opts = {}) {
     if (typeof callTool !== 'function') {
@@ -188,10 +242,11 @@ function createPrimaryTabSession(options = {}) {
     }
 
     const result = await callTool('chrome_navigate', args);
-    const returnedTabId =
+    let returnedTabId =
       result && typeof result === 'object' && Number.isInteger(result.tabId)
         ? result.tabId
         : null;
+    let finalResult = result;
 
     if (isFirst) {
       // First navigation seeds the primary tab id.
@@ -199,40 +254,73 @@ function createPrimaryTabSession(options = {}) {
         primaryTabId = returnedTabId;
         noteObservedTabId(returnedTabId);
       }
-    } else if (returnedTabId !== null) {
-      noteObservedTabId(returnedTabId);
-      if (returnedTabId !== primaryTabId) {
-        if (allowsNewTab) {
-          // Allowlisted scenario — the new tab is expected. Do not
-          // record a violation, do not flip primary.
-        } else {
-          recordViolation(
-            scenarioId,
-            HYGIENE_VIOLATION_KINDS.TAB_ID_CHANGED,
-            `chrome_navigate returned tabId=${returnedTabId} but primaryTabId=${primaryTabId}` +
-              (opts.isRetry ? ' (retry)' : ''),
-          );
-        }
-      }
-    }
-
-    // Count this navigation toward the reuse rate denominator only
-    // when it was supposed to land on the primary tab.
-    if (!allowsNewTab && !isFirst) {
-      expectedPrimaryTabNavigations += 1;
-      if (returnedTabId === primaryTabId && returnedTabId !== null) {
-        samePrimaryTabNavigations += 1;
-      }
-    } else if (!allowsNewTab && isFirst) {
       // First-ever navigation: by definition it lands on primary
       // (because primary is whatever it landed on). Count it as
       // both numerator and denominator so the rate stays meaningful
-      // for single-scenario runs.
-      expectedPrimaryTabNavigations += 1;
-      if (returnedTabId !== null) samePrimaryTabNavigations += 1;
+      // for single-scenario runs. Allowlisted first calls are still
+      // excluded from the denominator (consistent with rule 4).
+      if (!allowsNewTab) {
+        expectedPrimaryTabNavigations += 1;
+        if (returnedTabId !== null) samePrimaryTabNavigations += 1;
+      }
+      return finalResult;
     }
 
-    return result;
+    // Non-first call. Observe the result first.
+    if (returnedTabId !== null) {
+      noteObservedTabId(returnedTabId);
+    }
+
+    if (allowsNewTab) {
+      // Allowlisted scenario — the (possibly new) tab is expected.
+      // Do not record a violation, do not flip primary, do not
+      // attempt switch-back retry, do not count toward the reuse
+      // denominator.
+      return finalResult;
+    }
+
+    if (returnedTabId === primaryTabId && returnedTabId !== null) {
+      // Clean primary reuse on the first attempt.
+      expectedPrimaryTabNavigations += 1;
+      samePrimaryTabNavigations += 1;
+      return finalResult;
+    }
+
+    // Mismatch on a non-allowlisted call. Record violation #1, then
+    // perform exactly one switch-back retry against `primaryTabId`.
+    recordViolation(
+      scenarioId,
+      HYGIENE_VIOLATION_KINDS.TAB_ID_CHANGED,
+      `chrome_navigate returned tabId=${returnedTabId} but primaryTabId=${primaryTabId}` +
+        (opts.isRetry ? ' (caller-retry)' : ''),
+    );
+
+    const retryArgs = { url, tabId: primaryTabId };
+    const retryResult = await callTool('chrome_navigate', retryArgs);
+    const retryTabId =
+      retryResult && typeof retryResult === 'object' && Number.isInteger(retryResult.tabId)
+        ? retryResult.tabId
+        : null;
+    if (retryTabId !== null) {
+      noteObservedTabId(retryTabId);
+    }
+    finalResult = retryResult;
+    returnedTabId = retryTabId;
+
+    // Whether switch-back recovered or not, this is ONE helper-level
+    // navigation: expected +1 only (do not double-count).
+    expectedPrimaryTabNavigations += 1;
+    if (retryTabId === primaryTabId && primaryTabId !== null) {
+      samePrimaryTabNavigations += 1;
+    } else {
+      recordViolation(
+        scenarioId,
+        HYGIENE_VIOLATION_KINDS.TAB_ID_CHANGED,
+        `switch-back retry failed: chrome_navigate returned tabId=${retryTabId} but primaryTabId=${primaryTabId}`,
+      );
+    }
+
+    return finalResult;
   }
 
   /**
