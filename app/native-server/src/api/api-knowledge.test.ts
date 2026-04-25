@@ -1,0 +1,236 @@
+import {
+  classifyApiKnowledgeMetadata,
+  readApiKnowledgeRows,
+  readApiKnowledgeRowsForIntent,
+  resolveApiKnowledgeCandidate,
+  type ApiKnowledgeFetch,
+} from './api-knowledge';
+
+function jsonFetch(status: number, body: unknown): ApiKnowledgeFetch {
+  return jest.fn().mockResolvedValue({
+    status,
+    headers: { get: jest.fn().mockReturnValue('application/json') },
+    json: jest.fn().mockResolvedValue(body),
+  });
+}
+
+describe('V26-07 API Knowledge substrate', () => {
+  it('classifies GitHub seed endpoint metadata without retaining raw query or secrets', () => {
+    const metadata = classifyApiKnowledgeMetadata({
+      url: 'https://api.github.com/search/repositories?q=secret-token-value&per_page=10',
+      method: 'GET',
+      status: 200,
+      timingMs: 42,
+      sizeBytes: 512,
+      contentType: 'application/json; charset=utf-8',
+    });
+
+    expect(metadata).toMatchObject({
+      host: 'api.github.com',
+      pathPattern: '/search/repositories',
+      method: 'GET',
+      statusClass: '2xx',
+      sizeClass: 'small',
+      contentType: 'application/json',
+      endpointFamily: 'github_search_repositories',
+      dataPurpose: 'search_list',
+      readAllowed: true,
+    });
+    expect(JSON.stringify(metadata)).not.toContain('secret-token-value');
+    expect(JSON.stringify(metadata)).not.toContain('per_page');
+  });
+
+  it('classifies GitHub issues and npmjs search seed families', () => {
+    expect(
+      classifyApiKnowledgeMetadata({
+        url: 'https://api.github.com/repos/octocat/hello-world/issues?state=open',
+        method: 'HEAD',
+      }),
+    ).toMatchObject({
+      endpointFamily: 'github_issues_list',
+      dataPurpose: 'issue_list',
+      pathPattern: '/repos/:owner/:repo/issues',
+      readAllowed: true,
+    });
+
+    expect(
+      classifyApiKnowledgeMetadata({
+        url: 'https://registry.npmjs.org/-/v1/search?text=react',
+        method: 'GET',
+      }),
+    ).toMatchObject({
+      endpointFamily: 'npmjs_search_packages',
+      dataPurpose: 'package_search',
+      pathPattern: '/-/v1/search',
+      readAllowed: true,
+    });
+  });
+
+  it('returns fallback_required for unsupported site families', async () => {
+    const result = await readApiKnowledgeRowsForIntent({
+      intent: 'search products',
+      url: 'https://example.com/search?q=widget',
+      fetchFn: jest.fn(),
+    });
+
+    expect(result).toMatchObject({
+      status: 'fallback_required',
+      reason: 'unsupported_site_family',
+      fallbackEntryLayer: 'L0+L1',
+      telemetry: {
+        reason: 'unsupported_site_family',
+        readAllowed: false,
+        fallbackEntryLayer: 'L0+L1',
+      },
+    });
+  });
+
+  it('denies non-read methods before making a public request', async () => {
+    const fetchFn = jest.fn();
+    const result = await readApiKnowledgeRows({
+      endpointFamily: 'github_search_repositories',
+      method: 'POST',
+      params: { query: 'tabrix' },
+      fetchFn,
+    });
+
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      status: 'fallback_required',
+      reason: 'method_denied',
+      fallbackEntryLayer: 'L0+L1',
+      telemetry: { readAllowed: false },
+    });
+  });
+
+  it('surfaces 403 and rate limit as observable fallback results', async () => {
+    await expect(
+      readApiKnowledgeRows({
+        endpointFamily: 'github_search_repositories',
+        method: 'GET',
+        params: { query: 'tabrix' },
+        fetchFn: jsonFetch(403, { message: 'forbidden' }),
+      }),
+    ).resolves.toMatchObject({
+      status: 'fallback_required',
+      reason: 'http_forbidden',
+      telemetry: { status: 403 },
+    });
+
+    await expect(
+      readApiKnowledgeRows({
+        endpointFamily: 'github_search_repositories',
+        method: 'GET',
+        params: { query: 'tabrix' },
+        fetchFn: jsonFetch(429, { message: 'rate limited' }),
+      }),
+    ).resolves.toMatchObject({
+      status: 'fallback_required',
+      reason: 'rate_limited',
+      telemetry: { status: 429 },
+    });
+  });
+
+  it('returns compact GitHub rows without raw response body fields', async () => {
+    const result = await readApiKnowledgeRows({
+      endpointFamily: 'github_search_repositories',
+      method: 'GET',
+      params: { query: 'tabrix' },
+      fetchFn: jsonFetch(200, {
+        items: [
+          {
+            name: 'tabrix',
+            full_name: 'guodaxia103/tabrix',
+            description: 'Browser MCP',
+            language: 'TypeScript',
+            stargazers_count: 12,
+            html_url: 'https://github.com/guodaxia103/tabrix',
+            token: 'SHOULD_NOT_LEAK',
+          },
+        ],
+      }),
+    });
+
+    expect(result).toMatchObject({
+      status: 'ok',
+      kind: 'api_rows',
+      endpointFamily: 'github_search_repositories',
+      compact: true,
+      rawBodyStored: false,
+      rowCount: 1,
+      rows: [
+        {
+          name: 'tabrix',
+          fullName: 'guodaxia103/tabrix',
+          description: 'Browser MCP',
+          language: 'TypeScript',
+          stars: 12,
+          url: 'https://github.com/guodaxia103/tabrix',
+        },
+      ],
+    });
+    expect(JSON.stringify(result)).not.toContain('SHOULD_NOT_LEAK');
+  });
+
+  it('returns compact npmjs rows from the public search endpoint', async () => {
+    const result = await readApiKnowledgeRows({
+      endpointFamily: 'npmjs_search_packages',
+      method: 'GET',
+      params: { query: 'typescript' },
+      fetchFn: jsonFetch(200, {
+        objects: [
+          {
+            package: {
+              name: 'typescript',
+              version: '5.9.3',
+              description: 'TypeScript is a language for application scale JavaScript.',
+              links: { npm: 'https://www.npmjs.com/package/typescript' },
+            },
+            score: { detail: { quality: 0.95 } },
+            raw: 'SHOULD_NOT_LEAK',
+          },
+        ],
+      }),
+    });
+
+    expect(result).toMatchObject({
+      status: 'ok',
+      kind: 'api_rows',
+      endpointFamily: 'npmjs_search_packages',
+      dataPurpose: 'package_search',
+      rawBodyStored: false,
+      rows: [
+        {
+          name: 'typescript',
+          version: '5.9.3',
+          quality: 0.95,
+          url: 'https://www.npmjs.com/package/typescript',
+        },
+      ],
+    });
+    expect(JSON.stringify(result)).not.toContain('SHOULD_NOT_LEAK');
+  });
+
+  it('resolves supported search/list candidates without changing the public site-family contract', () => {
+    expect(
+      resolveApiKnowledgeCandidate({
+        intent: 'inspect issues',
+        url: 'https://github.com/octocat/hello-world/issues',
+        pageRole: 'issues_list',
+      }),
+    ).toMatchObject({
+      endpointFamily: 'github_issues_list',
+      params: { owner: 'octocat', repo: 'hello-world', state: 'open' },
+    });
+
+    expect(
+      resolveApiKnowledgeCandidate({
+        intent: 'search npm package zod',
+        url: 'https://www.npmjs.com/search?q=zod',
+      }),
+    ).toMatchObject({
+      endpointFamily: 'npmjs_search_packages',
+      dataPurpose: 'package_search',
+    });
+  });
+});
