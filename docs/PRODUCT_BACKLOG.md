@@ -488,6 +488,144 @@ _Pulled into Sprint 3 mid-sprint on 2026-04-20 as a P1 hotfix. This is **not** a
   - `pnpm run docs:check` passes inside the Codex sandbox.
   - Claude runs `pnpm -r typecheck` locally, confirms clean, and commits as `docs(backlog): drop rule-N numbering references (B-022)`.
 
+## Sprint 4 — v2.6 S1 foundation (2026-W17, 2026-04-25 → 2026-04-26)
+
+**Theme**: _v2.6 S1 — Foundation pass for "Layer Dispatch + Real Execution Value" v2._ Lock the four ground-floor packages that S2/S3 land on top of: step-level benchmark telemetry harness (V26-01), product-side primary tab controller (V26-02), honest dispatcher inputs (V26-04), and per-task read budget (V26-05). All four are no-regression against shipped v2.5.0 surfaces. P0/P1 semantics follow `.claude/strategy/TABRIX_V2_6_P0_CHAIN_V4_1_zh.md` §16.
+
+**Demo outcome** (what should be true after S1):
+
+1. The v26 benchmark transformer (`app/native-server/src/benchmark/v26-benchmark.ts`) exists and consumes step-level NDJSON with `startedAt / endedAt / durationMs / component / toolName / status / failureCode / waitedMs / chosenLayer / chosenSource`; emits `perTaskDurationMs / perToolDurationMs / unknownComponentRatio` aggregations. Negative duration / missing timestamp combinations fail the transformer; legacy v25 NDJSON without the new fields parses with `unknown` markers (fail-soft).
+2. A product-side `PrimaryTabController` runtime module exists (`app/native-server/src/runtime/primary-tab-controller.ts`), promotes the V25-05 `scripts/lib/v25-primary-tab-session.cjs` benchmark contract to runtime, and the bridge runtime snapshot now exposes `primaryTabId / primaryTabReuseRate / benchmarkOwnedTabCount`. Default off (env `TABRIX_PRIMARY_TAB_ENFORCE=true` to enforce on `chrome_navigate` hot path) — fail-soft so v2.5 navigation behavior is preserved unless explicitly opted-in.
+3. `app/native-server/src/mcp/choose-context.ts:687-688` no longer hard-codes `candidateActionsCount: 0, hvoCount: 0`. A new `mcp/page-context-provider.ts` reads the latest page snapshot for the current task and returns either real counters or `{ source: 'fallback_zero', cause }`; the `tabrix_choose_context_decisions` SQLite table grows two columns (`dispatcher_input_source`, `fallback_cause_v26`) via idempotent migration.
+4. `execution/task-session-context.ts` exists; `SessionManager` attaches one per task; `chrome_read_page` calls in `handleToolCall` are gated by the read-budget; URL/pageRole change invalidates and a default initial layer of `L0+L1` is enforced for replay/API fallback.
+5. No regression: `pnpm -r typecheck`, `pnpm -C app/native-server test:ci`, `pnpm run docs:check`, `pnpm run release:check`, `pnpm run size:check` all green; existing v23/v24/v25 benchmark + gate suites untouched.
+
+**Out of scope for Sprint 4 (S1)**:
+
+- V26-03 (skip-read actually wired through) / V26-06..V26-14 — those are S2/S3 work even if time allows.
+- `packages/shared/src/tools.ts` `TOOL_NAMES` / `TOOL_RISK_TIERS` — no new MCP tool surface.
+- `packages/shared/src/read-page-contract.ts` HVO public schema — no public contract change; only internal native-server gating.
+- Any `RELEASE_NOTES_v2.6` / `CHANGELOG` / version bump / publish action.
+
+**Execution order** (each commits + pushes before the next starts so reverts stay surgical):
+
+1. **B-025** (V26-01 benchmark transformer) — independent, lands first.
+2. **B-026** (V26-02 PrimaryTabController) — independent of B-025, second.
+3. **B-027** (V26-04 honest dispatcher inputs) — needs the telemetry table migration to land cleanly before downstream code consumes it.
+4. **B-028** (V26-05 task session context + read budget) — last in S1; touches `register-tools.ts` `chrome_read_page` path.
+5. **B-029** is an S2 placeholder — listed here so V26-06 has a stable backlog id when its sprint lands.
+
+### B-025 · v2.6 V26-01 — Step Telemetry Harness (benchmark transformer)
+
+- **Stage**: N/A (v2.6 release-evidence infra) · **Layer**: X · **KPI**: 更准 (per-step evidence powers V26-06+ reports)
+- **Owner**: Claude · **Size**: M · **Status**: `planned`
+- **Dependencies**: none — extends v25 transformer in a parallel module, does not modify v23/v24/v25 surfaces.
+- **Branch**: landed on `main` directly (foundation layer, no public contract surface change).
+- **Schema cite** (per the schema-cite rule in `AGENTS.md`):
+  - Extends the v25 NDJSON record `BenchmarkToolCallRecordV25` — see `app/native-server/src/benchmark/v25-benchmark.ts:123-163`. New record `BenchmarkToolCallRecordV26` adds `startedAt: string`, `endedAt: string`, `durationMs: number | null` (computed from `endedAt - startedAt` when not provided; `null` when either timestamp is missing), `component: string` (closed enum of `'mcp_tool' | 'native_handler' | 'extension_bridge' | 'page_snapshot' | 'unknown'`), `failureCode: string | null`, `waitedMs: number | null`, `chosenSource: BenchmarkLayerSourceRoute | null` (closed enum, mirrors v25). All new fields are optional — legacy v25 NDJSON parses with `component='unknown'`, `failureCode=null`, etc.
+  - No SQLite schema change. No `ExecutionStep` DTO change in `app/native-server/src/execution/types.ts:23-37` (deferred to V26-06+ when the runner can populate the columns).
+  - **Idempotency**: pure data transformer, no IO, no state. Same NDJSON in → same report out.
+- **Scope**:
+  - Add `app/native-server/src/benchmark/v26-benchmark.ts` exporting `BenchmarkToolCallRecordV26`, `BenchmarkRunInputV26`, `BenchmarkSummaryV26`, `summariseBenchmarkRunV26`. Re-exports v23/v24/v25 primitives that v26 reuses; bumps a local `BENCHMARK_REPORT_VERSION = 1` (independent counter from v25).
+  - Aggregations: `perTaskDurationMs` (Map keyed by `scenarioId`, value `{ p50, p95, sum, count }`), `perToolDurationMs` (Map keyed by `toolName`, same shape), `unknownComponentRatio` (`unknownCount / totalCount`), `componentDistribution` (closed-enum + unknown counters), `failureCodeDistribution` (open-ended map).
+  - Fail-shape contract: if `durationMs < 0` after derivation, transformer treats the record as malformed — emits a `transformerWarning` entry and excludes it from medians; if both timestamps are missing AND `durationMs` is missing, the record is bucketed under `unknownComponentRatio` denominator but excluded from latency aggregates.
+  - Add `app/native-server/src/benchmark/v26-benchmark.test.ts` with at least 8 cases: empty input, single record happy path, missing timestamps → unknown bucket, negative duration → excluded + warning, mixed v25/v26 records (back-compat), `unknownComponentRatio = 0/1/intermediate`, per-tool latency p50 across multiple tools, `chosenSource` distribution.
+  - Do NOT touch `scripts/lib/v25-benchmark-gate.cjs` — v26 gate ships in S3 V26-14.
+  - Do NOT touch `app/native-server/src/execution/types.ts` or `session-manager.ts` — owner-lane decision: keep V26-01 strictly transformer-side so the foundation lands without churning the runtime DTO. The runtime DTO extension is V26-06's responsibility (it owns the runner side that populates these columns).
+- **Must not do**: bump v23/v24/v25 `BENCHMARK_REPORT_VERSION`; modify v23/v24/v25 transformer surfaces; create a v26 release gate (S3 V26-14); change `ExecutionStep` shape; touch the chrome extension; introduce new MCP tool surface.
+- **Exit criteria**:
+  - `pnpm -r typecheck` green.
+  - `pnpm -C app/native-server test:ci -- --testPathPattern v26-benchmark` green (≥ 8 new tests).
+  - `pnpm -C app/native-server test:ci -- --testPathPattern v2[345]-benchmark` green (no regression).
+  - `pnpm run docs:check` green.
+- **Refs**: `.claude/strategy/TABRIX_V2_6_P0_CHAIN_V4_1_zh.md` §6 / §11 / §16.
+
+### B-026 · v2.6 V26-02 — Primary Tab Controller (runtime + bridge snapshot)
+
+- **Stage**: N/A (v2.6 reliability foundation) · **Layer**: X · **KPI**: 更稳 (multi-site tab leakage is the v2.5 acceptance regression)
+- **Owner**: Claude · **Size**: M · **Status**: `planned`
+- **Dependencies**: none — wraps the existing `scripts/lib/v25-primary-tab-session.cjs` contract; does not change extension navigate behavior unless `TABRIX_PRIMARY_TAB_ENFORCE=true`.
+- **Branch**: landed on `main` directly.
+- **Schema cite**:
+  - Extends `BridgeRuntimeSnapshot` — see `app/native-server/src/server/bridge-state.ts:11-36`. New optional fields: `primaryTabId: number | null` (default `null`), `primaryTabReuseRate: number | null` (default `null` until ≥ 1 navigation observed), `benchmarkOwnedTabCount: number` (default `0`). Baseline tabs the user already had open are **not** counted.
+  - No SQLite schema change. No DDL in `schema.ts`.
+  - **Idempotency**: controller state is per-process (no persistence). The opt-in env gate `TABRIX_PRIMARY_TAB_ENFORCE` defaults to off — `chrome_navigate` hot path behavior is unchanged unless the maintainer explicitly turns the gate on (fail-soft per V4.1 §16).
+- **Scope**:
+  - Add `app/native-server/src/runtime/primary-tab-controller.ts` exporting `createPrimaryTabController(opts?)` (re-uses the cjs `createPrimaryTabSession` under the hood, exposes a TS-typed surface) and a `getDefaultPrimaryTabController()` singleton accessor. Surface methods: `getSnapshot()`, `recordNavigation({ url, returnedTabId, scenarioId? })`, `declareAllowsNewTab(scenarioId)`, `reset()`.
+  - Extend `BridgeStateManager` with `setPrimaryTabSnapshot({ primaryTabId, primaryTabReuseRate, benchmarkOwnedTabCount })`; `getSnapshot()` includes the three new fields.
+  - In `app/native-server/src/mcp/register-tools.ts`, before forwarding `chrome_navigate` (line 1331-1343 region) check `process.env.TABRIX_PRIMARY_TAB_ENFORCE === 'true'`; when on, route through the controller (inject `tabId: primaryTabId` on second-and-after calls); when off, hot path is unchanged. After every navigation, push the controller snapshot into `bridgeRuntimeState`.
+  - The cjs `v25-primary-tab-session.cjs` stays unchanged — the new TS module wraps it via `require()` so the v25 benchmark runner contract is preserved.
+  - Add `app/native-server/src/runtime/primary-tab-controller.test.ts` with at least 6 cases: first call seeds primary, second call mismatch triggers switch-back, allowlisted scenario tolerated, snapshot fields populate `bridgeRuntimeState`, `TABRIX_PRIMARY_TAB_ENFORCE=false` → no-op (proves no regression), `TABRIX_PRIMARY_TAB_ENFORCE=true` → controller invoked.
+- **Must not do**: change the chrome-extension `NavigateTool` behavior; rewrite `v25-primary-tab-session.cjs`; gate the legacy benchmark runner on the new env flag; ship a public MCP tool for primary-tab control; touch the v25 release gate.
+- **Exit criteria**:
+  - `pnpm -r typecheck` green.
+  - `pnpm -C app/native-server test:ci -- --testPathPattern primary-tab-controller` green (≥ 6 new tests).
+  - `pnpm -C app/native-server test:ci -- --testPathPattern v25-primary-tab-session` green (no regression on benchmark contract).
+  - `pnpm run release:check` green.
+- **Refs**: `.claude/strategy/TABRIX_V2_6_P0_CHAIN_V4_1_zh.md` §6 / §16; `scripts/lib/v25-primary-tab-session.cjs:1-432`.
+
+### B-027 · v2.6 V26-04 — Honest Dispatcher Inputs + Source Router
+
+- **Stage**: N/A (v2.6 dispatcher correctness) · **Layer**: P (Policy/Dispatcher) · **KPI**: 更准 · 更省 (Strategy Table complexity rules can finally fire)
+- **Owner**: Claude · **Size**: M · **Status**: `planned`
+- **Dependencies**: none in S1 — the SQLite schema migration is idempotent and the dispatcher fallback path was already designed for `fallback_zero` semantics.
+- **Branch**: landed on `main` directly.
+- **Schema cite**:
+  - Migrates `tabrix_choose_context_decisions` — see `app/native-server/src/memory/db/schema.ts:314-359` (DDL `CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL`). Add two columns: `dispatcher_input_source TEXT` (closed enum: `live_snapshot | memory_snapshot | fallback_zero`) and `fallback_cause_v26 TEXT` (open-ended cause string for the `fallback_zero` branch — kept distinct from the existing `fallback_cause TEXT` column which still holds V25-02 dispatcher fallback reason). Migration is idempotent: `ALTER TABLE … ADD COLUMN` wrapped in a try/catch (`duplicate column name` → silently OK), same pattern as `ensureExperienceReplayWritebackColumns` in `client.ts`.
+  - Reads from `memory_page_snapshots` via the existing `PageSnapshotService` — see `app/native-server/src/memory/page-snapshot-service.ts:182-223`. Fields used: `interactiveCount` / `candidateActionCount` / `highValueObjectCount` / `pageRole`.
+  - Modifies `app/native-server/src/mcp/choose-context.ts:687-688` exactly: replaces hard-coded `candidateActionsCount: 0, hvoCount: 0` with values from the new `PageContextProvider`.
+  - **Idempotency**: schema migration runs on every `openMemoryDb`, no-op on second run. Provider is read-only (no writes).
+- **Scope**:
+  - Add `app/native-server/src/mcp/page-context-provider.ts` exporting `PageContextProvider` interface + `LivePageContextProvider` impl. `getContext({ sessionId, taskId })` returns `{ source: 'live_snapshot' | 'memory_snapshot' | 'fallback_zero', candidateActionsCount, hvoCount, fullReadByteLength, pageRole, fallbackCause? }`. Lookup order: latest `memory_page_snapshots` row for the current session (preferred) → most recent snapshot for the task (memory snapshot fallback) → `fallback_zero` with explicit `cause` ('no_session_snapshots' / 'no_task_snapshots' / 'persistence_off').
+  - Migrate `app/native-server/src/memory/telemetry/choose-context-telemetry.ts` `recordDecision` to accept and persist `dispatcherInputSource` + `fallbackCauseV26`. Extend the schema DDL string in `schema.ts` and add the idempotent column migration to `client.ts`.
+  - Modify `app/native-server/src/mcp/choose-context.ts` line 687-688: replace `candidateActionsCount: 0, hvoCount: 0` with provider output; record `dispatcherInputSource` + `fallbackCauseV26` on telemetry. The existing `dispatchLayer` output (`{ chosenLayer, sourceRoute, ... }`) is unchanged — V26-04 only changes the _inputs_ the dispatcher consumes, not its output shape.
+  - The v26-benchmark transformer (B-025) does not yet aggregate `dispatcherInputSource` — that aggregation is V26-06's job. B-027 only ensures the column lands and the value is recorded.
+  - Add `app/native-server/src/mcp/page-context-provider.test.ts` with ≥ 6 cases: live snapshot found, memory snapshot fallback, persistence-off → `fallback_zero` with cause, multiple snapshots → newest wins, complexity bucket flips when real counts present, `pageRole` propagated.
+  - Add at least 2 cases in `choose-context.test.ts`: dispatcher receives non-zero counts when snapshot exists; `fallback_zero` does not silently inflate `tokensSavedEstimate`.
+- **Must not do**: change `dispatchLayer` output shape; remove the existing `fallback_cause` column (V25-02 telemetry stays valid); introduce a new MCP tool; rebuild the strategy table; alter the public chooser result DTO beyond what V25-02 already exposes.
+- **Exit criteria**:
+  - `pnpm -r typecheck` green.
+  - `pnpm -C app/native-server test:ci -- --testPathPattern page-context-provider` green (≥ 6 new tests).
+  - `pnpm -C app/native-server test:ci -- --testPathPattern choose-context` green (no regression on existing 50+ chooser tests + new V26-04 cases).
+  - `pnpm -C app/native-server test:ci -- --testPathPattern choose-context-telemetry` green (column migration is idempotent; legacy DBs stay valid).
+  - `pnpm run docs:check` green.
+- **Refs**: `.claude/strategy/TABRIX_V2_6_P0_CHAIN_V4_1_zh.md` §0.1 / §6 / §11.
+
+### B-028 · v2.6 V26-05 — Task Session Context + Read Budget
+
+- **Stage**: N/A (v2.6 token-saving foundation) · **Layer**: X (execution shell) · **KPI**: 省 token (caps redundant `chrome_read_page` per task)
+- **Owner**: Claude · **Size**: M · **Status**: `planned`
+- **Dependencies**: none in S1 — runtime in-memory state only; no schema change.
+- **Branch**: landed on `main` directly.
+- **Schema cite**:
+  - No SQLite schema change. State lives in process memory only (deliberately — V4.1 §0.1 says "task session context is a runtime cap, not a persisted budget").
+  - Reads `pageRole` from `PageContextProvider` (B-027) when available; falls back to `null` when not.
+  - Public `chrome_read_page` shared schema in `packages/shared/src/read-page-contract.ts` is intentionally unchanged — V26-05 only gates the call in `register-tools.ts::handleToolCall`, returning a structured warning payload (still a valid `CallToolResult`) when budget is exceeded.
+  - **Idempotency**: per-task state resets on `startSession` / `finishSession`. No persistence, so process restart resets cleanly.
+- **Scope**:
+  - Add `app/native-server/src/execution/task-session-context.ts` exporting `TaskSessionContext` class. State per task: `currentUrl`, `pageRole`, `lastReadLayer`, `lastReadSource`, `targetRefsSeen: Set<string>`, `apiEndpointFamiliesSeen: Set<string>`, `readPageCount: number`, `readBudget: number` (default 6, configurable via `TABRIX_READ_BUDGET_PER_TASK` env). Methods: `noteUrlChange(url, pageRole?)` (invalidates `lastReadLayer` / `targetRefsSeen` when URL or pageRole changes), `noteReadPage({ layer, source, targetRefs?, apiFamilies? })`, `shouldAllowReadPage({ requestedLayer })` returns `{ allowed: boolean, reason?: string, suggestedLayer?: ReadPageRequestedLayer }`.
+  - Default initial layer enforcement: when allowed and no prior read on this URL/pageRole, suggest `'L0+L1'` (V4.1 §0.1 hard rule — replay/API fallback enters DOM at `L0+L1`, only escalates to L2 when verifier/target evidence demands).
+  - Extend `SessionManager` with a private `Map<taskId, TaskSessionContext>`; `startSession` attaches; `finishSession` detaches. Public accessor `getTaskContext(taskId): TaskSessionContext | null`.
+  - In `register-tools.ts::handleToolCall`, when `name === 'chrome_read_page'`, look up the task context (via the session→task chain), check `shouldAllowReadPage`. When budget exceeded or read is redundant, return a structured warning result (`status='ok'`, content includes `{ warning: 'read_budget_exceeded' | 'read_redundant', readPageCount, readBudget, suggestedLayer }`) WITHOUT forwarding to the extension. Successful reads call `noteReadPage`.
+  - Add `app/native-server/src/execution/task-session-context.test.ts` with ≥ 8 cases: virgin task allows read with `L0+L1` suggestion, budget exceeded warns, URL change resets budget, pageRole change resets budget, targetRefs accumulated and reused, env override `TABRIX_READ_BUDGET_PER_TASK=10` respected, layer escalation `L0 → L0+L1 → L0+L1+L2` allowed, layer demotion warned.
+  - Add ≥ 2 integration cases in `register-tools.test.ts`: `chrome_read_page` over budget returns structured warning without bridge call; URL change in a single task allows fresh read.
+- **Must not do**: persist context state to SQLite; modify `packages/shared/src/read-page-contract.ts` HVO schema; add a new MCP tool; throw a hard error when budget is exceeded (must be a structured warning, not a tool failure); change `chrome_read_page` argument schema.
+- **Exit criteria**:
+  - `pnpm -r typecheck` green.
+  - `pnpm -C app/native-server test:ci -- --testPathPattern task-session-context` green (≥ 8 new tests).
+  - `pnpm -C app/native-server test:ci -- --testPathPattern register-tools` green (existing register-tools tests + ≥ 2 new V26-05 integration cases).
+  - `pnpm run docs:check` green.
+- **Refs**: `.claude/strategy/TABRIX_V2_6_P0_CHAIN_V4_1_zh.md` §0.1 / §6 / §11 / §16.
+
+### B-029 · v2.6 V26-06 — Layer Metrics + Benchmark Evidence (S2 placeholder)
+
+- **Stage**: N/A (v2.6 S2 — reserved id) · **Layer**: X · **KPI**: 省 token · 更准
+- **Owner**: Claude · **Size**: L · **Status**: `planned` (NOT scheduled for S1)
+- **Dependencies**: B-025 / B-027 / B-028 landed.
+- **Branch**: TBD (S2).
+- **Scope (placeholder, S2 detail to follow when sprint lands)**: extend `v26-benchmark.ts` to aggregate `dispatcherInputSourceDistribution`, `readBudgetExceededRate`, `tabHygieneOnPrimaryTabRate`; wire into a `--gate` script (eventual V26-14); produce `docs/benchmarks/v26/` evidence artifacts. Schema cite + acceptance criteria written when S2 starts.
+- **Why allocate the id now**: keeps the `B-NNN` ↔ `V26-NN` mapping unbroken (`AGENTS.md` §"Operational Guardrails" / Rule 20). S1 commits reference V26-06 = B-029 in their plan-out, even though no code lands.
+
 ## Sprint 3+ — backlog pool (unordered, pulled into a sprint during review)
 
 | ID    | Stage | Layer | Title                                                                                                                                                                                                                                                                                                  | Size | Rough dependencies                    |
