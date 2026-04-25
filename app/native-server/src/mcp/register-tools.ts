@@ -8,12 +8,14 @@ import nativeMessagingHostInstance from '../native-messaging-host';
 import {
   CAPABILITY_GATED_TOOLS,
   NativeMessageType,
+  READ_PAGE_REQUESTED_LAYER_VALUES,
   TOOL_NAMES,
   TOOL_SCHEMAS,
   getRequiredCapability,
   getToolRiskTier,
   isCapabilityGatedTool,
   isExplicitOptInTool,
+  type ReadPageRequestedLayer,
 } from '@tabrix/shared';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
@@ -477,6 +479,72 @@ function isHeartbeatFresh(snapshot: BridgeRuntimeSnapshot): boolean {
 function hasExecutableBridge(snapshot: BridgeRuntimeSnapshot): boolean {
   return snapshot.commandChannelConnected || snapshot.nativeHostAttached;
 }
+
+/**
+ * v2.6 S1 P1-1 fix — extract a stable, externally-supplied task /
+ * session key from a tool-call's `args`. Lookup precedence:
+ *
+ *   1. `taskSessionId` (preferred — explicit naming)
+ *   2. `taskId`        (alias for legacy MCP clients)
+ *   3. `clientTaskId`  (alias for clients that already key their
+ *                       work by a client-side request id)
+ *
+ * Returns `null` when nothing usable is found, in which case
+ * `handleToolCall` falls back to the v2.5/v2.6 behaviour of using
+ * the freshly-minted internal `taskId` (i.e. no cross-call
+ * accumulation — strictly preserves the prior contract).
+ *
+ * Pure: tolerates `null`/non-object args, non-string values, and
+ * whitespace-only strings without throwing.
+ */
+function extractStableTaskKey(args: unknown): string | null {
+  if (!args || typeof args !== 'object') return null;
+  const obj = args as Record<string, unknown>;
+  for (const key of ['taskSessionId', 'taskId', 'clientTaskId'] as const) {
+    const raw = obj[key];
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (trimmed.length > 0) return trimmed;
+    }
+  }
+  return null;
+}
+
+/**
+ * v2.6 S1 P1-2 fix — read the `chrome_read_page` requested layer
+ * from tool args using the public schema name (`requestedLayer`)
+ * with the legacy `layer` field as a graceful fallback for any
+ * historical client. Returns `null` when neither field carries a
+ * value belonging to the closed
+ * {@link READ_PAGE_REQUESTED_LAYER_VALUES} enum, which the caller
+ * turns into the MCP-schema default (`'L0+L1+L2'`).
+ *
+ * The pre-fix code read `(args as any).layer` exclusively, which
+ * silently downgraded every real client request to the gate's
+ * internal default and sent the wrong layer to `noteReadPage`. The
+ * gate decisions and post-success bookkeeping were therefore
+ * decoupled from what the caller actually asked for.
+ */
+function extractRequestedLayer(args: unknown): ReadPageRequestedLayer | null {
+  if (!args || typeof args !== 'object') return null;
+  const obj = args as Record<string, unknown>;
+  for (const key of ['requestedLayer', 'layer'] as const) {
+    const raw = obj[key];
+    if (typeof raw !== 'string') continue;
+    if ((READ_PAGE_REQUESTED_LAYER_VALUES as readonly string[]).includes(raw)) {
+      return raw as ReadPageRequestedLayer;
+    }
+  }
+  return null;
+}
+
+/**
+ * MCP schema default per `packages/shared/src/tools.ts`:
+ * "Optional; when omitted preserves the legacy full L0+L1+L2
+ * payload." Centralised so the pre-gate and post-success sites
+ * cannot drift apart on the default again.
+ */
+const READ_PAGE_DEFAULT_LAYER: ReadPageRequestedLayer = 'L0+L1+L2';
 
 /**
  * V26-02 (B-026) — defensively walk a `chrome_navigate` extension
@@ -1394,6 +1462,15 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     // (persistence off, or `startSession` was bypassed) we forward the
     // call unchanged so the v2.5 happy path is preserved bit-for-bit.
     //
+    // v2.6 S1 P1-1 fix: prefer an externally-supplied stable key
+    // (`taskSessionId` / `taskId` / `clientTaskId`) so the budget
+    // accumulates across the multiple `handleToolCall` invocations
+    // that make up a single logical agent task. When the caller
+    // does not supply a key, fall back to the freshly-minted
+    // internal `taskId` — preserves v2.5/v2.6 behaviour bit-for-bit
+    // for legacy clients (no cross-call accumulation, gate becomes
+    // a no-op past the first call).
+    //
     // Decisions returned by `shouldAllowReadPage`:
     //   * `read_budget_exceeded` → return a structured warning
     //     CallToolResult immediately, WITHOUT a bridge round-trip.
@@ -1403,12 +1480,16 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     //
     // We also track `chrome_navigate` URL changes here so the next
     // `chrome_read_page` on a fresh page is treated as a first read.
-    const taskContext = sessionManager.getTaskContext(task.taskId);
+    const externalTaskKey = extractStableTaskKey(args);
+    const taskContext = externalTaskKey
+      ? sessionManager.getOrCreateExternalTaskContext(externalTaskKey)
+      : sessionManager.getTaskContext(task.taskId);
     if (taskContext && name === 'chrome_read_page') {
-      const requestedLayer =
-        args && typeof args === 'object' && typeof (args as any).layer === 'string'
-          ? ((args as any).layer as 'L0' | 'L0+L1' | 'L0+L1+L2')
-          : 'L0+L1';
+      // P1-2 fix: read the public `requestedLayer` field (with
+      // legacy `layer` fallback) instead of `(args as any).layer`,
+      // and default to the MCP-schema default `'L0+L1+L2'` when
+      // nothing is supplied.
+      const requestedLayer = extractRequestedLayer(args) ?? READ_PAGE_DEFAULT_LAYER;
       const decision = taskContext.shouldAllowReadPage({ requestedLayer });
       if (!decision.allowed || decision.reason === 'read_redundant') {
         const warningPayload = {
@@ -1490,11 +1571,10 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       // consume the budget — V4.1 §6 "honest budget" rule). The
       // taskContext lookup is repeated here because the post-processor
       // may have produced a tabId/URL update we want to honour.
+      // v2.6 S1 P1-2 fix: read `requestedLayer` (with legacy `layer`
+      // fallback) so the bookkeeping matches what the gate decided.
       if (name === 'chrome_read_page' && taskContext) {
-        const requestedLayer =
-          args && typeof args === 'object' && typeof (args as any).layer === 'string'
-            ? ((args as any).layer as 'L0' | 'L0+L1' | 'L0+L1+L2')
-            : 'L0+L1';
+        const requestedLayer = extractRequestedLayer(args) ?? READ_PAGE_DEFAULT_LAYER;
         taskContext.noteReadPage({
           layer: requestedLayer,
           source: 'unknown',

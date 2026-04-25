@@ -9,7 +9,7 @@
  * this provider is the only IO-touching adapter that surfaces those
  * facts.
  *
- * Lookup order (per V4.1 §11):
+ * Lookup order (per V4.1 §11, tightened by v2.6 S1 review):
  *   1. `live_snapshot` — newest snapshot whose `url` exactly matches
  *      the caller-supplied `url`. Strongest signal: the page the
  *      agent is asking about is the page we have telemetry for.
@@ -17,13 +17,22 @@
  *      the caller-supplied `pageRole` when no URL match is found.
  *      Weaker but still real telemetry: same role bucket, recent
  *      enough that strategy-table complexity rules can fire.
- *   3. `fallback_zero` — no usable snapshot. Returns zero counters
- *      with an explicit `cause` string (`persistence_off` /
- *      `no_session_snapshots` / `no_task_snapshots`) so the chooser
- *      telemetry can answer "did we honestly not know, or did we
- *      lie with zeros?". This is the EXACT shape v25 was returning
- *      silently — V26-04's job is to label it, not to invent
- *      synthetic counts.
+ *   3. `fallback_zero` — no usable snapshot we can honestly tie to
+ *      THIS chooser call. Returns zero counters with an explicit
+ *      `cause` (`persistence_off` / `no_session_snapshots` /
+ *      `no_matching_snapshot` / `no_task_snapshots` /
+ *      `provider_error`) so chooser telemetry can answer "did we
+ *      honestly not know, or did we lie with zeros?".
+ *
+ * v2.6 S1 review fix (P2): the previous implementation also tried a
+ * global "newest snapshot anywhere" fallback when both URL and
+ * pageRole missed, and labelled it `memory_snapshot`. That violated
+ * the V4.1 §11 "honest input" contract — feeding an unrelated
+ * page's complexity counters to the dispatcher is the same shape
+ * of dishonesty as the hard-coded zeros V26-04 was created to
+ * eliminate. The global lookup was removed; when no URL/pageRole
+ * match exists we surface `fallback_zero` with the precise cause
+ * so telemetry stays trustworthy.
  *
  * Hard rules:
  *   - This module is read-only. It NEVER writes to
@@ -43,6 +52,7 @@ export type DispatcherInputSource = 'live_snapshot' | 'memory_snapshot' | 'fallb
 export type DispatcherInputFallbackCauseV26 =
   | 'persistence_off'
   | 'no_session_snapshots'
+  | 'no_matching_snapshot'
   | 'no_task_snapshots'
   | 'provider_error';
 
@@ -69,13 +79,15 @@ export interface PageContextProvider {
 
 /**
  * Narrow read surface the live provider needs from
- * `PageSnapshotRepository`. We add the two finders the v26 provider
- * needs without widening the public repository to other callers.
+ * `PageSnapshotRepository`. Intentionally does NOT include
+ * `findLatestGlobal`: the v2.6 S1 review (P2) showed that an
+ * unrelated newest snapshot is not honest dispatcher input. The
+ * repository still exposes the global accessor for other callers
+ * (e.g. operator tooling), but the provider must not consume it.
  */
 export interface PageSnapshotReader {
   findLatestForUrl(url: string): PageSnapshot | undefined;
   findLatestForPageRole(pageRole: string): PageSnapshot | undefined;
-  findLatestGlobal(): PageSnapshot | undefined;
 }
 
 export interface LivePageContextProviderOptions {
@@ -165,9 +177,20 @@ export class LivePageContextProvider implements PageContextProvider {
         const byRole = this.reader.findLatestForPageRole(requestedPageRole);
         if (byRole) return projectSnapshot(byRole, 'memory_snapshot');
       }
-      const anyRecent = this.reader.findLatestGlobal();
-      if (anyRecent) return projectSnapshot(anyRecent, 'memory_snapshot');
-      return FALLBACK_ZERO(url ? 'no_session_snapshots' : 'no_task_snapshots', requestedPageRole);
+      // v2.6 S1 P2 fix: NO global "newest snapshot anywhere" fallback —
+      // an unrelated page's complexity is not honest dispatcher input.
+      // Surface a precise cause so chooser telemetry remains
+      // diagnosable (operator can tell URL miss apart from "we never
+      // had a hint" apart from "we had a hint but no row matched").
+      let cause: DispatcherInputFallbackCauseV26;
+      if (url) {
+        cause = 'no_session_snapshots';
+      } else if (requestedPageRole) {
+        cause = 'no_matching_snapshot';
+      } else {
+        cause = 'no_task_snapshots';
+      }
+      return FALLBACK_ZERO(cause, requestedPageRole);
     } catch {
       return FALLBACK_ZERO('provider_error', requestedPageRole);
     }

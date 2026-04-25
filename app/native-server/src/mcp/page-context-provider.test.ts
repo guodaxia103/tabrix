@@ -1,9 +1,10 @@
 /**
  * V26-04 (B-027) — `LivePageContextProvider` unit tests.
  *
- * Pins the four contracts the v26 chooser depends on:
- *   1. Lookup order (live URL → memory pageRole → memory global →
- *      fallback_zero with explicit cause).
+ * Pins the contracts the v26 chooser depends on (post v2.6 S1 P2
+ * tightening that removed the dishonest global fallback):
+ *   1. Lookup order: live URL → memory pageRole → fallback_zero
+ *      with explicit cause. NO global "newest anywhere" fallback.
  *   2. `persistence_off` short-circuit when the reader is `null`.
  *   3. Provider-level error isolation: any throw inside the reader
  *      becomes `fallback_zero` with cause `provider_error` so the
@@ -58,7 +59,6 @@ function makeReader(overrides: Partial<PageSnapshotReader> = {}): PageSnapshotRe
   return {
     findLatestForUrl: () => undefined,
     findLatestForPageRole: () => undefined,
-    findLatestGlobal: () => undefined,
     ...overrides,
   };
 }
@@ -101,17 +101,26 @@ describe('LivePageContextProvider — lookup order', () => {
     expect(result.fallbackCause).toBeUndefined();
   });
 
-  test('falls back to memory_snapshot global when neither URL nor pageRole match', () => {
-    const snap = makeSnap({ candidateActionCount: 5, highValueObjectCount: 2 });
+  test('does NOT fall back to a global "newest anywhere" snapshot (v2.6 S1 P2)', () => {
+    // Even when the reader has rows for OTHER URLs/pageRoles, the
+    // provider must not project them as honest dispatcher input.
+    // Anything outside the requested URL/pageRole envelope is
+    // unrelated complexity and gets `fallback_zero` instead.
     const provider = new LivePageContextProvider({
       reader: makeReader({
-        findLatestGlobal: () => snap,
+        findLatestForUrl: (url) =>
+          url === 'https://other.example/repo'
+            ? makeSnap({ url, candidateActionCount: 5, highValueObjectCount: 2 })
+            : undefined,
+        findLatestForPageRole: (role) =>
+          role === 'github_repo_overview' ? makeSnap({ pageRole: role }) : undefined,
       }),
     });
     const result = provider.getContext({});
-    expect(result.source).toBe('memory_snapshot');
-    expect(result.candidateActionsCount).toBe(5);
-    expect(result.hvoCount).toBe(2);
+    expect(result.source).toBe('fallback_zero');
+    expect(result.candidateActionsCount).toBe(0);
+    expect(result.hvoCount).toBe(0);
+    expect(result.fallbackCause).toBe('no_task_snapshots');
   });
 
   test('newest snapshot wins when several exist (delegates to reader)', () => {
@@ -162,11 +171,25 @@ describe('LivePageContextProvider — fallback_zero shapes', () => {
     expect(result.hvoCount).toBe(0);
   });
 
-  test('returns no_task_snapshots when no URL and no global snapshot exist', () => {
+  test('returns no_task_snapshots when neither URL nor pageRole are supplied', () => {
     const provider = new LivePageContextProvider({ reader: makeReader() });
     const result = provider.getContext({});
     expect(result.source).toBe('fallback_zero');
     expect(result.fallbackCause).toBe('no_task_snapshots');
+  });
+
+  test('returns no_matching_snapshot when only pageRole is supplied and misses (v2.6 S1 P2)', () => {
+    // Distinct cause from `no_session_snapshots` (URL miss) and
+    // `no_task_snapshots` (no hint at all). Lets operator dashboards
+    // tell "we knew the role but had no row" apart from the other
+    // two failure modes — useful for sizing memory coverage.
+    const provider = new LivePageContextProvider({ reader: makeReader() });
+    const result = provider.getContext({ pageRole: 'github_pull_review' });
+    expect(result.source).toBe('fallback_zero');
+    expect(result.fallbackCause).toBe('no_matching_snapshot');
+    expect(result.pageRole).toBe('github_pull_review');
+    expect(result.candidateActionsCount).toBe(0);
+    expect(result.hvoCount).toBe(0);
   });
 
   test('isolates reader exceptions into provider_error', () => {

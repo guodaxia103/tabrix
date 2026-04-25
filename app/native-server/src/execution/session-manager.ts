@@ -100,6 +100,16 @@ interface StorageInit {
 
 const nowIso = () => new Date().toISOString();
 
+/**
+ * v2.6 S1 P1-1 fix — hard cap on the number of distinct external
+ * task-session keys we hold in memory. Sized for "every reasonable
+ * daemon-mode workflow fits comfortably" (a single agent rarely runs
+ * more than ~30 logical tasks in a session) while still bounded so a
+ * misbehaving client cannot exhaust memory by minting fresh
+ * `taskSessionId`s per call.
+ */
+const EXTERNAL_TASK_CONTEXT_CAP = 256;
+
 function resolveRuntimeDbPath(options?: SessionManagerOptions): string {
   if (options?.dbPath !== undefined) return options.dbPath;
   if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined) {
@@ -189,6 +199,25 @@ export class SessionManager {
    * `getTaskContext(taskId)` before forwarding to the extension.
    */
   private readonly taskContexts = new Map<string, TaskSessionContext>();
+  /**
+   * v2.6 S1 P1-1 fix — externally-keyed read-budget gates. The MCP
+   * `handleToolCall` mints a fresh internal `taskId` per invocation,
+   * which previously meant `taskContexts` could never accumulate
+   * state across multiple tool calls of the same logical agent task.
+   * Callers can now pass a stable `taskSessionId` (or `taskId` /
+   * `clientTaskId` alias) in the tool args; this map keeps that
+   * context alive across `handleToolCall` round-trips so the read
+   * budget actually fires in production, not just in tests that
+   * spy on `getTaskContext`.
+   *
+   * Lifetime: independent of `startSession` / `finishSession` (the
+   * external key has no relation to the internal `taskId`). To keep
+   * memory bounded for long-running daemons we cap at
+   * {@link EXTERNAL_TASK_CONTEXT_CAP} entries and evict the oldest
+   * by insertion order (Map preserves insertion order, so the first
+   * `keys()` iterator value is the LRU candidate).
+   */
+  private readonly externalTaskContexts = new Map<string, TaskSessionContext>();
   private readonly repos: Repos | null;
   private readonly dbHandle: SqliteDatabase | null;
   private readonly persistenceMode: SessionPersistenceMode;
@@ -458,6 +487,48 @@ export class SessionManager {
     return next;
   }
 
+  /**
+   * v2.6 S1 P1-1 fix — return (or lazily create) the
+   * {@link TaskSessionContext} keyed by an externally-supplied stable
+   * id. The MCP `handleToolCall` derives this key from
+   * `args.taskSessionId` / `args.taskId` / `args.clientTaskId` so the
+   * read-budget gate accumulates state across consecutive tool calls
+   * within the same logical agent task (the previous behaviour reset
+   * the budget on every `handleToolCall`, which the v2.6 S1 review
+   * correctly flagged as "spy-only" semantics).
+   *
+   * Lifetime is independent of any `startSession` / `finishSession`
+   * pair. We bound memory at {@link EXTERNAL_TASK_CONTEXT_CAP}
+   * entries and evict the oldest insertion when the cap is hit
+   * (Map iteration order is insertion order). The eviction is
+   * intentionally simple — no LRU-on-read promotion — because the
+   * only real-world failure mode is a runaway client minting fresh
+   * keys per call, and FIFO is enough to bound that.
+   *
+   * Returns the existing context unmodified on repeat lookups so
+   * callers cannot accidentally clobber budget / page state.
+   */
+  public getOrCreateExternalTaskContext(externalKey: string): TaskSessionContext {
+    const existing = this.externalTaskContexts.get(externalKey);
+    if (existing) return existing;
+    if (this.externalTaskContexts.size >= EXTERNAL_TASK_CONTEXT_CAP) {
+      const oldest = this.externalTaskContexts.keys().next().value;
+      if (oldest !== undefined) this.externalTaskContexts.delete(oldest);
+    }
+    const next = new TaskSessionContext();
+    this.externalTaskContexts.set(externalKey, next);
+    return next;
+  }
+
+  /**
+   * v2.6 S1 P1-1 fix — test seam. Returns `null` when no external
+   * context exists; never lazily creates. Lets tests assert "we did
+   * NOT contaminate session A from a session B call".
+   */
+  public peekExternalTaskContext(externalKey: string): TaskSessionContext | null {
+    return this.externalTaskContexts.get(externalKey) ?? null;
+  }
+
   public getTask(taskId: string): Task {
     const task = this.tasks.get(taskId);
     if (!task) {
@@ -544,6 +615,14 @@ export class SessionManager {
     }
     this.tasks.clear();
     this.sessions.clear();
+    // v2.6 S1 P1-1: clear externally-keyed task contexts too, so a
+    // test calling `reset()` between cases starts with a virgin
+    // budget. Internal `taskContexts` is intentionally not touched
+    // here — those entries are owned by `startSession`/`finishSession`
+    // and would have been collected already if the corresponding
+    // sessions had finished cleanly; clearing them blindly risks
+    // hiding leaks in failing tests.
+    this.externalTaskContexts.clear();
   }
 
   /**

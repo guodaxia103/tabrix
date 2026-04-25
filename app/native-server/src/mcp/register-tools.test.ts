@@ -477,7 +477,10 @@ describe('handleToolCall execution wrapper', () => {
         .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
         .mockResolvedValueOnce({ status: 'success', items: [] } as never);
 
-      const result = await handleToolCall('chrome_read_page', { tabId: 1 });
+      const result = await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        requestedLayer: 'L0+L1',
+      });
 
       expect(result.isError).toBeFalsy();
       const payload = JSON.parse(String(result.content[0].text));
@@ -525,11 +528,303 @@ describe('handleToolCall execution wrapper', () => {
           status: 'success',
           data: { content: [{ type: 'text', text: 'read' }], isError: false },
         } as never);
-      const result = await handleToolCall('chrome_read_page', { tabId: 1 });
+      const result = await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        requestedLayer: 'L0+L1',
+      });
       expect(result.isError).toBeFalsy();
       // The post-success hook should have advanced readPageCount.
       expect(ctx.readPageCount).toBe(2);
       expect(ctx.lastReadLayer).toBe('L0+L1');
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // v2.6 S1 review fixes (P1-1, P1-2). These tests deliberately do
+  // NOT spy on `sessionManager.getTaskContext` — they exercise the
+  // real production path the agent walks today: `handleToolCall`
+  // mints a fresh internal task per call, but the externally-keyed
+  // context registry keeps state alive across calls when the args
+  // carry a stable `taskSessionId` (or alias).
+  // -------------------------------------------------------------------
+  describe('v2.6 S1 P1-1 — externally-keyed task context survives across handleToolCall', () => {
+    function mockReadPageRoundTrip(text: string): void {
+      jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never)
+        .mockResolvedValueOnce({
+          status: 'success',
+          data: { content: [{ type: 'text', text }], isError: false },
+        } as never);
+    }
+
+    it('accumulates readPageCount across consecutive chrome_read_page calls sharing taskSessionId', async () => {
+      markBridgeReady();
+      // Three calls with budget=2 → first two pass through, third
+      // is short-circuited by the gate. Real production path:
+      // stable `taskSessionId` only, no `getTaskContext` spy.
+      const ctx = sessionManager.getOrCreateExternalTaskContext('shared-task');
+      // Override the env-resolved budget on the shared context so
+      // the test does not have to mutate process.env.
+      Object.defineProperty(ctx, 'readBudget', { value: 2, writable: false });
+
+      mockReadPageRoundTrip('first');
+      const r1 = await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 'shared-task',
+        requestedLayer: 'L0+L1',
+      });
+      expect(r1.isError).toBeFalsy();
+
+      mockReadPageRoundTrip('second');
+      const r2 = await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 'shared-task',
+        requestedLayer: 'L0+L1+L2',
+      });
+      expect(r2.isError).toBeFalsy();
+
+      // Third call: budget exhausted. NO bridge round-trip; only
+      // the dynamic-flow listing is allowed. We `mockClear()` the
+      // shared spy so the post-call delta cleanly reflects this
+      // invocation only — `jest.spyOn` reuses the existing spy and
+      // would otherwise carry the call counts from r1/r2.
+      const flowSpy = jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never);
+      flowSpy.mockClear();
+      flowSpy.mockResolvedValueOnce({ status: 'success', items: [] } as never);
+      const r3 = await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 'shared-task',
+        requestedLayer: 'L0+L1+L2',
+      });
+      expect(r3.isError).toBeFalsy();
+      const payload = JSON.parse(String(r3.content[0].text));
+      expect(payload).toMatchObject({
+        warning: 'read_budget_exceeded',
+        readPageCount: 2,
+        readBudget: 2,
+      });
+      // Only the dynamic-flow probe was called for this third
+      // invocation — the bridge `call_tool` request never fired.
+      expect(flowSpy).toHaveBeenCalledTimes(1);
+
+      // External registry must reflect the two real reads exactly.
+      const persisted = sessionManager.peekExternalTaskContext('shared-task');
+      expect(persisted).toBe(ctx);
+      expect(persisted!.readPageCount).toBe(2);
+    });
+
+    it('does NOT cross-contaminate budgets between distinct taskSessionIds', async () => {
+      markBridgeReady();
+      const ctxA = sessionManager.getOrCreateExternalTaskContext('task-A');
+      const ctxB = sessionManager.getOrCreateExternalTaskContext('task-B');
+      Object.defineProperty(ctxA, 'readBudget', { value: 1, writable: false });
+      Object.defineProperty(ctxB, 'readBudget', { value: 3, writable: false });
+
+      // Burn task-A's budget.
+      mockReadPageRoundTrip('a1');
+      await handleToolCall('chrome_read_page', { tabId: 1, taskSessionId: 'task-A' });
+      expect(ctxA.readPageCount).toBe(1);
+
+      // task-B must still allow a read (budget intact).
+      mockReadPageRoundTrip('b1');
+      const rb1 = await handleToolCall('chrome_read_page', {
+        tabId: 2,
+        taskSessionId: 'task-B',
+      });
+      expect(rb1.isError).toBeFalsy();
+      expect(ctxB.readPageCount).toBe(1);
+      expect(ctxA.readPageCount).toBe(1);
+
+      // task-A is now over budget; the gate fires WITHOUT a bridge
+      // round-trip even though task-B is healthy. `mockClear` so
+      // the post-call assertion reflects this invocation only.
+      const flowSpy = jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never);
+      flowSpy.mockClear();
+      flowSpy.mockResolvedValueOnce({ status: 'success', items: [] } as never);
+      const ra2 = await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 'task-A',
+      });
+      const payload = JSON.parse(String(ra2.content[0].text));
+      expect(payload.warning).toBe('read_budget_exceeded');
+      expect(flowSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('alias precedence: taskSessionId beats taskId beats clientTaskId', async () => {
+      markBridgeReady();
+      const primary = sessionManager.getOrCreateExternalTaskContext('primary-key');
+
+      // taskSessionId wins over taskId/clientTaskId aliases.
+      mockReadPageRoundTrip('p1');
+      await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 'primary-key',
+        taskId: 'should-be-ignored',
+        clientTaskId: 'also-ignored',
+      });
+      expect(primary.readPageCount).toBe(1);
+      expect(sessionManager.peekExternalTaskContext('should-be-ignored')).toBeNull();
+      expect(sessionManager.peekExternalTaskContext('also-ignored')).toBeNull();
+
+      // taskId is honoured when taskSessionId is absent.
+      const fromTaskId = sessionManager.getOrCreateExternalTaskContext('legacy-task');
+      mockReadPageRoundTrip('p2');
+      await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskId: 'legacy-task',
+        clientTaskId: 'still-ignored',
+      });
+      expect(fromTaskId.readPageCount).toBe(1);
+      expect(sessionManager.peekExternalTaskContext('still-ignored')).toBeNull();
+
+      // clientTaskId is the last-resort alias.
+      const fromClient = sessionManager.getOrCreateExternalTaskContext('client-side');
+      mockReadPageRoundTrip('p3');
+      await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        clientTaskId: 'client-side',
+      });
+      expect(fromClient.readPageCount).toBe(1);
+    });
+
+    it('absence of any task key preserves v2.5/v2.6 behaviour (no cross-call accumulation)', async () => {
+      markBridgeReady();
+      // Two consecutive reads without any taskSessionId. Each
+      // mints a fresh internal task → fresh internal context →
+      // gate is effectively a no-op past the first call. The
+      // external registry must remain empty for these calls.
+      mockReadPageRoundTrip('legacy-1');
+      const r1 = await handleToolCall('chrome_read_page', { tabId: 1 });
+      expect(r1.isError).toBeFalsy();
+
+      mockReadPageRoundTrip('legacy-2');
+      const r2 = await handleToolCall('chrome_read_page', { tabId: 1 });
+      expect(r2.isError).toBeFalsy();
+
+      // No external context should have been created by these
+      // legacy-shape calls — the registry is keyed by externally
+      // supplied stable keys, not by the internal taskId.
+      for (const probe of ['', 'tabId', '1', 'undefined', 'null']) {
+        expect(sessionManager.peekExternalTaskContext(probe)).toBeNull();
+      }
+    });
+
+    it('whitespace-only / non-string task keys fall back to internal context (defensive)', async () => {
+      markBridgeReady();
+      mockReadPageRoundTrip('ws-1');
+      await handleToolCall('chrome_read_page', { tabId: 1, taskSessionId: '   ' });
+      mockReadPageRoundTrip('ws-2');
+      await handleToolCall('chrome_read_page', { tabId: 1, taskSessionId: 42 as never });
+      // No external entries materialised under degenerate keys.
+      expect(sessionManager.peekExternalTaskContext('   ')).toBeNull();
+      expect(sessionManager.peekExternalTaskContext('42')).toBeNull();
+    });
+  });
+
+  describe('v2.6 S1 P1-2 — chrome_read_page reads requestedLayer (not legacy `layer`)', () => {
+    function mockReadPageRoundTrip(text: string): void {
+      jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never)
+        .mockResolvedValueOnce({
+          status: 'success',
+          data: { content: [{ type: 'text', text }], isError: false },
+        } as never);
+    }
+
+    it('routes requestedLayer=L0+L1+L2 into shouldAllowReadPage / noteReadPage', async () => {
+      markBridgeReady();
+      const ctx = sessionManager.getOrCreateExternalTaskContext('layer-test');
+      Object.defineProperty(ctx, 'readBudget', { value: 4, writable: false });
+
+      mockReadPageRoundTrip('layer-1');
+      await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 'layer-test',
+        requestedLayer: 'L0+L1+L2',
+      });
+      expect(ctx.lastReadLayer).toBe('L0+L1+L2');
+      expect(ctx.readPageCount).toBe(1);
+
+      // A second call at the same layer on the same page becomes
+      // `read_redundant` and short-circuits — proves the gate
+      // received the requested layer (not the buggy default).
+      // `mockClear` so the assertion isolates this invocation.
+      const flowSpy = jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never);
+      flowSpy.mockClear();
+      flowSpy.mockResolvedValueOnce({ status: 'success', items: [] } as never);
+      const r2 = await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 'layer-test',
+        requestedLayer: 'L0+L1+L2',
+      });
+      const payload = JSON.parse(String(r2.content[0].text));
+      expect(payload.warning).toBe('read_redundant');
+      expect(flowSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('requestedLayer takes precedence over the legacy `layer` field', async () => {
+      markBridgeReady();
+      const ctx = sessionManager.getOrCreateExternalTaskContext('precedence');
+      Object.defineProperty(ctx, 'readBudget', { value: 4, writable: false });
+
+      mockReadPageRoundTrip('precedence');
+      await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 'precedence',
+        requestedLayer: 'L0',
+        layer: 'L0+L1+L2',
+      });
+      // Recorded layer must be the one named by the public schema.
+      expect(ctx.lastReadLayer).toBe('L0');
+    });
+
+    it('legacy `layer`-only callers still flow through (graceful fallback)', async () => {
+      markBridgeReady();
+      const ctx = sessionManager.getOrCreateExternalTaskContext('legacy-layer');
+      Object.defineProperty(ctx, 'readBudget', { value: 4, writable: false });
+
+      mockReadPageRoundTrip('legacy-layer');
+      await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 'legacy-layer',
+        layer: 'L0+L1',
+      });
+      expect(ctx.lastReadLayer).toBe('L0+L1');
+    });
+
+    it('omitting both fields defaults to L0+L1+L2 (matches MCP schema)', async () => {
+      markBridgeReady();
+      const ctx = sessionManager.getOrCreateExternalTaskContext('default-layer');
+      Object.defineProperty(ctx, 'readBudget', { value: 4, writable: false });
+
+      mockReadPageRoundTrip('default-layer');
+      await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 'default-layer',
+      });
+      expect(ctx.lastReadLayer).toBe('L0+L1+L2');
+    });
+
+    it('invalid layer string is ignored and falls back to the schema default', async () => {
+      markBridgeReady();
+      const ctx = sessionManager.getOrCreateExternalTaskContext('invalid-layer');
+      Object.defineProperty(ctx, 'readBudget', { value: 4, writable: false });
+
+      mockReadPageRoundTrip('invalid-layer');
+      await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 'invalid-layer',
+        requestedLayer: 'NOT_A_REAL_LAYER',
+      });
+      expect(ctx.lastReadLayer).toBe('L0+L1+L2');
     });
   });
 });
