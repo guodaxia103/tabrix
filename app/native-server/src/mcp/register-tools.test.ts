@@ -3,7 +3,6 @@ import { handleToolCall } from './register-tools';
 import { sessionManager } from '../execution/session-manager';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
-import { TaskSessionContext } from '../execution/task-session-context';
 
 describe('handleToolCall execution wrapper', () => {
   const markBridgeReady = () => {
@@ -459,20 +458,21 @@ describe('handleToolCall execution wrapper', () => {
   // -------------------------------------------------------------------
   // V26-05 (B-028) — Task Session Context + Read Budget integration.
   //
-  // The current `handleToolCall` shape mints a fresh task per call, so
-  // the only way to drive the task-context state across the gate is to
-  // pin `getTaskContext` to a shared instance via spy. That is the
-  // contract these tests pin: when a context exists and is over budget
-  // (or about to flip from a fresh URL), the gate fires correctly and
-  // the bridge round-trip is skipped.
+  // After the v2.6 S1 last-mile P1 fix, the gate resolves its task
+  // context via `resolveTaskContextKey` instead of `getTaskContext`,
+  // so we pin behaviour by pre-populating the auto-keyed registry
+  // entry the gate will look up. No `getTaskContext` spy is used.
   // -------------------------------------------------------------------
   describe('V26-05 read-budget gate', () => {
     it('chrome_read_page returns a structured warning without a bridge call when budget is exceeded', async () => {
       markBridgeReady();
-      const ctx = new TaskSessionContext({ readBudget: 2 });
+      // Pre-populate the same auto-key the gate will resolve for
+      // `{ tabId: 1 }` (no explicit task key). Budget = 2 with two
+      // reads already noted → the next call is over budget.
+      const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:1');
+      Object.defineProperty(ctx, 'readBudget', { value: 2, writable: false });
       ctx.noteReadPage({ layer: 'L0+L1', source: 'dom_json' });
       ctx.noteReadPage({ layer: 'L0+L1', source: 'dom_json' });
-      jest.spyOn(sessionManager, 'getTaskContext').mockReturnValue(ctx);
       const dynamicFlowSpy = jest
         .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
         .mockResolvedValueOnce({ status: 'success', items: [] } as never);
@@ -500,12 +500,13 @@ describe('handleToolCall execution wrapper', () => {
     it('chrome_navigate URL change unblocks a follow-up read in the same task', async () => {
       markBridgeReady();
       // Prime the context as if a previous read exhausted the page's
-      // L0+L1 layer at the OLD URL. After noteUrlChange the gate
-      // should treat the next read as a brand-new first read.
-      const ctx = new TaskSessionContext({ readBudget: 6 });
+      // L0+L1 layer at the OLD URL. The gate now resolves this same
+      // context via the auto-key for `tabId: 1`, so the navigate
+      // call will hit it and `noteUrlChange` will wipe lastReadLayer.
+      const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:1');
+      Object.defineProperty(ctx, 'readBudget', { value: 6, writable: false });
       ctx.noteUrlChange('https://old.example/foo', 'role_old');
       ctx.noteReadPage({ layer: 'L0+L1', source: 'dom_json' });
-      jest.spyOn(sessionManager, 'getTaskContext').mockReturnValue(ctx);
 
       // chrome_navigate to a new URL — the gate must call
       // `noteUrlChange` so the follow-up read is "first on this page".
@@ -692,37 +693,56 @@ describe('handleToolCall execution wrapper', () => {
       expect(fromClient.readPageCount).toBe(1);
     });
 
-    it('absence of any task key preserves v2.5/v2.6 behaviour (no cross-call accumulation)', async () => {
+    it('absence of any explicit task key now falls into the per-tab auto context (last-mile fix)', async () => {
       markBridgeReady();
-      // Two consecutive reads without any taskSessionId. Each
-      // mints a fresh internal task → fresh internal context →
-      // gate is effectively a no-op past the first call. The
-      // external registry must remain empty for these calls.
-      mockReadPageRoundTrip('legacy-1');
-      const r1 = await handleToolCall('chrome_read_page', { tabId: 1 });
-      expect(r1.isError).toBeFalsy();
+      // After the v2.6 S1 last-mile P1 fix, schema-following clients
+      // (which cannot pass `taskSessionId / taskId / clientTaskId`
+      // because those names are not in the public chrome_read_page
+      // schema) get an auto-derived `mcp:auto:tab:<tabId>` key, so
+      // the budget accumulates across calls without any caller
+      // co-operation. This test pins that contract.
+      //
+      // We intentionally vary `requestedLayer` between the two reads
+      // so the second call is not short-circuited by the
+      // `read_redundant` branch — that is exercised by the dedicated
+      // navigate-invalidation test below.
+      mockReadPageRoundTrip('auto-1');
+      await handleToolCall('chrome_read_page', { tabId: 1, requestedLayer: 'L0+L1' });
+      mockReadPageRoundTrip('auto-2');
+      await handleToolCall('chrome_read_page', { tabId: 1, requestedLayer: 'L0+L1+L2' });
 
-      mockReadPageRoundTrip('legacy-2');
-      const r2 = await handleToolCall('chrome_read_page', { tabId: 1 });
-      expect(r2.isError).toBeFalsy();
+      const auto = sessionManager.peekExternalTaskContext('mcp:auto:tab:1');
+      expect(auto).not.toBeNull();
+      expect(auto!.readPageCount).toBe(2);
 
-      // No external context should have been created by these
-      // legacy-shape calls — the registry is keyed by externally
-      // supplied stable keys, not by the internal taskId.
+      // Probes that resemble degenerate / pre-fix keys must remain
+      // empty — only the documented auto-key shape materialises.
       for (const probe of ['', 'tabId', '1', 'undefined', 'null']) {
         expect(sessionManager.peekExternalTaskContext(probe)).toBeNull();
       }
     });
 
-    it('whitespace-only / non-string task keys fall back to internal context (defensive)', async () => {
+    it('whitespace-only / non-string task keys fall through to the auto-key path (defensive)', async () => {
       markBridgeReady();
       mockReadPageRoundTrip('ws-1');
-      await handleToolCall('chrome_read_page', { tabId: 1, taskSessionId: '   ' });
+      await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: '   ',
+        requestedLayer: 'L0+L1',
+      });
       mockReadPageRoundTrip('ws-2');
-      await handleToolCall('chrome_read_page', { tabId: 1, taskSessionId: 42 as never });
-      // No external entries materialised under degenerate keys.
+      await handleToolCall('chrome_read_page', {
+        tabId: 1,
+        taskSessionId: 42 as never,
+        requestedLayer: 'L0+L1+L2',
+      });
+      // The degenerate key names themselves never materialise; the
+      // per-tab auto context absorbs both calls instead.
       expect(sessionManager.peekExternalTaskContext('   ')).toBeNull();
       expect(sessionManager.peekExternalTaskContext('42')).toBeNull();
+      const auto = sessionManager.peekExternalTaskContext('mcp:auto:tab:1');
+      expect(auto).not.toBeNull();
+      expect(auto!.readPageCount).toBe(2);
     });
   });
 
@@ -825,6 +845,204 @@ describe('handleToolCall execution wrapper', () => {
         requestedLayer: 'NOT_A_REAL_LAYER',
       });
       expect(ctx.lastReadLayer).toBe('L0+L1+L2');
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // v2.6 S1 last-mile P1 fix — auto-derived task-context key for
+  // schema-following MCP clients. These tests deliberately do NOT
+  // pass `taskSessionId` and they do NOT spy on
+  // `sessionManager.getTaskContext`; they exercise the production
+  // path that a default Claude Desktop / Cursor / Cline client walks.
+  // -------------------------------------------------------------------
+  describe('v2.6 S1 last-mile — read budget on the default MCP path (no taskSessionId)', () => {
+    function mockReadPageRoundTrip(text: string): void {
+      jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never)
+        .mockResolvedValueOnce({
+          status: 'success',
+          data: { content: [{ type: 'text', text }], isError: false },
+        } as never);
+    }
+
+    function mockNavigateRoundTrip(text: string, returnedTabId?: number): void {
+      jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never)
+        .mockResolvedValueOnce({
+          status: 'success',
+          data: {
+            content: [
+              {
+                type: 'text',
+                text:
+                  typeof returnedTabId === 'number'
+                    ? JSON.stringify({ ok: true, tabId: returnedTabId, summary: text })
+                    : text,
+              },
+            ],
+            isError: false,
+          },
+        } as never);
+    }
+
+    it('accumulates read budget across consecutive default-shape chrome_read_page calls on the same tab', async () => {
+      markBridgeReady();
+      // Pre-create the auto-key context with a tight budget so the
+      // gate fires deterministically without polluting process.env.
+      // The auto key shape is documented as `mcp:auto:tab:<tabId>`.
+      const auto = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:7');
+      Object.defineProperty(auto, 'readBudget', { value: 2, writable: false });
+
+      // Vary `requestedLayer` between the two healthy calls so the
+      // second is not short-circuited by `read_redundant`. The
+      // budget gate (count vs readBudget) is independent of layer
+      // and is what we assert below.
+      mockReadPageRoundTrip('first');
+      const r1 = await handleToolCall('chrome_read_page', {
+        tabId: 7,
+        requestedLayer: 'L0+L1',
+      });
+      expect(r1.isError).toBeFalsy();
+      expect(auto.readPageCount).toBe(1);
+
+      mockReadPageRoundTrip('second');
+      const r2 = await handleToolCall('chrome_read_page', {
+        tabId: 7,
+        requestedLayer: 'L0+L1+L2',
+      });
+      expect(r2.isError).toBeFalsy();
+      expect(auto.readPageCount).toBe(2);
+
+      // Third call must short-circuit on read_budget_exceeded WITHOUT
+      // a bridge round-trip. The dynamic-flow probe is the only call
+      // we expect to fire on this third invocation.
+      const flowSpy = jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never);
+      flowSpy.mockClear();
+      flowSpy.mockResolvedValueOnce({ status: 'success', items: [] } as never);
+      const r3 = await handleToolCall('chrome_read_page', {
+        tabId: 7,
+        requestedLayer: 'L0+L1+L2',
+      });
+      const payload = JSON.parse(String(r3.content[0].text));
+      expect(payload).toMatchObject({
+        warning: 'read_budget_exceeded',
+        readPageCount: 2,
+        readBudget: 2,
+      });
+      expect(flowSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('chrome_navigate on the same tab invalidates redundancy state for the next default-shape read', async () => {
+      markBridgeReady();
+      const auto = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:9');
+      Object.defineProperty(auto, 'readBudget', { value: 5, writable: false });
+
+      // First default-shape read on tab 9 establishes lastReadLayer.
+      mockReadPageRoundTrip('before-nav');
+      await handleToolCall('chrome_read_page', { tabId: 9, requestedLayer: 'L0+L1' });
+      expect(auto.lastReadLayer).toBe('L0+L1');
+      expect(auto.currentUrl).toBeNull();
+
+      // Default-shape navigate on tab 9 must hit the SAME auto
+      // context (so noteUrlChange wipes lastReadLayer / targetRefs).
+      mockNavigateRoundTrip('navigated', 9);
+      await handleToolCall('chrome_navigate', { tabId: 9, url: 'https://new.example/page' });
+      expect(auto.currentUrl).toBe('https://new.example/page');
+      expect(auto.lastReadLayer).toBeNull();
+
+      // Follow-up default-shape read must NOT be flagged
+      // read_redundant — the gate sees a fresh page.
+      mockReadPageRoundTrip('after-nav');
+      const r3 = await handleToolCall('chrome_read_page', {
+        tabId: 9,
+        requestedLayer: 'L0+L1',
+      });
+      expect(r3.isError).toBeFalsy();
+      // The post-success hook records the new read on the new page.
+      expect(auto.lastReadLayer).toBe('L0+L1');
+      expect(auto.readPageCount).toBe(2);
+    });
+
+    it('different tabIds do NOT share redundant state on the default MCP path', async () => {
+      markBridgeReady();
+      const tab1 = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:1');
+      const tab2 = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:2');
+      Object.defineProperty(tab1, 'readBudget', { value: 5, writable: false });
+      Object.defineProperty(tab2, 'readBudget', { value: 5, writable: false });
+
+      mockReadPageRoundTrip('tab1-1');
+      await handleToolCall('chrome_read_page', { tabId: 1, requestedLayer: 'L0+L1+L2' });
+      expect(tab1.lastReadLayer).toBe('L0+L1+L2');
+      expect(tab2.lastReadLayer).toBeNull();
+
+      // Same layer on tab 2 must NOT produce read_redundant — that
+      // would only happen if both tabs shared the same context.
+      // We assert by observing readPageCount: a redundant
+      // short-circuit skips `noteReadPage`, leaving count at 0.
+      mockReadPageRoundTrip('tab2-1');
+      const r2 = await handleToolCall('chrome_read_page', {
+        tabId: 2,
+        requestedLayer: 'L0+L1+L2',
+      });
+      expect(r2.isError).toBeFalsy();
+      expect(tab2.readPageCount).toBe(1);
+      expect(tab2.lastReadLayer).toBe('L0+L1+L2');
+      // tab 1's state is untouched.
+      expect(tab1.readPageCount).toBe(1);
+    });
+
+    it('explicit taskSessionId still beats the auto-derived per-tab key', async () => {
+      markBridgeReady();
+      const explicit = sessionManager.getOrCreateExternalTaskContext('explicit-task');
+      Object.defineProperty(explicit, 'readBudget', { value: 5, writable: false });
+
+      mockReadPageRoundTrip('explicit-1');
+      await handleToolCall('chrome_read_page', {
+        tabId: 5,
+        taskSessionId: 'explicit-task',
+        requestedLayer: 'L0+L1',
+      });
+
+      // The auto key for tab 5 must NOT have been created — explicit
+      // wins. Only the explicit context recorded a read.
+      expect(explicit.readPageCount).toBe(1);
+      expect(sessionManager.peekExternalTaskContext('mcp:auto:tab:5')).toBeNull();
+    });
+
+    it('omitted tabId falls back to the default key and still accumulates across calls', async () => {
+      markBridgeReady();
+      const fallback = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:default');
+      Object.defineProperty(fallback, 'readBudget', { value: 5, writable: false });
+
+      // Vary the layer so the second call is not short-circuited
+      // by `read_redundant` on a stable URL.
+      mockReadPageRoundTrip('default-1');
+      await handleToolCall('chrome_read_page', { requestedLayer: 'L0+L1' });
+      mockReadPageRoundTrip('default-2');
+      await handleToolCall('chrome_read_page', { requestedLayer: 'L0+L1+L2' });
+
+      expect(fallback.readPageCount).toBe(2);
+    });
+
+    it('auto-keying does NOT fire for non-budgeted tools (e.g. chrome_click_element)', async () => {
+      markBridgeReady();
+      // A click on tab 1 must not pre-create an auto context, since
+      // click never visits the budget gate or the URL invalidator.
+      jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never)
+        .mockResolvedValueOnce({
+          status: 'success',
+          data: { content: [{ type: 'text', text: 'clicked' }], isError: false },
+        } as never);
+      await handleToolCall('chrome_click_element', { tabId: 1, ref: 'ref_42' });
+
+      expect(sessionManager.peekExternalTaskContext('mcp:auto:tab:1')).toBeNull();
+      expect(sessionManager.peekExternalTaskContext('mcp:auto:tab:default')).toBeNull();
     });
   });
 });

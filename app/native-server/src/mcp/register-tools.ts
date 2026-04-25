@@ -547,6 +547,66 @@ function extractRequestedLayer(args: unknown): ReadPageRequestedLayer | null {
 const READ_PAGE_DEFAULT_LAYER: ReadPageRequestedLayer = 'L0+L1+L2';
 
 /**
+ * v2.6 S1 last-mile P1 fix — make the read-budget task key visible
+ * to schema-following MCP clients that DO NOT (and cannot) pass
+ * `taskSessionId / taskId / clientTaskId`, since those fields are
+ * not part of the public `chrome_read_page` schema (a strict client
+ * may even strip unknown fields).
+ *
+ * Only `chrome_read_page` (the gated tool) and `chrome_navigate` (the
+ * tool that invalidates the gate's lastReadLayer / targetRefsSeen
+ * via `noteUrlChange`) participate in auto-keying. Every other tool
+ * returns `null`, so click/fill/screenshot/etc. cannot accidentally
+ * mint phantom external task contexts or pollute the LRU map.
+ *
+ * Resolution order (highest precedence first):
+ *
+ *   1. Explicit `extractStableTaskKey(args)` — caller already
+ *      threaded a stable id through; honour it verbatim. This
+ *      preserves the c21ac8b precedence contract bit-for-bit.
+ *   2. Auto-key from `args.tabId` (positive integer) — strict
+ *      schema clients pass this and the public schema documents it.
+ *      Yields `mcp:auto:tab:<id>` so different tabs get isolated
+ *      contexts (no cross-tab redundant pollution).
+ *   3. Auto-key from `bridgeRuntimeState.primaryTabId` — when the
+ *      caller omitted `tabId` and the bridge knows which tab is
+ *      primary (e.g. set by an earlier `chrome_navigate`). Same
+ *      `mcp:auto:tab:<id>` shape.
+ *   4. Auto-key fallback `mcp:auto:tab:default` — single-tab
+ *      session, or pre-bridge-ready cold start. URL invalidation
+ *      via `chrome_navigate` still keeps redundancy honest inside
+ *      this single context.
+ *
+ * Returning `null` (only possible for tools outside the auto set
+ * with no explicit key) preserves the v2.5/v2.6 internal-taskId
+ * fallback path in `handleToolCall`.
+ */
+function resolveTaskContextKey(
+  toolName: string,
+  args: unknown,
+  bridge: { primaryTabId: number | null },
+): string | null {
+  const explicit = extractStableTaskKey(args);
+  if (explicit) return explicit;
+
+  const autoEligible = toolName === 'chrome_read_page' || toolName === 'chrome_navigate';
+  if (!autoEligible) return null;
+
+  const argTabId =
+    args && typeof args === 'object' ? (args as Record<string, unknown>).tabId : undefined;
+  if (typeof argTabId === 'number' && Number.isInteger(argTabId) && argTabId > 0) {
+    return `mcp:auto:tab:${argTabId}`;
+  }
+
+  const primary = bridge.primaryTabId;
+  if (typeof primary === 'number' && Number.isInteger(primary) && primary > 0) {
+    return `mcp:auto:tab:${primary}`;
+  }
+
+  return 'mcp:auto:tab:default';
+}
+
+/**
  * V26-02 (B-026) — defensively walk a `chrome_navigate` extension
  * response and extract the resulting `tabId`. The extension may
  * return the tabId directly on the data object OR embed it in a
@@ -1462,14 +1522,22 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     // (persistence off, or `startSession` was bypassed) we forward the
     // call unchanged so the v2.5 happy path is preserved bit-for-bit.
     //
-    // v2.6 S1 P1-1 fix: prefer an externally-supplied stable key
-    // (`taskSessionId` / `taskId` / `clientTaskId`) so the budget
-    // accumulates across the multiple `handleToolCall` invocations
-    // that make up a single logical agent task. When the caller
-    // does not supply a key, fall back to the freshly-minted
-    // internal `taskId` — preserves v2.5/v2.6 behaviour bit-for-bit
-    // for legacy clients (no cross-call accumulation, gate becomes
-    // a no-op past the first call).
+    // v2.6 S1 last-mile P1 fix: resolve the gate's task key from a
+    // ladder that BOTH honours an explicit caller-supplied key AND
+    // remains usable for schema-following MCP clients that cannot
+    // see `taskSessionId / taskId / clientTaskId` (those names are
+    // not in the public `chrome_read_page` schema, so a strict
+    // client may strip them on the wire). See
+    // `resolveTaskContextKey` above for the full ladder; the short
+    // version is: explicit > args.tabId > bridge.primaryTabId >
+    // single-process `mcp:auto:tab:default`. Auto-keying only fires
+    // for `chrome_read_page` and `chrome_navigate`, so click/fill/
+    // navigate-adjacent tools cannot mint phantom contexts.
+    //
+    // When `resolveTaskContextKey` returns null (only possible for
+    // tools outside the auto set without an explicit key), we fall
+    // back to the freshly-minted internal `taskId` so the v2.5/v2.6
+    // contract for those tools is preserved bit-for-bit.
     //
     // Decisions returned by `shouldAllowReadPage`:
     //   * `read_budget_exceeded` → return a structured warning
@@ -1478,9 +1546,14 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     //     point the agent at its previous projection.
     //   * `layer_demotion` / `''` → forward to the bridge as usual.
     //
-    // We also track `chrome_navigate` URL changes here so the next
-    // `chrome_read_page` on a fresh page is treated as a first read.
-    const externalTaskKey = extractStableTaskKey(args);
+    // `chrome_navigate` resolves the SAME key so a navigate followed
+    // by a read on the same tab shares one context — `noteUrlChange`
+    // wipes `lastReadLayer` / `targetRefsSeen` and the next read is
+    // treated as a fresh first read on the new page.
+    const bridgeForKey = bridgeRuntimeState.getSnapshot();
+    const externalTaskKey = resolveTaskContextKey(name, args, {
+      primaryTabId: bridgeForKey.primaryTabId,
+    });
     const taskContext = externalTaskKey
       ? sessionManager.getOrCreateExternalTaskContext(externalTaskKey)
       : sessionManager.getTaskContext(task.taskId);
