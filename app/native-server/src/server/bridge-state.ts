@@ -33,6 +33,29 @@ export interface BridgeRuntimeSnapshot {
   lastRecoveryAt: number | null;
   recoveryAttempts: number;
   recoveryInFlight: boolean;
+  /**
+   * Primary tab id Tabrix has been driving navigations through during
+   * the current process. `null` when the controller has not seen any
+   * navigation yet OR when V26-02 enforcement is off and no navigation
+   * has been observed by an opt-in caller. Source of truth:
+   * `runtime/primary-tab-controller.ts::getSnapshot()`.
+   */
+  primaryTabId: number | null;
+  /**
+   * `samePrimaryTabNavigations / expectedPrimaryTabNavigations` over
+   * the lifetime of the current process, excluding allowlisted
+   * navigations. `null` when no qualifying navigations have been
+   * observed yet. Mirrors the v25 benchmark's
+   * `BenchmarkTabHygieneSummaryV25.primaryTabReuseRate`.
+   */
+  primaryTabReuseRate: number | null;
+  /**
+   * Distinct tabIds Tabrix has driven navigations through. The v25
+   * "benchmark-owned" name is preserved for report-consumer
+   * compatibility — at runtime this is "tabs Tabrix has touched"
+   * because the runtime has no notion of pre-existing baseline tabs.
+   */
+  benchmarkOwnedTabCount: number;
 }
 
 interface RecordHeartbeatOptions {
@@ -114,6 +137,9 @@ export class BridgeStateManager {
     lastRecoveryAt: null,
     recoveryAttempts: 0,
     recoveryInFlight: false,
+    primaryTabId: null,
+    primaryTabReuseRate: null,
+    benchmarkOwnedTabCount: 0,
   };
 
   private watchTimer: NodeJS.Timeout | null = null;
@@ -145,7 +171,34 @@ export class BridgeStateManager {
       lastRecoveryAt: null,
       recoveryAttempts: 0,
       recoveryInFlight: false,
+      primaryTabId: null,
+      primaryTabReuseRate: null,
+      benchmarkOwnedTabCount: 0,
     };
+  }
+
+  /**
+   * Patch the snapshot's primary-tab hygiene fields. Called by the
+   * `chrome_navigate` hot path in `register-tools.ts` after every
+   * navigation. Idempotent — replaces all three fields atomically so
+   * snapshot consumers never see a half-applied update.
+   */
+  setPrimaryTabSnapshot(input: {
+    primaryTabId: number | null;
+    primaryTabReuseRate: number | null;
+    benchmarkOwnedTabCount: number;
+  }): void {
+    this.snapshot.primaryTabId = Number.isInteger(input.primaryTabId)
+      ? (input.primaryTabId as number)
+      : null;
+    this.snapshot.primaryTabReuseRate =
+      typeof input.primaryTabReuseRate === 'number' && Number.isFinite(input.primaryTabReuseRate)
+        ? input.primaryTabReuseRate
+        : null;
+    this.snapshot.benchmarkOwnedTabCount =
+      Number.isInteger(input.benchmarkOwnedTabCount) && input.benchmarkOwnedTabCount >= 0
+        ? input.benchmarkOwnedTabCount
+        : 0;
   }
 
   startWatching(): void {

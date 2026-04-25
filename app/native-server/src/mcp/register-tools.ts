@@ -37,6 +37,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
+import { getDefaultPrimaryTabController } from '../runtime/primary-tab-controller';
 import { collectRuntimeConsistencySnapshot } from '../scripts/runtime-consistency';
 import {
   readPersistedBrowserLaunchConfig,
@@ -475,6 +476,45 @@ function isHeartbeatFresh(snapshot: BridgeRuntimeSnapshot): boolean {
 
 function hasExecutableBridge(snapshot: BridgeRuntimeSnapshot): boolean {
   return snapshot.commandChannelConnected || snapshot.nativeHostAttached;
+}
+
+/**
+ * V26-02 (B-026) — defensively walk a `chrome_navigate` extension
+ * response and extract the resulting `tabId`. The extension may
+ * return the tabId directly on the data object OR embed it in a
+ * stringified JSON content payload (CallToolResult shape). Returns
+ * `null` when no integer-valued `tabId` is found anywhere.
+ *
+ * Pure function. Tolerates malformed inputs (returns `null`) so the
+ * controller observation hook in `handleToolCall` cannot throw.
+ */
+function extractTabIdFromCallToolResult(data: unknown): number | null {
+  if (!data || typeof data !== 'object') return null;
+  const direct = (data as Record<string, unknown>).tabId;
+  if (Number.isInteger(direct)) return direct as number;
+  const content = (data as { content?: unknown }).content;
+  if (Array.isArray(content)) {
+    for (const entry of content) {
+      if (entry && typeof entry === 'object') {
+        const text = (entry as { text?: unknown }).text;
+        if (typeof text === 'string' && text.length > 0) {
+          try {
+            const parsed = JSON.parse(text);
+            if (
+              parsed &&
+              typeof parsed === 'object' &&
+              Number.isInteger((parsed as Record<string, unknown>).tabId)
+            ) {
+              return (parsed as Record<string, number>).tabId;
+            }
+          } catch {
+            // Not JSON — skip.
+          }
+        }
+      }
+    }
+  }
+  return null;
 }
 
 async function invokeExtensionCommand(
@@ -1328,19 +1368,64 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         return result;
       }
     }
-    // 发送请求到Chrome扩展并等待响应
+    // V26-02 (B-026) — Primary Tab Controller hook. When
+    // `TABRIX_PRIMARY_TAB_ENFORCE=true`, inject `tabId: primaryTabId`
+    // into `chrome_navigate` args before forwarding to the extension
+    // so multi-site flows reuse the primary tab. When the env flag is
+    // off (default), `getInjectedTabId()` returns null and `args` is
+    // forwarded unchanged — bit-identical to v2.5 behaviour. The
+    // `args.tabId` caller-provided value always wins so allowlisted
+    // scenarios that explicitly want a fresh tab still get it.
+    const primaryTabController = getDefaultPrimaryTabController();
+    let outgoingArgs: any = args;
+    if (name === 'chrome_navigate') {
+      const callerSuppliedTabId =
+        args && typeof args === 'object' && Number.isInteger((args as any).tabId);
+      if (!callerSuppliedTabId) {
+        const injected = primaryTabController.getInjectedTabId();
+        if (injected !== null) {
+          outgoingArgs = { ...args, tabId: injected };
+        }
+      }
+    }
     const { response, bridgeFailure } = await callWithBridgeRecovery(
       () =>
         invokeExtensionCommand(
           'call_tool',
           {
             name,
-            args,
+            args: outgoingArgs,
           },
           120000,
         ),
       `tool:${name}`,
     );
+    // V26-02: regardless of the enforcement gate, observe every
+    // `chrome_navigate` outcome so the bridge runtime snapshot
+    // exposes hygiene metrics (`primaryTabReuseRate`,
+    // `benchmarkOwnedTabCount`) that the v26-benchmark transformer
+    // and any operator UI can read. Defensive: tolerate missing /
+    // malformed `tabId` in the response without throwing.
+    if (name === 'chrome_navigate') {
+      const responseTabId =
+        response &&
+        response.status === 'success' &&
+        response.data &&
+        typeof response.data === 'object'
+          ? extractTabIdFromCallToolResult(response.data)
+          : null;
+      const url =
+        args && typeof args === 'object' && typeof (args as any).url === 'string'
+          ? ((args as any).url as string)
+          : null;
+      primaryTabController.recordNavigation({ returnedTabId: responseTabId, url });
+      const ptSnapshot = primaryTabController.getSnapshot();
+      bridgeRuntimeState.setPrimaryTabSnapshot({
+        primaryTabId: ptSnapshot.primaryTabId,
+        primaryTabReuseRate: ptSnapshot.primaryTabReuseRate,
+        benchmarkOwnedTabCount: ptSnapshot.benchmarkOwnedTabCount,
+      });
+    }
     if (response.status === 'success') {
       const postResult = runPostProcessor({
         toolName: name,
