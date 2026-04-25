@@ -1,6 +1,6 @@
 # Tabrix 任务路线图（Stage 3a → 5e）
 
-> **版本**：`v1.0.0`（2026-04-21）—— [`PRD_zh.md`](./PRD_zh.md) 的配套文。
+> **版本**：`v1.0.0`（2026-04-21）—— 公开 Stage 级执行 SoT。
 > **语言**：中文。英文正本：[`TASK_ROADMAP.md`](./TASK_ROADMAP.md)（两份内容对等；改其中一份必须同 PR 改另一份）。
 > **状态**：`生效 / Stage 级执行 SoT`。
 > **取代**：[`MKEP_STAGE_3_PLUS_ROADMAP.md`](./MKEP_STAGE_3_PLUS_ROADMAP.md) 的路线图部分。老文档保留作历史参考，**这份是活的**。
@@ -13,7 +13,7 @@
 如果你是一个刚接手 Tabrix 的 AI 助手，**按这个顺序读**：
 
 1. [`AGENTS.md`](../AGENTS.md) —— 研发规则。
-2. [`PRD_zh.md`](./PRD_zh.md) —— 产品身份 + 硬约束。
+2. [`PRODUCT_SURFACE_MATRIX.md`](./PRODUCT_SURFACE_MATRIX.md) —— 公开产品表面 + 能力边界。
 3. **本文** —— 哪个 Stage 活着、下一步是什么、什么明令禁止。
 4. [`PRODUCT_BACKLOG.md`](./PRODUCT_BACKLOG.md) —— 本周你能领的 `B-*`。
 
@@ -161,7 +161,7 @@ v2.3.0 主线的 `V23-03` 包首次落地了 `read_page(render='markdown')` 与 
 1. Schema：`experience_action_paths(page_role, intent_signature, step_sequence, success_count, failure_count, last_used_at, …)` + `experience_locator_prefs(page_role, element_purpose, preferred_selector_kind, preferred_selector, hit_count, …)`。—— `B-005` 落地。
 2. **聚合器**（`B-012`，done）：扫描 `memory_sessions.status ∈ {completed, failed, aborted}` 且 `aggregated_at IS NULL`；join `memory_tasks` 取 intent；按 `step_index` 读 `memory_steps`；投影到 `experience_action_paths`。重复运行不会二次计数。
 3. `memory_sessions.aggregated_at` 列通过 guarded migration 加（SQLite 不支持 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`）。
-4. MCP 工具：`experience_suggest_plan(intent, pageRole?, limit?) → ExperienceActionPathPlan[]` 已在 `B-013` 落地（P0 只读、native-handled，不走扩展桥；按 `success_count` → 净成功数 → 最近使用 → 确定性 ID 排序）。`experience_replay(actionPathId, variableSubstitutions, targetTabId, maxSteps) → ExperienceReplayResult` 已在 **V24-01（v2.4.0）** 落地：bridged 工具，`P1` + `requiresExplicitOptIn` + 新 capability `experience_replay`；支持步骤集合限定为 `chrome_click_element` / `chrome_fill_or_select`；变量替换白名单 = `['queryText','targetLabel']`；聚合器对 `experience_replay:<actionPathId>` 类 task intent 走特殊路径，把 success/failure delta 投影回原始 Experience 行。`experience_score_step({actionPathId, stepIndex, observedOutcome, historyRef?, replayId?, evidence?}) → TabrixExperienceScoreStepResult` 已在 **V24-02（v2.4.0）** 落地：native（非 bridged）工具，`P1` + `requiresExplicitOptIn`；**复用** `experience_replay` capability（不新开钥匙——按 Policy 决定，捕获/使用绑定）；step 级 outcome → `success_delta`/`failure_delta` 投影统一收敛在 `ExperienceRepository.recordReplayStepOutcome` 单一来源；`experience_replay` 引擎本身在每一步执行后也调用同一条写回钩子（V24-01 的会话现在能自动累计 success/failure 计数）；session-end 复合评分（确定性、按 `taskWeights` v1、按 `EXPERIENCE_SCORE_STEP_RECENCY_HALF_LIFE_DAYS` 做 recency decay）由 aggregator 在 replay session 上写入。SQLite 写失败采用 **隔离** 策略，写入新表 `experience_writeback_warnings`，replay 路径绝不会被 I/O 抖动卡住——参见 `.claude/handoffs/` 下的 V24-02 失败处理契约。
+4. MCP 工具：`experience_suggest_plan(intent, pageRole?, limit?) → ExperienceActionPathPlan[]` 已在 `B-013` 落地（P0 只读、native-handled，不走扩展桥；按 `success_count` → 净成功数 → 最近使用 → 确定性 ID 排序）。`experience_replay(actionPathId, variableSubstitutions, targetTabId, maxSteps) → ExperienceReplayResult` 已在 **V24-01（v2.4.0）** 落地：bridged 工具，`P1` + `requiresExplicitOptIn` + 新 capability `experience_replay`；支持步骤集合限定为 `chrome_click_element` / `chrome_fill_or_select`；变量替换白名单 = `['queryText','targetLabel']`；聚合器对 `experience_replay:<actionPathId>` 类 task intent 走特殊路径，把 success/failure delta 投影回原始 Experience 行。`experience_score_step({actionPathId, stepIndex, observedOutcome, historyRef?, replayId?, evidence?}) → TabrixExperienceScoreStepResult` 已在 **V24-02（v2.4.0）** 落地：native（非 bridged）工具，`P1` + `requiresExplicitOptIn`；**复用** `experience_replay` capability（不新开钥匙——按 Policy 决定，捕获/使用绑定）；step 级 outcome → `success_delta`/`failure_delta` 投影统一收敛在 `ExperienceRepository.recordReplayStepOutcome` 单一来源；`experience_replay` 引擎本身在每一步执行后也调用同一条写回钩子（V24-01 的会话现在能自动累计 success/failure 计数）；session-end 复合评分（确定性、按 `taskWeights` v1、按 `EXPERIENCE_SCORE_STEP_RECENCY_HALF_LIFE_DAYS` 做 recency decay）由 aggregator 在 replay session 上写入。SQLite 写失败采用 **隔离** 策略，写入新表 `experience_writeback_warnings`，replay 路径绝不会被 I/O 抖动卡住。
 5. 回放时五级 locator 回退：`exact ref → stable hash → xpath → ax name → attribute`，按 Experience 统计动态重排。
 
 ### 非范围
@@ -183,7 +183,7 @@ v2.3.0 主线的 `V23-03` 包首次落地了 `read_page(render='markdown')` 与 
 - ✅ `B-005` —— Experience schema seed（done）。
 - ✅ `B-012` —— Experience action-path aggregator（done）。
 - ✅ `B-013` —— `experience_suggest_plan` MCP 工具（已落；`experience_replay` / `experience_score_step` 推迟，详见 backlog 中 B-013 的 "Next" 段）。
-- ✅ `B-EXP-REPLAY-V1` —— `experience_replay` v1 **已在 v2.4.0 (V24-01, 2026-04-22) 落地**：bridged MCP 工具 + capability gate + 聚合器特殊路径 + chooser 分支。2026-04-23 锁定的 owner 决策按原样落地；详见 `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §10 与 `.claude/handoffs/v2_4_0_v24_01_experience_replay_v1.md`。真实浏览器验收场景（`t5-G-experience-replay`）走 `tabrix-private-tests` 的兄弟 PR。
+- ✅ `B-EXP-REPLAY-V1` —— `experience_replay` v1 **已在 v2.4.0 (V24-01, 2026-04-22) 落地**：bridged MCP 工具 + capability gate + 聚合器特殊路径 + chooser 分支。2026-04-23 锁定的 owner 决策按原样落地；详见 `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §10 。真实浏览器验收场景（`t5-G-experience-replay`）走 `tabrix-private-tests` 的兄弟 PR。
 
 ### 给接手 AI 的提示
 

@@ -20,12 +20,11 @@ Sensitive maintainer-only materials still live outside this repository.
 
 ### Product-level Source of Truth (start here)
 
-- [`PRD.md`](./PRD.md) — canonical Product Requirements Document (English). Product identity, KPIs, MKEP architecture, capability tiers, MCP tool surface, anti-patterns, task numbering, change governance.
-- [`PRD_zh.md`](./PRD_zh.md) — Chinese mirror of `PRD.md`. Must stay semantically equivalent.
 - [`TASK_ROADMAP.md`](./TASK_ROADMAP.md) — canonical Stage-level execution plan from `Stage 3a` through `Stage 5e`, with Definition of Done and `B-*` mappings for each Stage.
 - [`TASK_ROADMAP_zh.md`](./TASK_ROADMAP_zh.md) — Chinese mirror of `TASK_ROADMAP.md`.
 - [`PRODUCT_BACKLOG.md`](./PRODUCT_BACKLOG.md) — sprint-level backlog (`B-*` items). Each Stage in `TASK_ROADMAP.md` breaks down into one or more `B-*` here.
-- [`MKEP_STAGE_3_PLUS_ROADMAP.md`](./MKEP_STAGE_3_PLUS_ROADMAP.md) — historical snapshot (v0.3, 2026-04-20). Superseded by `PRD.md` + `TASK_ROADMAP.md`; kept for provenance only.
+- [`PRODUCT_SURFACE_MATRIX.md`](./PRODUCT_SURFACE_MATRIX.md) — public product surface and capability tiers.
+- [`MKEP_STAGE_3_PLUS_ROADMAP.md`](./MKEP_STAGE_3_PLUS_ROADMAP.md) — historical snapshot (v0.3, 2026-04-20). Superseded by `PRODUCT_SURFACE_MATRIX.md` + `TASK_ROADMAP.md`; kept for provenance only.
 
 ### Getting Started
 
@@ -72,14 +71,13 @@ The following categories are maintained outside this repository by the project m
 - private acceptance evidence and gate-maintenance artifacts
 - private runbooks for non-public scenarios
 
-By contrast, `PRD.md`, `TASK_ROADMAP.md`, `PRODUCT_BACKLOG.md`, and `AGENTS.md` are intentionally kept in-repo because contributors need them to understand the current product and execution rules.
+By contrast, `TASK_ROADMAP.md`, `PRODUCT_BACKLOG.md`, `PRODUCT_SURFACE_MATRIX.md`, and `AGENTS.md` are intentionally kept in-repo because contributors need them to understand the current product and execution rules.
 
 ## Language Policy
 
 - English is the single public language for `docs/`, with the following **explicit, limited** bilingual exceptions:
-  - [`PRD.md`](./PRD.md) (English canonical) + [`PRD_zh.md`](./PRD_zh.md) (Chinese mirror)
   - [`TASK_ROADMAP.md`](./TASK_ROADMAP.md) (English canonical) + [`TASK_ROADMAP_zh.md`](./TASK_ROADMAP_zh.md) (Chinese mirror)
-  - Both pairs must stay semantically equivalent; any PR that edits one of a pair must edit the other in the same commit.
+  - This pair must stay semantically equivalent; any PR that edits one must edit the other in the same commit.
 - The only Chinese documents outside `docs/` are [`../README_zh.md`](../README_zh.md) (public landing page in Chinese) and [`../AGENTS.md`](../AGENTS.md) (internal contributor rules, bilingual prose)
 - Chinese variants of other internal materials are maintained outside this repository
 

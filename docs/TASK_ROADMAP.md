@@ -1,6 +1,6 @@
 # Tabrix Task Roadmap (Stage 3a → 5e)
 
-> **Version**: `v1.0.0` (2026-04-21) — companion to [`PRD.md`](./PRD.md).
+> **Version**: `v1.0.0` (2026-04-21) — public Stage-level execution plan.
 > **Language**: English (canonical). Chinese mirror: [`TASK_ROADMAP_zh.md`](./TASK_ROADMAP_zh.md).
 > **Status**: `Active / Execution plan SoT (Stage level)`.
 > **Supersedes**: the roadmap portion of [`MKEP_STAGE_3_PLUS_ROADMAP.md`](./MKEP_STAGE_3_PLUS_ROADMAP.md). That file stays as a historical reference; this one is the live plan.
@@ -13,7 +13,7 @@
 If you are a new AI assistant picking up work on Tabrix, read in this order:
 
 1. [`AGENTS.md`](../AGENTS.md) — development rules.
-2. [`PRD.md`](./PRD.md) — product identity + hard constraints.
+2. [`PRODUCT_SURFACE_MATRIX.md`](./PRODUCT_SURFACE_MATRIX.md) — public product surface + hard capability boundaries.
 3. **This file** — which Stage is live, what is next, what is off-limits.
 4. [`PRODUCT_BACKLOG.md`](./PRODUCT_BACKLOG.md) — the `B-*` you can grab this week.
 
@@ -161,7 +161,7 @@ The `V23-04` package extends `tabrix_choose_context` from a stateless v1 chooser
 1. Schema: `experience_action_paths(page_role, intent_signature, step_sequence, success_count, failure_count, last_used_at, …)` + `experience_locator_prefs(page_role, element_purpose, preferred_selector_kind, preferred_selector, hit_count, …)`. Done in `B-005`.
 2. **Aggregator** (`B-012`, done): walks `memory_sessions` where `status ∈ {completed, failed, aborted}` AND `aggregated_at IS NULL`; joins `memory_tasks` for intent; reads `memory_steps` for ordered step sequence; and projects into `experience_action_paths`. Idempotent re-runs do not double-count.
 3. `memory_sessions.aggregated_at` column added via guarded migration (SQLite lacks `IF NOT EXISTS` on `ADD COLUMN`).
-4. MCP tools: `experience_suggest_plan(intent, pageRole?, limit?) → ExperienceActionPathPlan[]` shipped in `B-013` (P0 read-only, native-handled — no extension round-trip; rows ranked by `success_count` then net-success margin then recency). `experience_replay(actionPathId, variableSubstitutions, targetTabId, maxSteps) → ExperienceReplayResult` shipped in **V24-01 (v2.4.0)** as a bridged tool: `P1` + `requiresExplicitOptIn` + new capability `experience_replay`; supported step kinds restricted to `chrome_click_element` / `chrome_fill_or_select`; substitution whitelist = `['queryText','targetLabel']`; aggregator special-cases `experience_replay:<actionPathId>` task intents and projects success/failure deltas back onto the original Experience row. `experience_score_step({actionPathId, stepIndex, observedOutcome, historyRef?, replayId?, evidence?}) → TabrixExperienceScoreStepResult` shipped in **V24-02 (v2.4.0)** as a native (non-bridged) tool: `P1` + `requiresExplicitOptIn`; **reuses** the `experience_replay` capability (no new capability key — capture and use are bundled by Policy); per-step outcome → `success_delta`/`failure_delta` projection lives in `ExperienceRepository.recordReplayStepOutcome` (single source of truth); the `experience_replay` engine itself drives the same write-back hook on every step (V24-01 sessions now compound counters automatically); session-end composite score (deterministic, per-`taskWeights` v1, recency-decayed via `EXPERIENCE_SCORE_STEP_RECENCY_HALF_LIFE_DAYS`) is written by the aggregator on replay sessions only. SQLite write failures are **isolated** into `experience_writeback_warnings` rows so the replay path never stalls on I/O — see §V24-02 in `.claude/handoffs/` for the failure-handling contract.
+4. MCP tools: `experience_suggest_plan(intent, pageRole?, limit?) → ExperienceActionPathPlan[]` shipped in `B-013` (P0 read-only, native-handled — no extension round-trip; rows ranked by `success_count` then net-success margin then recency). `experience_replay(actionPathId, variableSubstitutions, targetTabId, maxSteps) → ExperienceReplayResult` shipped in **V24-01 (v2.4.0)** as a bridged tool: `P1` + `requiresExplicitOptIn` + new capability `experience_replay`; supported step kinds restricted to `chrome_click_element` / `chrome_fill_or_select`; substitution whitelist = `['queryText','targetLabel']`; aggregator special-cases `experience_replay:<actionPathId>` task intents and projects success/failure deltas back onto the original Experience row. `experience_score_step({actionPathId, stepIndex, observedOutcome, historyRef?, replayId?, evidence?}) → TabrixExperienceScoreStepResult` shipped in **V24-02 (v2.4.0)** as a native (non-bridged) tool: `P1` + `requiresExplicitOptIn`; **reuses** the `experience_replay` capability (no new capability key — capture and use are bundled by Policy); per-step outcome → `success_delta`/`failure_delta` projection lives in `ExperienceRepository.recordReplayStepOutcome` (single source of truth); the `experience_replay` engine itself drives the same write-back hook on every step (V24-01 sessions now compound counters automatically); session-end composite score (deterministic, per-`taskWeights` v1, recency-decayed via `EXPERIENCE_SCORE_STEP_RECENCY_HALF_LIFE_DAYS`) is written by the aggregator on replay sessions only. SQLite write failures are **isolated** into `experience_writeback_warnings` rows so the replay path never stalls on I/O.
 5. Five-tier locator fallback at replay time: `exact ref → stable hash → xpath → ax name → attribute`, reordered by Experience statistics.
 
 ### Non-scope
@@ -183,7 +183,7 @@ The `V23-04` package extends `tabrix_choose_context` from a stateless v1 chooser
 - ✅ `B-005` — Experience schema seed (done).
 - ✅ `B-012` — Experience action-path aggregator (done).
 - ✅ `B-013` — `experience_suggest_plan` MCP tool (done; `experience_replay` / `experience_score_step` deferred — see backlog "Next" block under B-013).
-- ✅ `B-EXP-REPLAY-V1` — `experience_replay` v1 **landed in v2.4.0 (V24-01, 2026-04-22)** via bridged MCP tool + capability gate + aggregator special-case + chooser branch. Owner decisions of 2026-04-23 shipped as-locked; see `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §10 + `.claude/handoffs/v2_4_0_v24_01_experience_replay_v1.md`. Real-browser acceptance scenarios (`t5-G-experience-replay`) ride a sibling PR in `tabrix-private-tests`.
+- ✅ `B-EXP-REPLAY-V1` — `experience_replay` v1 **landed in v2.4.0 (V24-01, 2026-04-22)** via bridged MCP tool + capability gate + aggregator special-case + chooser branch. Owner decisions of 2026-04-23 shipped as-locked; see `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §10. Real-browser acceptance scenarios (`t5-G-experience-replay`) ride a sibling PR in `tabrix-private-tests`.
 
 ### Notes for incoming AI
 

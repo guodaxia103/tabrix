@@ -19,26 +19,24 @@ Before changing code or docs, every AI assistant should read the public reposito
 
 1. [README.md](./README.md)
 2. [docs/README.md](./docs/README.md)
-3. **[docs/PRD.md](./docs/PRD.md)** — canonical product requirements (product identity, KPIs, MKEP, capability tiers, anti-patterns). This file is the product-level SoT and supersedes the "PRD" role that used to be scattered across `PRODUCT_SURFACE_MATRIX.md`, `MKEP_STAGE_3_PLUS_ROADMAP.md`, and this file.
-4. **[docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md)** — canonical Stage-level execution plan (`Stage 3a → 5e`). Every Stage maps to one or more `B-*` items in `PRODUCT_BACKLOG.md`.
-5. [docs/PRODUCT_SURFACE_MATRIX.md](./docs/PRODUCT_SURFACE_MATRIX.md) — current public product surface + capability tiers (GA/Beta/Experimental/Internal). Referenced by `PRD.md`, not superseded.
-6. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
-7. [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md)
-8. [docs/PRODUCT_BACKLOG.md](./docs/PRODUCT_BACKLOG.md) — sprint-level backlog (the `B-*` items that Stages in `TASK_ROADMAP.md` break down into).
-9. [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) — historical reference only. The live roadmap is `TASK_ROADMAP.md`.
-10. [docs/PRODUCT_PRUNING_PLAN.md](./docs/PRODUCT_PRUNING_PLAN.md)
-11. [CONTRIBUTING.md](./CONTRIBUTING.md)
+3. **[docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md)** — canonical Stage-level execution plan (`Stage 3a → 5e`). Every Stage maps to one or more `B-*` items in `PRODUCT_BACKLOG.md`.
+4. [docs/PRODUCT_SURFACE_MATRIX.md](./docs/PRODUCT_SURFACE_MATRIX.md) — current public product surface + capability tiers (GA/Beta/Experimental/Internal).
+5. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+6. [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md)
+7. [docs/PRODUCT_BACKLOG.md](./docs/PRODUCT_BACKLOG.md) — sprint-level backlog (the `B-*` items that Stages in `TASK_ROADMAP.md` break down into).
+8. [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) — historical reference only. The live roadmap is `TASK_ROADMAP.md`.
+9. [docs/PRODUCT_PRUNING_PLAN.md](./docs/PRODUCT_PRUNING_PLAN.md)
+10. [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 Then continue with the smallest relevant task-specific reading set below.
 
-### Bilingual PRD / roadmap exception to rule 18
+### Bilingual roadmap exception to rule 18
 
 Rule 18 below says "Public English docs go under `docs/`. Chinese-language public material belongs only in root `README_zh.md` and this file." The **only** approved exceptions are:
 
-- [docs/PRD.md](./docs/PRD.md) (English, canonical) + [docs/PRD_zh.md](./docs/PRD_zh.md) (Chinese mirror).
 - [docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md) (English, canonical) + [docs/TASK_ROADMAP_zh.md](./docs/TASK_ROADMAP_zh.md) (Chinese mirror).
 
-These four files must stay semantically equivalent; any PR that edits one of a pair must edit the other in the same commit. Do not fork the pattern to other docs without an explicit governance decision.
+These two files must stay semantically equivalent; any PR that edits one must edit the other in the same commit. Do not fork the pattern to other docs without an explicit governance decision.
 
 ## Task-Specific Reading
 
@@ -152,7 +150,7 @@ The following product surfaces were removed as part of `docs/PRODUCT_PRUNING_PLA
 - Element Marker management, `element_picker` MCP tool.
 - Visual Editor (`web-editor-v2`).
 
-If a task seems to require any of these surfaces, stop and ask. The strategic value of the removed surfaces has been remapped to MKEP Stage 3+ (see [`docs/TASK_ROADMAP.md`](./docs/TASK_ROADMAP.md) §2–§18 and [`docs/PRD.md`](./docs/PRD.md) §8).
+If a task seems to require any of these surfaces, stop and ask. The strategic value of the removed surfaces has been remapped to MKEP Stage 3+ (see [`docs/TASK_ROADMAP.md`](./docs/TASK_ROADMAP.md) §2–§18 and [`docs/PRODUCT_SURFACE_MATRIX.md`](./docs/PRODUCT_SURFACE_MATRIX.md)).
 
 ## Tiered Execution Model (any AI assistant)
 

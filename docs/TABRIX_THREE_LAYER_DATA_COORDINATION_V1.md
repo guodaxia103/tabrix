@@ -4,7 +4,6 @@
 > **Scope tier**: Internal product and architecture rule. This document does not change any public MCP contract by itself.
 > **Companion docs**:
 >
-> - [`PRD.md`](./PRD.md)
 > - [`TASK_ROADMAP.md`](./TASK_ROADMAP.md)
 > - [`B_018_CONTEXT_SELECTOR_V1.md`](./B_018_CONTEXT_SELECTOR_V1.md)
 
