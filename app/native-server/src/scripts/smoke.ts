@@ -7,6 +7,12 @@ import path from 'path';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'crypto';
 import { getChromeMcpUrl } from '../constant';
+import {
+  assessClickOutcome,
+  assessKeyboardOutcome,
+  assessReadPagePayload,
+  assessUploadOutcome,
+} from './smoke-assertions';
 
 const COMMAND_CHANNEL_RECOVERY_MODES = ['fail-next-send', 'fail-all-sends', 'unavailable'] as const;
 type CommandChannelRecoveryMode = (typeof COMMAND_CHANNEL_RECOVERY_MODES)[number];
@@ -893,11 +899,12 @@ async function runAllToolsValidation(
     'Direct network request returned expected payload',
   );
 
-  await mcp.callTool('chrome_upload_file', {
+  const allToolsUploadCall = await mcp.callTool('chrome_upload_file', {
     tabId,
     selector: '#fileInput',
     filePath: smokeServer.tempFilePath,
   });
+  const allToolsExpectedUpload = path.basename(smokeServer.tempFilePath);
   const uploaded = await poll(
     async () =>
       parseToolText(
@@ -906,13 +913,16 @@ async function runAllToolsValidation(
           code: "return document.querySelector('#fileName').textContent;",
         }),
       ),
-    (value) => String(value?.result ?? value).includes(path.basename(smokeServer.tempFilePath)),
+    (value) => String(value?.result ?? value).includes(allToolsExpectedUpload),
     { timeout: 4000 },
   );
+  const allToolsUploadAssessment = assessUploadOutcome(allToolsUploadCall, uploaded, {
+    expectedFileName: allToolsExpectedUpload,
+  });
   record(
     'chrome_upload_file',
-    String(uploaded?.result ?? uploaded).includes(path.basename(smokeServer.tempFilePath)),
-    'Local file upload succeeded',
+    allToolsUploadAssessment.ok,
+    `${allToolsUploadAssessment.reason}: ${allToolsUploadAssessment.detail}`,
   );
 
   if (includeInteractiveTools) {
@@ -1263,11 +1273,13 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
 
       const commandRecoveryRead = await mcp.callTool('chrome_read_page', { tabId: tempTabId });
       const commandRecoveryParsed = parseToolText(commandRecoveryRead);
-      const commandRecoverySucceeded =
-        commandRecoveryRead?.isError !== true &&
-        String(commandRecoveryParsed?.pageContent || commandRecoveryParsed).includes(
-          'Chrome MCP Smoke Test',
-        );
+      const commandRecoveryAssessment =
+        commandRecoveryRead?.isError === true
+          ? null
+          : assessReadPagePayload(commandRecoveryParsed, {
+              expectedUrlPrefix: smokeServer!.baseUrl,
+            });
+      const commandRecoverySucceeded = commandRecoveryAssessment?.ok === true;
       const commandRecoveryReturnedAction =
         commandRecoveryRead?.isError === true && hasSingleRecoveryAction(commandRecoveryParsed);
       const expectRecoverySuccess = options.commandChannelRecovery === 'fail-next-send';
@@ -1354,9 +1366,11 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
 
       const recoveryRead = await mcp.callTool('chrome_read_page', { tabId: tempTabId });
       const recoveryParsed = parseToolText(recoveryRead);
-      const recoverySucceeded =
-        recoveryRead?.isError !== true &&
-        String(recoveryParsed?.pageContent || recoveryParsed).includes('Chrome MCP Smoke Test');
+      const recoveryAssessment =
+        recoveryRead?.isError === true
+          ? null
+          : assessReadPagePayload(recoveryParsed, { expectedUrlPrefix: smokeServer!.baseUrl });
+      const recoverySucceeded = recoveryAssessment?.ok === true;
       const recoveryReturnedAction =
         recoveryRead?.isError === true && hasSingleRecoveryAction(recoveryParsed);
       record(
@@ -1394,11 +1408,20 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       return result.ok ? 0 : 1;
     }
 
-    const page = parseToolText(await mcp.callTool('chrome_read_page', { tabId: tempTabId }));
+    const pageCall = await mcp.callTool('chrome_read_page', { tabId: tempTabId });
+    const page = parseToolText(pageCall);
+    const readPageAssessment =
+      pageCall?.isError === true
+        ? {
+            ok: false,
+            reason: 'tool_returned_error' as const,
+            detail: `chrome_read_page returned isError=true (${String(page).slice(0, 120)})`,
+          }
+        : assessReadPagePayload(page, { expectedUrlPrefix: smokeServer!.baseUrl });
     record(
       'chrome_read_page',
-      String(page?.pageContent || '').includes('Chrome MCP Smoke Test'),
-      'Read page content from smoke page',
+      readPageAssessment.ok,
+      `${readPageAssessment.reason}: ${readPageAssessment.detail}`,
     );
 
     const content = parseToolText(
@@ -1433,43 +1456,71 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     });
     record('chrome_fill_or_select', true, 'Filled text/select/checkbox inputs');
 
-    await mcp.callTool('chrome_keyboard', {
+    const keyboardCall = await mcp.callTool('chrome_keyboard', {
       tabId: tempTabId,
       selector: '#textInput',
       keys: 'X',
       delay: 30,
     });
-    const textValue = parseToolText(
-      await mcp.callTool('chrome_javascript', {
-        tabId: tempTabId,
-        code: "return document.querySelector('#textInput').value;",
-      }),
+    // Poll the readback so a slow input event does not look like an
+    // assertion failure. We require BOTH the prefilled `phase0` value
+    // (proves chrome_fill_or_select did not regress) AND the typed `X`
+    // (proves chrome_keyboard actually fired) so the keyboard assertion
+    // cannot be silently satisfied by the leftover fill alone. We also
+    // capture the LAST raw chrome_javascript call so the assessor can
+    // distinguish a real keyboard regression from a readback failure
+    // (e.g. chrome_javascript blocked by P3 policy).
+    let keyboardReadbackCall: Awaited<ReturnType<typeof mcp.callTool>> | null = null;
+    const textValue = await poll(
+      async () => {
+        keyboardReadbackCall = await mcp.callTool('chrome_javascript', {
+          tabId: tempTabId,
+          code: "return document.querySelector('#textInput').value;",
+        });
+        return parseToolText(keyboardReadbackCall);
+      },
+      (v) => {
+        const s = String(v?.result ?? v);
+        return s.includes('phase0') && s.includes('X');
+      },
+      { timeout: 4000 },
     );
+    const keyboardAssessment = assessKeyboardOutcome(keyboardCall, textValue, {
+      expectedExistingValue: 'phase0',
+      expectedTypedSequence: 'X',
+      observationCall: keyboardReadbackCall,
+    });
     record(
       'chrome_keyboard',
-      String(textValue?.result ?? textValue).includes('phase0'),
-      'Keyboard input executed on text input',
+      keyboardAssessment.ok,
+      `${keyboardAssessment.reason}: ${keyboardAssessment.detail}`,
     );
 
-    await mcp.callTool('chrome_click_element', {
+    const clickCall = await mcp.callTool('chrome_click_element', {
       tabId: tempTabId,
       selector: '#clickBtn',
     });
+    let clickReadbackCall: Awaited<ReturnType<typeof mcp.callTool>> | null = null;
     const clickedState = await poll(
-      async () =>
-        parseToolText(
-          await mcp.callTool('chrome_javascript', {
-            tabId: tempTabId,
-            code: "return document.querySelector('#status').textContent;",
-          }),
-        ),
+      async () => {
+        clickReadbackCall = await mcp.callTool('chrome_javascript', {
+          tabId: tempTabId,
+          code: "return document.querySelector('#status').textContent;",
+        });
+        return parseToolText(clickReadbackCall);
+      },
       (v) => String(v?.result ?? v).includes('clicked'),
       { timeout: 4000 },
     );
+    const clickAssessment = assessClickOutcome(clickCall, clickedState, {
+      expectedStateSubstring: 'clicked',
+      preClickIdleValue: 'idle',
+      observationCall: clickReadbackCall,
+    });
     record(
       'chrome_click_element',
-      String(clickedState?.result ?? clickedState).includes('clicked'),
-      'Button click changed page state',
+      clickAssessment.ok,
+      `${clickAssessment.reason}: ${clickAssessment.detail}`,
     );
 
     await mcp.callTool('chrome_network_capture', {
@@ -1550,11 +1601,12 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     );
 
     traceStep('chrome_upload_file:start');
-    await mcp.callTool('chrome_upload_file', {
+    const uploadCall = await mcp.callTool('chrome_upload_file', {
       tabId: tempTabId,
       selector: '#fileInput',
       filePath: smokeServer!.tempFilePath,
     });
+    const expectedUploadName = path.basename(smokeServer!.tempFilePath);
     const uploaded = await poll(
       async () =>
         parseToolText(
@@ -1563,13 +1615,16 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
             code: "return document.querySelector('#fileName').textContent;",
           }),
         ),
-      (v) => String(v?.result ?? v).includes(path.basename(smokeServer!.tempFilePath)),
+      (v) => String(v?.result ?? v).includes(expectedUploadName),
       { timeout: 4000 },
     );
+    const uploadAssessment = assessUploadOutcome(uploadCall, uploaded, {
+      expectedFileName: expectedUploadName,
+    });
     record(
       'chrome_upload_file',
-      String(uploaded?.result ?? uploaded).includes(path.basename(smokeServer!.tempFilePath)),
-      'Uploaded local temp file',
+      uploadAssessment.ok,
+      `${uploadAssessment.reason}: ${uploadAssessment.detail}`,
     );
 
     traceStep('chrome_click_element(download-intercept):start');
