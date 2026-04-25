@@ -338,6 +338,86 @@ describe('observeNewTabUntil', () => {
 
     await expect(observedPromise).resolves.toMatchObject({
       newTabOpened: false,
+      waitDiagnostics: { newTabObservation: { reason: 'page_strong_outcome_observed' } },
+    });
+  });
+
+  it('verifier clicks return immediately on page-local strong outcomes', async () => {
+    const observedPromise = observeNewTabUntil(
+      3,
+      Promise.resolve({
+        signals: {
+          beforeUnloadFired: false,
+          urlBefore: 'https://example.com/a',
+          urlAfter: 'https://example.com/b',
+          hashBefore: '',
+          hashAfter: '',
+          domChanged: false,
+          domAddedDialog: false,
+          domAddedMenu: false,
+          focusChanged: false,
+          targetStateDelta: null,
+        },
+      }),
+      { maxMs: 75, verifierRequested: true },
+    );
+
+    await expect(observedPromise).resolves.toMatchObject({
+      newTabOpened: false,
+      waitDiagnostics: { newTabObservation: { reason: 'page_strong_outcome_observed' } },
+    });
+  });
+
+  it('verifier clicks do not treat focus-only signals as new-tab observation readiness', async () => {
+    const observedPromise = observeNewTabUntil(
+      3,
+      Promise.resolve({
+        signals: {
+          beforeUnloadFired: false,
+          urlBefore: 'https://example.com/a',
+          urlAfter: 'https://example.com/a',
+          hashBefore: '',
+          hashAfter: '',
+          domChanged: false,
+          domAddedDialog: false,
+          domAddedMenu: false,
+          focusChanged: true,
+          targetStateDelta: null,
+        },
+      }),
+      { maxMs: 20, verifierRequested: true },
+    );
+
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(20);
+    await expect(observedPromise).resolves.toMatchObject({
+      newTabOpened: false,
+      waitDiagnostics: { newTabObservation: { reason: 'ambiguous_cap_elapsed' } },
+    });
+  });
+
+  it('non-verifier clicks still allow weak page outcomes to finish quickly', async () => {
+    const observedPromise = observeNewTabUntil(
+      3,
+      Promise.resolve({
+        signals: {
+          beforeUnloadFired: false,
+          urlBefore: 'https://example.com/a',
+          urlAfter: 'https://example.com/a',
+          hashBefore: '',
+          hashAfter: '',
+          domChanged: false,
+          domAddedDialog: false,
+          domAddedMenu: false,
+          focusChanged: true,
+          targetStateDelta: null,
+        },
+      }),
+      { maxMs: 75, verifierRequested: false },
+    );
+
+    await expect(observedPromise).resolves.toMatchObject({
+      newTabOpened: false,
       waitDiagnostics: { newTabObservation: { reason: 'page_outcome_observed' } },
     });
   });
@@ -433,6 +513,51 @@ describe('click-helper signals (end-to-end through jsdom)', () => {
     expect(merged.success).toBe(true);
   });
 
+  it('waitForNavigation=true resolves early on target state changes', async () => {
+    document.body.innerHTML = '<button id="btn" aria-expanded="false">Toggle</button>';
+    const button = document.getElementById('btn') as HTMLButtonElement;
+    setRect(button, { left: 20, top: 30, width: 120, height: 32 });
+    document.elementFromPoint = vi.fn(() => button);
+    button.addEventListener('click', () => {
+      button.setAttribute('aria-expanded', 'true');
+    });
+
+    const response = await sendClickRequest({
+      action: 'clickElement',
+      selector: '#btn',
+      waitForNavigation: true,
+      timeout: 1000,
+    });
+
+    expect(response.signals.targetStateDelta.ariaExpanded).toEqual({
+      before: 'false',
+      after: 'true',
+    });
+    expect(response.signals.waitDiagnostics.verification.reason).toBe('target_state_changed');
+    expect(response.signals.waitDiagnostics.verification.waitedMs).toBeLessThan(1000);
+  });
+
+  it('waitForNavigation=true resolves early on beforeunload', async () => {
+    document.body.innerHTML = '<button id="btn">Leave</button>';
+    const button = document.getElementById('btn') as HTMLButtonElement;
+    setRect(button, { left: 20, top: 30, width: 120, height: 32 });
+    document.elementFromPoint = vi.fn(() => button);
+    button.addEventListener('click', () => {
+      window.dispatchEvent(new Event('beforeunload'));
+    });
+
+    const response = await sendClickRequest({
+      action: 'clickElement',
+      selector: '#btn',
+      waitForNavigation: true,
+      timeout: 1000,
+    });
+
+    expect(response.signals.beforeUnloadFired).toBe(true);
+    expect(response.signals.waitDiagnostics.verification.reason).toBe('beforeunload');
+    expect(response.signals.waitDiagnostics.verification.waitedMs).toBeLessThan(1000);
+  });
+
   it('dialog appearance surfaces via domAddedDialog', async () => {
     document.body.innerHTML = '<button id="btn">Open dialog</button>';
     const button = document.getElementById('btn') as HTMLButtonElement;
@@ -485,6 +610,72 @@ describe('click-helper signals (end-to-end through jsdom)', () => {
 
     expect(response.signals.hashAfter).toBe('#clicked');
     expect(response.signals.waitDiagnostics.verification.reason).toBe('hash_changed');
+    expect(response.signals.waitDiagnostics.verification.waitedMs).toBeLessThan(400);
+  });
+
+  it('waitForNavigation=true resolves early on hash changes', async () => {
+    document.body.innerHTML = '<button id="btn">Hash</button>';
+    const button = document.getElementById('btn') as HTMLButtonElement;
+    setRect(button, { left: 20, top: 30, width: 120, height: 32 });
+    document.elementFromPoint = vi.fn(() => button);
+    button.addEventListener('click', () => {
+      window.location.hash = 'navigation-mode';
+    });
+
+    const response = await sendClickRequest({
+      action: 'clickElement',
+      selector: '#btn',
+      waitForNavigation: true,
+      timeout: 1000,
+    });
+
+    expect(response.signals.hashAfter).toBe('#navigation-mode');
+    expect(response.signals.waitDiagnostics.verification.reason).toBe('hash_changed');
+    expect(response.signals.waitDiagnostics.verification.waitedMs).toBeLessThan(1000);
+  });
+
+  it('waitForNavigation=true does not resolve early on focus-only changes', async () => {
+    document.body.innerHTML = '<button id="btn">Focus</button><input id="target" />';
+    const button = document.getElementById('btn') as HTMLButtonElement;
+    const input = document.getElementById('target') as HTMLInputElement;
+    setRect(button, { left: 20, top: 30, width: 120, height: 32 });
+    setRect(input, { left: 20, top: 80, width: 120, height: 32 });
+    document.elementFromPoint = vi.fn(() => button);
+    button.addEventListener('click', () => {
+      input.focus();
+    });
+
+    const response = await sendClickRequest({
+      action: 'clickElement',
+      selector: '#btn',
+      waitForNavigation: true,
+      timeout: 30,
+    });
+
+    expect(response.signals.focusChanged).toBe(true);
+    expect(response.signals.waitDiagnostics.verification.reason).toBe('timeout');
+  });
+
+  it('waitForNavigation=false can resolve early on focus-only changes', async () => {
+    document.body.innerHTML = '<button id="btn">Focus</button><input id="target" />';
+    const button = document.getElementById('btn') as HTMLButtonElement;
+    const input = document.getElementById('target') as HTMLInputElement;
+    setRect(button, { left: 20, top: 30, width: 120, height: 32 });
+    setRect(input, { left: 20, top: 80, width: 120, height: 32 });
+    document.elementFromPoint = vi.fn(() => button);
+    button.addEventListener('click', () => {
+      input.focus();
+    });
+
+    const response = await sendClickRequest({
+      action: 'clickElement',
+      selector: '#btn',
+      waitForNavigation: false,
+      timeout: 1000,
+    });
+
+    expect(response.signals.focusChanged).toBe(true);
+    expect(response.signals.waitDiagnostics.verification.reason).toBe('focus_changed');
     expect(response.signals.waitDiagnostics.verification.waitedMs).toBeLessThan(400);
   });
 });

@@ -281,19 +281,22 @@ export async function waitForPostClickReadbackReady(
 ): Promise<PostClickReadbackReady> {
   const startedAt = nowMs();
   const elapsed = () => Math.max(0, nowMs() - startedAt);
+  let latestTab: chrome.tabs.Tab | null = null;
 
-  const classifyTab = (tab: chrome.tabs.Tab | null): PostClickReadbackReady['reason'] | null => {
+  const classifyInitialTab = (
+    tab: chrome.tabs.Tab | null,
+  ): PostClickReadbackReady['reason'] | null => {
     if (!tab) return 'tab_unavailable';
     const url = typeof tab.url === 'string' ? tab.url : null;
     if (url && beforeUrl && url !== beforeUrl) return 'url_changed';
     if (url && !beforeUrl) return 'url_changed';
-    if (tab.status === 'complete') return 'tab_complete';
     return null;
   };
 
   try {
     const initialTab = await chrome.tabs.get(tabId);
-    const initialReason = classifyTab(initialTab);
+    latestTab = initialTab ?? null;
+    const initialReason = classifyInitialTab(initialTab);
     if (initialReason) {
       return { waitedMs: elapsed(), reason: initialReason, tab: initialTab ?? null };
     }
@@ -322,11 +325,12 @@ export async function waitForPostClickReadbackReady(
       tab: chrome.tabs.Tab,
     ) => {
       if (updatedTabId !== tabId) return;
+      latestTab = tab;
       if (typeof changeInfo.url === 'string' && (!beforeUrl || changeInfo.url !== beforeUrl)) {
         finish('url_changed', { ...tab, url: changeInfo.url });
         return;
       }
-      if (changeInfo.status === 'complete' || tab.status === 'complete') {
+      if (changeInfo.status === 'complete') {
         finish('tab_complete', tab);
       }
     };
@@ -340,7 +344,14 @@ export async function waitForPostClickReadbackReady(
 
     timeoutId = setTimeout(
       () => {
-        finish('timeout', null);
+        void (async () => {
+          try {
+            latestTab = await chrome.tabs.get(tabId);
+          } catch {
+            // Keep the best previously observed tab, if any.
+          }
+          finish('timeout', latestTab);
+        })();
       },
       Math.max(0, maxMs),
     );

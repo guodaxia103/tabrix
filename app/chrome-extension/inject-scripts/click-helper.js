@@ -497,7 +497,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         if (diffTargetState(stateBefore, snapshotTargetState(element)) != null) {
           return 'target_state_changed';
         }
-        if (document.activeElement !== focusBefore) return 'focus_changed';
+        if (!waitForNavigation && document.activeElement !== focusBefore) return 'focus_changed';
         return null;
       });
 

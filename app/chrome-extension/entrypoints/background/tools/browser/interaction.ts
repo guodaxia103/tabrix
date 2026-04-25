@@ -198,6 +198,7 @@ export interface ClickBrowserSignals {
       reason:
         | 'new_tab_created'
         | 'tab_query_delta'
+        | 'page_strong_outcome_observed'
         | 'page_outcome_observed'
         | 'ambiguous_cap_elapsed'
         | 'listener_unavailable';
@@ -401,11 +402,24 @@ export function observeNewTabUntil(
       }
     };
     void captureBaseline();
-    const pageSignalsHaveOutcome = (value: unknown): boolean => {
-      const page =
-        value && typeof value === 'object' && 'signals' in value
-          ? ((value as { signals?: ClickPageSignals | null }).signals ?? null)
-          : null;
+    const readPageSignals = (value: unknown): ClickPageSignals | null =>
+      value && typeof value === 'object' && 'signals' in value
+        ? ((value as { signals?: ClickPageSignals | null }).signals ?? null)
+        : null;
+    const pageSignalsHaveStrongOutcome = (value: unknown): boolean => {
+      const page = readPageSignals(value);
+      if (!page) return false;
+      return (
+        page.beforeUnloadFired ||
+        page.urlBefore !== page.urlAfter ||
+        page.hashBefore !== page.hashAfter ||
+        page.domAddedDialog ||
+        page.domAddedMenu ||
+        page.targetStateDelta != null
+      );
+    };
+    const pageSignalsHaveWeakOutcome = (value: unknown): boolean => {
+      const page = readPageSignals(value);
       if (!page) return false;
       return (
         page.beforeUnloadFired ||
@@ -434,7 +448,11 @@ export function observeNewTabUntil(
         finalize('new_tab_created');
         return;
       }
-      if (!verifierRequested && pageSignalsHaveOutcome(value)) {
+      if (pageSignalsHaveStrongOutcome(value)) {
+        finalize('page_strong_outcome_observed');
+        return;
+      }
+      if (!verifierRequested && pageSignalsHaveWeakOutcome(value)) {
         finalize('page_outcome_observed');
         return;
       }
