@@ -3,6 +3,7 @@ import { handleToolCall } from './register-tools';
 import { sessionManager } from '../execution/session-manager';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
+import { TaskSessionContext } from '../execution/task-session-context';
 
 describe('handleToolCall execution wrapper', () => {
   const markBridgeReady = () => {
@@ -452,6 +453,83 @@ describe('handleToolCall execution wrapper', () => {
     expect(result.content[0]).toMatchObject({
       type: 'text',
       text: expect.stringContaining('disabled'),
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // V26-05 (B-028) — Task Session Context + Read Budget integration.
+  //
+  // The current `handleToolCall` shape mints a fresh task per call, so
+  // the only way to drive the task-context state across the gate is to
+  // pin `getTaskContext` to a shared instance via spy. That is the
+  // contract these tests pin: when a context exists and is over budget
+  // (or about to flip from a fresh URL), the gate fires correctly and
+  // the bridge round-trip is skipped.
+  // -------------------------------------------------------------------
+  describe('V26-05 read-budget gate', () => {
+    it('chrome_read_page returns a structured warning without a bridge call when budget is exceeded', async () => {
+      markBridgeReady();
+      const ctx = new TaskSessionContext({ readBudget: 2 });
+      ctx.noteReadPage({ layer: 'L0+L1', source: 'dom_json' });
+      ctx.noteReadPage({ layer: 'L0+L1', source: 'dom_json' });
+      jest.spyOn(sessionManager, 'getTaskContext').mockReturnValue(ctx);
+      const dynamicFlowSpy = jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never);
+
+      const result = await handleToolCall('chrome_read_page', { tabId: 1 });
+
+      expect(result.isError).toBeFalsy();
+      const payload = JSON.parse(String(result.content[0].text));
+      expect(payload).toEqual({
+        warning: 'read_budget_exceeded',
+        readPageCount: 2,
+        readBudget: 2,
+        suggestedLayer: 'L0+L1',
+      });
+      // Critical contract: the bridge `call_tool` round-trip MUST NOT
+      // happen on a budget-blocked read. The dynamic-flow-list call
+      // (mocked above) is the only allowed extension call.
+      expect(dynamicFlowSpy).toHaveBeenCalledTimes(1);
+      expect(dynamicFlowSpy.mock.calls[0]).toBeDefined();
+    });
+
+    it('chrome_navigate URL change unblocks a follow-up read in the same task', async () => {
+      markBridgeReady();
+      // Prime the context as if a previous read exhausted the page's
+      // L0+L1 layer at the OLD URL. After noteUrlChange the gate
+      // should treat the next read as a brand-new first read.
+      const ctx = new TaskSessionContext({ readBudget: 6 });
+      ctx.noteUrlChange('https://old.example/foo', 'role_old');
+      ctx.noteReadPage({ layer: 'L0+L1', source: 'dom_json' });
+      jest.spyOn(sessionManager, 'getTaskContext').mockReturnValue(ctx);
+
+      // chrome_navigate to a new URL — the gate must call
+      // `noteUrlChange` so the follow-up read is "first on this page".
+      jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never)
+        .mockResolvedValueOnce({
+          status: 'success',
+          data: { content: [{ type: 'text', text: 'navigated' }], isError: false },
+        } as never);
+      await handleToolCall('chrome_navigate', { url: 'https://new.example/bar', tabId: 1 });
+      expect(ctx.currentUrl).toBe('https://new.example/bar');
+      expect(ctx.lastReadLayer).toBeNull();
+
+      // Follow-up chrome_read_page — bridge call must go through.
+      jest
+        .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+        .mockResolvedValueOnce({ status: 'success', items: [] } as never)
+        .mockResolvedValueOnce({
+          status: 'success',
+          data: { content: [{ type: 'text', text: 'read' }], isError: false },
+        } as never);
+      const result = await handleToolCall('chrome_read_page', { tabId: 1 });
+      expect(result.isError).toBeFalsy();
+      // The post-success hook should have advanced readPageCount.
+      expect(ctx.readPageCount).toBe(2);
+      expect(ctx.lastReadLayer).toBe('L0+L1');
     });
   });
 });

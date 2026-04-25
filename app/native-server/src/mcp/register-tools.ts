@@ -1388,6 +1388,56 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         }
       }
     }
+    // V26-05 (B-028) — Task Session Context read-budget gate. Only the
+    // `chrome_read_page` hot path is gated; everything else passes
+    // through. The gate is fail-soft: when no task context is attached
+    // (persistence off, or `startSession` was bypassed) we forward the
+    // call unchanged so the v2.5 happy path is preserved bit-for-bit.
+    //
+    // Decisions returned by `shouldAllowReadPage`:
+    //   * `read_budget_exceeded` → return a structured warning
+    //     CallToolResult immediately, WITHOUT a bridge round-trip.
+    //   * `read_redundant`       → same: avoid the round-trip and
+    //     point the agent at its previous projection.
+    //   * `layer_demotion` / `''` → forward to the bridge as usual.
+    //
+    // We also track `chrome_navigate` URL changes here so the next
+    // `chrome_read_page` on a fresh page is treated as a first read.
+    const taskContext = sessionManager.getTaskContext(task.taskId);
+    if (taskContext && name === 'chrome_read_page') {
+      const requestedLayer =
+        args && typeof args === 'object' && typeof (args as any).layer === 'string'
+          ? ((args as any).layer as 'L0' | 'L0+L1' | 'L0+L1+L2')
+          : 'L0+L1';
+      const decision = taskContext.shouldAllowReadPage({ requestedLayer });
+      if (!decision.allowed || decision.reason === 'read_redundant') {
+        const warningPayload = {
+          warning: decision.reason || 'read_budget_exceeded',
+          readPageCount: decision.readPageCount,
+          readBudget: decision.readBudget,
+          suggestedLayer: decision.suggestedLayer,
+        };
+        const warningResult: CallToolResult = {
+          content: [{ type: 'text', text: JSON.stringify(warningPayload) }],
+        };
+        sessionManager.completeStep(session.sessionId, step.stepId, {
+          status: 'completed',
+          resultSummary: `chrome_read_page short-circuited (${warningPayload.warning})`,
+        });
+        sessionManager.finishSession(session.sessionId, {
+          status: 'completed',
+          summary: `chrome_read_page short-circuited (${warningPayload.warning})`,
+        });
+        return warningResult;
+      }
+    }
+    if (taskContext && name === 'chrome_navigate') {
+      const url =
+        args && typeof args === 'object' && typeof (args as any).url === 'string'
+          ? ((args as any).url as string)
+          : null;
+      taskContext.noteUrlChange(url);
+    }
     const { response, bridgeFailure } = await callWithBridgeRecovery(
       () =>
         invokeExtensionCommand(
@@ -1435,6 +1485,21 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         sessionManager,
         args,
       });
+      // V26-05 (B-028): record a successful chrome_read_page so the
+      // budget reflects bridge-confirmed reads (failed reads do NOT
+      // consume the budget — V4.1 §6 "honest budget" rule). The
+      // taskContext lookup is repeated here because the post-processor
+      // may have produced a tabId/URL update we want to honour.
+      if (name === 'chrome_read_page' && taskContext) {
+        const requestedLayer =
+          args && typeof args === 'object' && typeof (args as any).layer === 'string'
+            ? ((args as any).layer as 'L0' | 'L0+L1' | 'L0+L1+L2')
+            : 'L0+L1';
+        taskContext.noteReadPage({
+          layer: requestedLayer,
+          source: 'unknown',
+        });
+      }
       const normalized = normalizeToolCallResult(name, postResult.rawResult);
       sessionManager.completeStep(session.sessionId, step.stepId, {
         status: 'completed',

@@ -27,6 +27,7 @@ import {
 } from '../memory/experience';
 import { KnowledgeApiRepository } from '../memory/knowledge/knowledge-api-repository';
 import { ChooseContextTelemetryRepository } from '../memory/telemetry/choose-context-telemetry';
+import { TaskSessionContext } from './task-session-context';
 
 export interface CreateTaskInput {
   taskType: string;
@@ -180,6 +181,14 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
 export class SessionManager {
   private tasks = new Map<string, Task>();
   private sessions = new Map<string, ExecutionSession>();
+  /**
+   * V26-05 (B-028) — per-task in-process read-budget gate. Attached
+   * on `startSession`, detached on `finishSession`. Never persisted
+   * (V4.1 §0.1 — runtime cap, not a persisted budget). The
+   * `register-tools` `chrome_read_page` shim consults this via
+   * `getTaskContext(taskId)` before forwarding to the extension.
+   */
+  private readonly taskContexts = new Map<string, TaskSessionContext>();
   private readonly repos: Repos | null;
   private readonly dbHandle: SqliteDatabase | null;
   private readonly persistenceMode: SessionPersistenceMode;
@@ -300,6 +309,15 @@ export class SessionManager {
     this.repos?.session.insert(session);
     this.sessions.set(session.sessionId, session);
     this.updateTaskStatus(task.taskId, 'running');
+    // V26-05 (B-028): attach a fresh per-task read-budget gate. Idempotent
+    // — `startSession` may be called more than once per task (e.g. retry
+    // after an aborted session) and we deliberately keep the existing
+    // context so the budget already spent on the prior session still
+    // counts. A truly virgin task (first `startSession`) gets a brand-new
+    // context with the env-resolved budget.
+    if (!this.taskContexts.has(task.taskId)) {
+      this.taskContexts.set(task.taskId, new TaskSessionContext());
+    }
     return session;
   }
 
@@ -392,7 +410,52 @@ export class SessionManager {
 
       console.warn(`[tabrix/experience] aggregation failed: ${message}`);
     }
+    // V26-05 (B-028): release the per-task read-budget gate. The task is
+    // logically finished (completed / failed / aborted) so any future
+    // tool call against the same taskId should start a fresh budget.
+    // Detach is best-effort: if `taskContexts` does not have the entry
+    // we silently no-op (e.g. tests that bypass `startSession`).
+    this.taskContexts.delete(session.taskId);
     return session;
+  }
+
+  /**
+   * V26-05 (B-028) — read-only accessor used by the
+   * `register-tools::handleToolCall` `chrome_read_page` shim. Returns
+   * `null` when no context is attached (e.g. the task finished, the
+   * caller bypassed `startSession`, or persistence/runtime state was
+   * reset between sessions).
+   */
+  public getTaskContext(taskId: string): TaskSessionContext | null {
+    return this.taskContexts.get(taskId) ?? null;
+  }
+
+  /**
+   * V26-05 (B-028) — convenience used by `register-tools` when only
+   * the `sessionId` is in scope. Walks `session → task → context`
+   * defensively so a missing session does not throw.
+   */
+  public getTaskContextForSession(sessionId: string): TaskSessionContext | null {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    return this.getTaskContext(session.taskId);
+  }
+
+  /**
+   * V26-05 (B-028) — test seam. Lets unit / integration tests
+   * pre-seed a context (e.g. drive `readPageCount` over the budget)
+   * without going through `startSession`. Production callers must
+   * prefer `getTaskContext` — this method exists so the
+   * `register-tools` integration tests can simulate a long-running
+   * task without ceremony. Returns the existing context when one is
+   * already attached so callers cannot accidentally clobber state.
+   */
+  public ensureTaskContext(taskId: string, ctx?: TaskSessionContext): TaskSessionContext {
+    const existing = this.taskContexts.get(taskId);
+    if (existing) return existing;
+    const next = ctx ?? new TaskSessionContext();
+    this.taskContexts.set(taskId, next);
+    return next;
   }
 
   public getTask(taskId: string): Task {
