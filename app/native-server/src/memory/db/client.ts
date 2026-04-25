@@ -190,6 +190,12 @@ function ensureChooseContextDecisionLayerColumns(db: SqliteDatabase): void {
     ['ranked_candidate_count', 'INTEGER'],
     ['replay_eligible_blocked_by', 'TEXT'],
     ['replay_fallback_depth', 'INTEGER'],
+    // V26-04 (B-027) honest dispatcher inputs. Same idempotent
+    // additive pattern. Legacy DBs from before V26-04 pick these
+    // columns up on next `openMemoryDb`. Virgin DBs see them from
+    // the CREATE in `CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL`.
+    ['dispatcher_input_source', 'TEXT'],
+    ['fallback_cause_v26', 'TEXT'],
   ];
   for (const [name, type] of additions) {
     if (!hasColumn(db, 'tabrix_choose_context_decisions', name)) {

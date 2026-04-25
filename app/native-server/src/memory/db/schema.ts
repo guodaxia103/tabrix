@@ -337,7 +337,20 @@ CREATE TABLE IF NOT EXISTS tabrix_choose_context_decisions (
   -- binding). Append-only; nullable for legacy rows.
   ranked_candidate_count       INTEGER,
   replay_eligible_blocked_by   TEXT,
-  replay_fallback_depth        INTEGER
+  replay_fallback_depth        INTEGER,
+  -- V26-04 (B-027): honest dispatcher inputs.
+  --   dispatcher_input_source is a closed enum:
+  --     'live_snapshot' | 'memory_snapshot' | 'fallback_zero'
+  --   fallback_cause_v26 is the structured reason for the
+  --   'fallback_zero' branch:
+  --     'persistence_off' | 'no_session_snapshots' |
+  --     'no_task_snapshots' | 'provider_error'
+  -- Intentionally distinct from the existing fallback_cause column
+  -- (V25-02 layer-dispatcher reason) so audits can replay both
+  -- layers independently. Both NULLABLE so legacy rows + tests that
+  -- pre-date V26-04 stay valid.
+  dispatcher_input_source      TEXT,
+  fallback_cause_v26           TEXT
 );
 
 CREATE INDEX IF NOT EXISTS tabrix_choose_context_decisions_strategy_idx

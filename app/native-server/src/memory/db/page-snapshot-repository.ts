@@ -132,6 +132,9 @@ export class PageSnapshotRepository {
   private readonly listByStepStmt;
   private readonly findLatestInSessionForTabStmt;
   private readonly findLatestPageRoleForSessionStmt;
+  private readonly findLatestForUrlStmt;
+  private readonly findLatestForPageRoleStmt;
+  private readonly findLatestGlobalStmt;
   private readonly clearStmt;
 
   constructor(private readonly db: SqliteDatabase) {
@@ -175,6 +178,27 @@ export class PageSnapshotRepository {
           AND s.page_role IS NOT NULL
           AND s.page_role <> ''
         ORDER BY s.captured_at DESC, s.snapshot_id DESC
+        LIMIT 1`,
+    );
+    // V26-04 (B-027): live page context provider lookups. Three
+    // newest-first finders feed `LivePageContextProvider`. They are
+    // pure reads — no joins, no writes — and rely on the
+    // `captured_at_idx` ordering already in `MEMORY_CREATE_TABLES_SQL`.
+    this.findLatestForUrlStmt = db.prepare(
+      `SELECT * FROM memory_page_snapshots
+        WHERE url = ?
+        ORDER BY captured_at DESC, snapshot_id DESC
+        LIMIT 1`,
+    );
+    this.findLatestForPageRoleStmt = db.prepare(
+      `SELECT * FROM memory_page_snapshots
+        WHERE page_role = ?
+        ORDER BY captured_at DESC, snapshot_id DESC
+        LIMIT 1`,
+    );
+    this.findLatestGlobalStmt = db.prepare(
+      `SELECT * FROM memory_page_snapshots
+        ORDER BY captured_at DESC, snapshot_id DESC
         LIMIT 1`,
     );
     this.clearStmt = db.prepare('DELETE FROM memory_page_snapshots');
@@ -221,6 +245,35 @@ export class PageSnapshotRepository {
       | undefined;
     if (!row?.page_role) return undefined;
     return row.page_role;
+  }
+
+  /**
+   * V26-04 (B-027): newest snapshot whose `url` exactly matches.
+   * `undefined` when no row matches. Caller must treat `undefined`
+   * as "no live signal — degrade to memory_snapshot or fallback".
+   */
+  public findLatestForUrl(url: string): PageSnapshot | undefined {
+    const row = this.findLatestForUrlStmt.get(url) as PageSnapshotRow | undefined;
+    return row ? rowToSnapshot(row) : undefined;
+  }
+
+  /**
+   * V26-04 (B-027): newest snapshot whose `page_role` matches.
+   * `undefined` when no row matches.
+   */
+  public findLatestForPageRole(pageRole: string): PageSnapshot | undefined {
+    const row = this.findLatestForPageRoleStmt.get(pageRole) as PageSnapshotRow | undefined;
+    return row ? rowToSnapshot(row) : undefined;
+  }
+
+  /**
+   * V26-04 (B-027): newest snapshot in the table, regardless of
+   * URL or pageRole. Used as the last-resort `memory_snapshot`
+   * fallback before the provider returns `fallback_zero`.
+   */
+  public findLatestGlobal(): PageSnapshot | undefined {
+    const row = this.findLatestGlobalStmt.get() as PageSnapshotRow | undefined;
+    return row ? rowToSnapshot(row) : undefined;
   }
 
   public clear(): void {

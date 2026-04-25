@@ -55,6 +55,7 @@ import {
   type LayerDispatchTaskType,
   type LayerDispatchUserIntentHint,
 } from './choose-context-layer-dispatch';
+import type { PageContextProvider } from './page-context-provider';
 
 export class TabrixChooseContextInputError extends Error {
   public readonly code: 'TABRIX_CHOOSE_CONTEXT_BAD_INPUT';
@@ -568,6 +569,16 @@ export interface RunTabrixChooseContextDeps {
    */
   telemetry?: ChooseContextTelemetryRepository | null;
   /**
+   * V26-04 (B-027) — honest dispatcher inputs. When provided, the
+   * chooser asks the provider for `{candidateActionsCount, hvoCount,
+   * fullReadByteLength, pageRole}` instead of feeding the dispatcher
+   * literal zeros. When `undefined` or `null`, behaviour is
+   * bit-identical to v2.5: zeros in, `dispatcher_input_source` and
+   * `fallback_cause_v26` left `null` in telemetry. This is the
+   * fail-soft adoption path the V4.1 plan §11 requires.
+   */
+  pageContext?: PageContextProvider | null;
+  /**
    * Test seam for deterministic ids / clocks. Defaults to
    * `randomUUID` and `() => new Date().toISOString()`.
    */
@@ -679,17 +690,34 @@ export function runTabrixChooseContext(
   // the strategy is picked. The dispatcher is pure (no IO) so this
   // adds zero hot-path Memory traffic. We feed it the same facts the
   // strategy used so rule alignment is auditable from telemetry.
+  //
+  // V26-04 (B-027): honest dispatcher inputs. When the caller wired
+  // a `PageContextProvider`, the dispatcher receives real
+  // candidateActions / HVO counts + fullReadByteLength drawn from the
+  // most recent matching `memory_page_snapshots` row instead of
+  // hard-coded zeros. The provider call itself is read-only and
+  // never throws (it returns a `fallback_zero` shape on any error)
+  // so the chooser hot-path stays safe. When the provider is absent
+  // (test stubs / persistence off / pre-V26-04 callers) we keep the
+  // historical zero-input behaviour bit-for-bit and leave
+  // `dispatcherInputSource` / `fallbackCauseV26` `null` in telemetry.
   const intentHint = classifyIntentForLayerDispatch(input.intent);
+  const dispatcherInputs = deps.pageContext
+    ? deps.pageContext.getContext({
+        url: input.url ?? null,
+        pageRole: input.pageRole ?? null,
+      })
+    : null;
   const layerDispatch = dispatchLayer({
     pageRole: input.pageRole ?? null,
     userIntent: intentHint,
     taskType: deriveTaskTypeForLayerDispatch(intentHint),
-    candidateActionsCount: 0,
-    hvoCount: 0,
+    candidateActionsCount: dispatcherInputs?.candidateActionsCount ?? 0,
+    hvoCount: dispatcherInputs?.hvoCount ?? 0,
     knowledgeAvailable: !!knowledgeCatalog && knowledgeCatalog.totalEndpoints > 0,
     experienceReplayAvailable: decision.strategy === 'experience_replay',
     safetyRequiresFullLayers: false,
-    fullReadByteLength: 0,
+    fullReadByteLength: dispatcherInputs?.fullReadByteLength ?? 0,
   });
   const tokensSavedEstimate = Math.max(
     0,
@@ -736,6 +764,17 @@ export function runTabrixChooseContext(
         rankedCandidateCount: decision.rankedCandidateCount ?? null,
         replayEligibleBlockedBy: decision.replayEligibleBlockedBy ?? null,
         replayFallbackDepth: decision.replayFallbackDepth ?? null,
+        // V26-04 (B-027): honest dispatcher input source. `null` when
+        // no `pageContext` provider was wired (preserves the v25
+        // null-everywhere telemetry shape for legacy callers and
+        // tests). Otherwise records the closed-enum source the
+        // provider returned plus its `fallbackCause` only on the
+        // `fallback_zero` branch.
+        dispatcherInputSource: dispatcherInputs?.source ?? null,
+        fallbackCauseV26:
+          dispatcherInputs && dispatcherInputs.source === 'fallback_zero'
+            ? (dispatcherInputs.fallbackCause ?? null)
+            : null,
       });
       decisionId = candidateId;
     } catch (error) {

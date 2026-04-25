@@ -29,6 +29,7 @@ import {
   parseExperienceSuggestPlanInput,
 } from '../memory/experience';
 import { runTabrixChooseContext, runTabrixChooseContextRecordOutcome } from './choose-context';
+import { createLivePageContextProvider } from './page-context-provider';
 import type { CapabilityEnv } from '../policy/capabilities';
 import type { SessionManager } from '../execution/session-manager';
 import {
@@ -43,7 +44,11 @@ import { experienceScoreStepNativeHandler } from './experience-score-step';
 export interface NativeToolHandlerDeps {
   sessionManager: Pick<
     SessionManager,
-    'experience' | 'getPersistenceStatus' | 'knowledgeApi' | 'chooseContextTelemetry'
+    | 'experience'
+    | 'getPersistenceStatus'
+    | 'knowledgeApi'
+    | 'chooseContextTelemetry'
+    | 'pageSnapshots'
   >;
   /**
    * Capability allowlist source. Optional so existing handler tests
@@ -141,11 +146,19 @@ const handleExperienceSuggestPlan: NativeToolHandler = (args, deps) => {
 };
 
 const handleTabrixChooseContext: NativeToolHandler = (args, deps) => {
+  // V26-04 (B-027): wire the live page context provider so the
+  // dispatcher receives real candidateActions / HVO counts instead
+  // of the v25 hard-coded zeros. When persistence is off
+  // `pageSnapshots` is `null` and the provider returns
+  // `fallback_zero` with cause `persistence_off` — honest telemetry,
+  // same numerical dispatcher input the chooser used to ship.
+  const pageContext = createLivePageContextProvider(deps.sessionManager.pageSnapshots ?? null);
   const result = runTabrixChooseContext(args, {
     experience: deps.sessionManager.experience,
     knowledgeApi: deps.sessionManager.knowledgeApi,
     capabilityEnv: deps.capabilityEnv ?? {},
     telemetry: deps.sessionManager.chooseContextTelemetry,
+    pageContext,
   });
   return jsonResult(result, result.status === 'invalid_input');
 };

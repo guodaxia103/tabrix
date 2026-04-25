@@ -925,6 +925,11 @@ describe('runTabrixChooseContext telemetry (V23-04)', () => {
         rankedCandidateCount: 0,
         replayEligibleBlockedBy: null,
         replayFallbackDepth: 'cold',
+        // V26-04 (B-027) — no `pageContext` provider was wired, so the
+        // dispatcher still got the v25 zero-input behaviour and these
+        // telemetry slots stay `null`. Honest "we did not measure".
+        dispatcherInputSource: null,
+        fallbackCauseV26: null,
       },
     ]);
   });
@@ -952,6 +957,82 @@ describe('runTabrixChooseContext telemetry (V23-04)', () => {
     );
     expect(result.status).toBe('invalid_input');
     expect(tele.decisions).toEqual([]);
+  });
+
+  // ---------------------------------------------------------------
+  // V26-04 (B-027) — honest dispatcher inputs.
+  // ---------------------------------------------------------------
+  it('records dispatcherInputSource=live_snapshot when the page context provider returns a live row', () => {
+    const { service } = fakeExperience([]);
+    const tele = fakeTelemetry();
+    const baselineFullRead = 'a'.repeat(120);
+    const result = runTabrixChooseContext(
+      { intent: 'open issues', url: 'https://github.com/octocat/hello/issues' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: {},
+        telemetry: tele.repo,
+        newDecisionId: () => 'dc-v26-04-live',
+        now: () => '2026-04-25T10:00:00.000Z',
+        pageContext: {
+          getContext: () => ({
+            source: 'live_snapshot',
+            candidateActionsCount: 9,
+            hvoCount: 4,
+            fullReadByteLength: baselineFullRead.length,
+            pageRole: 'github_issues_list',
+          }),
+        },
+      },
+    );
+    expect(result.status).toBe('ok');
+    expect(tele.decisions).toHaveLength(1);
+    const recorded = tele.decisions[0];
+    expect(recorded.dispatcherInputSource).toBe('live_snapshot');
+    expect(recorded.fallbackCauseV26).toBeNull();
+    // Honest dispatcher inputs feed real estimates: tokensSavedEstimate
+    // must NOT silently inflate just because the provider exists. The
+    // chooser still computes it from the dispatcher's own
+    // fullRead/chosen estimates, so a non-zero value here is only
+    // possible when the dispatcher itself decided to skip a layer.
+    expect(recorded.tokensSavedEstimate).toBeGreaterThanOrEqual(0);
+  });
+
+  it('records dispatcherInputSource=fallback_zero with cause when no snapshot is available', () => {
+    const { service } = fakeExperience([]);
+    const tele = fakeTelemetry();
+    const result = runTabrixChooseContext(
+      { intent: 'open issues' },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: {},
+        telemetry: tele.repo,
+        newDecisionId: () => 'dc-v26-04-fallback',
+        now: () => '2026-04-25T10:00:00.000Z',
+        pageContext: {
+          getContext: () => ({
+            source: 'fallback_zero',
+            candidateActionsCount: 0,
+            hvoCount: 0,
+            fullReadByteLength: 0,
+            pageRole: null,
+            fallbackCause: 'no_task_snapshots',
+          }),
+        },
+      },
+    );
+    expect(result.status).toBe('ok');
+    expect(tele.decisions).toHaveLength(1);
+    const recorded = tele.decisions[0];
+    expect(recorded.dispatcherInputSource).toBe('fallback_zero');
+    expect(recorded.fallbackCauseV26).toBe('no_task_snapshots');
+    // Critically: the chooser MUST NOT silently inflate
+    // tokensSavedEstimate just because the provider answered. With
+    // every dispatcher input at 0, savings stay at 0 — the v25
+    // baseline behaviour, but now with honest telemetry to prove it.
+    expect(recorded.tokensSavedEstimate).toBe(0);
   });
 
   it('telemetry write failure must not break the chooser (decisionId omitted)', () => {
@@ -1277,7 +1358,12 @@ describe('runTabrixChooseContext ranked replay (V24-03)', () => {
         'chosenLayer',
         'createdAt',
         'decisionId',
+        // V26-04 (B-027): strict-shape gate must include the two
+        // new honest-dispatcher-input columns. Both are `null` here
+        // because no `pageContext` provider is wired in this test.
+        'dispatcherInputSource',
         'fallbackCause',
+        'fallbackCauseV26',
         'fallbackStrategy',
         'intentSignature',
         'knowledgeEndpointFamily',

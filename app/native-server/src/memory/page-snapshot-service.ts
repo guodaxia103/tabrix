@@ -217,6 +217,24 @@ export class PageSnapshotService {
     return this.repo.get(snapshotId);
   }
 
+  /**
+   * V26-04 (B-027): pass-through readers used by
+   * `LivePageContextProvider`. We expose them on the service rather
+   * than handing the repository out so the public boundary stays
+   * "PageSnapshotService is the only Memory façade".
+   */
+  public findLatestForUrl(url: string) {
+    return this.repo.findLatestForUrl(url);
+  }
+
+  public findLatestForPageRole(pageRole: string) {
+    return this.repo.findLatestForPageRole(pageRole);
+  }
+
+  public findLatestGlobal() {
+    return this.repo.findLatestGlobal();
+  }
+
   public clear(): void {
     this.repo.clear();
   }

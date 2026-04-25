@@ -80,6 +80,16 @@ export interface RecordChooseContextDecisionInput {
   rankedCandidateCount?: number | null;
   replayEligibleBlockedBy?: ReplayEligibilityBlockReason | null;
   replayFallbackDepth?: number | 'cold' | null;
+  // ---------------------------------------------------------------
+  // V26-04 (B-027) honest dispatcher inputs. Both optional — callers
+  // that pre-date V26-04 (and tests) keep working unchanged. The
+  // `dispatcher_input_source` column is closed-enum at the SQL
+  // boundary too, but the writer accepts a free string so it does
+  // not have to import `DispatcherInputSource` from the chooser
+  // module (avoids a circular dep).
+  // ---------------------------------------------------------------
+  dispatcherInputSource?: string | null;
+  fallbackCauseV26?: string | null;
 }
 
 export interface RecordChooseContextOutcomeInput {
@@ -172,8 +182,9 @@ export class ChooseContextTelemetryRepository {
            chosen_layer, layer_dispatch_reason, source_route, fallback_cause,
            token_estimate_chosen, token_estimate_full_read, tokens_saved_estimate,
            knowledge_endpoint_family,
-           ranked_candidate_count, replay_eligible_blocked_by, replay_fallback_depth
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           ranked_candidate_count, replay_eligible_blocked_by, replay_fallback_depth,
+           dispatcher_input_source, fallback_cause_v26
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.decisionId,
@@ -194,6 +205,8 @@ export class ChooseContextTelemetryRepository {
         input.rankedCandidateCount ?? null,
         blockedByValue,
         fallbackDepthValue,
+        input.dispatcherInputSource ?? null,
+        input.fallbackCauseV26 ?? null,
       );
   }
 
