@@ -103,6 +103,23 @@ describe('V26-07 API Knowledge substrate', () => {
     });
   });
 
+  it('does not return empty api_rows for HEAD on the on-demand reader path', async () => {
+    const fetchFn = jest.fn();
+    const result = await readApiKnowledgeRows({
+      endpointFamily: 'github_search_repositories',
+      method: 'HEAD',
+      params: { query: 'tabrix' },
+      fetchFn,
+    });
+
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      status: 'fallback_required',
+      reason: 'method_denied',
+      fallbackEntryLayer: 'L0+L1',
+    });
+  });
+
   it('surfaces 403 and rate limit as observable fallback results', async () => {
     await expect(
       readApiKnowledgeRows({
@@ -231,6 +248,30 @@ describe('V26-07 API Knowledge substrate', () => {
     ).toMatchObject({
       endpointFamily: 'npmjs_search_packages',
       dataPurpose: 'package_search',
+    });
+  });
+
+  it('resolves Chinese natural-language search/list intents for GitHub and npmjs tasks', () => {
+    expect(
+      resolveApiKnowledgeCandidate({
+        intent: '搜索 GitHub 上 AI助手 相关热门项目，列出前10个',
+        url: 'https://github.com/search',
+      }),
+    ).toMatchObject({
+      endpointFamily: 'github_search_repositories',
+      dataPurpose: 'search_list',
+      params: { query: 'AI助手' },
+    });
+
+    expect(
+      resolveApiKnowledgeCandidate({
+        intent: '搜索 npm 上 browser automation 相关包，列出前10个',
+        url: 'https://www.npmjs.com/search',
+      }),
+    ).toMatchObject({
+      endpointFamily: 'npmjs_search_packages',
+      dataPurpose: 'package_search',
+      params: { query: 'browser automation' },
     });
   });
 });

@@ -164,7 +164,7 @@ export function resolveApiKnowledgeCandidate(input: {
         params: { owner: repo.owner, repo: repo.repo, state: 'open' },
       };
     }
-    if (/\b(search|find|repositories|repos?|projects?)\b/.test(intent)) {
+    if (isSearchListIntent(intent, input.intent, 'github')) {
       return {
         endpointFamily: 'github_search_repositories',
         dataPurpose: 'search_list',
@@ -181,7 +181,7 @@ export function resolveApiKnowledgeCandidate(input: {
     host === 'registry.npmjs.org' ||
     /\b(npm|npmjs|package|packages?)\b/.test(intent)
   ) {
-    if (/\b(search|find|package|packages?|npm|npmjs)\b/.test(intent)) {
+    if (isSearchListIntent(intent, input.intent, 'npmjs')) {
       return {
         endpointFamily: 'npmjs_search_packages',
         dataPurpose: 'package_search',
@@ -211,7 +211,7 @@ export async function readApiKnowledgeRows(
       endpointFamily: undefined,
     });
   }
-  if (!READ_METHODS.has(method)) {
+  if (method !== 'GET') {
     return fallback({
       reason: 'method_denied',
       method,
@@ -231,28 +231,6 @@ export async function readApiKnowledgeRows(
       endpointFamily,
     });
   }
-  if (method === 'HEAD') {
-    return {
-      status: 'ok',
-      kind: 'api_rows',
-      endpointFamily,
-      dataPurpose: request.dataPurpose,
-      rows: [],
-      rowCount: 0,
-      compact: true,
-      rawBodyStored: false,
-      telemetry: {
-        endpointFamily,
-        method,
-        reason: 'head_ok',
-        status: null,
-        waitedMs: elapsed(),
-        readAllowed: true,
-        fallbackEntryLayer: 'none',
-      },
-    };
-  }
-
   try {
     const fetchFn = input.fetchFn ?? resolveFetch();
     const response = await fetchFn(request.url, {
@@ -575,6 +553,23 @@ function normalizeText(value: string): string {
   return value.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+function isSearchListIntent(
+  normalizedIntent: string,
+  rawIntent: string,
+  family: 'github' | 'npmjs',
+): boolean {
+  if (/\b(search|find|list|repositories|repos?|projects?|packages?)\b/.test(normalizedIntent)) {
+    return true;
+  }
+  if (/搜索|查找|检索|列出|热门|前\s*\d+\s*个/.test(rawIntent)) {
+    return true;
+  }
+  if (family === 'github') {
+    return /仓库|代码库|项目/.test(rawIntent);
+  }
+  return /软件包|依赖包|npm\s*包|包/.test(rawIntent);
+}
+
 function extractSearchQuery(intent: string): string {
   const cleaned = intent
     .replace(
@@ -582,7 +577,14 @@ function extractSearchQuery(intent: string): string {
       ' ',
     )
     .replace(/\b(first|top)\s+\d+\b/gi, ' ')
-    .replace(/\d+/g, ' ')
+    .replace(/前\s*\d+\s*个/g, ' ')
+    .replace(
+      /搜索|查找|检索|列出|热门|相关|项目|仓库|代码库|软件包|依赖包|npm\s*包|包|上|的|和|以及/g,
+      ' ',
+    )
+    .replace(/GitHub|github|NPMJS|npmjs|NPM|npm/g, ' ')
+    .replace(/[，。；：、]/g, ' ')
+    .replace(/\b(on|about|related|by|for)\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return cleaned || intent.trim().slice(0, 80) || 'javascript';
