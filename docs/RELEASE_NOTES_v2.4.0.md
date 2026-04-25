@@ -79,8 +79,8 @@ Codex / maintainer lane ran the real v2.4 MCP benchmark against `guodaxia103/tab
 
 - **Run ID:** `v24-release-2026-04-23-rerun2`
 - **Build SHA:** `f76a01809199e4a324fb12fa6189bf49f0461eaa`
-- **Private acceptance summary:** `E:/projects/AI/codex/tabrix-private-tests/artifacts/v24-real-browser-acceptance/v24-real-browser-acceptance-2026-04-23T07-48-13.007Z/summary.json`
-- **Benchmark NDJSON:** `C:/Users/gsy/.chrome-mcp-agent/benchmarks/v24/v24-release-2026-04-23-rerun2.ndjson`
+- **Private acceptance summary:** `<local-tabrix-private-tests>/artifacts/v24-real-browser-acceptance/v24-real-browser-acceptance-2026-04-23T07-48-13.007Z/summary.json`
+- **Benchmark NDJSON:** `<local-tabrix-data-dir>/benchmarks/v24/v24-release-2026-04-23-rerun2.ndjson`
 - **Report file:** `docs/benchmarks/v24/v24-release-2026-04-23-rerun2.json`
 - **Baseline comparison table:** `docs/benchmarks/v24/v24-vs-v23-baseline-2026-04-23.md`
 - **Acceptance result:** 15 / 15 real-browser scenario pairs passed; `pairCount = 3`.
@@ -119,7 +119,7 @@ pnpm --filter @tabrix/tabrix build
 pnpm --filter @tabrix/extension build
 pnpm run extension:reload
 pnpm -C ../tabrix-private-tests run acceptance:v2.4.0 -- --main-repo ../main_tabrix --owner guodaxia103 --repo tabrix --run-id v24-release-2026-04-23
-pnpm run benchmark:v24 -- --input C:/Users/gsy/.chrome-mcp-agent/benchmarks/v24/v24-release-2026-04-23.ndjson --gate --baseline docs/benchmarks/v23/v23-baseline-2026-04-23.json
+pnpm run benchmark:v24 -- --input <local-tabrix-data-dir>/benchmarks/v24/v24-release-2026-04-23.ndjson --gate --baseline docs/benchmarks/v23/v23-baseline-2026-04-23.json
 ```
 
 ### Real acceptance scenario list (v2.4.0 KPI subset)

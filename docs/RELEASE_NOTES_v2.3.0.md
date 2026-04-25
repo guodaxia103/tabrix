@@ -73,7 +73,7 @@ The released v2.3.0 benchmark baseline was exercised against a live Chrome sessi
 
 - **Run ID:** `v23-baseline-2026-04-23`
 - **Build SHA:** `52b1b260c2c82ac04050d4eeab8fc3730efa9ab6`
-- **Acceptance summary:** `E:/projects/AI/codex/tabrix-private-tests/artifacts/v23-real-browser-acceptance/v23-real-browser-acceptance-2026-04-22T18-09-05.099Z/summary.json`
+- **Acceptance summary:** `<local-tabrix-private-tests>/artifacts/v23-real-browser-acceptance/v23-real-browser-acceptance-2026-04-22T18-09-05.099Z/summary.json`
 - **Report file:** `docs/benchmarks/v23/v23-baseline-2026-04-23.json`
 - **Scenario result:** `8/8` passed, `blocked=false`
 - **Headline numbers:**

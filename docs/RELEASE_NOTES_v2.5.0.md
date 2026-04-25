@@ -191,15 +191,15 @@ readback`) remains independent of read-page L-layer envelopes.
 - `pnpm -C app/chrome-extension test` — **passed** (47 files, 405 passed).
 - `pnpm run docs:check` — **passed**.
 - `pnpm run size:check` — **passed** (`sidepanel-*.js` 32.03 kB, `sidepanel-*.css` 23.44 kB).
-- `pnpm run benchmark:v25 -- --input C:/Users/gsy/.chrome-mcp-agent/benchmarks/v25/v25-release-2026-04-24.ndjson --gate --baseline-v24 docs/benchmarks/v24/v24-release-2026-04-23-rerun2.json` — **hard-passed**.
+- `pnpm run benchmark:v25 -- --input <local-tabrix-data-dir>/benchmarks/v25/v25-release-2026-04-24.ndjson --gate --baseline-v24 docs/benchmarks/v24/v24-release-2026-04-23-rerun2.json` — **hard-passed**.
 - `pnpm run release:check` — **passed after the v2.5.0 version bump**.
 
 ## Real-browser acceptance evidence
 
 - **Run ID:** `v25-release-2026-04-24`
 - **Build SHA:** `16c331db47e0c5dbc53c2c101c44049b6d5d2ac1`
-- **Private acceptance summary:** `E:/projects/AI/codex/tabrix-private-tests/artifacts/v25-real-browser-acceptance/v25-real-browser-acceptance-2026-04-24T10-05-18.901Z/summary.json`
-- **Benchmark NDJSON:** `C:/Users/gsy/.chrome-mcp-agent/benchmarks/v25/v25-release-2026-04-24.ndjson`
+- **Private acceptance summary:** `<local-tabrix-private-tests>/artifacts/v25-real-browser-acceptance/v25-real-browser-acceptance-2026-04-24T10-05-18.901Z/summary.json`
+- **Benchmark NDJSON:** `<local-tabrix-data-dir>/benchmarks/v25/v25-release-2026-04-24.ndjson`
 - **Report file:** `docs/benchmarks/v25/v25-release-2026-04-24.json`
 - **Baseline comparison table:** `docs/benchmarks/v25/v25-vs-v24-baseline-2026-04-24.md`
 - **Acceptance result:** **9/9** scenario pairs passed; `pairedRunCount = 3`.
@@ -230,7 +230,7 @@ pnpm --filter @tabrix/tabrix build
 pnpm --filter @tabrix/extension build
 pnpm run extension:reload
 pnpm -C ../tabrix-private-tests run acceptance:v2.5.0 -- --main-repo ../main_tabrix --owner guodaxia103 --repo tabrix --run-id v25-release-2026-04-24
-pnpm run benchmark:v25 -- --input C:/Users/gsy/.chrome-mcp-agent/benchmarks/v25/v25-release-2026-04-24.ndjson --gate --baseline-v24 docs/benchmarks/v24/v24-release-2026-04-23-rerun2.json
+pnpm run benchmark:v25 -- --input <local-tabrix-data-dir>/benchmarks/v25/v25-release-2026-04-24.ndjson --gate --baseline-v24 docs/benchmarks/v24/v24-release-2026-04-23-rerun2.json
 node ./scripts/release-diagnostic-v25.mjs --input docs/benchmarks/v25/v25-release-2026-04-24.json
 pnpm run release:check
 ```
