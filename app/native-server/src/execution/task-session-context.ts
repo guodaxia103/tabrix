@@ -27,6 +27,7 @@
  */
 
 import type { ReadPageRequestedLayer } from '@tabrix/shared';
+import type { ChooseContextDecisionSnapshot, SkipReadSourceKind } from './skip-read-orchestrator';
 
 /**
  * Default read budget per task. Sized to "a small handful of fresh
@@ -103,6 +104,50 @@ export interface NoteReadPageInput {
    * Same idea as `targetRefs` but for the Knowledge layer.
    */
   apiFamilies?: ReadonlyArray<string> | null;
+}
+
+/**
+ * V26-03 (B-026) — record a successful skip-read execution. Increments
+ * `taskTotals.readPageAvoidedCount` and folds `tokensSavedEstimate`
+ * into `taskTotals.tokensSavedEstimateTotal`.
+ *
+ * NOTE the budget bookkeeping invariant: a skipped read does NOT
+ * consume the per-task `readBudget`. The whole point of V26-03 is
+ * to *not* spend the budget on a read we proved we could avoid.
+ */
+export interface NoteSkipReadInput {
+  source: SkipReadSourceKind;
+  /**
+   * Layer the SKIPPED read would have demanded. Recorded here so a
+   * subsequent verifier-failure escalation can detect a layer
+   * downgrade (`L0+L1+L2 → L0+L1` is the V26-03 hard cap).
+   */
+  layer: ReadPageRequestedLayer;
+  /** Token cost the skip avoided. Clamped to `>= 0`. */
+  tokensSavedEstimate: number;
+  /**
+   * Optional action-path identifier (V25-04). Surfaced into
+   * telemetry so an operator can correlate a skip event to the
+   * Experience replay candidate that backed it.
+   */
+  actionPathId?: string | null;
+  /**
+   * Optional API endpoint family. Folded into `apiEndpointFamiliesSeen`
+   * so a follow-up read on the same family is treated as redundant.
+   */
+  apiFamily?: string | null;
+}
+
+/**
+ * V26-03 (B-026) — per-task aggregate counters consumed by V26-06's
+ * NDJSON emitter and the v26-benchmark transformer. Read-only at the
+ * public surface; the writer is `noteSkipRead`.
+ */
+export interface TaskTotalsSnapshot {
+  /** Number of `chrome_read_page` calls the orchestrator avoided. */
+  readPageAvoidedCount: number;
+  /** Sum of `tokensSavedEstimate` across all skip events on this task. */
+  tokensSavedEstimateTotal: number;
 }
 
 export interface ShouldAllowReadPageInput {
@@ -208,6 +253,27 @@ export class TaskSessionContext {
    */
   public readonly readBudget: number;
 
+  /**
+   * V26-03 (B-026) — aggregate counters for the skip-read
+   * orchestrator. Mutated only by `noteSkipRead`; surfaced read-only
+   * via {@link getTaskTotals}.
+   */
+  private _readPageAvoidedCount = 0;
+  private _tokensSavedEstimateTotal = 0;
+
+  /**
+   * V26-03 (B-026) — most recent `choose_context` decision recorded
+   * for this task. The orchestrator MUST NOT infer a sourceRoute on
+   * its own; the chooser writes the decision via
+   * {@link noteChooseContextDecision} and the `chrome_read_page`
+   * shim consumes it via {@link peekChooseContextDecision}.
+   *
+   * `null` before the chooser runs OR after a URL/pageRole change
+   * invalidates the prior decision (a different page is a different
+   * decision).
+   */
+  private _chooseContextDecision: ChooseContextDecisionSnapshot | null = null;
+
   constructor(options?: TaskSessionContextOptions) {
     if (options?.readBudget !== undefined) {
       const cap = options.readBudget;
@@ -244,7 +310,76 @@ export class TaskSessionContext {
       this.lastReadLayer = null;
       this.lastReadSource = null;
       this.targetRefsSeen.clear();
+      // V26-03: a stale decision against the prior page is unsafe.
+      // Drop it so the orchestrator never skips a read on the new
+      // page based on a decision that targeted the old one.
+      this._chooseContextDecision = null;
     }
+  }
+
+  /**
+   * V26-03 (B-026) — record a `choose_context` decision so the
+   * `chrome_read_page` shim can ask the orchestrator whether to
+   * skip the next read. The orchestrator NEVER infers a route on
+   * its own; the chooser is the only authority.
+   *
+   * Idempotent: passing the same decision twice replaces it cheaply
+   * (objects are stored by reference, not deep-cloned). Callers MUST
+   * NOT mutate the snapshot after recording it.
+   *
+   * Pass `null` to clear the decision (e.g. after the orchestrator
+   * has consumed it and the chooser knows there is no follow-up).
+   */
+  public noteChooseContextDecision(decision: ChooseContextDecisionSnapshot | null): void {
+    this._chooseContextDecision = decision;
+  }
+
+  /**
+   * V26-03 (B-026) — read accessor for the most recent
+   * {@link ChooseContextDecisionSnapshot}. Returns `null` when no
+   * decision has been recorded for the current page (either the
+   * chooser has not run, or `noteUrlChange` invalidated the prior
+   * decision).
+   *
+   * Does NOT clear the decision — multiple reads against the same
+   * page may legitimately consult the same decision (e.g. retries
+   * inside the same hot path). The chooser is responsible for
+   * issuing a fresh decision when it wants the gate to re-evaluate.
+   */
+  public peekChooseContextDecision(): ChooseContextDecisionSnapshot | null {
+    return this._chooseContextDecision;
+  }
+
+  /**
+   * V26-03 (B-026) — record a successful skip-read execution. Does
+   * NOT increment `readPageCount` (a skipped read did not happen).
+   * Folds the `apiFamily` (when supplied) into
+   * `apiEndpointFamiliesSeen` so a follow-up read on the same family
+   * is bucketed as redundant by the existing gate.
+   */
+  public noteSkipRead(input: NoteSkipReadInput): void {
+    this._readPageAvoidedCount += 1;
+    const tokens =
+      Number.isFinite(input.tokensSavedEstimate) && input.tokensSavedEstimate > 0
+        ? Math.floor(input.tokensSavedEstimate)
+        : 0;
+    this._tokensSavedEstimateTotal += tokens;
+    if (typeof input.apiFamily === 'string' && input.apiFamily.length > 0) {
+      this.apiEndpointFamiliesSeen.add(input.apiFamily);
+    }
+  }
+
+  /**
+   * V26-03 (B-026) — read-only accessor for the per-task aggregate
+   * counters consumed by V26-06's NDJSON emitter and the v26
+   * transformer. Returns a fresh object each call so callers cannot
+   * accidentally mutate the running totals.
+   */
+  public getTaskTotals(): TaskTotalsSnapshot {
+    return {
+      readPageAvoidedCount: this._readPageAvoidedCount,
+      tokensSavedEstimateTotal: this._tokensSavedEstimateTotal,
+    };
   }
 
   /**

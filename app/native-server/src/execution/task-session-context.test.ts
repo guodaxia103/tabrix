@@ -11,6 +11,7 @@ import {
   TaskSessionContext,
   resolveReadBudgetFromEnv,
 } from './task-session-context';
+import type { ChooseContextDecisionSnapshot } from './skip-read-orchestrator';
 
 describe('resolveReadBudgetFromEnv', () => {
   it('returns the default when the env key is unset', () => {
@@ -213,5 +214,124 @@ describe('TaskSessionContext — noteReadPage hygiene', () => {
       ctx.noteReadPage({ layer: 'L0', source: 'dom_json', targetRefs: null, apiFamilies: null }),
     ).not.toThrow();
     expect(ctx.readPageCount).toBe(1);
+  });
+});
+
+const REPLAY_DECISION_FOR_CTX: ChooseContextDecisionSnapshot = Object.freeze({
+  sourceRoute: 'experience_replay_skip_read',
+  chosenLayer: 'L0',
+  fullReadTokenEstimate: 4096,
+  replayCandidate: { actionPathId: 'ap_session_001', portableArgsOk: true, policyOk: true },
+});
+
+describe('TaskSessionContext — V26-03 noteSkipRead + taskTotals', () => {
+  it('starts with zeroed taskTotals (honest counters)', () => {
+    const ctx = new TaskSessionContext({ readBudget: 6 });
+    expect(ctx.getTaskTotals()).toEqual({
+      readPageAvoidedCount: 0,
+      tokensSavedEstimateTotal: 0,
+    });
+  });
+
+  it('noteSkipRead increments readPageAvoidedCount and folds tokensSavedEstimate', () => {
+    const ctx = new TaskSessionContext({ readBudget: 6 });
+    ctx.noteSkipRead({
+      source: 'experience_replay',
+      layer: 'L0',
+      tokensSavedEstimate: 4096,
+      actionPathId: 'ap_a',
+    });
+    ctx.noteSkipRead({
+      source: 'api_list',
+      layer: 'L0+L1',
+      tokensSavedEstimate: 2048,
+      apiFamily: 'github_search_repositories',
+    });
+    expect(ctx.getTaskTotals()).toEqual({
+      readPageAvoidedCount: 2,
+      tokensSavedEstimateTotal: 6144,
+    });
+    // The shim's V26-08 redundancy detector relies on this fold-in.
+    expect(ctx.apiEndpointFamiliesSeen.has('github_search_repositories')).toBe(true);
+  });
+
+  it('noteSkipRead does NOT consume the per-task read budget (that is the point)', () => {
+    const ctx = new TaskSessionContext({ readBudget: 2 });
+    ctx.noteSkipRead({ source: 'experience_replay', layer: 'L0', tokensSavedEstimate: 100 });
+    ctx.noteSkipRead({ source: 'experience_replay', layer: 'L0', tokensSavedEstimate: 100 });
+    ctx.noteSkipRead({ source: 'experience_replay', layer: 'L0', tokensSavedEstimate: 100 });
+    expect(ctx.readPageCount).toBe(0);
+    expect(ctx.shouldAllowReadPage({ requestedLayer: 'L0+L1' }).allowed).toBe(true);
+  });
+
+  it('clamps negative / NaN / Infinity tokensSavedEstimate to 0 (honest budget)', () => {
+    const ctx = new TaskSessionContext({ readBudget: 6 });
+    ctx.noteSkipRead({ source: 'experience_replay', layer: 'L0', tokensSavedEstimate: -1 });
+    ctx.noteSkipRead({ source: 'experience_replay', layer: 'L0', tokensSavedEstimate: Number.NaN });
+    ctx.noteSkipRead({
+      source: 'experience_replay',
+      layer: 'L0',
+      tokensSavedEstimate: Number.POSITIVE_INFINITY,
+    });
+    expect(ctx.getTaskTotals()).toEqual({
+      readPageAvoidedCount: 3,
+      tokensSavedEstimateTotal: 0,
+    });
+  });
+
+  it('getTaskTotals returns a fresh object so callers cannot mutate the running totals', () => {
+    const ctx = new TaskSessionContext({ readBudget: 6 });
+    ctx.noteSkipRead({ source: 'experience_replay', layer: 'L0', tokensSavedEstimate: 100 });
+    const snap = ctx.getTaskTotals();
+    snap.readPageAvoidedCount = 99;
+    snap.tokensSavedEstimateTotal = 99;
+    expect(ctx.getTaskTotals()).toEqual({
+      readPageAvoidedCount: 1,
+      tokensSavedEstimateTotal: 100,
+    });
+  });
+});
+
+describe('TaskSessionContext — V26-03 noteChooseContextDecision (correction #3 data flow)', () => {
+  it('peekChooseContextDecision returns null before the chooser writes one', () => {
+    const ctx = new TaskSessionContext({ readBudget: 6 });
+    expect(ctx.peekChooseContextDecision()).toBeNull();
+  });
+
+  it('records and surfaces the most recent chooser decision', () => {
+    const ctx = new TaskSessionContext({ readBudget: 6 });
+    ctx.noteChooseContextDecision(REPLAY_DECISION_FOR_CTX);
+    expect(ctx.peekChooseContextDecision()).toBe(REPLAY_DECISION_FOR_CTX);
+  });
+
+  it('does NOT clear the decision on peek (multiple reads of the same page consult the same decision)', () => {
+    const ctx = new TaskSessionContext({ readBudget: 6 });
+    ctx.noteChooseContextDecision(REPLAY_DECISION_FOR_CTX);
+    ctx.peekChooseContextDecision();
+    expect(ctx.peekChooseContextDecision()).toBe(REPLAY_DECISION_FOR_CTX);
+  });
+
+  it('noteChooseContextDecision(null) clears the recorded decision', () => {
+    const ctx = new TaskSessionContext({ readBudget: 6 });
+    ctx.noteChooseContextDecision(REPLAY_DECISION_FOR_CTX);
+    ctx.noteChooseContextDecision(null);
+    expect(ctx.peekChooseContextDecision()).toBeNull();
+  });
+
+  it('noteUrlChange invalidates the prior decision (a different page is a different decision)', () => {
+    const ctx = new TaskSessionContext({ readBudget: 6 });
+    ctx.noteUrlChange('https://a.example/x', 'role_a');
+    ctx.noteChooseContextDecision(REPLAY_DECISION_FOR_CTX);
+    expect(ctx.peekChooseContextDecision()).not.toBeNull();
+    ctx.noteUrlChange('https://b.example/y', 'role_a');
+    expect(ctx.peekChooseContextDecision()).toBeNull();
+  });
+
+  it('idempotent same-URL noteUrlChange does NOT clobber a recorded decision', () => {
+    const ctx = new TaskSessionContext({ readBudget: 6 });
+    ctx.noteUrlChange('https://a.example/x', 'role_a');
+    ctx.noteChooseContextDecision(REPLAY_DECISION_FOR_CTX);
+    ctx.noteUrlChange('https://a.example/x', 'role_a');
+    expect(ctx.peekChooseContextDecision()).toBe(REPLAY_DECISION_FOR_CTX);
   });
 });

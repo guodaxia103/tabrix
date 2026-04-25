@@ -32,6 +32,9 @@ import { runTabrixChooseContext, runTabrixChooseContextRecordOutcome } from './c
 import { createLivePageContextProvider } from './page-context-provider';
 import type { CapabilityEnv } from '../policy/capabilities';
 import type { SessionManager } from '../execution/session-manager';
+import type { TaskSessionContext } from '../execution/task-session-context';
+import type { ChooseContextDecisionSnapshot } from '../execution/skip-read-orchestrator';
+import type { LayerSourceRoute, TabrixChooseContextResult } from '@tabrix/shared';
 import {
   experienceReplayNativeHandler,
   type DispatchBridgedFn,
@@ -81,6 +84,20 @@ export interface NativeToolHandlerDeps {
    * Optional so existing handler tests stay source-compatible.
    */
   outcomeWriter?: ReplayOutcomeWriter;
+  /**
+   * V26-03 (B-026): the externally-keyed `TaskSessionContext` the
+   * dispatcher resolved for this tool call. Wired exclusively for
+   * `tabrix_choose_context` so its decision (sourceRoute / chosenLayer
+   * / token estimate / replay candidate / API capability) lands in
+   * the SAME context the `chrome_read_page` shim later peeks via
+   * `peekChooseContextDecision`. Other handlers ignore the field.
+   *
+   * `null` when the wrapper resolved no context (tools outside the
+   * auto-key set without an explicit `taskSessionId`). The chooser
+   * handler treats that as "no context to write to" and leaves the
+   * skip-read execution loop dormant — same as the v2.5 happy path.
+   */
+  taskContext?: TaskSessionContext | null;
 }
 
 export type NativeToolHandler = (
@@ -160,8 +177,107 @@ const handleTabrixChooseContext: NativeToolHandler = (args, deps) => {
     telemetry: deps.sessionManager.chooseContextTelemetry,
     pageContext,
   });
+  // V26-03 (B-026): close the skip-read execution loop. When the
+  // wrapper provided a `TaskSessionContext` AND the chooser produced
+  // an actionable layer-dispatch result, write the decision into
+  // the context BEFORE we return. The next `chrome_read_page` call
+  // on the same key reads it via `peekChooseContextDecision` and
+  // the orchestrator decides skip vs forward vs fallback. Hard
+  // rules (session corrections #2/#3/#4):
+  //   * `noteUrlChange` runs FIRST so a chooser call against a
+  //     different page than the one currently held in the context
+  //     wipes the prior decision (per task-session-context tests).
+  //   * Only `experience_replay_skip_read` may attach a real
+  //     `replayCandidate`; every other route stores `null` so the
+  //     orchestrator's gates fire honestly (`replay_candidate_missing`).
+  //   * `apiCapability` is left `null` until V26-07/V26-08 lands a
+  //     real `knowledge_call_api` — never fake `available: true`.
+  if (deps.taskContext && result.status === 'ok') {
+    persistChooseContextDecision(args, result, deps.taskContext);
+  }
   return jsonResult(result, result.status === 'invalid_input');
 };
+
+/**
+ * V26-03 (B-026) — translate the chooser result + raw args into a
+ * {@link ChooseContextDecisionSnapshot} and write it onto the live
+ * `TaskSessionContext`. Pure-ish: only side-effect is the two
+ * setters on the context. Skips the write when `chosenLayer` /
+ * `sourceRoute` are absent (would mean the chooser hit a
+ * pre-V25-02 path that has no layer dispatch attached — extremely
+ * unlikely on the production code path, but the sentinel keeps the
+ * read-side `planSkipRead` happy because it would otherwise see
+ * `undefined` fields and force `'forward'`).
+ */
+function persistChooseContextDecision(
+  rawArgs: unknown,
+  result: TabrixChooseContextResult,
+  taskContext: TaskSessionContext,
+): void {
+  if (!result.chosenLayer || !result.sourceRoute) return;
+
+  const argsObj =
+    rawArgs && typeof rawArgs === 'object' && !Array.isArray(rawArgs)
+      ? (rawArgs as Record<string, unknown>)
+      : {};
+  const url = typeof argsObj.url === 'string' && argsObj.url.length > 0 ? argsObj.url : null;
+  const pageRole =
+    typeof argsObj.pageRole === 'string' && argsObj.pageRole.length > 0
+      ? argsObj.pageRole
+      : (result.resolved?.pageRole ?? null);
+
+  // Always sync the URL/pageRole first. If they changed since the
+  // prior read on this context, `noteUrlChange` clears `lastReadLayer`
+  // / `targetRefsSeen` AND any prior chooser decision so the snapshot
+  // we are about to write is the only authority. Idempotent same-page
+  // calls are a no-op so a chooser that re-runs on the SAME page does
+  // not clobber its own decision.
+  taskContext.noteUrlChange(url, pageRole);
+
+  const sourceRoute = result.sourceRoute as LayerSourceRoute;
+
+  // Replay candidate is attached ONLY on the
+  // `experience_replay_skip_read` route AND when the chooser surfaced
+  // an `experience` / `experience_ranked` artifact. Replay eligibility
+  // is gated upstream (`rankExperienceCandidates.topReplayEligible`)
+  // by capability + step kinds + page role + threshold + portability;
+  // by the time the chooser picks `experience_replay`, those gates
+  // already passed for the top candidate, so the snapshot reports
+  // `policyOk: true` / `portableArgsOk: true`.
+  let replayCandidate: ChooseContextDecisionSnapshot['replayCandidate'] = null;
+  if (sourceRoute === 'experience_replay_skip_read') {
+    const experienceArtifact = result.artifacts?.find(
+      (artifact) => artifact.kind === 'experience' || artifact.kind === 'experience_ranked',
+    );
+    const actionPathId = experienceArtifact?.ref;
+    if (typeof actionPathId === 'string' && actionPathId.length > 0) {
+      replayCandidate = { actionPathId, portableArgsOk: true, policyOk: true };
+    }
+    // No artifact / empty ref → leave `replayCandidate = null`. The
+    // orchestrator turns that into `'fallback_required' /
+    // 'replay_candidate_missing'` per session correction #4.
+  }
+
+  // V26-07/V26-08 will eventually attach a real `apiCapability`. Until
+  // then we always store `null` so the orchestrator's
+  // `'api_layer_not_available'` fallback fires deterministically on the
+  // `knowledge_supported_read` route. Fabricating `{ available: true }`
+  // here would mark the read as skippable but no engine exists to
+  // honour it — the integration test pins this invariant.
+  const snapshot: ChooseContextDecisionSnapshot = {
+    sourceRoute,
+    chosenLayer: result.chosenLayer,
+    fullReadTokenEstimate:
+      typeof result.tokenEstimateFullRead === 'number' &&
+      Number.isFinite(result.tokenEstimateFullRead) &&
+      result.tokenEstimateFullRead > 0
+        ? Math.floor(result.tokenEstimateFullRead)
+        : 0,
+    replayCandidate,
+    apiCapability: null,
+  };
+  taskContext.noteChooseContextDecision(snapshot);
+}
 
 const handleTabrixChooseContextRecordOutcome: NativeToolHandler = (args, deps) => {
   const result = runTabrixChooseContextRecordOutcome(args, {

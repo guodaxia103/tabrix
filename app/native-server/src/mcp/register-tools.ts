@@ -26,6 +26,7 @@ import {
 import { isCapabilityEnabled, type CapabilityEnv } from '../policy/capabilities';
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
+import { planSkipRead, type SkipReadPlan } from '../execution/skip-read-orchestrator';
 import { runPostProcessor } from './tool-post-processors';
 import { getNativeToolHandler } from './native-tool-handlers';
 import type {
@@ -553,11 +554,23 @@ const READ_PAGE_DEFAULT_LAYER: ReadPageRequestedLayer = 'L0+L1+L2';
  * not part of the public `chrome_read_page` schema (a strict client
  * may even strip unknown fields).
  *
- * Only `chrome_read_page` (the gated tool) and `chrome_navigate` (the
+ * Only `chrome_read_page` (the gated tool), `chrome_navigate` (the
  * tool that invalidates the gate's lastReadLayer / targetRefsSeen
- * via `noteUrlChange`) participate in auto-keying. Every other tool
- * returns `null`, so click/fill/screenshot/etc. cannot accidentally
- * mint phantom external task contexts or pollute the LRU map.
+ * via `noteUrlChange`), and `tabrix_choose_context` (V26-03 — the
+ * decision writer that the `chrome_read_page` shim consumes via
+ * `peekChooseContextDecision`) participate in auto-keying. Every
+ * other tool returns `null`, so click/fill/screenshot/etc. cannot
+ * accidentally mint phantom external task contexts or pollute the
+ * LRU map.
+ *
+ * V26-03 (B-026) — `tabrix_choose_context` joins the auto set so a
+ * chooser → reader pair issued back-to-back without an explicit
+ * `taskSessionId` lands on the SAME `TaskSessionContext`. This is
+ * the only way the orchestrator can read what the chooser wrote
+ * without the test having to spy on `getTaskContext`. The chooser's
+ * public schema does not advertise `tabId` either, so the auto
+ * fallback (primary tab → `mcp:auto:tab:default`) is what makes the
+ * pairing work in the schema-strict path.
  *
  * Resolution order (highest precedence first):
  *
@@ -589,7 +602,10 @@ function resolveTaskContextKey(
   const explicit = extractStableTaskKey(args);
   if (explicit) return explicit;
 
-  const autoEligible = toolName === 'chrome_read_page' || toolName === 'chrome_navigate';
+  const autoEligible =
+    toolName === 'chrome_read_page' ||
+    toolName === 'chrome_navigate' ||
+    toolName === 'tabrix_choose_context';
   if (!autoEligible) return null;
 
   const argTabId =
@@ -1364,6 +1380,24 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       return result;
     }
 
+    // V26-03 (B-026) — resolve the task context BEFORE we branch into
+    // the native handler so `tabrix_choose_context` (a native-handled
+    // tool) can write its decision into the same `TaskSessionContext`
+    // the `chrome_read_page` shim later peeks. Auto-keying covers the
+    // schema-strict client case (chooser's public schema does not
+    // advertise `taskSessionId / tabId`) so the pair lands on the
+    // same `mcp:auto:tab:<id|default>` key without spying on
+    // `getTaskContext`. Tools outside the auto set still get the
+    // freshly-minted internal `taskId` fallback so their v2.5/v2.6
+    // contract is preserved bit-for-bit.
+    const bridgeForKeyEarly = bridgeRuntimeState.getSnapshot();
+    const externalTaskKeyEarly = resolveTaskContextKey(name, args, {
+      primaryTabId: bridgeForKeyEarly.primaryTabId,
+    });
+    const taskContextEarly = externalTaskKeyEarly
+      ? sessionManager.getOrCreateExternalTaskContext(externalTaskKeyEarly)
+      : sessionManager.getTaskContext(task.taskId);
+
     // Native-handled tools short-circuit the extension round-trip — see
     // `mcp/native-tool-handlers.ts`. Currently Experience read-side
     // queries (B-013), the context selector (B-018 v1), and the V24-01
@@ -1381,6 +1415,13 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       const nativeResult = await nativeHandler(args, {
         sessionManager,
         capabilityEnv: getCurrentCapabilityEnv(),
+        // V26-03 (B-026): carries the `TaskSessionContext` the
+        // `tabrix_choose_context` handler writes into via
+        // `noteChooseContextDecision`. `null` for tools outside the
+        // auto-key set when there is no live external context;
+        // handlers that do not need it (e.g. experience suggest /
+        // record-outcome) ignore the field.
+        taskContext: taskContextEarly,
         ...replayDeps,
       });
       if (nativeResult.isError) {
@@ -1550,14 +1591,86 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     // by a read on the same tab shares one context — `noteUrlChange`
     // wipes `lastReadLayer` / `targetRefsSeen` and the next read is
     // treated as a fresh first read on the new page.
-    const bridgeForKey = bridgeRuntimeState.getSnapshot();
-    const externalTaskKey = resolveTaskContextKey(name, args, {
-      primaryTabId: bridgeForKey.primaryTabId,
-    });
-    const taskContext = externalTaskKey
-      ? sessionManager.getOrCreateExternalTaskContext(externalTaskKey)
-      : sessionManager.getTaskContext(task.taskId);
+    // Reuse the same `TaskSessionContext` we resolved before the
+    // native-handler branch (V26-03 wiring). Re-resolving here would
+    // be functionally equivalent under the current
+    // `getOrCreateExternalTaskContext` LRU semantics, but the fewer
+    // resolution sites the harder it is for a future edit to drift
+    // the chooser-write and reader-peek apart.
+    const taskContext = taskContextEarly;
     if (taskContext && name === 'chrome_read_page') {
+      // V26-03 (B-026) — skip-read orchestrator hook. We consult it
+      // BEFORE the existing budget gate because a `'skip'` plan
+      // means we never round-trip the bridge AND never spend the
+      // budget on a read we proved we could avoid.
+      //
+      // Hard rules (session corrections #2/#3/#4):
+      //   * The orchestrator only fires when `choose_context` has
+      //     ALREADY recorded a decision into this task context. Any
+      //     in-flight read without a recorded decision keeps the
+      //     v2.5 happy path bit-identical.
+      //   * On `'skip'` we return a STRUCTURED skip envelope —
+      //     never a synthetic `chrome_read_page` compact payload.
+      //     A consumer can tell the read was avoided by the explicit
+      //     `kind: 'read_page_skipped'` discriminator.
+      //   * On `'fallback_required'` / `'forward'` we drop straight
+      //     into the existing budget gate so the legacy short-circuit
+      //     warnings still fire.
+      const recordedDecision = taskContext.peekChooseContextDecision();
+      if (recordedDecision !== null) {
+        const skipPlan: SkipReadPlan = planSkipRead({
+          decision: recordedDecision,
+          taskCtx: {
+            readPageCount: taskContext.readPageCount,
+            readBudget: taskContext.readBudget,
+            lastReadLayer: taskContext.lastReadLayer,
+            currentUrl: taskContext.currentUrl,
+          },
+        });
+        if (skipPlan.action === 'skip') {
+          taskContext.noteSkipRead({
+            source: skipPlan.sourceKind,
+            layer: recordedDecision.chosenLayer,
+            tokensSavedEstimate: skipPlan.tokensSavedEstimate,
+            actionPathId: recordedDecision.replayCandidate?.actionPathId ?? null,
+            apiFamily: recordedDecision.apiCapability?.family ?? null,
+          });
+          const totals = taskContext.getTaskTotals();
+          const skipPayload = {
+            kind: 'read_page_skipped',
+            readPageAvoided: skipPlan.readPageAvoided,
+            sourceKind: skipPlan.sourceKind,
+            sourceRoute: skipPlan.sourceRoute,
+            tokensSavedEstimate: skipPlan.tokensSavedEstimate,
+            fallbackUsed: skipPlan.fallbackUsed,
+            fallbackEntryLayer: skipPlan.fallbackEntryLayer,
+            requiresApiCall: skipPlan.requiresApiCall,
+            requiresExperienceReplay: skipPlan.requiresExperienceReplay,
+            actionPathId: recordedDecision.replayCandidate?.actionPathId ?? null,
+            apiFamily: recordedDecision.apiCapability?.family ?? null,
+            diagnostic: skipPlan.diagnostic,
+            taskTotals: totals,
+          };
+          const skipResult: CallToolResult = {
+            content: [{ type: 'text', text: JSON.stringify(skipPayload) }],
+          };
+          sessionManager.completeStep(session.sessionId, step.stepId, {
+            status: 'completed',
+            resultSummary: `chrome_read_page skipped via ${skipPlan.sourceKind} (saved ~${skipPlan.tokensSavedEstimate} tok)`,
+          });
+          sessionManager.finishSession(session.sessionId, {
+            status: 'completed',
+            summary: `chrome_read_page skipped via ${skipPlan.sourceKind}`,
+          });
+          return skipResult;
+        }
+        // `fallback_required` / `forward` falls through to the
+        // existing budget gate path below. The chooser decision
+        // stays recorded so a follow-up read on the same page can
+        // re-evaluate (e.g. once V26-07 wires capability we may
+        // upgrade `api_layer_not_available` → skip without needing
+        // a fresh chooser run).
+      }
       // P1-2 fix: read the public `requestedLayer` field (with
       // legacy `layer` fallback) instead of `(args as any).layer`,
       // and default to the MCP-schema default `'L0+L1+L2'` when
