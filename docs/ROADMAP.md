@@ -71,7 +71,7 @@ Longer-term public directions:
 
 These directions are strategically important, but they should not outrun the current reliability foundation.
 
-For the full technical plan, see `docs/MKEP_STAGE_3_PLUS_ROADMAP.md`.
+Detailed sprint plans and owner-lane briefs are maintained outside the public repository.
 
 ## What We Will Not Prioritize First
 

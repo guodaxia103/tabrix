@@ -69,7 +69,7 @@ removals are intentional and make room for the MKEP Stage 3+ work
 the old three tabs (`workflows / agent-chat / element-markers`) were
 replaced with three "Coming in Stage 3x" placeholder tabs — Memory,
 Knowledge, Experience — each linking to
-`docs/MKEP_STAGE_3_PLUS_ROADMAP.md`.
+maintainer-private MKEP planning materials.
 
 **Data-dir helpers relocation**:
 `getAgentDataDir / getDatabasePath / getDefaultWorkspaceDir /
@@ -128,7 +128,7 @@ file`. Root cause: `pnpm install --ignore-scripts` **overrides**
   (`knowledge-object-classification.test.ts`, 15 tests) and 5 new
   Stage 2 assertions in `knowledge-registry.test.ts`. Full extension
   suite goes from 843 → 878 tests, all green. Design document lives
-  at `docs/KNOWLEDGE_STAGE_2.md`.
+  in maintainer-private Knowledge planning materials.
 
 - **MKEP Knowledge Registry — Stage 1** — first data-ification pass of
   the Knowledge layer. The GitHub understanding-layer rules (Site
@@ -150,7 +150,7 @@ file`. Root cause: `pnpm install --ignore-scripts` **overrides**
   the existing `read-page-understanding.test.ts` / `read-page-mode.test.ts`
   / `read-page-high-value-objects-github.test.ts` suites this keeps
   the `read_page` contract stable through the migration. See
-  `docs/KNOWLEDGE_STAGE_1.md` for the full design.
+  maintainer-private Knowledge planning materials for the full design.
 - **MKEP Memory Phase 0.3** — DOM action history. Every
   `chrome_click_element` / `chrome_fill_or_select` / `chrome_navigate` /
   `chrome_keyboard` call now persists a `memory_actions` row and
@@ -173,7 +173,7 @@ file`. Root cause: `pnpm install --ignore-scripts` **overrides**
   `PageSnapshotRepository` gains
   `findLatestInSessionForTab({ sessionId, tabId, beforeIso })` with
   a new companion index `memory_page_snapshots_tab_captured_idx`.
-- Design rationale: `docs/MEMORY_PHASE_0_3.md`.
+- Design rationale: maintainer-private Memory planning materials.
 
 - **MKEP Memory Phase 0.2** — `chrome_read_page` now emits a real
   `historyRef` of the form `memory://snapshot/<uuid>` and persists a
@@ -188,7 +188,7 @@ file`. Root cause: `pnpm install --ignore-scripts` **overrides**
 - New `app/native-server/src/mcp/tool-post-processors.ts` registry
   hooks the `chrome_read_page` success path in `handleToolCall`
   without affecting any other tool; unrelated tools pay zero overhead.
-- Design rationale: `docs/MEMORY_PHASE_0_2.md`.
+- Design rationale: maintainer-private Memory planning materials.
 
 ### Changed
 

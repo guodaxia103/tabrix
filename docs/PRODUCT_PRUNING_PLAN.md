@@ -129,7 +129,7 @@
 - **Knowledge** — 未来展示 Knowledge Registry 的 SiteProfile / PageCatalog / UIMap / ApiEndpoint（Stage 3d / 3g）。
 - **Experience** — 未来展示 Experience Deck（Stage 4）。
 
-每个 tab 先上"Coming in Stage 3x"占位卡片 + 指向 `docs/MKEP_STAGE_3_PLUS_ROADMAP.md` 的链接。
+每个 tab 先上"Coming soon"占位卡片；详细 Stage 计划留在维护者私有规划材料中。
 
 ## 3. 入口裁剪清单
 
@@ -190,4 +190,4 @@
 ## 7. 后续（不在本 PR 内）
 
 - Stage 3a Locator V5 / 3b Policy Engine / 3c Experience Cache / 3d Knowledge UIMap — 都在下线后的空白画布上展开。
-- `docs/MKEP_STAGE_3_PLUS_ROADMAP.md` 同步 v0.3：把"依赖已清退"更新到各任务的前置条件。
+- 维护者私有路线图同步：把"依赖已清退"更新到各任务的前置条件。

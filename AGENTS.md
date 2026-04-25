@@ -19,24 +19,18 @@ Before changing code or docs, every AI assistant should read the public reposito
 
 1. [README.md](./README.md)
 2. [docs/README.md](./docs/README.md)
-3. **[docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md)** — canonical Stage-level execution plan (`Stage 3a → 5e`). Every Stage maps to one or more `B-*` items in `PRODUCT_BACKLOG.md`.
+3. [docs/ROADMAP.md](./docs/ROADMAP.md) — public product direction and contribution areas.
 4. [docs/PRODUCT_SURFACE_MATRIX.md](./docs/PRODUCT_SURFACE_MATRIX.md) — current public product surface + capability tiers (GA/Beta/Experimental/Internal).
 5. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 6. [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md)
-7. [docs/PRODUCT_BACKLOG.md](./docs/PRODUCT_BACKLOG.md) — sprint-level backlog (the `B-*` items that Stages in `TASK_ROADMAP.md` break down into).
-8. [docs/MKEP_STAGE_3_PLUS_ROADMAP.md](./docs/MKEP_STAGE_3_PLUS_ROADMAP.md) — historical reference only. The live roadmap is `TASK_ROADMAP.md`.
-9. [docs/PRODUCT_PRUNING_PLAN.md](./docs/PRODUCT_PRUNING_PLAN.md)
-10. [CONTRIBUTING.md](./CONTRIBUTING.md)
+7. [docs/PRODUCT_PRUNING_PLAN.md](./docs/PRODUCT_PRUNING_PLAN.md)
+8. [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 Then continue with the smallest relevant task-specific reading set below.
 
-### Bilingual roadmap exception to rule 18
+### Private maintainer planning boundary
 
-Rule 18 below says "Public English docs go under `docs/`. Chinese-language public material belongs only in root `README_zh.md` and this file." The **only** approved exceptions are:
-
-- [docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md) (English, canonical) + [docs/TASK_ROADMAP_zh.md](./docs/TASK_ROADMAP_zh.md) (Chinese mirror).
-
-These two files must stay semantically equivalent; any PR that edits one must edit the other in the same commit. Do not fork the pattern to other docs without an explicit governance decision.
+Detailed PRDs, sprint backlogs, owner-lane briefs, and version-internal plans are maintainer-private materials and must stay outside the public Git tree. Public contributors should use `docs/ROADMAP.md`, `docs/PRODUCT_SURFACE_MATRIX.md`, and code-local issues/PRs as the public working contract.
 
 ## Task-Specific Reading
 
@@ -65,39 +59,19 @@ Read:
 
 ### MKEP Memory-layer tasks (SQLite / SessionManager / post-processor / sidepanel Memory tab)
 
-Read:
-
-- [docs/MEMORY_PHASE_0.md](./docs/MEMORY_PHASE_0.md) / [MEMORY_PHASE_0_2.md](./docs/MEMORY_PHASE_0_2.md) / [MEMORY_PHASE_0_3.md](./docs/MEMORY_PHASE_0_3.md)
-- [docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md) §6 Stage 3e / §10 Stage 3i
-
-Touchpoints: `app/native-server/src/memory/**`, `app/chrome-extension/entrypoints/sidepanel/**` (Memory tab).
+Public touchpoints: `app/native-server/src/memory/**`, `app/chrome-extension/entrypoints/sidepanel/**` (Memory tab). Detailed phase plans are maintainer-private and must not be reintroduced under `docs/`.
 
 ### MKEP Knowledge-layer tasks (registry / seeds / HVO classifier / UI map)
 
-Read:
-
-- [docs/KNOWLEDGE_STAGE_1.md](./docs/KNOWLEDGE_STAGE_1.md)
-- [docs/KNOWLEDGE_STAGE_2.md](./docs/KNOWLEDGE_STAGE_2.md)
-- [docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md) §2 Stage 3a / §8 Stage 3g / §9 Stage 3h
-
-Touchpoints: `app/chrome-extension/entrypoints/background/knowledge/**`, `app/chrome-extension/entrypoints/background/tools/browser/read-page*`.
+Public touchpoints: `app/chrome-extension/entrypoints/background/knowledge/**`, `app/chrome-extension/entrypoints/background/tools/browser/read-page*`. Detailed Knowledge stage plans are maintainer-private and must not be reintroduced under `docs/`.
 
 ### MKEP Experience-layer tasks (action-path replay / recipes / shared deck)
 
-Read:
-
-- [docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md) §3 Stage 3b / §11 Stage 4a
-
-Note: Experience tables do not yet exist in code. New schemas must be added under `app/native-server/src/memory/db/` and cross-linked from an `experience/` module, not reintroduced as a new SQLite file.
+Read the public MKEP code map in this file and the relevant implementation modules. Detailed Experience package briefs are maintainer-private and must not be reintroduced under `docs/`.
 
 ### MKEP Policy-layer tasks (risk-tier gating / capability opt-in)
 
-Read:
-
-- [docs/POLICY_PHASE_0.md](./docs/POLICY_PHASE_0.md)
-- [docs/TASK_ROADMAP.md](./docs/TASK_ROADMAP.md) §7 Stage 3f
-
-Touchpoints: `app/native-server/src/policy/**`, `packages/shared/src/tools.ts` (`TOOL_RISK_TIERS` + `requiresExplicitOptIn`).
+Public touchpoints: `app/native-server/src/policy/**`, `packages/shared/src/tools.ts` (`TOOL_RISK_TIERS` + `requiresExplicitOptIn`). Detailed Policy phase plans are maintainer-private and must not be reintroduced under `docs/`.
 
 ### Release, security, and third-party reuse tasks
 
@@ -150,7 +124,7 @@ The following product surfaces were removed as part of `docs/PRODUCT_PRUNING_PLA
 - Element Marker management, `element_picker` MCP tool.
 - Visual Editor (`web-editor-v2`).
 
-If a task seems to require any of these surfaces, stop and ask. The strategic value of the removed surfaces has been remapped to MKEP Stage 3+ (see [`docs/TASK_ROADMAP.md`](./docs/TASK_ROADMAP.md) §2–§18 and [`docs/PRODUCT_SURFACE_MATRIX.md`](./docs/PRODUCT_SURFACE_MATRIX.md)).
+If a task seems to require any of these surfaces, stop and ask. The strategic value of the removed surfaces has been remapped to MKEP work tracked in maintainer-private planning, while the public boundary remains [`docs/PRODUCT_SURFACE_MATRIX.md`](./docs/PRODUCT_SURFACE_MATRIX.md).
 
 ## Tiered Execution Model (any AI assistant)
 
@@ -272,6 +246,6 @@ Default expectations:
 17. Public / private test split. Any test or fixture that reproduces a specific real-world site's URL, DOM content, brand-named accessibility tree, or login-state flow (e.g. Douyin / BOSS / private-console vendors) belongs in the sibling `tabrix-private-tests` repository, not in this repo. In this public repo only the declared GA baseline (currently: GitHub) may appear in `app/**/tests/**` as realistic fixture data. Generic login, footer, dashboard, and accessibility-tree fixtures must use neutral wording and MUST NOT embed a specific vendor brand as flavoring. Exception: guardrail tests that list brand words as forbidden tokens (e.g. `tests/read-page-understanding-core-neutrality.test.ts`) may contain those words because their purpose is to assert absence, not reproduce a scenario.
 18. Documentation placement. Public English docs go under `docs/`. Chinese-language public material belongs only in root `README_zh.md` and this file. Internal governance, audit, gate maintenance, PRD, roadmap sequencing, and acceptance evidence are maintained outside this public repository by the project maintainers. Do not reintroduce deleted internal documents into `docs/` without an explicit governance decision.
 19. Removed-surface invariant. Before adding any MCP tool, background listener, popup entry, sidepanel tab, or shared type, check it against the "Removed Surfaces" list above. If the change looks like it would reintroduce a removed surface in any form — including under a different name — stop and surface the question instead of implementing it.
-20. Backlog invariant. Every non-trivial feature or refactor commit must map to a `B-XXX` ID from `docs/PRODUCT_BACKLOG.md`, or explain in the commit body why no backlog item applies. If the backlog has no room for the task, propose a new `B-XXX` entry in the same change instead of coding first.
+20. Planning invariant. Every non-trivial feature or refactor commit should reference a public issue, a public roadmap item, or a maintainer-private `B-*` item when one exists. Do not create or update public sprint-backlog files under `docs/`.
 
 If a task conflicts with these rules, stop and surface the tradeoff instead of guessing.

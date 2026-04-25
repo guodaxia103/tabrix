@@ -24,7 +24,7 @@ The release is backward compatible with v2.2.x. Every new MCP tool is additive a
 ### V23-03 / B-015 — `read_page(render='markdown')` + L2 source routing
 
 - `packages/shared/src/read-page-contract.ts` adds the optional `render?: 'json' | 'markdown'` input field (defaulting to `'json'`, no behaviour change for existing callers) plus the new L2 source-routing fields `domJsonRef` / `markdownRef` / `knowledgeRef` so a caller can ask "give me the cheap reading surface" without losing access to the execution truth.
-- The extension's `read-page.ts` now emits an optional `markdown` projection through the new helper `read-page-markdown.ts`. Markdown is intentionally a **reading surface** — HVOs, candidate actions, and `targetRef` continue to live in the JSON branch, and the markdown projection deliberately omits `ref` / `targetRef` values so callers cannot accidentally execute against a markdown view (B-015 invariant from `docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md` §4.3).
+- The extension's `read-page.ts` now emits an optional `markdown` projection through the new helper `read-page-markdown.ts`. Markdown is intentionally a **reading surface** — HVOs, candidate actions, and `targetRef` continue to live in the JSON branch, and the markdown projection deliberately omits `ref` / `targetRef` values so callers cannot accidentally execute against a markdown view (B-015 invariant).
 - New tests: `read-page-render-markdown.test.ts`, `read-page-l2-source-routing.test.ts`. `B-015` flips from pool to done.
 
 ### V23-04 / B-018 v1.5 — `tabrix_choose_context` telemetry + outcome write-back + markdown branch
@@ -37,7 +37,7 @@ The release is backward compatible with v2.2.x. Every new MCP tool is additive a
 
 ### V23-05 / `B-EXP-REPLAY-V1` — `experience_replay` v1 owner-lane brief (no implementation)
 
-- New design doc `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` specifies the v1 contract for `experience_replay`: input/output DTOs, proposed risk tier (P1 + `requiresExplicitOptIn` + new `experience_replay` capability), closed failure-code enum, fail-closed step semantics, Memory write-back via the existing `memory_sessions` + `memory_steps` shape, and a 3-layer test matrix (unit + integration + private-repo `T5-G-experience-replay`).
+- A maintainer-private owner brief specifies the v1 contract for `experience_replay`: input/output DTOs, proposed risk tier (P1 + `requiresExplicitOptIn` + new `experience_replay` capability), closed failure-code enum, fail-closed step semantics, Memory write-back via the existing `memory_sessions` + `memory_steps` shape, and a 3-layer test matrix (unit + integration + private-repo `T5-G-experience-replay`).
 - **No code lands** in v2.3.0 for `experience_replay`. The brief enumerates 7 owner-lane open questions that gate any future implementation; per `AGENTS.md` §"Tiered Execution Model" they cannot be answered by fast-lane.
 
 ### V23-06 — Benchmark framework + release gate
@@ -154,6 +154,6 @@ The `tabrix-private-tests` `acceptance:v2.3.0` runner is expected to cover at mi
 
 ## Known limitations carried into v2.3.0
 
-- `experience_replay` is **not** shipped — only the brief is. Until the maintainer answers the 7 open questions in `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §10, the chooser's `'experience_replay'` strategy remains absent and the K5 metric (`懂用户`) cannot improve beyond what `experience_suggest_plan` already provides.
+- `experience_replay` is **not** shipped — only the owner brief is. Until the maintainer answers the 7 open questions, the chooser's `'experience_replay'` strategy remains absent and the K5 metric (`懂用户`) cannot improve beyond what `experience_suggest_plan` already provides.
 - `historyRef` promotion to a true content-hash anchor (carried over from v2.2.0 §B-011 caveat) remains out of scope; B-011 v1 stability does not depend on it.
 - `knowledge_call_api` (B-017 v2) remains absent. The chooser still routes to `knowledge_light` rather than inventing an `api_only` strategy when API Knowledge has rows but no executable call layer exists.

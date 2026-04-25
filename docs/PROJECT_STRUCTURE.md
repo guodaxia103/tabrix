@@ -57,7 +57,7 @@ Key directories:
 - `entrypoints/popup/`
   - Extension popup UI for connection, remote access, and host status. Previously hosted Local-Model / Element-Marker / Builder entries — all removed.
 - `entrypoints/sidepanel/`
-  - Side panel UI. Current tabs are Memory / Knowledge / Experience placeholders pointing at `docs/MKEP_STAGE_3_PLUS_ROADMAP.md`.
+  - Side panel UI. Current tabs are Memory / Knowledge / Experience placeholders.
 - `entrypoints/offscreen/`
   - Offscreen document. Now hosts only the GIF encoder and the SW keepalive port; the semantic-similarity engine was removed.
 - `entrypoints/shared/`
@@ -206,7 +206,7 @@ Start with:
 
 - `app/chrome-extension/entrypoints/sidepanel/App.vue`
 - `app/chrome-extension/entrypoints/sidepanel/components/` (Memory / Knowledge / Experience tab placeholders)
-- `docs/MKEP_STAGE_3_PLUS_ROADMAP.md` for the target shape of each viewer
+- `docs/ROADMAP.md` for public product direction
 
 ### Change MKEP Memory persistence
 
@@ -260,7 +260,7 @@ To ramp up quickly, read in this order:
   - MKEP persistence layers (Memory in `native-server/src/memory`, Knowledge in `chrome-extension/entrypoints/background/knowledge`, Policy in `native-server/src/policy`)
   - CLI / diagnostics (`native-server/src/scripts`)
 - `packages/shared/` is the key stability boundary. Any change to tool schemas, risk tiers, or cross-process types should usually start there.
-- The previous agent / workflow / visual-editor / element-marker / local-semantic subsystems are not present in this tree; their strategic value is migrating into MKEP Stage 3+ (see `docs/MKEP_STAGE_3_PLUS_ROADMAP.md`).
+- The previous agent / workflow / visual-editor / element-marker / local-semantic subsystems are not present in this tree; their strategic value is migrating into MKEP work tracked outside the public docs.
 
 ## 7. Maintenance Suggestions
 

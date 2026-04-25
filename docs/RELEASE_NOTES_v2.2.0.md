@@ -100,7 +100,7 @@ contract on `ReadPageHighValueObject` continues to be emitted.
   shipped strategies (`experience_reuse` / `knowledge_light` /
   `read_page_required`). GitHub-first; `siteId` only honours `github` in v1,
   and non-GitHub URLs resolve to `read_page_required`. Design + scope detail
-  in [`docs/B_018_CONTEXT_SELECTOR_V1.md`](./B_018_CONTEXT_SELECTOR_V1.md).
+  in the maintainer-private B-018 owner brief.
   - **Caveat**: this is a v1 _slice_, not the full Stage 3h DoD. The full
     decision table, telemetry-driven self-learning, and multi-site coverage
     are still in pool. The v1 selector is intentionally rule-only (no
