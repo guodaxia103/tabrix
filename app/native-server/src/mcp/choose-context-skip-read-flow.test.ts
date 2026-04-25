@@ -50,6 +50,8 @@ import { sessionManager } from '../execution/session-manager';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import type { ChooseContextDecisionSnapshot } from '../execution/skip-read-orchestrator';
+import type { ExperienceQueryService } from '../memory/experience';
+import type { ExperienceActionPathRow } from '../memory/experience/experience-repository';
 
 const AUTO_DEFAULT_KEY = 'mcp:auto:tab:default';
 
@@ -351,6 +353,240 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     });
     expect(callToolInvocations).toHaveLength(1);
     expect(ctx.getTaskTotals().readPageAvoidedCount).toBe(0);
+  });
+
+  // ------------------------------------------------------------------
+  // (e2) fallback_required clamps the bridge requestedLayer to L0+L1
+  //      even when the caller asked for L0+L1+L2. V26-03 review
+  //      closeout — pins the V26-03 §0.1 hard rule (a fallback MUST
+  //      NOT silently re-widen back to a full DOM read).
+  // ------------------------------------------------------------------
+  it('fallback_required forwards chrome_read_page to the bridge with requestedLayer clamped to L0+L1 (never the original L0+L1+L2)', async () => {
+    markBridgeReady();
+    // V26-03 review closeout: when `chrome_read_page` is called with
+    // `tabId: 7` the production `resolveTaskContextKey` ladder pins
+    // the lookup to `mcp:auto:tab:7` (not `mcp:auto:tab:default`), so
+    // we MUST seed the decision against the same key the shim will
+    // peek into. Using `getOrCreateExternalTaskContext('mcp:auto:tab:7')`
+    // exercises the real key resolution rather than spying on it.
+    const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:7');
+    ctx.noteUrlChange('https://github.com/octocat/repo/issues', 'issues_list');
+    // Chooser said `experience_replay_skip_read` but no executable
+    // candidate landed on the snapshot — the orchestrator MUST surface
+    // `'fallback_required' / 'replay_candidate_missing'` and the
+    // bridge MUST be called with the clamped fallback layer, not the
+    // caller's original `'L0+L1+L2'`.
+    ctx.noteChooseContextDecision({
+      sourceRoute: 'experience_replay_skip_read',
+      // Even when the chooser picked `'L0+L1+L2'` upstream, the
+      // orchestrator clamps the fallback entry layer to `'L0+L1'`
+      // (V4.1 §0.1 hard rule).
+      chosenLayer: 'L0+L1+L2',
+      fullReadTokenEstimate: 16384,
+      replayCandidate: null,
+      apiCapability: null,
+    });
+
+    const bridgeSpy = mockBridgeRoundTrip(
+      JSON.stringify({ kind: 'page', pageContent: 'fallback-clamped-layer' }),
+    );
+
+    const result = await handleToolCall('chrome_read_page', {
+      // Caller asks for the schema default — full layered read.
+      requestedLayer: 'L0+L1+L2',
+      // Unrelated args MUST survive verbatim through the fallback
+      // path so caller contracts that key off `tabId` / `windowId` /
+      // `refId` are not silently broken.
+      tabId: 7,
+      windowId: 11,
+      refId: 'tgt_clamped_fallback',
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
+    // Forward path: bridge response, not a skip envelope.
+    expect(payload).not.toHaveProperty('kind', 'read_page_skipped');
+    expect(payload.pageContent).toBe('fallback-clamped-layer');
+
+    const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
+      const messageType = call[1];
+      return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
+    });
+    expect(callToolInvocations).toHaveLength(1);
+    const forwarded = callToolInvocations[0]?.[0] as {
+      name: string;
+      args: Record<string, unknown>;
+    };
+    expect(forwarded.name).toBe('chrome_read_page');
+    // V26-03 review closeout hard contract: the bridge MUST receive
+    // the clamped fallback layer, NOT the caller's original
+    // `'L0+L1+L2'`.
+    expect(forwarded.args.requestedLayer).toBe('L0+L1');
+    // And every other arg MUST be preserved bit-identically.
+    expect(forwarded.args.tabId).toBe(7);
+    expect(forwarded.args.windowId).toBe(11);
+    expect(forwarded.args.refId).toBe('tgt_clamped_fallback');
+    // The post-success bookkeeping MUST also reflect the clamped
+    // layer so a subsequent redundant-read gate decision does not
+    // drift back to the caller's original layer.
+    expect(ctx.lastReadLayer).toBe('L0+L1');
+    // Read budget consumed by the (forwarded) bridge call.
+    expect(ctx.readPageCount).toBe(1);
+    expect(ctx.getTaskTotals().readPageAvoidedCount).toBe(0);
+  });
+
+  // ------------------------------------------------------------------
+  // (real-chooser) end-to-end skip via the production chooser path
+  //
+  // Pre-seeding `noteChooseContextDecision(...)` is BANNED here.
+  // Instead we stub `sessionManager.experience` with a query service
+  // that returns one replay-eligible row, run the real
+  // `tabrix_choose_context` MCP tool, and assert that the FOLLOW-UP
+  // `chrome_read_page` returns the skip envelope without invoking
+  // the bridge. Pins that the chooser-side write actually flows
+  // through `persistChooseContextDecision`.
+  // ------------------------------------------------------------------
+  it('real chooser path: tabrix_choose_context writes experience_replay_skip_read + replayCandidate, follow-up chrome_read_page skips without bridge call', async () => {
+    markBridgeReady();
+    // Enable the `experience_replay` capability so the chooser is
+    // allowed to mark the row replay-eligible. Restored by the
+    // `afterEach` `restoreAllMocks`/`reset` pair plus the
+    // `delete process.env...` in the finally below.
+    const previousCapabilities = process.env.TABRIX_POLICY_CAPABILITIES;
+    process.env.TABRIX_POLICY_CAPABILITIES = 'experience_replay';
+    try {
+      // Replay-eligible Experience row: a single
+      // `chrome_click_element` step whose args extract to a portable
+      // shape, on a GitHub pageRole the v1 allowlist accepts, with
+      // success counters above
+      // {EXPERIENCE_REPLAY_MIN_SUCCESS_COUNT, _RATE}.
+      const ACTION_PATH_ID = 'action_path_' + 'a'.repeat(64);
+      const replayableRow: ExperienceActionPathRow = {
+        actionPathId: ACTION_PATH_ID,
+        pageRole: 'issues_list',
+        intentSignature: 'browse repository issues',
+        stepSequence: [
+          {
+            toolName: 'chrome_click_element',
+            status: 'completed',
+            historyRef: null,
+            args: { selector: '#issues-tab' },
+          },
+        ],
+        successCount: 9,
+        failureCount: 1,
+        lastUsedAt: '2026-04-22T00:00:00.000Z',
+        lastReplayAt: '2026-04-22T00:00:00.000Z',
+        compositeScoreDecayed: 0.9,
+        createdAt: '2026-04-21T00:00:00.000Z',
+        updatedAt: '2026-04-22T00:00:00.000Z',
+      };
+      const fakeExperience: Pick<ExperienceQueryService, 'suggestActionPaths'> = {
+        suggestActionPaths: jest.fn().mockReturnValue([replayableRow]),
+      };
+      // Stub the `experience` getter on the singleton so the live
+      // chooser handler reads our fake row. We DO NOT spy on
+      // `getTaskContext` — the chooser ↔ reader pair lands on the
+      // SAME `mcp:auto:tab:default` key purely via the production
+      // `resolveTaskContextKey` ladder.
+      jest
+        .spyOn(sessionManager, 'experience', 'get')
+        .mockReturnValue(fakeExperience as unknown as ExperienceQueryService);
+
+      // Pre-create the auto-key context so we can introspect it
+      // AFTER the chooser ran. We do NOT pre-write a decision —
+      // the chooser must do that itself.
+      const ctx = sessionManager.getOrCreateExternalTaskContext(AUTO_DEFAULT_KEY);
+      expect(ctx.peekChooseContextDecision()).toBeNull();
+
+      // Intentionally OMIT `pageRole` from the chooser's MCP args.
+      // The dispatcher's priority-4 page-complexity rule
+      // (`simple_page_low_density` / `medium_page_overview` /
+      // `complex_page_detail_required`) only fires when
+      // `pageRole.length > 0`; with the chooser's own pageRole left
+      // unset the dispatcher falls through to the priority-5 MKEP
+      // rule and emits `'experience_replay_skip_read'`. The mocked
+      // row's `pageRole='issues_list'` is what gates ROW-side
+      // replay eligibility (`TABRIX_EXPERIENCE_REPLAY_GITHUB_PAGE_ROLES`),
+      // and that path is independent of the chooser-input pageRole.
+      // Pick an `intent` whose `classifyIntentForLayerDispatch`
+      // bucket is `'unknown'` — `inspect` / `details` / `summary`
+      // / `open` / `click` / `fill` / `search` etc. all collapse
+      // into a higher-priority dispatcher rule that emits
+      // `'read_page_required'` BEFORE the MKEP rule. `'browse'`
+      // is in none of those keyword sets and produces
+      // `taskType='unknown'`, which is exactly the path the
+      // priority-5 MKEP rule was designed for.
+      const chooserResult = await handleToolCall(TOOL_NAMES.CONTEXT.CHOOSE, {
+        intent: 'browse repository issues',
+        url: 'https://github.com/octocat/repo/issues',
+      });
+      expect(chooserResult.isError).toBeFalsy();
+      const chooserPayload = JSON.parse(String(chooserResult.content[0].text)) as {
+        status: string;
+        strategy?: string;
+        sourceRoute?: string;
+        chosenLayer?: string;
+      };
+      expect(chooserPayload.status).toBe('ok');
+      expect(chooserPayload.strategy).toBe('experience_replay');
+      expect(chooserPayload.sourceRoute).toBe('experience_replay_skip_read');
+
+      // The decision MUST have landed on the SAME auto-key context the
+      // reader will resolve, with a real replay candidate — written
+      // by `persistChooseContextDecision`, NOT by the test.
+      const decision = ctx.peekChooseContextDecision();
+      expect(decision).not.toBeNull();
+      if (!decision) throw new Error('decision unexpectedly null');
+      expect(decision.sourceRoute).toBe('experience_replay_skip_read');
+      expect(decision.replayCandidate).toEqual({
+        actionPathId: ACTION_PATH_ID,
+        portableArgsOk: true,
+        policyOk: true,
+      });
+      expect(decision.apiCapability).toBeNull();
+
+      // Now spy on the bridge and run the follow-up `chrome_read_page`.
+      // The orchestrator MUST short-circuit and the bridge `call_tool`
+      // round-trip MUST NOT happen.
+      const bridgeSpy = jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait');
+
+      const readResult = await handleToolCall('chrome_read_page', {
+        requestedLayer: decision.chosenLayer,
+      });
+
+      expect(readResult.isError).toBeFalsy();
+      const readPayload = JSON.parse(String(readResult.content[0].text)) as Record<string, unknown>;
+      expect(readPayload.kind).toBe('read_page_skipped');
+      expect(readPayload.readPageAvoided).toBe(true);
+      expect(readPayload.sourceKind).toBe('experience_replay');
+      expect(readPayload.sourceRoute).toBe('experience_replay_skip_read');
+      expect(readPayload.actionPathId).toBe(ACTION_PATH_ID);
+      // Hard contract: skip envelope MUST NOT carry layered DOM keys.
+      for (const forbiddenKey of [
+        'pageContent',
+        'L0',
+        'L1',
+        'L2',
+        'targetRef',
+        'targetRefs',
+        'locator',
+      ]) {
+        expect(readPayload).not.toHaveProperty(forbiddenKey);
+      }
+
+      assertNoCallToolInvocation(bridgeSpy);
+
+      // Read budget MUST stay at zero — the skip MUST NOT consume it.
+      expect(ctx.readPageCount).toBe(0);
+      expect(ctx.getTaskTotals().readPageAvoidedCount).toBe(1);
+    } finally {
+      if (previousCapabilities === undefined) {
+        delete process.env.TABRIX_POLICY_CAPABILITIES;
+      } else {
+        process.env.TABRIX_POLICY_CAPABILITIES = previousCapabilities;
+      }
+    }
   });
 
   // ------------------------------------------------------------------

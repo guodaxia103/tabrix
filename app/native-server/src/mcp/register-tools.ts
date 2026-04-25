@@ -1598,6 +1598,15 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     // resolution sites the harder it is for a future edit to drift
     // the chooser-write and reader-peek apart.
     const taskContext = taskContextEarly;
+    // V26-03 review closeout: when the orchestrator returns
+    // `'fallback_required'` we MUST forward to the bridge with the
+    // clamped fallback entry layer (`'L0'` / `'L0+L1'`), never the
+    // caller's original `requestedLayer`. Otherwise an upstream
+    // `requestedLayer='L0+L1+L2'` (the schema default) would silently
+    // re-widen the read on the failure path — exactly the regression
+    // V26-03 §0.1 forbids. `null` means "no fallback fired, keep the
+    // caller's original layer bit-identical to the pre-V26-03 path".
+    let forcedReadPageLayer: 'L0' | 'L0+L1' | null = null;
     if (taskContext && name === 'chrome_read_page') {
       // V26-03 (B-026) — skip-read orchestrator hook. We consult it
       // BEFORE the existing budget gate because a `'skip'` plan
@@ -1670,12 +1679,25 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         // re-evaluate (e.g. once V26-07 wires capability we may
         // upgrade `api_layer_not_available` → skip without needing
         // a fresh chooser run).
+        if (skipPlan.action === 'fallback_required') {
+          // V26-03 review closeout: pin the bridge-side
+          // `requestedLayer` to the orchestrator's clamped
+          // fallback entry layer. Used below by the budget gate,
+          // the bridge `call_tool` payload, and the post-success
+          // `noteReadPage` bookkeeping so the three sites cannot
+          // drift back to `'L0+L1+L2'`.
+          forcedReadPageLayer = skipPlan.fallbackEntryLayer;
+        }
       }
       // P1-2 fix: read the public `requestedLayer` field (with
       // legacy `layer` fallback) instead of `(args as any).layer`,
       // and default to the MCP-schema default `'L0+L1+L2'` when
-      // nothing is supplied.
-      const requestedLayer = extractRequestedLayer(args) ?? READ_PAGE_DEFAULT_LAYER;
+      // nothing is supplied. When the orchestrator demanded a
+      // fallback, override the caller-supplied layer with the
+      // clamped fallback entry layer so the gate decision matches
+      // what we are about to forward to the bridge.
+      const requestedLayer =
+        forcedReadPageLayer ?? extractRequestedLayer(args) ?? READ_PAGE_DEFAULT_LAYER;
       const decision = taskContext.shouldAllowReadPage({ requestedLayer });
       if (!decision.allowed || decision.reason === 'read_redundant') {
         const warningPayload = {
@@ -1704,6 +1726,19 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           ? ((args as any).url as string)
           : null;
       taskContext.noteUrlChange(url);
+    }
+    // V26-03 review closeout: when the orchestrator demanded a
+    // fallback for `chrome_read_page`, replace the caller's
+    // `requestedLayer` (which may be the schema default
+    // `'L0+L1+L2'`) with the clamped fallback entry layer
+    // (`'L0'` / `'L0+L1'`). Every other field on `args`
+    // (`tabId` / `windowId` / `refId` / …) is preserved verbatim
+    // so call-site contracts that rely on them are unaffected.
+    if (name === 'chrome_read_page' && forcedReadPageLayer) {
+      outgoingArgs = {
+        ...(outgoingArgs && typeof outgoingArgs === 'object' ? outgoingArgs : {}),
+        requestedLayer: forcedReadPageLayer,
+      };
     }
     const { response, bridgeFailure } = await callWithBridgeRecovery(
       () =>
@@ -1759,8 +1794,13 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       // may have produced a tabId/URL update we want to honour.
       // v2.6 S1 P1-2 fix: read `requestedLayer` (with legacy `layer`
       // fallback) so the bookkeeping matches what the gate decided.
+      // V26-03 review closeout: when a fallback layer was forced
+      // upstream, the budget gate already saw the clamped layer —
+      // record the same value here so the post-success bookkeeping
+      // cannot drift back to the caller's original layer.
       if (name === 'chrome_read_page' && taskContext) {
-        const requestedLayer = extractRequestedLayer(args) ?? READ_PAGE_DEFAULT_LAYER;
+        const requestedLayer =
+          forcedReadPageLayer ?? extractRequestedLayer(args) ?? READ_PAGE_DEFAULT_LAYER;
         taskContext.noteReadPage({
           layer: requestedLayer,
           source: 'unknown',
