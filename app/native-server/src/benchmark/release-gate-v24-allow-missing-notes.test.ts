@@ -10,10 +10,10 @@
  * Fixture shape:
  *   - Synthetic v2.4.0 fixture repo (versioned package.json files +
  *     CHANGELOG.md as the notes fallback target).
- *   - A FAILING benchmark report under docs/benchmarks/v24/
+ *   - A FAILING benchmark report under the private evidence directory
  *     (lane-integrity violation).
  *   - A baseline comparison file present under
- *     docs/benchmarks/v24/v24-vs-v23-baseline-*.md.
+ *     v24-vs-v23-baseline-*.md evidence table.
  *   - CHANGELOG.md does NOT embed the comparison table.
  *
  * Two assertions:
@@ -135,7 +135,7 @@ function writeFailingBenchmarkReport(root: string): void {
     unknownCount: 0,
     violationCount: 1,
   };
-  const benchmarkDir = path.join(root, 'docs', 'benchmarks', 'v24');
+  const benchmarkDir = path.join(root, '.claude', 'private-docs', 'benchmarks', 'v24');
   fs.mkdirSync(benchmarkDir, { recursive: true });
   fs.writeFileSync(
     path.join(benchmarkDir, 'fixture-v24-amn-fail.json'),
@@ -145,7 +145,7 @@ function writeFailingBenchmarkReport(root: string): void {
 }
 
 function writeBaselineTable(root: string): void {
-  const benchmarkDir = path.join(root, 'docs', 'benchmarks', 'v24');
+  const benchmarkDir = path.join(root, '.claude', 'private-docs', 'benchmarks', 'v24');
   fs.mkdirSync(benchmarkDir, { recursive: true });
   fs.writeFileSync(
     path.join(benchmarkDir, 'v24-vs-v23-baseline-2026-04-23.md'),

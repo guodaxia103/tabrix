@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed (BREAKING — product surface pruning aligned with MKEP)
 
-This release executes `docs/PRODUCT_PRUNING_PLAN.md` and removes five
+This release executes the maintainer-owned product pruning plan and removes five
 non-MKEP product surfaces from the extension and native server. All
 removals are intentional and make room for the MKEP Stage 3+ work
 (Memory / Knowledge / Experience viewers).
@@ -236,8 +236,7 @@ file`. Root cause: `pnpm install --ignore-scripts` **overrides**
 ### Verified
 
 - T5.0~T5.4 full-chain real-browser compatibility verified end-to-end by the
-  maintainer-held `tabrix-private-tests` suite at commit
-  [`8f47ea7`](https://github.com/guodaxia103/tabrix-private-tests/commit/8f47ea7)
+  maintainer-held private acceptance suite
   (15 / 15 scenarios passed, `productLevelReady: true`, all four verdicts
   `legacyCorePassed` / `t5UnderstandingPassed` / `compatibilityPassed` /
   `recoveryCompatibilityPassed` == `true`). See

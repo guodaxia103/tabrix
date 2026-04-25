@@ -65,6 +65,18 @@ Audit gate note:
 - `pnpm run audit` now uses the in-repo OSV production dependency gate implemented in `scripts/audit-prod.mjs` instead of the retired npm audit endpoint.
 - `pnpm run release:check` remains the release metadata and notes gate that runs before publication.
 
+Release-evidence note:
+
+- Raw benchmark JSON, NDJSON, screenshots, private scenario outputs, and
+  baseline-comparison markdown are maintainer-private evidence. They must not
+  be committed under `docs/`.
+- Benchmark CLIs and `release:check` read/write evidence under
+  `TABRIX_RELEASE_EVIDENCE_DIR` when set, otherwise under
+  `.claude/private-docs/benchmarks/`.
+- Public release notes may include high-level shipped behaviour and inline
+  release summaries, but they must not point readers to private evidence paths
+  or sibling private-test checkout paths.
+
 If the release includes new third-party reuse, complete these manual checks as well:
 
 - the upstream project appears in the documented third-party reuse matrix and has a source record;

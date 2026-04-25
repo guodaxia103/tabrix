@@ -306,7 +306,7 @@ function findBaselineComparisonTable(benchmarkDir) {
  * comparison table.
  *
  * v2.4.0 closeout review-fix (finding 3 of 3): the previous "header OR
- * a `docs/benchmarks/v24/` reference is fine" rule let a release ship
+ * a separate comparison-file reference is fine" rule let a release ship
  * with nothing but a file link in the notes — readers had to chase a
  * separate file to see the actual numbers. The release-evidence
  * contract for v2.4 is now strict: the canonical markdown table header
@@ -317,8 +317,8 @@ function findBaselineComparisonTable(benchmarkDir) {
  * tolerant), AND it must be followed by at least one body row that
  * actually carries data — i.e. a markdown table separator line
  * (`| --- | --- | ...`) and at least one `| K… |`-style data row. A
- * notes file that only references `docs/benchmarks/v24/<file>.md`
- * without the inline table is REJECTED.
+ * notes file that only references a separate comparison file without
+ * the inline table is REJECTED.
  *
  * Returns `{ ok, reasons[], tablePath? }`. The `reasons` array is
  * non-empty iff `ok === false`.
@@ -357,7 +357,7 @@ function requireBaselineComparisonTable(notesPath, benchmarkDir) {
       reasons: [
         `release notes ${path.basename(notesPath)} does NOT inline the v24-vs-v23 baseline comparison table ` +
           `(expected canonical header "metric | v2.3.0 baseline | v2.4.0 median | delta | direction"). ` +
-          `A bare reference to docs/benchmarks/v24/*.md is not sufficient — the table itself must be inlined.`,
+          `A bare reference to a separate comparison file is not sufficient — the table itself must be inlined.`,
       ],
       tablePath: tableResult.tablePath,
     };

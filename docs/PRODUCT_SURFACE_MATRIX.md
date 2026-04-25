@@ -43,10 +43,9 @@ This matrix is the public source of truth for capability classification.
 
 ### Removed surfaces (no longer part of the public product story)
 
-The following surfaces were intentionally removed in the MKEP pruning
-pass (see `docs/PRODUCT_PRUNING_PLAN.md` and the `Unreleased` section of
-`CHANGELOG.md`). They are archived in git history and may reappear in a
-different form once Stage 3+ lands.
+The following surfaces are not part of the current public product story. They
+must not be reintroduced or marketed as public capability without an explicit
+owner decision.
 
 | Capability Area | Status (since Unreleased) | Replacement / Follow up |
 | | | |
@@ -88,5 +87,4 @@ When choosing what to build next:
 `PROJECT_STRUCTURE.md`
 `TESTING.md`
 `PLATFORM_SUPPORT.md`
-`PRODUCT_PRUNING_PLAN.md` — the executed pruning pass aligned with MKEP
 `ROADMAP.md` — public product direction after the pruning pass

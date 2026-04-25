@@ -23,8 +23,7 @@ Before changing code or docs, every AI assistant should read the public reposito
 4. [docs/PRODUCT_SURFACE_MATRIX.md](./docs/PRODUCT_SURFACE_MATRIX.md) — current public product surface + capability tiers (GA/Beta/Experimental/Internal).
 5. [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 6. [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md)
-7. [docs/PRODUCT_PRUNING_PLAN.md](./docs/PRODUCT_PRUNING_PLAN.md)
-8. [CONTRIBUTING.md](./CONTRIBUTING.md)
+7. [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 Then continue with the smallest relevant task-specific reading set below.
 
@@ -91,11 +90,11 @@ Keep these in `main_tabrix`:
 - Pure functions, DTO/schema validation, repository/handler tests, policy gates, release-readiness checks, bundle/docs/typecheck/audit gates, and fixture-level benchmark tests.
 - Public baseline tests that protect Tabrix's declared open surface and can run deterministically in CI.
 
-Keep these in the sibling `tabrix-private-tests` repository:
+Keep these in the maintainer-private acceptance repository:
 
 - Real MCP browser runs, live-site scenarios, login/private-account flows, private repository/account cases, benchmark NDJSON producers, screenshots, and release evidence artifacts.
 
-Passing `main_tabrix` tests is not product-level acceptance for claims about real browser behavior, version benchmark evidence, or release readiness. Those claims require the matching `tabrix-private-tests` lane.
+Passing `main_tabrix` tests is not product-level acceptance for claims about real browser behavior, version benchmark evidence, or release readiness. Those claims require the matching maintainer-private acceptance lane.
 
 ## MKEP Code Map (post-pruning)
 
@@ -116,7 +115,7 @@ Cross-cutting helpers:
 
 ## Removed Surfaces — Must Not Be Reintroduced
 
-The following product surfaces were removed as part of `docs/PRODUCT_PRUNING_PLAN.md` and **must not be reintroduced** without an explicit governance decision from the repository owner:
+The following product surfaces were removed from the public product surface and **must not be reintroduced** without an explicit governance decision from the repository owner:
 
 - Smart Assistant / Quick Panel / Agent Chat in the sidepanel (Codex / Claude / Cursor / Cline are the intended upstream drivers — Tabrix does not embed its own assistant UI).
 - Record & Replay v2 / v3 engine, builder UI, `run_flow` / `list_published_flows` MCP tools.
@@ -243,7 +242,7 @@ Default expectations:
 14. When extension code changes, the default local acceptance loop is: `pnpm -C app/chrome-extension build` -> `pnpm run extension:reload` -> real browser validation. Do not claim browser-side verification if the unpacked extension has not been reloaded.
 15. Architecture-review trigger: after every 3 consecutive `feat:` / `fix:` commits on the same MKEP layer (Memory / Knowledge / Experience / Policy), stop adding more feat/fix and run a short architecture-debt checkpoint before continuing. Deliver: (a) a listing of any site-specific / domain-specific names that leaked into a core layer, (b) a listing of any files that grew past the project's maintainability budget for that subsystem, (c) a listing of any new cross-layer import that violates the MKEP layering in the code-map table above, (d) an explicit decision to either open a `refactor:` task or to record an accepted debt item. Do not silently skip this checkpoint — if no debt is found, state that explicitly in the task summary.
 16. When editing `app/chrome-extension/entrypoints/background/tools/browser/read-page-understanding-core.ts` or any other file that the repository's architectural-review policy tags "core neutral", the change MUST NOT introduce site-specific vocabulary (e.g. Chinese/English anchors belonging to a single product, hostnames, or family-specific role literals). Such logic belongs in a `*-<family>.ts` adapter. The neutrality invariant is protected by `tests/read-page-understanding-core-neutrality.test.ts`; do not weaken or skip that test to unblock a change.
-17. Public / private test split. Any test or fixture that reproduces a specific real-world site's URL, DOM content, brand-named accessibility tree, or login-state flow (e.g. Douyin / BOSS / private-console vendors) belongs in the sibling `tabrix-private-tests` repository, not in this repo. In this public repo only the declared GA baseline (currently: GitHub) may appear in `app/**/tests/**` as realistic fixture data. Generic login, footer, dashboard, and accessibility-tree fixtures must use neutral wording and MUST NOT embed a specific vendor brand as flavoring. Exception: guardrail tests that list brand words as forbidden tokens (e.g. `tests/read-page-understanding-core-neutrality.test.ts`) may contain those words because their purpose is to assert absence, not reproduce a scenario.
+17. Public / private test split. Any test or fixture that reproduces a specific real-world site's URL, DOM content, brand-named accessibility tree, or login-state flow (e.g. Douyin / BOSS / private-console vendors) belongs in the maintainer-private acceptance repository, not in this repo. In this public repo only the declared GA baseline (currently: GitHub) may appear in `app/**/tests/**` as realistic fixture data. Generic login, footer, dashboard, and accessibility-tree fixtures must use neutral wording and MUST NOT embed a specific vendor brand as flavoring. Exception: guardrail tests that list brand words as forbidden tokens (e.g. `tests/read-page-understanding-core-neutrality.test.ts`) may contain those words because their purpose is to assert absence, not reproduce a scenario.
 18. Documentation placement. Public English docs go under `docs/`. Chinese-language public material belongs only in root `README_zh.md` and this file. Internal governance, audit, gate maintenance, PRD, roadmap sequencing, and acceptance evidence are maintained outside this public repository by the project maintainers. Do not reintroduce deleted internal documents into `docs/` without an explicit governance decision.
 19. Removed-surface invariant. Before adding any MCP tool, background listener, popup entry, sidepanel tab, or shared type, check it against the "Removed Surfaces" list above. If the change looks like it would reintroduce a removed surface in any form — including under a different name — stop and surface the question instead of implementing it.
 20. Planning invariant. Every non-trivial feature or refactor commit should reference a public issue, a public roadmap item, or a maintainer-private `B-*` item when one exists. Do not create or update public sprint-backlog files under `docs/`.

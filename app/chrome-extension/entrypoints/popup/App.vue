@@ -468,7 +468,7 @@ function showComingSoonToast(feature: string) {
 }
 
 // Record & Replay / workflow surfaces were removed as part of the MKEP
-// pruning (see docs/PRODUCT_PRUNING_PLAN.md §P5). No flow list, recorder
+// pruning. No flow list, recorder
 // control or workflow state lives in the popup anymore.
 
 const nativeConnectionStatus = ref<'unknown' | 'connected' | 'disconnected'>('unknown');

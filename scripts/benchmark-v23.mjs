@@ -3,7 +3,7 @@
  * Tabrix v2.3.0 benchmark CLI (V23-06).
  *
  * Reads an NDJSON tool-call log produced by a real-browser acceptance
- * run (typically by `tabrix-private-tests` against a maintainer's Chrome
+ * run (typically by the maintainer-private acceptance lane against Chrome
  * session — see `docs/RELEASE_NOTES_v2.3.0.md` §"Maintainer command
  * list" for the producer side) and writes a deterministic v2.3.0
  * release-evidence JSON report.
@@ -18,7 +18,7 @@
  *            `{ kind: "tool_call", ... BenchmarkToolCallRecord }` or
  *            `{ kind: "scenario", ... BenchmarkScenarioRecord }`.
  *   --out    Optional. Output JSON path. Defaults to
- *            `docs/benchmarks/v23/<runId>.json`.
+ *            `.claude/private-docs/benchmarks/v23/<runId>.json`.
  *   --gate   Optional. When set, exit non-zero if the report fails the
  *            release gate predicate. Used by `release:check` for v2.3+.
  *
@@ -42,6 +42,13 @@ const require = createRequire(import.meta.url);
 const { evaluateBenchmarkGate } = require('./lib/v23-benchmark-gate.cjs');
 
 const ROOT = process.cwd();
+
+function getReleaseEvidenceDir(version) {
+  const baseDir =
+    process.env.TABRIX_RELEASE_EVIDENCE_DIR ||
+    path.join(ROOT, '.claude', 'private-docs', 'benchmarks');
+  return path.join(baseDir, version);
+}
 
 function parseArgs(argv) {
   const opts = { input: null, out: null, gate: false };
@@ -197,8 +204,7 @@ async function main() {
     }
   }
 
-  const outPath =
-    opts.out ?? path.join(ROOT, 'docs', 'benchmarks', 'v23', `${runInput.runId}.json`);
+  const outPath = opts.out ?? path.join(getReleaseEvidenceDir('v23'), `${runInput.runId}.json`);
   ensureOutputDir(outPath);
   fs.writeFileSync(outPath, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
 

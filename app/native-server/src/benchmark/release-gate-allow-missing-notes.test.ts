@@ -14,7 +14,7 @@
  * This test spawns the actual `check-release-readiness.mjs` script
  * against a synthetic v2.3.0 fixture repo (so we exercise the real wiring
  * end-to-end, not just a refactored predicate). The fixture has:
- *   - a failing benchmark report on disk under docs/benchmarks/v23/
+ *   - a failing benchmark report on disk under the private evidence directory
  *     (lane-integrity violation injected — same shape of failure
  *     `benchmark-v23.mjs --gate` would block on)
  *   - NO release notes file
@@ -111,7 +111,7 @@ function writeFailingBenchmarkReport(root: string): void {
     violationCount: 1,
   };
 
-  const benchmarkDir = path.join(root, 'docs', 'benchmarks', 'v23');
+  const benchmarkDir = path.join(root, '.claude', 'private-docs', 'benchmarks', 'v23');
   fs.mkdirSync(benchmarkDir, { recursive: true });
   fs.writeFileSync(
     path.join(benchmarkDir, 'fixture-amn-fail.json'),

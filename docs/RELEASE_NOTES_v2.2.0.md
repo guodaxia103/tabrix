@@ -137,13 +137,10 @@ deliberately explicit about which evidence is **real-browser** and which is
 ### Real-browser acceptance (private, anchored)
 
 - **`B-011` golden path** — `T5-F-GH-STABLE-TARGETREF-ROUNDTRIP` in the
-  maintainer-held `tabrix-private-tests` repo, GitHub repo home (no login
+  maintainer-held private acceptance lane, GitHub repo home (no login
   state). Two consecutive `read_page` calls produce the same `tgt_<10-hex>`
   for the same logical HVO; a click using **only** `candidateAction.targetRef`
   (no per-snapshot `ref`) lands real navigation.
-  - Private-tests anchor commit:
-    [`e5e6b33`](https://github.com/guodaxia103/tabrix-private-tests/commit/e5e6b33)
-    on top of the v2.1.0 anchor (`8f47ea7`).
   - Evidence sample (per-machine, not committed to the public repo):
     `artifacts/t5-fullchain-real-browser-acceptance/.../evidence/t5-f-gh-stable-targetref-roundtrip.json`,
     `targetRefStable: true`, `clickResult.ok: true`, `urlChanged: true`.

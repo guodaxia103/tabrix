@@ -31,8 +31,7 @@ import {
  *      click bridge against `targetRef` is ambiguous.
  *
  * The cross-reload, real-browser counterpart of (2) lives in the
- * `tabrix-private-tests` repo as
- * `T5-F-GH-STABLE-TARGETREF-CROSS-RELOAD`. This file is the
+ * maintainer-private acceptance lane. This file is the
  * unit-level guard so a future refactor cannot silently weaken these
  * properties without lighting up here first.
  */

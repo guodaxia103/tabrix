@@ -6,7 +6,7 @@
  * as they depend on Vue and will bloat the service worker bundle.
  *
  * The record-replay (RR) RPC composables were removed as part of the MKEP pruning
- * (see docs/PRODUCT_PRUNING_PLAN.md §1.2). New MKEP-aligned composables will be
+ * during MKEP pruning. New MKEP-aligned composables will be
  * exported from here in Stage 3+.
  */
 

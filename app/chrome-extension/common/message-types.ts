@@ -114,7 +114,7 @@ export enum SendMessageType {
 
 // ============================================================
 // Quick Panel / AgentChat message contracts were removed as part of the
-// MKEP pruning (see docs/PRODUCT_PRUNING_PLAN.md §P2). The file keeps
+// MKEP pruning removed the legacy element marker surface. The file keeps
 // only the cross-surface message enums that non-agent features still
 // use (extension <-> native host, MKEP viewers etc.).
 // ============================================================

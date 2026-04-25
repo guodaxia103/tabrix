@@ -501,7 +501,7 @@ function requireBaselineComparisonTableV25(notesPath, benchmarkDir) {
     reasons.push(
       `release notes ${path.basename(notesPath)} does NOT inline the v25-vs-v24 baseline comparison table ` +
         `(expected canonical header "metric | v2.4 baseline | v2.5 median | delta | direction"). ` +
-        `A bare reference to docs/benchmarks/v25/*.md is not sufficient — the table itself must be inlined.`,
+        `A bare reference to a separate comparison file is not sufficient — the table itself must be inlined.`,
     );
   } else {
     let cursor = headerLineIndex + 1;

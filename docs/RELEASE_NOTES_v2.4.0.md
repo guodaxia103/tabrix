@@ -4,9 +4,9 @@ Release date: 2026 04 23.
 
 ## Summary
 
-v2.4.0 is the first release whose **Experience layer learns from its own replay outcomes**. The chooser ranks Experience candidates with a deterministic composite score, the replay engine writes outcome deltas back into the Experience repository through an isolated write back path, and a new `experience_score_step` MCP tool lets external clients participate in the same loop. The release also lands the v2.4 benchmark framework + release gate so that future v2.4+ tags must ship with a real browser pair aware report under `docs/benchmarks/v24/`.
+v2.4.0 is the first release whose **Experience layer learns from its own replay outcomes**. The chooser ranks Experience candidates with a deterministic composite score, the replay engine writes outcome deltas back into the Experience repository through an isolated write back path, and a new `experience_score_step` MCP tool lets external clients participate in the same loop. The release also lands the v2.4 benchmark framework + release gate so that future v2.4+ tags must ship with a real browser pair aware report in the maintainer-private release evidence directory.
 
-The release is backward compatible with v2.3.x. Every new MCP tool is additive; every new field on existing tools is optional. The chooser's `experience_replay` strategy stays disabled by default until the operator opts in via the existing `experience_replay` capability (V23 05 brief). The v2.3 release gate path under `docs/benchmarks/v23/` remains intact for v2.3.x tags.
+The release is backward compatible with v2.3.x. Every new MCP tool is additive; every new field on existing tools is optional. The chooser's `experience_replay` strategy stays disabled by default until the operator opts in via the existing `experience_replay` capability (V23 05 brief). The v2.3 release gate path remains intact for v2.3.x tags.
 
 ## Highlights (what's actually new since v2.3.0)
 
@@ -45,7 +45,7 @@ New benchmark transformer `app/native server/src/benchmark/v24 benchmark.ts` (pu
 **K7 replay fallback rate**: per pair `fallbackCount / totalSecondTouchCount`, MEDIAN.
 **K8 token saving ratio**: `(firstTouchTokensIn   secondTouchTokensIn) / firstTouchTokensIn`, MEDIAN. HIGHER is better; the V24 04 trigger is K8 < 0.40 (i.e. second touch saves less than 40 % of first touch input tokens). v2.4.0 closeout corrected the prior "second / first, lower is better" wording, which was inverted vs. the documented gate target.
 New `replayEligibilityDistribution` and `replayEligibilityBlockedBy` distributions derived from per tool call V24 03 chooser metadata (`chooserStrategy`, `chooserBlockedBy`). Lets Codex see "we had a candidate but blocked it because: …" at the run level.
-New CLI wrapper `pnpm run benchmark:v24` (`scripts/benchmark v24.mjs`): reads NDJSON, writes `docs/benchmarks/v24/<runId>.json`, supports `  gate` (gate then write semantics, hard reasons block the write), and `  baseline <v23 report.json>` to auto emit `docs/benchmarks/v24/v24 vs v23 baseline <date>.md` with the canonical `metric | v2.3.0 baseline | v2.4.0 median | delta | direction` table.
+New CLI wrapper `pnpm run benchmark:v24` (`scripts/benchmark v24.mjs`): reads NDJSON, writes private release evidence, supports `  gate` (gate then write semantics, hard reasons block the write), and `  baseline <v23 report.json>` to auto emit a private comparison table with the canonical `metric | v2.3.0 baseline | v2.4.0 median | delta | direction` table.
 New release gate `scripts/lib/v24 benchmark gate.cjs` (independent CommonJS file from v23): hard invariants are lane integrity / K3 ≥ 0.85 / K4 ≤ 0.10 / non empty scenarios / `reportVersion === 1` / `pairCount ≥ 3` per declared KPI scenario / baseline comparison table embed in release notes; soft (`WARN:`) reasons cover K5..K8 guidance (K5 ≥ 1.5, K6 ≥ 0.80, K7 ≤ 0.20, K8 ≥ 0.40 — K8 is "higher is better" under the closeout corrected `(first   second) / first` semantic). Gate then write blocks `  gate` from leaving a failing JSON on disk.
 `scripts/check release readiness.mjs` adds a `benchmarkGateAppliesV24` branch (v2.4.0+) preempting the v23 branch (which still applies to v2.3.x). `  allow missing notes` still does NOT bypass the v24 content gate, the baseline comparison table embed requirement, or the pairCount check (mirrors the V23 06 closeout).
 
@@ -79,10 +79,7 @@ Codex / maintainer lane ran the real v2.4 MCP benchmark against `guodaxia103/tab
 
 **Run ID:** `v24 release 2026 04 23 rerun2`
 **Build SHA:** `f76a01809199e4a324fb12fa6189bf49f0461eaa`
-**Private acceptance summary:** `<local tabrix private tests>/artifacts/v24 real browser acceptance/v24 real browser acceptance 2026 04 23T07 48 13.007Z/summary.json`
-**Benchmark NDJSON:** `<local tabrix data dir>/benchmarks/v24/v24 release 2026 04 23 rerun2.ndjson`
-**Report file:** `docs/benchmarks/v24/v24 release 2026 04 23 rerun2.json`
-**Baseline comparison table:** `docs/benchmarks/v24/v24 vs v23 baseline 2026 04 23.md`
+**Private evidence:** archived outside the public repository.
 **Acceptance result:** 15 / 15 real browser scenario pairs passed; `pairCount = 3`.
 **Gate result:** `pnpm run benchmark:v24      input ...   gate   baseline ...` hard passed with WARN evidence for K5 / K7 / K8.
 
@@ -111,30 +108,11 @@ The v24 release gate hard passed, but emitted three evidence warnings:
 
 These warnings do not block v2.4.0. They are the measured basis for v2.5 focusing on runtime layer dispatch, token reduction, and visible execution value.
 
-## Commands used for the real browser release evidence
+## Maintainer release evidence
 
-```bash
-pnpm  r   if present typecheck
-pnpm   filter @tabrix/tabrix build
-pnpm   filter @tabrix/extension build
-pnpm run extension:reload
-pnpm  C ../tabrix private tests run acceptance:v2.4.0      main repo ../main_tabrix   owner guodaxia103   repo tabrix   run id v24 release 2026 04 23
-pnpm run benchmark:v24      input <local tabrix data dir>/benchmarks/v24/v24 release 2026 04 23.ndjson   gate   baseline docs/benchmarks/v23/v23 baseline 2026 04 23.json
-```
-
-### Real acceptance scenario list (v2.4.0 KPI subset)
-
-The `tabrix private tests` `acceptance:v2.4.0` runner covered these scenarios with `pairCount = 3`:
-
-| Family | Scenario ID | First touch + second touch pairs |
-| | | |
-| Repo navigation | `T5 A GH REPO NAV ISSUES` | 3 |
-| Repo navigation | `T5 A GH REPO NAV PRS` | 3 |
-| Stable targetRef | `T5 F GH STABLE TARGETREF CROSS RELOAD` | 3 |
-| Markdown reading | `T5 H GH REPO HOME READ MARKDOWN` | 3 |
-| Chooser ranked replay | `T5 I GH CHOOSE CONTEXT RANKED REPLAY` | 3 |
-
-All 15 scenario pairs passed in the real browser run.
+The concrete real-browser commands, private scenario identifiers, NDJSON path,
+and JSON report are maintainer-private release evidence. Public release notes
+only record the shipped capability boundary and headline outcome.
 
 ## Versioning policy reminder
 

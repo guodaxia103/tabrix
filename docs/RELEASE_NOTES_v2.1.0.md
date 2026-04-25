@@ -52,13 +52,11 @@ v2.1.0. No behavior regressions in any of those subsystems.
 
 ## Acceptance Evidence
 
-This release was verified end-to-end by the maintainer-held
-`tabrix-private-tests` full-chain real-browser acceptance suite.
+This release was verified end-to-end by the maintainer-held full-chain
+real-browser acceptance suite.
 
 - Suite: `T5_FULLCHAIN_REAL_BROWSER_ACCEPTANCE` (15 scenarios across
   Groups A / B / C / D / E)
-- Private-tests commit:
-  [`8f47ea73a54c9d8fd449707f20e34dd26f7055cb`](https://github.com/guodaxia103/tabrix-private-tests/commit/8f47ea7)
 - Groups:
   - A (environment health): runtime-consistency with 4-state classification
   - B (legacy core action chain): real `chrome_navigate` +

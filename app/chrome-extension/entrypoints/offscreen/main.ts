@@ -6,7 +6,7 @@
  *   2. Host the GIF encoder worker.
  *
  * The semantic-similarity engine was removed as part of the MKEP pruning
- * (see docs/PRODUCT_PRUNING_PLAN.md §1.3). Any future on-device model
+ * during MKEP pruning. Any future on-device model
  * inference for Memory/Knowledge will be re-introduced from a dedicated
  * offscreen entrypoint.
  */

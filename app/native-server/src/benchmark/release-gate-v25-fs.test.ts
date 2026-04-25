@@ -567,7 +567,7 @@ describe('release-gate v25 — baseline-comparison-table requirement (release-no
   it('notes WITHOUT canonical inline header is rejected (link-only is NOT enough)', () => {
     fs.writeFileSync(
       notesPath,
-      '# Notes\n\nSee `docs/benchmarks/v25/v25-vs-v24-baseline-2026-04-23.md`.\n',
+      '# Notes\n\nSee `.claude/private-docs/benchmarks/v25/v25-vs-v24-baseline-2026-04-23.md`.\n',
       'utf8',
     );
     const result = gateModule.requireBaselineComparisonTableV25(notesPath, bDir);

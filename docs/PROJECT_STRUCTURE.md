@@ -5,7 +5,7 @@ This guide explains where the code lives and how the main runtime paths fit toge
 Scope note:
 
 - The stable public product surface is centered on browser execution through the Chrome extension plus MCP access through `Streamable HTTP` and `stdio`.
-- The repository is being progressively reshaped around the MKEP layers (Memory / Knowledge / Experience / Policy). The agent / workflow / visual-editor / element-marker / local-semantic subsystems that used to live in this tree were removed in the MKEP pruning pass (see `docs/PRODUCT_PRUNING_PLAN.md` and the `Unreleased` section of `CHANGELOG.md`) and should not be expected in `main`.
+- The repository is being progressively reshaped around the MKEP layers (Memory / Knowledge / Experience / Policy). Legacy agent / workflow / visual-editor / element-marker / local-semantic surfaces are not part of the current public product surface and should not be expected in `main`.
 
 Related docs:
 

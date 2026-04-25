@@ -5,7 +5,7 @@ import { initNativeHostListener } from './native-host';
  * Initializes all background services and listeners.
  *
  * The local-model / semantic-similarity / storage-manager services were
- * removed as part of the MKEP pruning (see docs/PRODUCT_PRUNING_PLAN.md §1.3).
+ * removed as part of the MKEP pruning.
  * Any future MKEP Memory/Knowledge indexing will bring up its own service
  * from `background/memory/` or `background/knowledge/`.
  */

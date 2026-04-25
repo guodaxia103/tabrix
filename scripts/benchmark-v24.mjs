@@ -23,16 +23,16 @@
  *               `{ kind: "pair", pairIndex, scenarioId, role,
  *                  toolCallSeqs: number[] }`.
  *   --out       Optional. Output JSON path. Defaults to
- *               `docs/benchmarks/v24/<runId>.json`.
+ *               `.claude/private-docs/benchmarks/v24/<runId>.json`.
  *   --gate      Optional. When set, exit non-zero on HARD gate
  *               failure; the report is NOT written on hard fail
  *               (gate-then-write). WARN-only failures still write
  *               the report and exit zero, but print the WARN list to
  *               stderr.
  *   --baseline  Optional. Path to a v2.3.0 benchmark report JSON. When
- *               set, the CLI emits a markdown comparison table to
- *               `docs/benchmarks/v24/v24-vs-v23-baseline-<date>.md`
- *               so the maintainer can paste it into the release notes.
+ *               set, the CLI emits a private markdown comparison table
+ *               next to the JSON report so the maintainer can paste it
+ *               into the release notes.
  *   --kpi       Optional. Add a KPI scenario id; flag may be repeated.
  *               These IDs are merged with the NDJSON header's
  *               `kpiScenarioIds` (CLI flags ADD to the header list).
@@ -54,6 +54,13 @@ const {
 } = require('./lib/v24-benchmark-gate.cjs');
 
 const ROOT = process.cwd();
+
+function getReleaseEvidenceDir(version) {
+  const baseDir =
+    process.env.TABRIX_RELEASE_EVIDENCE_DIR ||
+    path.join(ROOT, '.claude', 'private-docs', 'benchmarks');
+  return path.join(baseDir, version);
+}
 
 function parseArgs(argv) {
   const opts = {
@@ -240,7 +247,7 @@ function emitBaselineComparison(summary, baselinePath) {
   lines.push('> NOTE: K5..K8 are evidence-only in v2.4 (gate emits `WARN:` reasons rather than hard-fail). v23 baseline does not measure them.');
   lines.push('');
 
-  const baselineDir = path.join(ROOT, 'docs', 'benchmarks', 'v24');
+  const baselineDir = getReleaseEvidenceDir('v24');
   fs.mkdirSync(baselineDir, { recursive: true });
   const date = new Date().toISOString().slice(0, 10);
   const tablePath = path.join(baselineDir, `v24-vs-v23-baseline-${date}.md`);
@@ -294,8 +301,7 @@ async function main() {
     process.exit(2);
   }
 
-  const outPath =
-    opts.out ?? path.join(ROOT, 'docs', 'benchmarks', 'v24', `${runInput.runId}.json`);
+  const outPath = opts.out ?? path.join(getReleaseEvidenceDir('v24'), `${runInput.runId}.json`);
   ensureOutputDir(outPath);
   fs.writeFileSync(outPath, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
 

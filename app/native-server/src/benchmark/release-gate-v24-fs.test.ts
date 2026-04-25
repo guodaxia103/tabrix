@@ -14,7 +14,7 @@
  *   4. WARN-only reasons (K5..K8 below guidance) do NOT make `ok=false`.
  *   5. `requireBaselineComparisonTable` rejects (a) missing notes,
  *      (b) missing baseline file, (c) notes without the canonical
- *      header AND without the docs/benchmarks/v24/ link.
+ *      header AND without a separate evidence-file link.
  *   6. `gate-then-write`: spawning `benchmark-v24.mjs --gate` against
  *      a FAILING NDJSON does NOT leave the report on disk.
  *   7. Cross-source guard: the gate's `BENCHMARK_REPORT_VERSION_EXPECTED`
@@ -285,12 +285,12 @@ describe('release-gate v24 — baseline comparison table requirement', () => {
 
   it('closeout finding 3 — claim 5f: link-only reference WITHOUT an inline table is REJECTED', () => {
     // Pre-closeout, a maintainer could ship release notes that only
-    // pointed at `docs/benchmarks/v24/...md` and the gate would pass.
+    // pointed at a separate comparison file and the gate would pass.
     // Reviewers had to chase the file. Under the v2.4.0 closeout
     // contract the table must be inlined.
     fs.writeFileSync(
       notesPath,
-      '# Notes\n\nSee `docs/benchmarks/v24/v24-vs-v23-baseline-2026-04-23.md` for the comparison.\n',
+      '# Notes\n\nSee `.claude/private-docs/benchmarks/v24/v24-vs-v23-baseline-2026-04-23.md` for the comparison.\n',
       'utf8',
     );
     const result = gateModule.requireBaselineComparisonTable(notesPath, bDir);
@@ -300,11 +300,11 @@ describe('release-gate v24 — baseline comparison table requirement', () => {
 
   it('closeout finding 3 — claim 5g: link-only is STILL rejected even when the link is rendered as a markdown link', () => {
     // The previous loose rule keyed off the substring
-    // `docs/benchmarks/v24/`. Verify both inline-code and rendered-
+    // a separate evidence-file path. Verify both inline-code and rendered-
     // link forms now fail without an actual inline table.
     fs.writeFileSync(
       notesPath,
-      '# Notes\n\nSee [baseline](docs/benchmarks/v24/v24-vs-v23-baseline-2026-04-23.md).\n',
+      '# Notes\n\nSee [baseline](.claude/private-docs/benchmarks/v24/v24-vs-v23-baseline-2026-04-23.md).\n',
       'utf8',
     );
     const result = gateModule.requireBaselineComparisonTable(notesPath, bDir);
@@ -347,7 +347,7 @@ describe('release-gate v24 — baseline comparison table requirement', () => {
     expect(result.reasons.some((r) => r.includes('inline table is empty'))).toBe(true);
   });
 
-  it('closeout finding 3 — claim 5j: inline table + a docs/benchmarks/v24/ link is accepted', () => {
+  it('closeout finding 3 — claim 5j: inline table + a separate evidence-file link is accepted', () => {
     // Maintainers are encouraged to ALSO link the canonical file —
     // make sure we do not regress on the both-present case.
     fs.writeFileSync(
@@ -355,7 +355,7 @@ describe('release-gate v24 — baseline comparison table requirement', () => {
       [
         '# Notes',
         '',
-        'See `docs/benchmarks/v24/v24-vs-v23-baseline-2026-04-23.md` for the canonical copy.',
+        'See `.claude/private-docs/benchmarks/v24/v24-vs-v23-baseline-2026-04-23.md` for the canonical copy.',
         '',
         '| metric | v2.3.0 baseline | v2.4.0 median | delta | direction |',
         '| --- | --- | --- | --- | --- |',

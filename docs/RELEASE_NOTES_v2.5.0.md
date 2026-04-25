@@ -65,9 +65,10 @@ read-page behaviour by default.
   `release-gate-v25-fs.test.ts`.
 - New CLI `pnpm run benchmark:v25`
   (`scripts/benchmark-v25.mjs`): reads NDJSON, writes
-  `docs/benchmarks/v25/<runId>.json`, supports `--gate` (gate-then-write
+  private release evidence, supports `--gate` (gate-then-write
   semantics, hard reasons block the write), and `--baseline-v24
-<v24-report.json>` to auto-emit the v25-vs-v24 baseline table.
+<v24-report.json>` to auto-emit the v25-vs-v24 baseline table privately
+  for maintainer review.
 - New gate library `scripts/lib/v25-benchmark-gate.cjs` (independent
   CommonJS file from v23/v24). Hard invariants: `reportVersion === 1`,
   lane integrity, K3 ≥ 0.85, K4 ≤ 0.10, non-empty scenarios,
@@ -191,17 +192,14 @@ readback`) remains independent of read-page L-layer envelopes.
 - `pnpm -C app/chrome-extension test` — **passed** (47 files, 405 passed).
 - `pnpm run docs:check` — **passed**.
 - `pnpm run size:check` — **passed** (`sidepanel-*.js` 32.03 kB, `sidepanel-*.css` 23.44 kB).
-- `pnpm run benchmark:v25 -- --input <local-tabrix-data-dir>/benchmarks/v25/v25-release-2026-04-24.ndjson --gate --baseline-v24 docs/benchmarks/v24/v24-release-2026-04-23-rerun2.json` — **hard-passed**.
+- `pnpm run benchmark:v25 -- --input <private-run.ndjson> --gate --baseline-v24 <private-v24-report.json>` — **hard-passed**.
 - `pnpm run release:check` — **passed after the v2.5.0 version bump**.
 
 ## Real-browser acceptance evidence
 
 - **Run ID:** `v25-release-2026-04-24`
 - **Build SHA:** `16c331db47e0c5dbc53c2c101c44049b6d5d2ac1`
-- **Private acceptance summary:** `<local-tabrix-private-tests>/artifacts/v25-real-browser-acceptance/v25-real-browser-acceptance-2026-04-24T10-05-18.901Z/summary.json`
-- **Benchmark NDJSON:** `<local-tabrix-data-dir>/benchmarks/v25/v25-release-2026-04-24.ndjson`
-- **Report file:** `docs/benchmarks/v25/v25-release-2026-04-24.json`
-- **Baseline comparison table:** `docs/benchmarks/v25/v25-vs-v24-baseline-2026-04-24.md`
+- **Private evidence:** archived outside the public repository.
 - **Acceptance result:** **9/9** scenario pairs passed; `pairedRunCount = 3`.
 - **Gate result:** **hard-passed**.
 - **Browser tab hygiene:** `primaryTabReuseRate = 1.000`, `maxConcurrentTabs = 1`, `tabHygieneViolations = 0`.
@@ -229,9 +227,8 @@ pnpm -r --if-present typecheck
 pnpm --filter @tabrix/tabrix build
 pnpm --filter @tabrix/extension build
 pnpm run extension:reload
-pnpm -C ../tabrix-private-tests run acceptance:v2.5.0 -- --main-repo ../main_tabrix --owner guodaxia103 --repo tabrix --run-id v25-release-2026-04-24
-pnpm run benchmark:v25 -- --input <local-tabrix-data-dir>/benchmarks/v25/v25-release-2026-04-24.ndjson --gate --baseline-v24 docs/benchmarks/v24/v24-release-2026-04-23-rerun2.json
-node ./scripts/release-diagnostic-v25.mjs --input docs/benchmarks/v25/v25-release-2026-04-24.json
+pnpm run benchmark:v25 -- --input <private-run.ndjson> --gate --baseline-v24 <private-v24-report.json>
+node ./scripts/release-diagnostic-v25.mjs --input <private-v25-report.json>
 pnpm run release:check
 ```
 

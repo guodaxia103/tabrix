@@ -21,7 +21,7 @@
  *      `summariseBenchmarkRun(records)` and writes the report.
  *
  * This file owns step (3); steps (1) and (2) are owned by the
- * maintainer and the private `tabrix-private-tests` repo respectively.
+ * maintainer and the private acceptance lane respectively.
  *
  * Schema invariants (do NOT break without bumping `BENCHMARK_REPORT_VERSION`):
  *  - Every K-metric is either a finite number or `null` (not `undefined`,

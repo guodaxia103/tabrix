@@ -3,7 +3,7 @@
  *
  * This replaces the previous `useAgentTheme` composable from the deprecated
  * Agent/AgentChat stack (removed as part of the MKEP pruning — see
- * docs/PRODUCT_PRUNING_PLAN.md §P2). The only popup consumer kept the
+ * MKEP pruning. The only popup consumer kept the
  * two-tone light/dark toggle, so this module intentionally exposes the
  * smallest surface needed to preserve that UX without dragging in any
  * agent infrastructure.

@@ -9,12 +9,10 @@ It is intended for:
 - Contributors working on the public codebase
 - Release, security, and compliance readers
 
-This repository keeps two kinds of docs:
-
-- **public product and integration docs** for users and contributors
-- a **small set of repo-internal governance docs** that contributors must follow in order to change the product safely
-
-Sensitive maintainer-only materials still live outside this repository.
+This repository keeps public product and integration docs for users and
+contributors. Maintainer-only planning, benchmark evidence, release-gate
+evidence, PRDs, detailed version plans, prompts, and handoffs stay outside the
+public repository.
 
 ## Entry Points
 
@@ -22,7 +20,6 @@ Sensitive maintainer-only materials still live outside this repository.
 
 - [`ROADMAP.md`](./ROADMAP.md) — public product direction and contribution areas.
 - [`PRODUCT_SURFACE_MATRIX.md`](./PRODUCT_SURFACE_MATRIX.md) — public product surface and capability tiers.
-- [`PRODUCT_PRUNING_PLAN.md`](./PRODUCT_PRUNING_PLAN.md) — public record of removed product surfaces that must not be reintroduced casually.
 
 ### Getting Started
 
@@ -42,7 +39,6 @@ Sensitive maintainer-only materials still live outside this repository.
 - [`COMPATIBILITY_MATRIX.md`](./COMPATIBILITY_MATRIX.md) — MCP client and environment compatibility
 - [`PLATFORM_SUPPORT.md`](./PLATFORM_SUPPORT.md) — OS and browser support posture
 - [`WHY_MCP_CHROME.md`](./WHY_MCP_CHROME.md) — rationale behind the Chrome-native architecture
-- [`VISUAL_EDITOR.md`](./VISUAL_EDITOR.md) — visual editor surface
 - [`ERROR_CODES.md`](./ERROR_CODES.md) — error code reference
 
 ### Release and Process
@@ -69,7 +65,9 @@ The following categories are maintained outside this repository by the project m
 - private acceptance evidence and gate-maintenance artifacts
 - private runbooks for non-public scenarios
 
-By contrast, `ROADMAP.md`, `PRODUCT_SURFACE_MATRIX.md`, `PRODUCT_PRUNING_PLAN.md`, and `AGENTS.md` are intentionally kept in-repo because contributors need them to understand the public product direction and execution rules.
+By contrast, `ROADMAP.md`, `PRODUCT_SURFACE_MATRIX.md`, and `AGENTS.md` are
+kept in-repo because contributors need them to understand the public product
+direction and execution rules.
 
 ## Language Policy
 
@@ -81,9 +79,12 @@ By contrast, `ROADMAP.md`, `PRODUCT_SURFACE_MATRIX.md`, `PRODUCT_PRUNING_PLAN.md
 
 - Public filenames use `UPPER_SNAKE_CASE.md`
 - No temporary status words such as `draft`, `latest`, `temp`, or `v2_zh`
-- Versioned release notes and dated governance documents do not belong in this directory
+- Versioned release notes may live here, but raw benchmark reports and private
+  acceptance artifacts do not belong in this directory
 - `README.md`, `CHANGELOG.md` (root), and the public entry documents above are the only stable exceptions
 
 ## Public Source of Truth
 
-For public-facing documentation, this directory is the source of truth. Some repo-internal governance docs also live here because they define the contribution contract for this open-source codebase. Sensitive maintainer-only governance, audit evidence, and private acceptance materials stay outside the repository.
+For public-facing documentation, this directory is the source of truth.
+Sensitive maintainer-only governance, release evidence, and private acceptance
+materials stay outside the repository.

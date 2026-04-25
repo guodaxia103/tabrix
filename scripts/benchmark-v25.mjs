@@ -30,16 +30,14 @@
  *                   record emitted by the v25 real MCP runner via
  *                   `scripts/lib/v25-primary-tab-session.cjs`.
  *   --out           Optional. Output JSON path. Defaults to
- *                   `docs/benchmarks/v25/<runId>.json`.
+ *                   `.claude/private-docs/benchmarks/v25/<runId>.json`.
  *   --gate          Optional. Exit non-zero on HARD gate failure; the
  *                   report is NOT written on hard fail (gate-then-write).
  *   --baseline-v24  Optional. Path to a v2.4.0 benchmark report JSON.
  *                   When set, the CLI populates the report's
  *                   `comparisonToV24` block AND emits a markdown
- *                   comparison table to
- *                   `docs/benchmarks/v25/v25-vs-v24-baseline-<date>.md`
- *                   so the maintainer can paste it into the release
- *                   notes.
+ *                   comparison table next to the private JSON report
+ *                   so the maintainer can paste it into the release notes.
  *   --kpi           Optional. Add a KPI scenario id; flag may be
  *                   repeated. These IDs are merged with the NDJSON
  *                   header's `kpiScenarioIds`.
@@ -66,6 +64,13 @@ const {
 } = require('./lib/v25-benchmark-gate.cjs');
 
 const ROOT = process.cwd();
+
+function getReleaseEvidenceDir(version) {
+  const baseDir =
+    process.env.TABRIX_RELEASE_EVIDENCE_DIR ||
+    path.join(ROOT, '.claude', 'private-docs', 'benchmarks');
+  return path.join(baseDir, version);
+}
 
 function parseArgs(argv) {
   const opts = {
@@ -288,7 +293,7 @@ function emitBaselineComparisonTable(summary, baseline, baselinePath) {
   );
   lines.push('');
 
-  const baselineDir = path.join(ROOT, 'docs', 'benchmarks', 'v25');
+  const baselineDir = getReleaseEvidenceDir('v25');
   fs.mkdirSync(baselineDir, { recursive: true });
   const date = new Date().toISOString().slice(0, 10);
   const tablePath = path.join(baselineDir, `v25-vs-v24-baseline-${date}.md`);
@@ -356,8 +361,7 @@ async function main() {
     process.exit(2);
   }
 
-  const outPath =
-    opts.out ?? path.join(ROOT, 'docs', 'benchmarks', 'v25', `${runInput.runId}.json`);
+  const outPath = opts.out ?? path.join(getReleaseEvidenceDir('v25'), `${runInput.runId}.json`);
   ensureOutputDir(outPath);
   fs.writeFileSync(outPath, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
 

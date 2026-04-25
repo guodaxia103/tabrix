@@ -376,7 +376,6 @@ Tabrix exists to provide sustained maintenance, clearer roadmap execution, and f
 - [Platform Support](docs/PLATFORM_SUPPORT.md)
 - [Tools API](docs/TOOLS.md)
 - [Testing Guide](docs/TESTING.md)
-- [Visual Editor](docs/VISUAL_EDITOR.md)
 - [Use Cases](docs/USE_CASES.md)
 - [Public Roadmap](docs/ROADMAP.md)
 - [Release Process](docs/RELEASE_PROCESS.md)

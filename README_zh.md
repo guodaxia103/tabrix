@@ -375,7 +375,6 @@ Tabrix 将持续维护、持续迭代，并提供更清晰的产品路线。
 - [Platform Support](docs/PLATFORM_SUPPORT.md)
 - [Tools API](docs/TOOLS.md)
 - [Testing](docs/TESTING.md)
-- [Visual Editor](docs/VISUAL_EDITOR.md)
 - [Use Cases](docs/USE_CASES.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Release Process](docs/RELEASE_PROCESS.md)

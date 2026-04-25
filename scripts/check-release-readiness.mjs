@@ -49,6 +49,13 @@ function fileExists(relativePath) {
   return fs.existsSync(path.join(ROOT, relativePath));
 }
 
+function getReleaseEvidenceDir(version) {
+  const baseDir =
+    process.env.TABRIX_RELEASE_EVIDENCE_DIR ||
+    path.join(ROOT, '.claude', 'private-docs', 'benchmarks');
+  return path.join(baseDir, version);
+}
+
 function parseArgs(argv) {
   const options = {
     tag: process.env.RELEASE_TAG || '',
@@ -212,17 +219,18 @@ const BENCHMARK_REPORT_MAX_AGE_DAYS = 7;
 if (benchmarkGateAppliesV25(nativePkg.version)) {
   // V25-05: v2.5.0+ release gate. Same shape as the v2.4 branch —
   // presence + recency + hard content gate via the canonical CJS
-  // module, baseline-comparison table embed in the notes, and a soft
-  // assertion that the notes reference the canonical report file.
+  // module and baseline-comparison table embed in the notes. Raw
+  // benchmark reports are maintainer-private evidence and are not
+  // committed under public docs.
   // `--allow-missing-notes` deliberately does NOT bypass the content
   // gate, the baseline-comparison-table embed, or the
   // `__V25_TBD__` placeholder rejection (mirrors V23-06 / V24-05
   // closeouts).
-  const benchmarkDir = path.join(ROOT, 'docs', 'benchmarks', 'v25');
+  const benchmarkDir = getReleaseEvidenceDir('v25');
   if (!fs.existsSync(benchmarkDir)) {
     errors.push(
       `v2.5.0+ release gate: missing benchmark directory ${path.relative(ROOT, benchmarkDir)}. ` +
-        `Run \`pnpm run benchmark:v25 -- --input <run.ndjson> --gate\` first; see docs/RELEASE_NOTES_v${nativePkg.version}.md "Maintainer command list".`,
+        `Run \`pnpm run benchmark:v25 -- --input <run.ndjson> --gate\` first; raw evidence stays under TABRIX_RELEASE_EVIDENCE_DIR or .claude/private-docs/benchmarks.`,
     );
   } else {
     const reports = fs
@@ -281,25 +289,14 @@ if (benchmarkGateAppliesV25(nativePkg.version)) {
         );
       }
 
-      // Soft assertion: release notes should reference some
-      // `docs/benchmarks/v25/` JSON report.
-      if (fileExists(selectedNotesFile)) {
-        const notes = fs.readFileSync(path.join(ROOT, selectedNotesFile), 'utf8');
-        if (!notes.includes('benchmarks/v25')) {
-          warnings.push(
-            `Release notes ${selectedNotesFile} do not reference any \`docs/benchmarks/v25/\` report. ` +
-              `Recommend pointing readers at the specific report committed for this tag.`,
-          );
-        }
-      }
     }
   }
 } else if (benchmarkGateAppliesV24(nativePkg.version)) {
-  const benchmarkDir = path.join(ROOT, 'docs', 'benchmarks', 'v24');
+  const benchmarkDir = getReleaseEvidenceDir('v24');
   if (!fs.existsSync(benchmarkDir)) {
     errors.push(
       `v2.4.0+ release gate: missing benchmark directory ${path.relative(ROOT, benchmarkDir)}. ` +
-        `Run \`pnpm run benchmark:v24 -- --input <run.ndjson> --gate\` first; see docs/RELEASE_NOTES_v${nativePkg.version}.md "Maintainer command list".`,
+        `Run \`pnpm run benchmark:v24 -- --input <run.ndjson> --gate\` first; raw evidence stays under TABRIX_RELEASE_EVIDENCE_DIR or .claude/private-docs/benchmarks.`,
     );
   } else {
     const reports = fs
@@ -348,8 +345,8 @@ if (benchmarkGateAppliesV25(nativePkg.version)) {
       // INLINE the canonical baseline-comparison table — header
       // (`metric | v2.3.0 baseline | v2.4.0 median | delta | direction`)
       // + markdown separator + at least one body row. v2.4.0 closeout
-      // review-fix (finding 3): a bare reference to the
-      // `docs/benchmarks/v24/<file>.md` is no longer sufficient; the
+      // review-fix (finding 3): a bare reference to a separate
+      // benchmark comparison file is no longer sufficient; the
       // table itself must be in the notes so reviewers do not have to
       // chase a separate file. `--allow-missing-notes` only opens the
       // notes-fallback path (handled in the release-notes block above);
@@ -369,25 +366,14 @@ if (benchmarkGateAppliesV25(nativePkg.version)) {
         );
       }
 
-      // Soft assertion: release notes should reference some
-      // `docs/benchmarks/v24/` JSON report.
-      if (fileExists(selectedNotesFile)) {
-        const notes = fs.readFileSync(path.join(ROOT, selectedNotesFile), 'utf8');
-        if (!notes.includes('benchmarks/v24')) {
-          warnings.push(
-            `Release notes ${selectedNotesFile} do not reference any \`docs/benchmarks/v24/\` report. ` +
-              `Recommend pointing readers at the specific report committed for this tag.`,
-          );
-        }
-      }
     }
   }
 } else if (benchmarkGateApplies(nativePkg.version)) {
-  const benchmarkDir = path.join(ROOT, 'docs', 'benchmarks', 'v23');
+  const benchmarkDir = getReleaseEvidenceDir('v23');
   if (!fs.existsSync(benchmarkDir)) {
     errors.push(
       `v2.3.0+ release gate: missing benchmark directory ${path.relative(ROOT, benchmarkDir)}. ` +
-        `Run \`pnpm run benchmark:v23 -- --input <run.ndjson> --gate\` first; see docs/RELEASE_NOTES_v${nativePkg.version}.md "Maintainer command list".`,
+        `Run \`pnpm run benchmark:v23 -- --input <run.ndjson> --gate\` first; raw evidence stays under TABRIX_RELEASE_EVIDENCE_DIR or .claude/private-docs/benchmarks.`,
     );
   } else {
     const reports = fs
@@ -428,17 +414,6 @@ if (benchmarkGateAppliesV25(nativePkg.version)) {
         }
       }
 
-      // Soft assertion: release notes should reference some benchmark
-      // report (commit SHA or filename).
-      if (fileExists(selectedNotesFile)) {
-        const notes = fs.readFileSync(path.join(ROOT, selectedNotesFile), 'utf8');
-        if (!notes.includes('benchmarks/v23')) {
-          warnings.push(
-            `Release notes ${selectedNotesFile} do not reference any \`docs/benchmarks/v23/\` report. ` +
-              `Recommend pointing readers at the specific report committed for this tag.`,
-          );
-        }
-      }
     }
   }
 }
