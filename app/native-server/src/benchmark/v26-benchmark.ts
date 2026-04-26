@@ -174,6 +174,20 @@ export interface BenchmarkToolCallRecordV26 extends BenchmarkToolCallRecordV25 {
    * can cross-reference.
    */
   chosenSource?: BenchmarkChosenSource | string;
+  /** Payload kind returned by `chrome_read_page`, e.g. `api_rows` or `read_page_skipped`. */
+  kind?: string;
+  /** Runtime payload source kind; mirrors skip-read envelopes when present. */
+  sourceKind?: BenchmarkChosenSource | string;
+  /** Dispatcher input source selected by the runner/recorder. */
+  dispatcherInputSource?: string | null;
+  /** Redacted API family emitted by the V26-07 internal reader. */
+  apiFamily?: string | null;
+  /** Redacted API purpose emitted by the V26-07 internal reader. */
+  dataPurpose?: string | null;
+  /** V26-07 API telemetry, kept redacted and optional for legacy NDJSON. */
+  apiTelemetry?: BenchmarkApiTelemetryV26 | null;
+  /** V26-03 task totals copied from skip-read envelopes. */
+  taskTotals?: BenchmarkTaskTotalsV26 | null;
 }
 
 /**
@@ -192,6 +206,24 @@ export type BenchmarkChosenSource =
 
 export interface BenchmarkRunInputV26 extends BenchmarkRunInputV25WithBaseline {
   toolCalls: BenchmarkToolCallRecordV26[];
+  /** `fixture` makes synthetic replay explicit; real MCP runners should set `real_mcp`. */
+  evidenceKind?: BenchmarkEvidenceKindV26;
+}
+
+export type BenchmarkEvidenceKindV26 = 'real_mcp' | 'fixture' | 'unknown';
+
+export interface BenchmarkTaskTotalsV26 {
+  readPageAvoidedCount?: number;
+  tokensSavedEstimateTotal?: number;
+}
+
+export interface BenchmarkApiTelemetryV26 {
+  endpointFamily?: string;
+  status?: 'ok' | 'fallback' | string;
+  reason?: string;
+  httpStatus?: number | null;
+  waitedMs?: number | null;
+  fallbackEntryLayer?: string | null;
 }
 
 /**
@@ -246,6 +278,19 @@ export interface BenchmarkTransformerWarningV26 {
   detail?: string;
 }
 
+export type BenchmarkEvidenceStatusV26 = 'pass' | 'warn' | 'fail';
+
+export interface BenchmarkEvidenceFindingV26 {
+  level: 'warn' | 'fail';
+  code:
+    | 'missing_v26_api_evidence'
+    | 'read_page_avoided_zero'
+    | 'tokens_saved_zero'
+    | 'tab_hygiene_missing'
+    | 'dispatcher_input_source_missing';
+  detail: string;
+}
+
 export interface BenchmarkSummaryV26 {
   reportVersion: typeof BENCHMARK_REPORT_VERSION;
   /**
@@ -269,6 +314,19 @@ export interface BenchmarkSummaryV26 {
   /** Open-ended map; key is the `failureCode` string. */
   failureCodeDistribution: Record<string, number>;
   chosenSourceDistribution: BenchmarkChosenSourceCountersV26;
+  readPageAvoidedCount: number;
+  tokensSavedEstimateTotal: number;
+  layerDistribution: BenchmarkSummaryV25['layerMetrics']['chosenLayerDistribution'];
+  dispatcherInputSourceDistribution: Record<string, number>;
+  apiKnowledgeHitRate: number | null;
+  fallbackDistribution: Record<string, number>;
+  medianDuration: number | null;
+  readPageCount: number;
+  primaryTabReuseRate: number | null;
+  maxConcurrentBenchmarkTabs: number | null;
+  evidenceKind: BenchmarkEvidenceKindV26;
+  evidenceStatus: BenchmarkEvidenceStatusV26;
+  evidenceFindings: BenchmarkEvidenceFindingV26[];
   /**
    * Total `waitedMs` summed across all records that recorded a finite
    * non-negative `waitedMs`. `null` when no qualifying samples.
@@ -333,6 +391,107 @@ function emptyChosenSourceCounters(): BenchmarkChosenSourceCountersV26 {
     dom_json: 0,
     unknown: 0,
   };
+}
+
+function increment(map: Record<string, number>, key: string): void {
+  if (key.length === 0) return;
+  map[key] = (map[key] ?? 0) + 1;
+}
+
+function maxNonNegativeFromTaskTotals(
+  toolCalls: BenchmarkToolCallRecordV26[],
+  key: keyof BenchmarkTaskTotalsV26,
+): number {
+  let max = 0;
+  for (const call of toolCalls) {
+    const value = call.taskTotals?.[key];
+    if (isFiniteNumber(value) && value >= 0) {
+      max = Math.max(max, value);
+    }
+  }
+  return max;
+}
+
+function effectiveSourceKind(call: BenchmarkToolCallRecordV26): string | null {
+  if (typeof call.sourceKind === 'string' && call.sourceKind.length > 0) return call.sourceKind;
+  if (typeof call.chosenSource === 'string' && call.chosenSource.length > 0) {
+    return call.chosenSource;
+  }
+  return null;
+}
+
+function isApiAttempt(call: BenchmarkToolCallRecordV26): boolean {
+  const sourceKind = effectiveSourceKind(call);
+  return (
+    call.kind === 'api_rows' ||
+    sourceKind === 'api_list' ||
+    !!call.apiTelemetry ||
+    (typeof call.apiFamily === 'string' && call.apiFamily.length > 0)
+  );
+}
+
+function isApiHit(call: BenchmarkToolCallRecordV26): boolean {
+  const sourceKind = effectiveSourceKind(call);
+  return (
+    call.kind === 'api_rows' ||
+    ((sourceKind === 'api_list' || call.apiTelemetry?.status === 'ok') &&
+      call.readPageAvoided === true)
+  );
+}
+
+function isDomReadPage(call: BenchmarkToolCallRecordV26): boolean {
+  if (call.toolName !== 'chrome_read_page') return false;
+  if (call.readPageAvoided === true) return false;
+  if (call.kind === 'api_rows') return false;
+  if (effectiveSourceKind(call) === 'api_list') return false;
+  return true;
+}
+
+function buildEvidenceFindings(args: {
+  apiAttemptCount: number;
+  dispatcherInputSourceCount: number;
+  readPageAvoidedCount: number;
+  tokensSavedEstimateTotal: number;
+  tabHygienePresent: boolean;
+}): BenchmarkEvidenceFindingV26[] {
+  const findings: BenchmarkEvidenceFindingV26[] = [];
+  if (args.apiAttemptCount === 0) {
+    findings.push({
+      level: 'fail',
+      code: 'missing_v26_api_evidence',
+      detail: 'No V26-07/V26-08 API telemetry or api_rows evidence was present.',
+    });
+  }
+  if (args.readPageAvoidedCount === 0) {
+    findings.push({
+      level: 'fail',
+      code: 'read_page_avoided_zero',
+      detail: 'No read_page avoidance was observed; V26 skip-read/API evidence is missing.',
+    });
+  }
+  if (args.tokensSavedEstimateTotal === 0) {
+    findings.push({
+      level: 'fail',
+      code: 'tokens_saved_zero',
+      detail: 'No token savings were observed; the report must not be treated as a success.',
+    });
+  }
+  if (!args.tabHygienePresent) {
+    findings.push({
+      level: 'warn',
+      code: 'tab_hygiene_missing',
+      detail: 'No v25 tab hygiene block was present in the input.',
+    });
+  }
+  if (args.dispatcherInputSourceCount === 0) {
+    findings.push({
+      level: 'warn',
+      code: 'dispatcher_input_source_missing',
+      detail:
+        'No dispatcherInputSource values were present; source-distribution evidence is partial.',
+    });
+  }
+  return findings;
 }
 
 /**
@@ -484,13 +643,20 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
   const componentDistribution = emptyComponentCounters();
   const chosenSourceDistribution = emptyChosenSourceCounters();
   const failureCodeDistribution: Record<string, number> = {};
+  const dispatcherInputSourceDistribution: Record<string, number> = {};
+  const fallbackDistribution: Record<string, number> = {};
   const transformerWarnings: BenchmarkTransformerWarningV26[] = [];
 
   const perTaskBuckets = new Map<string, number[]>();
   const perToolBuckets = new Map<string, number[]>();
+  const validDurations: number[] = [];
 
   let waitedMsTotal = 0;
   let waitedMsSamples = 0;
+  let apiAttemptCount = 0;
+  let apiHitCount = 0;
+  let dispatcherInputSourceCount = 0;
+  let readPageCount = 0;
 
   for (const call of toolCalls) {
     const triage = triageRecord(call);
@@ -498,6 +664,7 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
     transformerWarnings.push(...triage.warnings);
 
     if (triage.durationValid) {
+      validDurations.push(triage.duration);
       if (typeof call.scenarioId === 'string' && call.scenarioId.length > 0) {
         const arr = perTaskBuckets.get(call.scenarioId) ?? [];
         arr.push(triage.duration);
@@ -525,6 +692,31 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
       waitedMsTotal += call.waitedMs;
       waitedMsSamples += 1;
     }
+
+    if (typeof call.dispatcherInputSource === 'string' && call.dispatcherInputSource.length > 0) {
+      increment(dispatcherInputSourceDistribution, call.dispatcherInputSource);
+      dispatcherInputSourceCount += 1;
+    }
+
+    if (isApiAttempt(call)) {
+      apiAttemptCount += 1;
+      if (isApiHit(call)) apiHitCount += 1;
+    }
+
+    if (isDomReadPage(call)) readPageCount += 1;
+
+    if (typeof call.fallbackCause === 'string' && call.fallbackCause.length > 0) {
+      increment(fallbackDistribution, call.fallbackCause);
+    } else if (
+      call.apiTelemetry &&
+      call.apiTelemetry.status !== 'ok' &&
+      typeof call.apiTelemetry.reason === 'string' &&
+      call.apiTelemetry.reason.length > 0
+    ) {
+      increment(fallbackDistribution, call.apiTelemetry.reason);
+    } else if (call.fallbackUsed === true) {
+      increment(fallbackDistribution, 'fallback_used');
+    }
   }
 
   const perTaskDurationMs: BenchmarkLatencyBucketV26[] = [...perTaskBuckets.entries()]
@@ -538,6 +730,40 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
   const unknownComponentRatio =
     totalToolCalls === 0 ? null : componentDistribution.unknown / totalToolCalls;
 
+  const readPageAvoidedCount = Math.max(
+    v25Summary.layerMetrics.readPageAvoidedCount,
+    maxNonNegativeFromTaskTotals(toolCalls, 'readPageAvoidedCount'),
+  );
+  const tokensSavedEstimateTotal = Math.max(
+    v25Summary.layerMetrics.tokensSavedEstimateTotal,
+    maxNonNegativeFromTaskTotals(toolCalls, 'tokensSavedEstimateTotal'),
+  );
+  const medianDuration = quantile(
+    [...validDurations].sort((a, b) => a - b),
+    0.5,
+  );
+  const apiKnowledgeHitRate = apiAttemptCount === 0 ? null : apiHitCount / apiAttemptCount;
+  const tabHygienePresent = v25Summary.tabHygiene !== null;
+  const evidenceKind: BenchmarkEvidenceKindV26 =
+    input.evidenceKind ??
+    (input.buildSha === 'fixture' || input.runId.toLowerCase().includes('fixture')
+      ? 'fixture'
+      : 'unknown');
+  const evidenceFindings = buildEvidenceFindings({
+    apiAttemptCount,
+    dispatcherInputSourceCount,
+    readPageAvoidedCount,
+    tokensSavedEstimateTotal,
+    tabHygienePresent,
+  });
+  const evidenceStatus: BenchmarkEvidenceStatusV26 = evidenceFindings.some(
+    (finding) => finding.level === 'fail',
+  )
+    ? 'fail'
+    : evidenceFindings.some((finding) => finding.level === 'warn')
+      ? 'warn'
+      : 'pass';
+
   transformerWarnings.sort(compareWarnings);
 
   return {
@@ -550,6 +776,19 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
     componentDistribution,
     failureCodeDistribution,
     chosenSourceDistribution,
+    readPageAvoidedCount,
+    tokensSavedEstimateTotal,
+    layerDistribution: v25Summary.layerMetrics.chosenLayerDistribution,
+    dispatcherInputSourceDistribution,
+    apiKnowledgeHitRate,
+    fallbackDistribution,
+    medianDuration,
+    readPageCount,
+    primaryTabReuseRate: v25Summary.tabHygiene?.primaryTabReuseRate ?? null,
+    maxConcurrentBenchmarkTabs: v25Summary.tabHygiene?.maxConcurrentTabs ?? null,
+    evidenceKind,
+    evidenceStatus,
+    evidenceFindings,
     totalWaitedMs: waitedMsSamples > 0 ? waitedMsTotal : null,
     transformerWarnings,
   };

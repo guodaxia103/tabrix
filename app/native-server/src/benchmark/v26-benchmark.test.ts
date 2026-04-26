@@ -393,4 +393,97 @@ describe('v26 search/list fast-path fixture', () => {
       2,
     );
   });
+
+  it('emits Gate A summary fields without presenting the fixture as real benchmark evidence', () => {
+    const summary = summariseBenchmarkRunV26(v26SearchListFastPathFixture());
+
+    expect(summary.evidenceKind).toBe('fixture');
+    expect(summary.evidenceStatus).toBe('pass');
+    expect(summary.evidenceFindings).toEqual([]);
+    expect(summary.readPageAvoidedCount).toBe(2);
+    expect(summary.tokensSavedEstimateTotal).toBe(2340);
+    expect(summary.layerDistribution.L0).toBe(2);
+    expect(summary.dispatcherInputSourceDistribution).toEqual({ api_knowledge: 2 });
+    expect(summary.apiKnowledgeHitRate).toBe(1);
+    expect(summary.fallbackDistribution).toEqual({});
+    expect(summary.medianDuration).toBe(40.5);
+    expect(summary.readPageCount).toBe(0);
+    expect(summary.primaryTabReuseRate).toBe(1);
+    expect(summary.maxConcurrentBenchmarkTabs).toBe(1);
+  });
+});
+
+describe('summariseBenchmarkRunV26 — layer evidence closeout metrics', () => {
+  it('consumes V26-03 skip-read taskTotals even when token estimates are absent', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({
+            toolName: 'chrome_read_page',
+            kind: 'read_page_skipped',
+            chosenSource: 'experience_replay',
+            sourceKind: 'experience_replay',
+            readPageAvoided: true,
+            tokenEstimateChosen: undefined,
+            tokenEstimateFullRead: undefined,
+            taskTotals: {
+              readPageAvoidedCount: 1,
+              tokensSavedEstimateTotal: 900,
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(summary.readPageAvoidedCount).toBe(1);
+    expect(summary.tokensSavedEstimateTotal).toBe(900);
+  });
+
+  it('consumes V26-07 API fallback telemetry and still counts the DOM read_page fallback', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({
+            toolName: 'chrome_read_page',
+            kind: 'read_page_api_fallback',
+            chosenSource: 'dom_json',
+            dispatcherInputSource: 'api_knowledge',
+            apiFamily: 'github_search_repositories',
+            apiTelemetry: {
+              endpointFamily: 'github_search_repositories',
+              status: 'fallback',
+              reason: 'rate_limited',
+              httpStatus: 403,
+              fallbackEntryLayer: 'L0+L1',
+            },
+            readPageAvoided: false,
+          }),
+        ],
+      }),
+    );
+
+    expect(summary.apiKnowledgeHitRate).toBe(0);
+    expect(summary.fallbackDistribution).toEqual({ rate_limited: 1 });
+    expect(summary.readPageCount).toBe(1);
+    expect(summary.dispatcherInputSourceDistribution).toEqual({ api_knowledge: 1 });
+  });
+
+  it('fails loudly when V26 API/read avoidance/token-saving evidence is missing or zero', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [call({ toolName: 'chrome_read_page', chosenSource: 'dom_json' })],
+      }),
+    );
+
+    expect(summary.evidenceStatus).toBe('fail');
+    expect(summary.evidenceFindings.map((finding) => finding.code)).toEqual([
+      'missing_v26_api_evidence',
+      'read_page_avoided_zero',
+      'tokens_saved_zero',
+      'tab_hygiene_missing',
+      'dispatcher_input_source_missing',
+    ]);
+    expect(summary.readPageAvoidedCount).toBe(0);
+    expect(summary.tokensSavedEstimateTotal).toBe(0);
+  });
 });
