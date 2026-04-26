@@ -56,6 +56,7 @@ import {
   type LayerDispatchUserIntentHint,
 } from './choose-context-layer-dispatch';
 import type { PageContextProvider } from './page-context-provider';
+import { resolveApiKnowledgeCandidate } from '../api/api-knowledge';
 
 export class TabrixChooseContextInputError extends Error {
   public readonly code: 'TABRIX_CHOOSE_CONTEXT_BAD_INPUT';
@@ -648,6 +649,13 @@ export function runTabrixChooseContext(
   }
 
   let knowledgeCatalog: ChooseContextFacts['knowledgeCatalog'];
+  const apiCandidate = isCapabilityEnabled('api_knowledge', deps.capabilityEnv)
+    ? resolveApiKnowledgeCandidate({
+        intent: input.intent,
+        url: input.url,
+        pageRole: input.pageRole,
+      })
+    : null;
   // Only consult Knowledge when (a) no experience hit, (b) a recognised
   // site family is in scope, (c) the api_knowledge capability is on,
   // and (d) the repo handle exists. Each of these gates is a real
@@ -674,6 +682,13 @@ export function runTabrixChooseContext(
         };
       }
     }
+  }
+  if (!experienceHit && !knowledgeCatalog && apiCandidate) {
+    knowledgeCatalog = {
+      site: apiCandidate.endpointFamily,
+      totalEndpoints: 1,
+      sampleSignatures: [apiCandidate.endpointFamily],
+    };
   }
 
   const decision = chooseContextStrategy({
@@ -715,6 +730,7 @@ export function runTabrixChooseContext(
     candidateActionsCount: dispatcherInputs?.candidateActionsCount ?? 0,
     hvoCount: dispatcherInputs?.hvoCount ?? 0,
     knowledgeAvailable: !!knowledgeCatalog && knowledgeCatalog.totalEndpoints > 0,
+    searchListIntent: !!apiCandidate,
     experienceReplayAvailable: decision.strategy === 'experience_replay',
     safetyRequiresFullLayers: false,
     fullReadByteLength: dispatcherInputs?.fullReadByteLength ?? 0,

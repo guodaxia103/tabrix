@@ -7,6 +7,11 @@ import {
   type BenchmarkRunInputV26,
   type BenchmarkToolCallRecordV26,
 } from './v26-benchmark';
+import {
+  V26_GATE_A_GITHUB_SEARCH_SCENARIO_ID,
+  V26_GATE_A_NPMJS_SEARCH_SCENARIO_ID,
+  v26SearchListFastPathFixture,
+} from './v26-search-list-fast-path-fixture';
 
 function call(overrides: Partial<BenchmarkToolCallRecordV26> = {}): BenchmarkToolCallRecordV26 {
   return {
@@ -370,5 +375,22 @@ describe('summariseBenchmarkRunV26 — v25 surface preservation', () => {
     expect(
       summary.v25Summary.layerMetrics.sourceRouteDistribution.experience_replay_skip_read,
     ).toBe(1);
+  });
+});
+
+describe('v26 search/list fast-path fixture', () => {
+  it('keeps Gate A API search scenario ids visible and avoids DOM read_page records', () => {
+    const summary = summariseBenchmarkRunV26(v26SearchListFastPathFixture());
+
+    expect(summary.v25Summary.scenarioSummaries.map((s) => s.scenarioId).sort()).toEqual([
+      V26_GATE_A_GITHUB_SEARCH_SCENARIO_ID,
+      V26_GATE_A_NPMJS_SEARCH_SCENARIO_ID,
+    ]);
+    expect(summary.chosenSourceDistribution.api_list).toBe(2);
+    expect(summary.v25Summary.layerMetrics.readPageAvoidedCount).toBe(2);
+    expect(summary.v25Summary.layerMetrics.tokensSavedEstimateTotal).toBeGreaterThan(0);
+    expect(summary.v25Summary.layerMetrics.sourceRouteDistribution.knowledge_supported_read).toBe(
+      2,
+    );
   });
 });

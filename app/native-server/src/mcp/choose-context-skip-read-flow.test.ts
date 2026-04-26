@@ -355,6 +355,127 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(ctx.getTaskTotals().readPageAvoidedCount).toBe(0);
   });
 
+  it('production chooser→reader path returns API compact rows without bridge chrome_read_page for Chinese GitHub search', async () => {
+    markBridgeReady();
+    const previousCapabilities = process.env.TABRIX_POLICY_CAPABILITIES;
+    process.env.TABRIX_POLICY_CAPABILITIES = 'api_knowledge';
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 200,
+      headers: { get: jest.fn().mockReturnValue('application/json') },
+      json: jest.fn().mockResolvedValue({
+        items: [
+          {
+            name: 'ai-assistant',
+            full_name: 'octocat/ai-assistant',
+            description: 'AI assistant demo',
+            language: 'TypeScript',
+            stargazers_count: 123,
+            html_url: 'https://github.com/octocat/ai-assistant',
+          },
+        ],
+      }),
+    } as never);
+    const bridgeSpy = jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait');
+
+    try {
+      const choose = await handleToolCall(TOOL_NAMES.CONTEXT.CHOOSE, {
+        intent: '搜索 GitHub 上 AI助手 相关热门项目，列出前10个',
+        url: 'https://github.com/search',
+      });
+      expect(choose.isError).toBeFalsy();
+      const choosePayload = JSON.parse(String(choose.content[0].text)) as Record<string, unknown>;
+      expect(choosePayload.sourceRoute).toBe('knowledge_supported_read');
+
+      const ctx = sessionManager.getOrCreateExternalTaskContext(AUTO_DEFAULT_KEY);
+      const decision = ctx.peekChooseContextDecision();
+      expect(decision?.apiCapability).toMatchObject({
+        available: true,
+        family: 'github_search_repositories',
+        params: { query: 'AI助手' },
+      });
+
+      const result = await handleToolCall('chrome_read_page', { requestedLayer: 'L0+L1+L2' });
+      expect(result.isError).toBeFalsy();
+      const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
+      expect(payload).toMatchObject({
+        kind: 'api_rows',
+        readPageAvoided: true,
+        sourceKind: 'api_list',
+        sourceRoute: 'knowledge_supported_read',
+        apiFamily: 'github_search_repositories',
+        dataPurpose: 'search_list',
+        rowCount: 1,
+        compact: true,
+        rawBodyStored: false,
+        taskTotals: { readPageAvoidedCount: 1 },
+      });
+      expect(payload).not.toHaveProperty('targetRef');
+      expect(payload).not.toHaveProperty('locator');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(String(fetchSpy.mock.calls[0]?.[0])).toContain(
+        'https://api.github.com/search/repositories',
+      );
+      assertNoCallToolInvocation(bridgeSpy);
+    } finally {
+      if (previousCapabilities === undefined) {
+        delete process.env.TABRIX_POLICY_CAPABILITIES;
+      } else {
+        process.env.TABRIX_POLICY_CAPABILITIES = previousCapabilities;
+      }
+    }
+  });
+
+  it('API failure falls back to bridge chrome_read_page at L0+L1 and does not count as avoided', async () => {
+    markBridgeReady();
+    const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:7');
+    ctx.noteUrlChange('https://github.com/search', null);
+    ctx.noteChooseContextDecision({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0+L1+L2',
+      fullReadTokenEstimate: 12000,
+      replayCandidate: null,
+      apiCapability: {
+        available: true,
+        family: 'github_search_repositories',
+        dataPurpose: 'search_list',
+        params: { query: 'tabrix' },
+      },
+    });
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 403,
+      headers: { get: jest.fn().mockReturnValue('application/json') },
+      json: jest.fn().mockResolvedValue({ message: 'forbidden' }),
+    } as never);
+    const bridgeSpy = mockBridgeRoundTrip(
+      JSON.stringify({ kind: 'page', pageContent: 'api-fallback-dom' }),
+    );
+
+    const result = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1+L2',
+      tabId: 7,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('kind', 'api_rows');
+    expect(payload.pageContent).toBe('api-fallback-dom');
+    const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
+      const messageType = call[1];
+      return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
+    });
+    expect(callToolInvocations).toHaveLength(1);
+    const forwarded = callToolInvocations[0]?.[0] as {
+      name: string;
+      args: Record<string, unknown>;
+    };
+    expect(forwarded.name).toBe('chrome_read_page');
+    expect(forwarded.args.requestedLayer).toBe('L0+L1');
+    expect(ctx.getTaskTotals()).toEqual({
+      readPageAvoidedCount: 0,
+      tokensSavedEstimateTotal: 0,
+    });
+  });
+
   // ------------------------------------------------------------------
   // (e2) fallback_required clamps the bridge requestedLayer to L0+L1
   //      even when the caller asked for L0+L1+L2. V26-03 review

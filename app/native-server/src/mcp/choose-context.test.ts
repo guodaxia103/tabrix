@@ -1035,6 +1035,66 @@ describe('runTabrixChooseContext telemetry (V23-04)', () => {
     expect(recorded.tokensSavedEstimate).toBe(0);
   });
 
+  it('routes Chinese search/list API candidates to knowledge_supported_read without shared site-family changes', () => {
+    const { service } = fakeExperience([]);
+    const result = runTabrixChooseContext(
+      {
+        intent: '搜索 GitHub 上 AI助手 相关热门项目，列出前10个',
+        url: 'https://github.com/search',
+      },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'api_knowledge' },
+        pageContext: {
+          getContext: () => ({
+            source: 'live_snapshot',
+            candidateActionsCount: 0,
+            hvoCount: 0,
+            fullReadByteLength: 20_000,
+            pageRole: null,
+          }),
+        },
+      },
+    );
+
+    expect(result.status).toBe('ok');
+    expect(result.strategy).toBe('knowledge_light');
+    expect(result.chosenLayer).toBe('L0');
+    expect(result.layerDispatchReason).toBe('knowledge_supports_summary');
+    expect(result.sourceRoute).toBe('knowledge_supported_read');
+    expect(result.resolved?.siteFamily).toBe('github');
+  });
+
+  it('routes npmjs Chinese package search through internal API knowledge without adding a public site family', () => {
+    const { service } = fakeExperience([]);
+    const result = runTabrixChooseContext(
+      {
+        intent: '搜索 npm 上 browser automation 相关包，列出前10个',
+        url: 'https://www.npmjs.com/search',
+      },
+      {
+        experience: service,
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'api_knowledge' },
+        pageContext: {
+          getContext: () => ({
+            source: 'live_snapshot',
+            candidateActionsCount: 0,
+            hvoCount: 0,
+            fullReadByteLength: 20_000,
+            pageRole: null,
+          }),
+        },
+      },
+    );
+
+    expect(result.status).toBe('ok');
+    expect(result.strategy).toBe('knowledge_light');
+    expect(result.sourceRoute).toBe('knowledge_supported_read');
+    expect(result.resolved?.siteFamily).toBeUndefined();
+  });
+
   it('telemetry write failure must not break the chooser (decisionId omitted)', () => {
     const { service } = fakeExperience([]);
     const tele = fakeTelemetry();

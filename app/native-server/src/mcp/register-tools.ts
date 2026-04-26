@@ -27,6 +27,7 @@ import { isCapabilityEnabled, type CapabilityEnv } from '../policy/capabilities'
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { planSkipRead, type SkipReadPlan } from '../execution/skip-read-orchestrator';
+import { readApiKnowledgeRows } from '../api/api-knowledge';
 import { runPostProcessor } from './tool-post-processors';
 import { getNativeToolHandler } from './native-tool-handlers';
 import type {
@@ -1637,41 +1638,94 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           },
         });
         if (skipPlan.action === 'skip') {
-          taskContext.noteSkipRead({
-            source: skipPlan.sourceKind,
-            layer: recordedDecision.chosenLayer,
-            tokensSavedEstimate: skipPlan.tokensSavedEstimate,
-            actionPathId: recordedDecision.replayCandidate?.actionPathId ?? null,
-            apiFamily: recordedDecision.apiCapability?.family ?? null,
-          });
-          const totals = taskContext.getTaskTotals();
-          const skipPayload = {
-            kind: 'read_page_skipped',
-            readPageAvoided: skipPlan.readPageAvoided,
-            sourceKind: skipPlan.sourceKind,
-            sourceRoute: skipPlan.sourceRoute,
-            tokensSavedEstimate: skipPlan.tokensSavedEstimate,
-            fallbackUsed: skipPlan.fallbackUsed,
-            fallbackEntryLayer: skipPlan.fallbackEntryLayer,
-            requiresApiCall: skipPlan.requiresApiCall,
-            requiresExperienceReplay: skipPlan.requiresExperienceReplay,
-            actionPathId: recordedDecision.replayCandidate?.actionPathId ?? null,
-            apiFamily: recordedDecision.apiCapability?.family ?? null,
-            diagnostic: skipPlan.diagnostic,
-            taskTotals: totals,
-          };
-          const skipResult: CallToolResult = {
-            content: [{ type: 'text', text: JSON.stringify(skipPayload) }],
-          };
-          sessionManager.completeStep(session.sessionId, step.stepId, {
-            status: 'completed',
-            resultSummary: `chrome_read_page skipped via ${skipPlan.sourceKind} (saved ~${skipPlan.tokensSavedEstimate} tok)`,
-          });
-          sessionManager.finishSession(session.sessionId, {
-            status: 'completed',
-            summary: `chrome_read_page skipped via ${skipPlan.sourceKind}`,
-          });
-          return skipResult;
+          if (skipPlan.requiresApiCall) {
+            const cap = recordedDecision.apiCapability;
+            const apiResult = await readApiKnowledgeRows({
+              endpointFamily: cap?.family ?? '',
+              method: 'GET',
+              params: cap?.params ?? {},
+            });
+            if (apiResult.status === 'ok') {
+              taskContext.noteSkipRead({
+                source: skipPlan.sourceKind,
+                layer: recordedDecision.chosenLayer,
+                tokensSavedEstimate: skipPlan.tokensSavedEstimate,
+                actionPathId: null,
+                apiFamily: apiResult.endpointFamily,
+              });
+              const totals = taskContext.getTaskTotals();
+              const apiPayload = {
+                kind: 'api_rows',
+                readPageAvoided: true,
+                sourceKind: skipPlan.sourceKind,
+                sourceRoute: skipPlan.sourceRoute,
+                chosenLayer: recordedDecision.chosenLayer,
+                tokensSavedEstimate: skipPlan.tokensSavedEstimate,
+                fallbackUsed: 'none',
+                fallbackEntryLayer: skipPlan.fallbackEntryLayer,
+                requiresApiCall: true,
+                requiresExperienceReplay: false,
+                apiFamily: apiResult.endpointFamily,
+                dataPurpose: apiResult.dataPurpose,
+                rows: apiResult.rows,
+                rowCount: apiResult.rowCount,
+                compact: apiResult.compact,
+                rawBodyStored: apiResult.rawBodyStored,
+                apiTelemetry: apiResult.telemetry,
+                diagnostic: skipPlan.diagnostic,
+                taskTotals: totals,
+              };
+              const apiCallResult: CallToolResult = {
+                content: [{ type: 'text', text: JSON.stringify(apiPayload) }],
+              };
+              sessionManager.completeStep(session.sessionId, step.stepId, {
+                status: 'completed',
+                resultSummary: `chrome_read_page fulfilled via ${skipPlan.sourceKind} (saved ~${skipPlan.tokensSavedEstimate} tok)`,
+              });
+              sessionManager.finishSession(session.sessionId, {
+                status: 'completed',
+                summary: `chrome_read_page fulfilled via ${skipPlan.sourceKind}`,
+              });
+              return apiCallResult;
+            }
+            forcedReadPageLayer = apiResult.fallbackEntryLayer;
+          } else {
+            taskContext.noteSkipRead({
+              source: skipPlan.sourceKind,
+              layer: recordedDecision.chosenLayer,
+              tokensSavedEstimate: skipPlan.tokensSavedEstimate,
+              actionPathId: recordedDecision.replayCandidate?.actionPathId ?? null,
+              apiFamily: recordedDecision.apiCapability?.family ?? null,
+            });
+            const totals = taskContext.getTaskTotals();
+            const skipPayload = {
+              kind: 'read_page_skipped',
+              readPageAvoided: skipPlan.readPageAvoided,
+              sourceKind: skipPlan.sourceKind,
+              sourceRoute: skipPlan.sourceRoute,
+              tokensSavedEstimate: skipPlan.tokensSavedEstimate,
+              fallbackUsed: skipPlan.fallbackUsed,
+              fallbackEntryLayer: skipPlan.fallbackEntryLayer,
+              requiresApiCall: skipPlan.requiresApiCall,
+              requiresExperienceReplay: skipPlan.requiresExperienceReplay,
+              actionPathId: recordedDecision.replayCandidate?.actionPathId ?? null,
+              apiFamily: recordedDecision.apiCapability?.family ?? null,
+              diagnostic: skipPlan.diagnostic,
+              taskTotals: totals,
+            };
+            const skipResult: CallToolResult = {
+              content: [{ type: 'text', text: JSON.stringify(skipPayload) }],
+            };
+            sessionManager.completeStep(session.sessionId, step.stepId, {
+              status: 'completed',
+              resultSummary: `chrome_read_page skipped via ${skipPlan.sourceKind} (saved ~${skipPlan.tokensSavedEstimate} tok)`,
+            });
+            sessionManager.finishSession(session.sessionId, {
+              status: 'completed',
+              summary: `chrome_read_page skipped via ${skipPlan.sourceKind}`,
+            });
+            return skipResult;
+          }
         }
         // `fallback_required` / `forward` falls through to the
         // existing budget gate path below. The chooser decision

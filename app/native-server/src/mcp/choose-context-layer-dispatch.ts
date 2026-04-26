@@ -89,6 +89,12 @@ export interface LayerDispatchInput {
    */
   knowledgeAvailable?: boolean;
   /**
+   * True when V26-07 resolved a read-only search/list API candidate.
+   * This lets API-backed reading tasks beat the generic "search form"
+   * bucket without adding a new public source-route enum.
+   */
+  searchListIntent?: boolean;
+  /**
    * Whether the chooser has a replay-eligible Experience candidate
    * for this `(intent, pageRole)` bucket (i.e.
    * `experience_replay` would actually run). Drives priority-5.
@@ -189,6 +195,7 @@ interface NormalizedInput {
   candidateActionsCount: number;
   hvoCount: number;
   knowledgeAvailable: boolean;
+  searchListIntent: boolean;
   experienceReplayAvailable: boolean;
   safetyRequiresFullLayers: boolean;
   safetyReason: string;
@@ -215,6 +222,12 @@ const RULES: readonly DispatchRule[] = Object.freeze([
   },
 
   // ---------- priority 2 — user intent override ----------
+  {
+    layer: 'L0',
+    reason: 'knowledge_supports_summary',
+    sourceRoute: 'knowledge_supported_read',
+    matches: (i) => i.knowledgeAvailable && i.searchListIntent,
+  },
   {
     layer: 'L0',
     reason: 'user_intent_summary',
@@ -349,6 +362,7 @@ function normalizeInput(input: LayerDispatchInput): NormalizedInput | { error: s
     candidateActionsCount: normalizeCount(input.candidateActionsCount),
     hvoCount: normalizeCount(input.hvoCount),
     knowledgeAvailable: normalizeBool(input.knowledgeAvailable),
+    searchListIntent: normalizeBool(input.searchListIntent),
     experienceReplayAvailable: normalizeBool(input.experienceReplayAvailable),
     safetyRequiresFullLayers: normalizeBool(input.safetyRequiresFullLayers),
     safetyReason: normalizeString(input.safetyReason),

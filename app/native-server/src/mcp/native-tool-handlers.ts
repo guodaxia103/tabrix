@@ -35,6 +35,7 @@ import type { SessionManager } from '../execution/session-manager';
 import type { TaskSessionContext } from '../execution/task-session-context';
 import type { ChooseContextDecisionSnapshot } from '../execution/skip-read-orchestrator';
 import type { LayerSourceRoute, TabrixChooseContextResult } from '@tabrix/shared';
+import { resolveApiKnowledgeCandidate } from '../api/api-knowledge';
 import {
   experienceReplayNativeHandler,
   type DispatchBridgedFn,
@@ -190,8 +191,9 @@ const handleTabrixChooseContext: NativeToolHandler = (args, deps) => {
   //   * Only `experience_replay_skip_read` may attach a real
   //     `replayCandidate`; every other route stores `null` so the
   //     orchestrator's gates fire honestly (`replay_candidate_missing`).
-  //   * `apiCapability` is left `null` until V26-07/V26-08 lands a
-  //     real `knowledge_call_api` — never fake `available: true`.
+  //   * `apiCapability` is attached only when V26-07 can resolve a
+  //     real read-only API candidate for the `knowledge_supported_read`
+  //     route — never fake `available: true`.
   if (deps.taskContext && result.status === 'ok') {
     persistChooseContextDecision(args, result, deps.taskContext);
   }
@@ -258,12 +260,23 @@ function persistChooseContextDecision(
     // 'replay_candidate_missing'` per session correction #4.
   }
 
-  // V26-07/V26-08 will eventually attach a real `apiCapability`. Until
-  // then we always store `null` so the orchestrator's
-  // `'api_layer_not_available'` fallback fires deterministically on the
-  // `knowledge_supported_read` route. Fabricating `{ available: true }`
-  // here would mark the read as skippable but no engine exists to
-  // honour it — the integration test pins this invariant.
+  let apiCapability: ChooseContextDecisionSnapshot['apiCapability'] = null;
+  if (sourceRoute === 'knowledge_supported_read') {
+    const candidate = resolveApiKnowledgeCandidate({
+      intent: typeof argsObj.intent === 'string' ? argsObj.intent : '',
+      url: url ?? undefined,
+      pageRole: pageRole ?? undefined,
+    });
+    if (candidate) {
+      apiCapability = {
+        available: true,
+        family: candidate.endpointFamily,
+        dataPurpose: candidate.dataPurpose,
+        params: candidate.params,
+      };
+    }
+  }
+
   const snapshot: ChooseContextDecisionSnapshot = {
     sourceRoute,
     chosenLayer: result.chosenLayer,
@@ -274,7 +287,7 @@ function persistChooseContextDecision(
         ? Math.floor(result.tokenEstimateFullRead)
         : 0,
     replayCandidate,
-    apiCapability: null,
+    apiCapability,
   };
   taskContext.noteChooseContextDecision(snapshot);
 }

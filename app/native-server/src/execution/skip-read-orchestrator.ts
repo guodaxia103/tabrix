@@ -135,6 +135,10 @@ export interface ChooseContextDecisionSnapshot {
     available: boolean;
     /** Endpoint family, e.g. `'github_search_repositories'`. */
     family: string;
+    /** API data purpose from the internal V26-07 reader. */
+    dataPurpose?: string;
+    /** Redacted request params for the internal V26-07 reader. */
+    params?: Record<string, string>;
   } | null;
 }
 

@@ -80,6 +80,23 @@ describe('dispatchLayer — priority 1 safety override', () => {
 });
 
 describe('dispatchLayer — priority 2 user intent override', () => {
+  test('search/list API candidate beats generic search-as-form intent', () => {
+    const out = dispatchLayer({
+      pageRole: '',
+      userIntent: 'form_or_submit',
+      taskType: 'action',
+      candidateActionsCount: 0,
+      hvoCount: 0,
+      knowledgeAvailable: true,
+      searchListIntent: true,
+      fullReadByteLength: 20_000,
+    });
+    expect(out.chosenLayer).toBe('L0');
+    expect(out.reason).toBe('knowledge_supports_summary');
+    expect(out.sourceRoute).toBe('knowledge_supported_read');
+    expect(out.readPageAvoided).toBe(false);
+  });
+
   test.each([
     ['summary', 'L0', 'user_intent_summary'],
     ['open_or_select', 'L0+L1', 'user_intent_open_or_select'],
