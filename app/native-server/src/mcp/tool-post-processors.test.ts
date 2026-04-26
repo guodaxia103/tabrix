@@ -1,6 +1,10 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { TOOL_NAMES } from '@tabrix/shared';
 import { SessionManager } from '../execution/session-manager';
+import { __hostConfigInternals, setPersistedPolicyCapabilities } from '../host-config';
 import {
   runPostProcessor,
   chromeReadPagePostProcessor,
@@ -332,6 +336,7 @@ describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
           'Content-Type': 'application/json; charset=utf-8',
           'Set-Cookie': 'session=NEW_VALUE_PII; HttpOnly',
         },
+        requestBody: 'raw-request-body-PII=should_never_persist',
         responseBody: JSON.stringify([
           { id: 1, number: 10, title: 'private-title-PII', user: { login: 'octocat' } },
         ]),
@@ -368,12 +373,17 @@ describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
 
   const ENV_KEY = 'TABRIX_POLICY_CAPABILITIES';
   let prevEnv: string | undefined;
+  let configDir: string;
   beforeEach(() => {
     prevEnv = process.env[ENV_KEY];
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tabrix-network-capabilities-'));
+    __hostConfigInternals.setConfigFileForTesting(path.join(configDir, 'config.json'));
   });
   afterEach(() => {
     if (prevEnv === undefined) delete process.env[ENV_KEY];
     else process.env[ENV_KEY] = prevEnv;
+    __hostConfigInternals.setConfigFileForTesting(null);
+    fs.rmSync(configDir, { recursive: true, force: true });
   });
 
   it('is registered for the canonical NETWORK_CAPTURE tool name', () => {
@@ -405,8 +415,9 @@ describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
     }
   });
 
-  it('captures GitHub-only rows (with full redaction) when capability is enabled', () => {
-    process.env[ENV_KEY] = 'api_knowledge';
+  it('captures GitHub-only rows from persisted api_knowledge when shell env is absent', () => {
+    delete process.env[ENV_KEY];
+    setPersistedPolicyCapabilities('api_knowledge');
     const { manager, session, step } = bootstrap();
     try {
       const raw = wrap(SAMPLE_BUNDLE);
@@ -448,12 +459,36 @@ describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
         'cookie-payload-PII',
         'NEW_VALUE_PII',
         'private-title-PII',
+        'raw-request-body-PII',
+        'state=open',
+        'per_page=30',
         'hunter2',
         'octocat',
       ];
       for (const needle of FORBIDDEN) {
         expect(blob).not.toContain(needle);
       }
+    } finally {
+      manager.close();
+    }
+  });
+
+  it('gives shell env priority over persisted config when deciding capture enablement', () => {
+    setPersistedPolicyCapabilities('api_knowledge');
+    process.env[ENV_KEY] = 'experience_replay';
+    const { manager, session, step } = bootstrap();
+    try {
+      const raw = wrap(SAMPLE_BUNDLE);
+      runPostProcessor({
+        toolName: TOOL_NAMES.BROWSER.NETWORK_CAPTURE,
+        rawResult: raw,
+        stepId: step.stepId,
+        sessionId: session.sessionId,
+        sessionManager: manager,
+        args: {},
+      });
+
+      expect(manager.knowledgeApi!.countAll()).toBe(0);
     } finally {
       manager.close();
     }

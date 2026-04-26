@@ -30,7 +30,7 @@ import {
   deriveKnowledgeFromBundle,
   type CapturedNetworkBundle,
 } from '../memory/knowledge/api-knowledge-capture';
-import { isCapabilityEnabled } from '../policy/capabilities';
+import { getCurrentCapabilityEnv, isCapabilityEnabled } from '../policy/capabilities';
 
 export interface ToolPostProcessorContext {
   toolName: string;
@@ -203,7 +203,7 @@ export const chromeNetworkCapturePostProcessor: ToolPostProcessor = (ctx) => {
     extraArtifactRefs: [],
   };
   try {
-    if (!isCapabilityEnabled('api_knowledge', process.env)) return empty;
+    if (!isCapabilityEnabled('api_knowledge', getCurrentCapabilityEnv())) return empty;
     const repo = ctx.sessionManager.knowledgeApi;
     if (!repo) return empty;
 
