@@ -31,7 +31,11 @@ import {
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { planSkipRead, type SkipReadPlan } from '../execution/skip-read-orchestrator';
-import { readApiKnowledgeEndpointPlan, type ApiKnowledgeReadFallback } from '../api/api-knowledge';
+import {
+  readApiKnowledgeEndpointPlan,
+  type ApiKnowledgeFetch,
+  type ApiKnowledgeReadFallback,
+} from '../api/api-knowledge';
 import { mapDataSourceToLayerContract } from '../execution/layer-contract';
 import { runPostProcessor } from './tool-post-processors';
 import { getNativeToolHandler } from './native-tool-handlers';
@@ -130,6 +134,7 @@ function estimateApiRowsTokenSavings(args: {
 }
 
 type ApiReadFallbackCauseV26 = 'api_timeout' | 'semantic_mismatch' | 'api_unavailable';
+type AcceptanceApiFaultV26 = 'network_timeout' | 'semantic_mismatch';
 
 interface ApiReadFallbackEvidenceV26 {
   kind: 'read_page_fallback';
@@ -147,6 +152,32 @@ function normalizeApiFallbackCause(reason: string | null | undefined): ApiReadFa
   if (reason === 'network_timeout') return 'api_timeout';
   if (reason === 'semantic_mismatch') return 'semantic_mismatch';
   return 'api_unavailable';
+}
+
+function readAcceptanceApiFault(args: unknown): AcceptanceApiFaultV26 | null {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
+  const value = (args as { __tabrixAcceptanceApiFault?: unknown }).__tabrixAcceptanceApiFault;
+  return value === 'network_timeout' || value === 'semantic_mismatch' ? value : null;
+}
+
+function apiFaultFetchOverride(fault: AcceptanceApiFaultV26 | null): ApiKnowledgeFetch | undefined {
+  if (fault !== 'network_timeout') return undefined;
+  return () => new Promise(() => undefined);
+}
+
+function apiFaultDataPurposeOverride(
+  fault: AcceptanceApiFaultV26 | null,
+  current: string | undefined,
+): string | undefined {
+  if (fault !== 'semantic_mismatch') return current;
+  return current === 'issue_list' ? 'search_list' : 'issue_list';
+}
+
+function stripInternalReadPageArgs(args: unknown): unknown {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return args;
+  const out = { ...(args as Record<string, unknown>) };
+  delete out.__tabrixAcceptanceApiFault;
+  return out;
 }
 
 function withFallbackEvidence(
@@ -1763,11 +1794,13 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         if (skipPlan.action === 'skip') {
           if (skipPlan.requiresApiCall) {
             const cap = recordedDecision.apiCapability;
+            const acceptanceApiFault = readAcceptanceApiFault(args);
             const apiResult = await readApiKnowledgeEndpointPlan({
               endpointFamily: cap?.family ?? '',
-              dataPurpose: cap?.dataPurpose,
+              dataPurpose: apiFaultDataPurposeOverride(acceptanceApiFault, cap?.dataPurpose),
               method: 'GET',
               params: cap?.params ?? {},
+              fetchFn: apiFaultFetchOverride(acceptanceApiFault),
             });
             if (apiResult.status === 'ok') {
               const tokenSavings = estimateApiRowsTokenSavings({
@@ -2006,6 +2039,9 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         ...(outgoingArgs && typeof outgoingArgs === 'object' ? outgoingArgs : {}),
         requestedLayer: forcedReadPageLayer,
       };
+    }
+    if (name === 'chrome_read_page') {
+      outgoingArgs = stripInternalReadPageArgs(outgoingArgs);
     }
     const { response, bridgeFailure } = await callWithBridgeRecovery(
       () =>

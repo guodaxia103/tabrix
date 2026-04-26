@@ -559,16 +559,6 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
           params: { query: 'tabrix' },
         },
       });
-      jest.spyOn(globalThis, 'fetch').mockImplementation(((_url: unknown, init?: unknown) => {
-        const signal = (init as { signal?: AbortSignal } | undefined)?.signal;
-        return new Promise((_resolve, reject) => {
-          signal?.addEventListener('abort', () => {
-            const error = new Error('aborted');
-            error.name = 'AbortError';
-            reject(error);
-          });
-        });
-      }) as never);
       const bridgeSpy = mockBridgeRoundTrip(
         JSON.stringify({ kind: 'page', pageContent: 'api-timeout-fallback-dom' }),
       );
@@ -576,6 +566,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       const pending = handleToolCall('chrome_read_page', {
         requestedLayer: 'L0+L1+L2',
         tabId: 10,
+        __tabrixAcceptanceApiFault: 'network_timeout',
       });
       await jest.advanceTimersByTimeAsync(2600);
       const result = await pending;
@@ -599,6 +590,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       };
       expect(forwarded.name).toBe('chrome_read_page');
       expect(forwarded.args.requestedLayer).toBe('L0+L1');
+      expect(forwarded.args).not.toHaveProperty('__tabrixAcceptanceApiFault');
       expect(ctx.getTaskTotals()).toEqual({
         readPageAvoidedCount: 0,
         tokensSavedEstimateTotal: 0,
@@ -620,7 +612,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       apiCapability: {
         available: true,
         family: 'github_search_repositories',
-        dataPurpose: 'issue_list',
+        dataPurpose: 'search_list',
         params: { query: 'tabrix' },
       },
     });
@@ -632,6 +624,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     const result = await handleToolCall('chrome_read_page', {
       requestedLayer: 'L0+L1+L2',
       tabId: 9,
+      __tabrixAcceptanceApiFault: 'semantic_mismatch',
     });
 
     expect(result.isError).toBeFalsy();
@@ -652,6 +645,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       args: Record<string, unknown>;
     };
     expect(forwarded.args.requestedLayer).toBe('L0+L1');
+    expect(forwarded.args).not.toHaveProperty('__tabrixAcceptanceApiFault');
     expect(ctx.getTaskTotals()).toEqual({
       readPageAvoidedCount: 0,
       tokensSavedEstimateTotal: 0,
