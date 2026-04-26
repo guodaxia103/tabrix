@@ -14,6 +14,7 @@ export type ApiKnowledgeFallbackReason =
   | 'rate_limited'
   | 'http_error'
   | 'decode_error'
+  | 'semantic_mismatch'
   | 'network_timeout'
   | 'network_error';
 
@@ -104,6 +105,10 @@ export interface ApiKnowledgeReadInput {
   fetchFn?: ApiKnowledgeFetch;
   nowMs?: () => number;
   limit?: number;
+}
+
+export interface ApiKnowledgeEndpointReadPlan extends ApiKnowledgeReadInput {
+  dataPurpose?: ApiDataPurpose | string | null;
 }
 
 export interface ApiKnowledgeIntentReadInput {
@@ -339,6 +344,36 @@ export async function readApiKnowledgeRows(
   }
 }
 
+export async function readApiKnowledgeEndpointPlan(
+  input: ApiKnowledgeEndpointReadPlan,
+): Promise<ApiKnowledgeReadResult> {
+  const startedAt = input.nowMs?.() ?? Date.now();
+  const elapsed = () => Math.max(0, (input.nowMs?.() ?? Date.now()) - startedAt);
+  const method = normalizeMethod(input.method);
+  const endpointFamily = normalizeEndpointFamily(input.endpointFamily);
+  if (!endpointFamily) {
+    return fallback({
+      reason: 'unsupported_family',
+      method,
+      status: null,
+      waitedMs: elapsed(),
+      endpointFamily: undefined,
+    });
+  }
+  const expectedPurpose = normalizeDataPurpose(input.dataPurpose);
+  const actualPurpose = dataPurposeForFamily(endpointFamily);
+  if (expectedPurpose && expectedPurpose !== actualPurpose) {
+    return fallback({
+      reason: 'semantic_mismatch',
+      method,
+      status: null,
+      waitedMs: elapsed(),
+      endpointFamily,
+    });
+  }
+  return readApiKnowledgeRows(input);
+}
+
 export async function readApiKnowledgeRowsForIntent(
   input: ApiKnowledgeIntentReadInput,
 ): Promise<ApiKnowledgeReadResult> {
@@ -407,6 +442,24 @@ function normalizeEndpointFamily(value: string): ApiEndpointFamily | null {
     return value;
   }
   return null;
+}
+
+function normalizeDataPurpose(value: unknown): ApiDataPurpose | null {
+  if (value === 'search_list' || value === 'issue_list' || value === 'package_search') {
+    return value;
+  }
+  return null;
+}
+
+function dataPurposeForFamily(endpointFamily: ApiEndpointFamily): ApiDataPurpose {
+  switch (endpointFamily) {
+    case 'github_search_repositories':
+      return 'search_list';
+    case 'github_issues_list':
+      return 'issue_list';
+    case 'npmjs_search_packages':
+      return 'package_search';
+  }
 }
 
 function buildPublicRequest(

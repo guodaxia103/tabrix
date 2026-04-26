@@ -31,7 +31,7 @@ import {
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { planSkipRead, type SkipReadPlan } from '../execution/skip-read-orchestrator';
-import { readApiKnowledgeRows } from '../api/api-knowledge';
+import { readApiKnowledgeEndpointPlan } from '../api/api-knowledge';
 import { runPostProcessor } from './tool-post-processors';
 import { getNativeToolHandler } from './native-tool-handlers';
 import type {
@@ -1694,8 +1694,9 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         if (skipPlan.action === 'skip') {
           if (skipPlan.requiresApiCall) {
             const cap = recordedDecision.apiCapability;
-            const apiResult = await readApiKnowledgeRows({
+            const apiResult = await readApiKnowledgeEndpointPlan({
               endpointFamily: cap?.family ?? '',
+              dataPurpose: cap?.dataPurpose,
               method: 'GET',
               params: cap?.params ?? {},
             });

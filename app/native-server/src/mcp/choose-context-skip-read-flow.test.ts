@@ -510,6 +510,52 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     });
   });
 
+  it('API semantic mismatch falls back to bridge L0+L1 without calling public fetch', async () => {
+    markBridgeReady();
+    const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:9');
+    ctx.noteUrlChange('https://github.com/search', null);
+    ctx.noteChooseContextDecision({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0+L1+L2',
+      fullReadTokenEstimate: 12000,
+      replayCandidate: null,
+      apiCapability: {
+        available: true,
+        family: 'github_search_repositories',
+        dataPurpose: 'issue_list',
+        params: { query: 'tabrix' },
+      },
+    });
+    const fetchSpy = jest.spyOn(globalThis, 'fetch');
+    const bridgeSpy = mockBridgeRoundTrip(
+      JSON.stringify({ kind: 'page', pageContent: 'api-semantic-fallback-dom' }),
+    );
+
+    const result = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1+L2',
+      tabId: 9,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
+    expect(payload.pageContent).toBe('api-semantic-fallback-dom');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
+      const messageType = call[1];
+      return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
+    });
+    expect(callToolInvocations).toHaveLength(1);
+    const forwarded = callToolInvocations[0]?.[0] as {
+      name: string;
+      args: Record<string, unknown>;
+    };
+    expect(forwarded.args.requestedLayer).toBe('L0+L1');
+    expect(ctx.getTaskTotals()).toEqual({
+      readPageAvoidedCount: 0,
+      tokensSavedEstimateTotal: 0,
+    });
+  });
+
   // ------------------------------------------------------------------
   // (e2) fallback_required clamps the bridge requestedLayer to L0+L1
   //      even when the caller asked for L0+L1+L2. V26-03 review

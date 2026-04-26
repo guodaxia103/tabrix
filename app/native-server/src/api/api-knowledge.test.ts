@@ -1,5 +1,6 @@
 import {
   classifyApiKnowledgeMetadata,
+  readApiKnowledgeEndpointPlan,
   readApiKnowledgeRows,
   readApiKnowledgeRowsForIntent,
   resolveApiKnowledgeCandidate,
@@ -149,6 +150,59 @@ describe('V26-07 API Knowledge substrate', () => {
       status: 'fallback_required',
       reason: 'rate_limited',
       telemetry: { status: 429 },
+    });
+  });
+
+  it('endpoint read plan rejects semantic mismatches before fetch and falls back to L0+L1', async () => {
+    const fetchFn = jest.fn();
+    const result = await readApiKnowledgeEndpointPlan({
+      endpointFamily: 'github_search_repositories',
+      dataPurpose: 'issue_list',
+      method: 'GET',
+      params: { query: 'tabrix' },
+      fetchFn,
+    });
+
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      status: 'fallback_required',
+      reason: 'semantic_mismatch',
+      fallbackEntryLayer: 'L0+L1',
+      telemetry: {
+        reason: 'semantic_mismatch',
+        readAllowed: false,
+        fallbackEntryLayer: 'L0+L1',
+      },
+    });
+  });
+
+  it('endpoint read plan delegates semantically equivalent GET plans to compact api_rows', async () => {
+    const fetchFn = jsonFetch(200, {
+      items: [
+        {
+          name: 'tabrix',
+          full_name: 'guodaxia103/tabrix',
+          stargazers_count: 10,
+          html_url: 'https://github.com/guodaxia103/tabrix',
+        },
+      ],
+    });
+    const result = await readApiKnowledgeEndpointPlan({
+      endpointFamily: 'github_search_repositories',
+      dataPurpose: 'search_list',
+      method: 'GET',
+      params: { query: 'tabrix' },
+      fetchFn,
+    });
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      status: 'ok',
+      kind: 'api_rows',
+      endpointFamily: 'github_search_repositories',
+      dataPurpose: 'search_list',
+      rowCount: 1,
+      rawBodyStored: false,
     });
   });
 
