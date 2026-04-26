@@ -43,12 +43,16 @@
  *      bridge (URL change MUST invalidate the decision).
  */
 
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { TOOL_NAMES } from '@tabrix/shared';
 import nativeMessagingHostInstance from '../native-messaging-host';
 import { handleToolCall } from './register-tools';
 import { sessionManager } from '../execution/session-manager';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
+import { __hostConfigInternals, setPersistedPolicyCapabilities } from '../host-config';
 import type { ChooseContextDecisionSnapshot } from '../execution/skip-read-orchestrator';
 import type { ExperienceQueryService } from '../memory/experience';
 import type { ExperienceActionPathRow } from '../memory/experience/experience-repository';
@@ -355,10 +359,13 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(ctx.getTaskTotals().readPageAvoidedCount).toBe(0);
   });
 
-  it('production chooser→reader path returns API compact rows without bridge chrome_read_page for Chinese GitHub search', async () => {
+  it('production chooser→reader path uses persisted api_knowledge capability for Chinese GitHub search', async () => {
     markBridgeReady();
     const previousCapabilities = process.env.TABRIX_POLICY_CAPABILITIES;
-    process.env.TABRIX_POLICY_CAPABILITIES = 'api_knowledge';
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tabrix-gate-a-capability-'));
+    __hostConfigInternals.setConfigFileForTesting(path.join(configDir, 'config.json'));
+    delete process.env.TABRIX_POLICY_CAPABILITIES;
+    setPersistedPolicyCapabilities('api_knowledge');
     const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
       status: 200,
       headers: { get: jest.fn().mockReturnValue('application/json') },
@@ -391,7 +398,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       expect(decision?.apiCapability).toMatchObject({
         available: true,
         family: 'github_search_repositories',
-        params: { query: 'AI助手' },
+        params: { query: 'AI助手', sort: 'stars', order: 'desc' },
       });
 
       const result = await handleToolCall('chrome_read_page', { requestedLayer: 'L0+L1+L2' });
@@ -422,6 +429,8 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       } else {
         process.env.TABRIX_POLICY_CAPABILITIES = previousCapabilities;
       }
+      __hostConfigInternals.setConfigFileForTesting(null);
+      fs.rmSync(configDir, { recursive: true, force: true });
     }
   });
 

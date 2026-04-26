@@ -8,6 +8,7 @@
  */
 
 import { ALL_TABRIX_CAPABILITIES, isTabrixCapability, type TabrixCapability } from '@tabrix/shared';
+import { getPersistedPolicyCapabilities } from '../host-config';
 
 export interface CapabilityEnv {
   /**
@@ -27,6 +28,13 @@ export interface CapabilityParseResult {
    * dropping typos.
    */
   unknown: readonly string[];
+}
+
+export type CapabilitySourceKind = 'env' | 'persisted_config' | 'default';
+
+export interface CapabilityResolutionResult {
+  env: CapabilityEnv;
+  source: CapabilitySourceKind;
 }
 
 function tokenize(raw: string | undefined): string[] {
@@ -68,4 +76,52 @@ export function parseCapabilityAllowlist(env: CapabilityEnv): CapabilityParseRes
  */
 export function isCapabilityEnabled(capability: TabrixCapability, env: CapabilityEnv): boolean {
   return parseCapabilityAllowlist(env).enabled.has(capability);
+}
+
+export function resolveCapabilityEnv(input: {
+  env?: CapabilityEnv;
+  persistedPolicyCapabilities?: string;
+}): CapabilityResolutionResult {
+  const envValue = input.env?.TABRIX_POLICY_CAPABILITIES;
+  if (typeof envValue === 'string' && envValue.trim().length > 0) {
+    return {
+      env: { TABRIX_POLICY_CAPABILITIES: envValue },
+      source: 'env',
+    };
+  }
+  if (
+    typeof input.persistedPolicyCapabilities === 'string' &&
+    input.persistedPolicyCapabilities.trim().length > 0
+  ) {
+    return {
+      env: { TABRIX_POLICY_CAPABILITIES: input.persistedPolicyCapabilities },
+      source: 'persisted_config',
+    };
+  }
+  return { env: {}, source: 'default' };
+}
+
+export function getCurrentCapabilityResolution(): CapabilityResolutionResult {
+  return resolveCapabilityEnv({
+    env: { TABRIX_POLICY_CAPABILITIES: process.env.TABRIX_POLICY_CAPABILITIES },
+    persistedPolicyCapabilities: getPersistedPolicyCapabilities(),
+  });
+}
+
+export function getCurrentCapabilityEnv(): CapabilityEnv {
+  return getCurrentCapabilityResolution().env;
+}
+
+export function getCapabilityDiagnostics(): {
+  source: CapabilitySourceKind;
+  enabled: TabrixCapability[];
+  unknown: string[];
+} {
+  const resolution = getCurrentCapabilityResolution();
+  const parsed = parseCapabilityAllowlist(resolution.env);
+  return {
+    source: resolution.source,
+    enabled: Array.from(parsed.enabled).sort(),
+    unknown: [...parsed.unknown],
+  };
 }

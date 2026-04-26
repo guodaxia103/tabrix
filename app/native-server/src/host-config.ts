@@ -12,17 +12,28 @@ import os from 'os';
 
 const CONFIG_DIR = path.join(os.homedir(), '.tabrix');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+let configFileOverride: string | null = null;
 
 const ALLOWED_HOSTS = ['127.0.0.1', '0.0.0.0', 'localhost', '::'];
 
 interface HostConfig {
   host?: string;
+  policyCapabilities?: string;
+}
+
+function getConfigFile(): string {
+  return configFileOverride ?? CONFIG_FILE;
+}
+
+function getConfigDir(): string {
+  return path.dirname(getConfigFile());
 }
 
 function readConfig(): HostConfig {
   try {
-    if (!fs.existsSync(CONFIG_FILE)) return {};
-    const raw = fs.readFileSync(CONFIG_FILE, 'utf8');
+    const configFile = getConfigFile();
+    if (!fs.existsSync(configFile)) return {};
+    const raw = fs.readFileSync(configFile, 'utf8');
     return JSON.parse(raw) as HostConfig;
   } catch {
     return {};
@@ -31,12 +42,13 @@ function readConfig(): HostConfig {
 
 function writeConfig(cfg: HostConfig): void {
   try {
-    if (!fs.existsSync(CONFIG_DIR)) {
-      fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    const configDir = getConfigDir();
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
     }
     const existing = readConfig();
     const merged = { ...existing, ...cfg };
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2), 'utf8');
+    fs.writeFileSync(getConfigFile(), JSON.stringify(merged, null, 2), 'utf8');
   } catch {
     // best-effort; if home dir is unwritable, fall back to in-memory
   }
@@ -52,3 +64,18 @@ export function setPersistedHost(host: string): void {
   if (!ALLOWED_HOSTS.includes(host)) return;
   writeConfig({ host });
 }
+
+export function getPersistedPolicyCapabilities(): string | undefined {
+  const cfg = readConfig();
+  return typeof cfg.policyCapabilities === 'string' ? cfg.policyCapabilities : undefined;
+}
+
+export function setPersistedPolicyCapabilities(policyCapabilities: string): void {
+  writeConfig({ policyCapabilities });
+}
+
+export const __hostConfigInternals = {
+  setConfigFileForTesting(configFile: string | null): void {
+    configFileOverride = configFile;
+  },
+};

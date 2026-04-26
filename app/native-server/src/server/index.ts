@@ -41,6 +41,7 @@ import {
 } from '../scripts/bridge-recovery-guidance';
 import { registerMemoryRoutes } from './memory-routes';
 import { registerExecutionRoutes } from './execution-routes';
+import { getCapabilityDiagnostics, type CapabilitySourceKind } from '../policy/capabilities';
 
 // Compatibility guard:
 // @hono/node-server may call socket.destroySoon() while draining incoming requests.
@@ -139,6 +140,11 @@ interface ServerStatusSnapshot {
     };
     lastSessionId: string | null;
     persistenceMode: 'disk' | 'memory' | 'off';
+  };
+  capabilities: {
+    source: CapabilitySourceKind;
+    enabled: string[];
+    unknown: string[];
   };
 }
 
@@ -916,6 +922,7 @@ export class Server {
     this.bridgeState.syncBrowserProcessNow();
     this.bridgeState.setNativeHostAttached(this.nativeHost !== null);
     const bridge = this.bridgeState.getSnapshot();
+    const capabilities = getCapabilityDiagnostics();
 
     return {
       isRunning: this.isRunning,
@@ -953,6 +960,7 @@ export class Server {
             : null,
         persistenceMode: sessionManager.getPersistenceStatus().mode,
       },
+      capabilities,
     };
   }
 

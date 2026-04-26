@@ -116,6 +116,11 @@ describe('服务器测试', () => {
       },
       lastSessionId: null,
     });
+    expect(response.body.data.capabilities).toMatchObject({
+      source: expect.any(String),
+      enabled: expect.any(Array),
+      unknown: expect.any(Array),
+    });
     expect(Array.isArray(response.body.data.transports.sessionIds)).toBe(true);
     expect(Array.isArray(response.body.data.transports.clients)).toBe(true);
     expect(Array.isArray(response.body.data.transports.sessions)).toBe(true);

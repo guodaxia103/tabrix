@@ -1,4 +1,22 @@
-import { isCapabilityEnabled, parseCapabilityAllowlist, type CapabilityEnv } from './capabilities';
+import {
+  getCurrentCapabilityEnv,
+  isCapabilityEnabled,
+  parseCapabilityAllowlist,
+  resolveCapabilityEnv,
+  type CapabilityEnv,
+} from './capabilities';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { __hostConfigInternals } from '../host-config';
+
+const ORIGINAL_ENV = process.env.TABRIX_POLICY_CAPABILITIES;
+
+afterEach(() => {
+  if (ORIGINAL_ENV === undefined) delete process.env.TABRIX_POLICY_CAPABILITIES;
+  else process.env.TABRIX_POLICY_CAPABILITIES = ORIGINAL_ENV;
+  __hostConfigInternals.setConfigFileForTesting(null);
+});
 
 describe('B-016 capability gate parser', () => {
   describe('parseCapabilityAllowlist', () => {
@@ -112,6 +130,58 @@ describe('B-016 capability gate parser', () => {
           TABRIX_POLICY_CAPABILITIES: 'experience_replay',
         }),
       ).toBe(false);
+    });
+  });
+
+  describe('resolveCapabilityEnv', () => {
+    it('keeps default closed when neither env nor persisted config is set', () => {
+      expect(resolveCapabilityEnv({})).toEqual({
+        env: {},
+        source: 'default',
+      });
+    });
+
+    it('uses persisted config for Chrome-launched native host when shell env is absent', () => {
+      expect(
+        resolveCapabilityEnv({
+          env: {},
+          persistedPolicyCapabilities: 'api_knowledge',
+        }),
+      ).toEqual({
+        env: { TABRIX_POLICY_CAPABILITIES: 'api_knowledge' },
+        source: 'persisted_config',
+      });
+    });
+
+    it('gives explicit env priority over persisted config', () => {
+      expect(
+        resolveCapabilityEnv({
+          env: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+          persistedPolicyCapabilities: 'api_knowledge',
+        }),
+      ).toEqual({
+        env: { TABRIX_POLICY_CAPABILITIES: 'experience_replay' },
+        source: 'env',
+      });
+    });
+
+    it('getCurrentCapabilityEnv reads persisted config when Chrome-launched host has no shell env', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tabrix-capabilities-'));
+      try {
+        __hostConfigInternals.setConfigFileForTesting(path.join(dir, 'config.json'));
+        fs.writeFileSync(
+          path.join(dir, 'config.json'),
+          JSON.stringify({ policyCapabilities: 'api_knowledge' }),
+          'utf8',
+        );
+        delete process.env.TABRIX_POLICY_CAPABILITIES;
+
+        expect(getCurrentCapabilityEnv()).toEqual({
+          TABRIX_POLICY_CAPABILITIES: 'api_knowledge',
+        });
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 });

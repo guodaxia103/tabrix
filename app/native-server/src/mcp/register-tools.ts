@@ -23,7 +23,11 @@ import {
   isToolAllowedByPolicy,
   resolveOptInAllowlist,
 } from '../policy/phase0-opt-in';
-import { isCapabilityEnabled, type CapabilityEnv } from '../policy/capabilities';
+import {
+  getCurrentCapabilityEnv,
+  isCapabilityEnabled,
+  type CapabilityEnv,
+} from '../policy/capabilities';
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { planSkipRead, type SkipReadPlan } from '../execution/skip-read-orchestrator';
@@ -150,10 +154,6 @@ function filterToolsByCapability(tools: Tool[], env: CapabilityEnv): Tool[] {
     if (!cap) return true;
     return isCapabilityEnabled(cap, env);
   });
-}
-
-function getCurrentCapabilityEnv(): CapabilityEnv {
-  return { TABRIX_POLICY_CAPABILITIES: process.env.TABRIX_POLICY_CAPABILITIES };
 }
 
 /**

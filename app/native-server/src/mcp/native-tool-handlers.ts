@@ -30,7 +30,7 @@ import {
 } from '../memory/experience';
 import { runTabrixChooseContext, runTabrixChooseContextRecordOutcome } from './choose-context';
 import { createLivePageContextProvider } from './page-context-provider';
-import type { CapabilityEnv } from '../policy/capabilities';
+import { getCurrentCapabilityEnv, type CapabilityEnv } from '../policy/capabilities';
 import type { SessionManager } from '../execution/session-manager';
 import type { TaskSessionContext } from '../execution/task-session-context';
 import type { ChooseContextDecisionSnapshot } from '../execution/skip-read-orchestrator';
@@ -367,8 +367,6 @@ export async function invokeNativeToolHandler(
   if (!handler) return undefined;
   return await handler(args, {
     sessionManager: defaultSessionManager,
-    capabilityEnv: {
-      TABRIX_POLICY_CAPABILITIES: process.env.TABRIX_POLICY_CAPABILITIES,
-    },
+    capabilityEnv: getCurrentCapabilityEnv(),
   });
 }
