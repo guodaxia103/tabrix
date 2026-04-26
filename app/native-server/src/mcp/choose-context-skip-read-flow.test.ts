@@ -58,8 +58,12 @@ import type { ExperienceQueryService } from '../memory/experience';
 import type { ExperienceActionPathRow } from '../memory/experience/experience-repository';
 
 const AUTO_DEFAULT_KEY = 'mcp:auto:tab:default';
+const CAPABILITIES_ENV_KEY = 'TABRIX_POLICY_CAPABILITIES';
 
 describe('V26-03 choose_context → chrome_read_page skip-read execution loop', () => {
+  let configDir: string;
+  let previousCapabilities: string | undefined;
+
   function markBridgeReady(): void {
     jest.spyOn(bridgeRuntimeState, 'syncBrowserProcessNow').mockImplementation(() => {
       bridgeRuntimeState.setBrowserProcessRunning(true);
@@ -112,10 +116,24 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(callToolInvocations).toHaveLength(0);
   }
 
+  beforeEach(() => {
+    previousCapabilities = process.env[CAPABILITIES_ENV_KEY];
+    configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tabrix-skip-read-capabilities-'));
+    __hostConfigInternals.setConfigFileForTesting(path.join(configDir, 'config.json'));
+    delete process.env[CAPABILITIES_ENV_KEY];
+  });
+
   afterEach(() => {
     jest.restoreAllMocks();
     bridgeRuntimeState.reset();
     sessionManager.reset();
+    if (previousCapabilities === undefined) {
+      delete process.env[CAPABILITIES_ENV_KEY];
+    } else {
+      process.env[CAPABILITIES_ENV_KEY] = previousCapabilities;
+    }
+    __hostConfigInternals.setConfigFileForTesting(null);
+    fs.rmSync(configDir, { recursive: true, force: true });
   });
 
   // ------------------------------------------------------------------
@@ -156,7 +174,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(decision.chosenLayer).toBe(payload.chosenLayer);
     // Honest defaults (V26-03 session corrections #2/#3/#4):
     //   * No Experience repo wired → no replay candidate.
-    //   * V26-07/V26-08 not landed → apiCapability stays null.
+    //   * api_knowledge default-off → apiCapability stays null.
     //   * fullReadTokenEstimate must be a non-negative integer (0
     //     when the dispatcher had no byte estimate to ground it).
     expect(decision.replayCandidate ?? null).toBeNull();
@@ -361,10 +379,6 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
 
   it('production chooser→reader path uses persisted api_knowledge capability for Chinese GitHub search', async () => {
     markBridgeReady();
-    const previousCapabilities = process.env.TABRIX_POLICY_CAPABILITIES;
-    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tabrix-gate-a-capability-'));
-    __hostConfigInternals.setConfigFileForTesting(path.join(configDir, 'config.json'));
-    delete process.env.TABRIX_POLICY_CAPABILITIES;
     setPersistedPolicyCapabilities('api_knowledge');
     const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
       status: 200,
@@ -384,54 +398,55 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     } as never);
     const bridgeSpy = jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait');
 
-    try {
-      const choose = await handleToolCall(TOOL_NAMES.CONTEXT.CHOOSE, {
-        intent: '搜索 GitHub 上 AI助手 相关热门项目，列出前10个',
-        url: 'https://github.com/search',
-      });
-      expect(choose.isError).toBeFalsy();
-      const choosePayload = JSON.parse(String(choose.content[0].text)) as Record<string, unknown>;
-      expect(choosePayload.sourceRoute).toBe('knowledge_supported_read');
+    const choose = await handleToolCall(TOOL_NAMES.CONTEXT.CHOOSE, {
+      intent: '搜索 GitHub 上 AI助手 相关热门项目，列出前10个',
+      url: 'https://github.com/search',
+    });
+    expect(choose.isError).toBeFalsy();
+    const choosePayload = JSON.parse(String(choose.content[0].text)) as Record<string, unknown>;
+    expect(choosePayload.sourceRoute).toBe('knowledge_supported_read');
 
-      const ctx = sessionManager.getOrCreateExternalTaskContext(AUTO_DEFAULT_KEY);
-      const decision = ctx.peekChooseContextDecision();
-      expect(decision?.apiCapability).toMatchObject({
-        available: true,
-        family: 'github_search_repositories',
-        params: { query: 'AI助手', sort: 'stars', order: 'desc' },
-      });
+    const ctx = sessionManager.getOrCreateExternalTaskContext(AUTO_DEFAULT_KEY);
+    const decision = ctx.peekChooseContextDecision();
+    expect(decision?.apiCapability).toMatchObject({
+      available: true,
+      family: 'github_search_repositories',
+      params: { query: 'AI助手', sort: 'stars', order: 'desc' },
+    });
 
-      const result = await handleToolCall('chrome_read_page', { requestedLayer: 'L0+L1+L2' });
-      expect(result.isError).toBeFalsy();
-      const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
-      expect(payload).toMatchObject({
-        kind: 'api_rows',
-        readPageAvoided: true,
-        sourceKind: 'api_list',
-        sourceRoute: 'knowledge_supported_read',
-        apiFamily: 'github_search_repositories',
-        dataPurpose: 'search_list',
-        rowCount: 1,
-        compact: true,
-        rawBodyStored: false,
-        taskTotals: { readPageAvoidedCount: 1 },
-      });
-      expect(payload).not.toHaveProperty('targetRef');
-      expect(payload).not.toHaveProperty('locator');
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(String(fetchSpy.mock.calls[0]?.[0])).toContain(
-        'https://api.github.com/search/repositories',
-      );
-      assertNoCallToolInvocation(bridgeSpy);
-    } finally {
-      if (previousCapabilities === undefined) {
-        delete process.env.TABRIX_POLICY_CAPABILITIES;
-      } else {
-        process.env.TABRIX_POLICY_CAPABILITIES = previousCapabilities;
-      }
-      __hostConfigInternals.setConfigFileForTesting(null);
-      fs.rmSync(configDir, { recursive: true, force: true });
-    }
+    const result = await handleToolCall('chrome_read_page', { requestedLayer: 'L0+L1+L2' });
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      kind: 'api_rows',
+      readPageAvoided: true,
+      sourceKind: 'api_list',
+      sourceRoute: 'knowledge_supported_read',
+      apiFamily: 'github_search_repositories',
+      dataPurpose: 'search_list',
+      rowCount: 1,
+      compact: true,
+      rawBodyStored: false,
+      taskTotals: { readPageAvoidedCount: 1 },
+    });
+    expect(payload.tokensSavedEstimate).toEqual(expect.any(Number));
+    expect(payload.tokensSavedEstimate as number).toBeGreaterThan(0);
+    expect(
+      (payload.taskTotals as { tokensSavedEstimateTotal?: number }).tokensSavedEstimateTotal,
+    ).toEqual(expect.any(Number));
+    expect(
+      (payload.taskTotals as { tokensSavedEstimateTotal: number }).tokensSavedEstimateTotal,
+    ).toBeGreaterThan(0);
+    expect(payload.tokenEstimateChosen).toEqual(expect.any(Number));
+    expect(payload.tokenEstimateFullRead).toEqual(expect.any(Number));
+    expect(payload.tokensSavedEstimateSource).toEqual(expect.any(String));
+    expect(payload).not.toHaveProperty('targetRef');
+    expect(payload).not.toHaveProperty('locator');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain(
+      'https://api.github.com/search/repositories',
+    );
+    assertNoCallToolInvocation(bridgeSpy);
   });
 
   it('API failure falls back to bridge chrome_read_page at L0+L1 and does not count as avoided', async () => {
@@ -582,8 +597,8 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     // allowed to mark the row replay-eligible. Restored by the
     // `afterEach` `restoreAllMocks`/`reset` pair plus the
     // `delete process.env...` in the finally below.
-    const previousCapabilities = process.env.TABRIX_POLICY_CAPABILITIES;
-    process.env.TABRIX_POLICY_CAPABILITIES = 'experience_replay';
+    const previousCapabilitiesForReplay = process.env[CAPABILITIES_ENV_KEY];
+    process.env[CAPABILITIES_ENV_KEY] = 'experience_replay';
     try {
       // Replay-eligible Experience row: a single
       // `chrome_click_element` step whose args extract to a portable
@@ -711,10 +726,10 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       expect(ctx.readPageCount).toBe(0);
       expect(ctx.getTaskTotals().readPageAvoidedCount).toBe(1);
     } finally {
-      if (previousCapabilities === undefined) {
-        delete process.env.TABRIX_POLICY_CAPABILITIES;
+      if (previousCapabilitiesForReplay === undefined) {
+        delete process.env[CAPABILITIES_ENV_KEY];
       } else {
-        process.env.TABRIX_POLICY_CAPABILITIES = previousCapabilities;
+        process.env[CAPABILITIES_ENV_KEY] = previousCapabilitiesForReplay;
       }
     }
   });

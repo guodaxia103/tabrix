@@ -105,9 +105,41 @@ interface TableInfoRow {
   name: string;
 }
 
+interface SqliteMasterNameRow {
+  name: string;
+}
+
+function hasTable(db: SqliteDatabase, table: string): boolean {
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
+    .get(table) as SqliteMasterNameRow | undefined;
+  return row?.name === table;
+}
+
 function hasColumn(db: SqliteDatabase, table: string, column: string): boolean {
   const rows = db.prepare(`PRAGMA table_info(${table})`).all() as TableInfoRow[];
   return rows.some((row) => row.name === column);
+}
+
+function execMigration(
+  db: SqliteDatabase,
+  args: { table: string; column?: string; sql: string },
+): void {
+  try {
+    db.exec(args.sql);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      [
+        `migration failed for table=${args.table}`,
+        args.column ? `column=${args.column}` : null,
+        `sql=${args.sql}`,
+        `cause=${message}`,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
+  }
 }
 
 /**
@@ -117,7 +149,11 @@ function hasColumn(db: SqliteDatabase, table: string, column: string): boolean {
  */
 function ensureSessionAggregatedAtColumn(db: SqliteDatabase): void {
   if (!hasColumn(db, 'memory_sessions', 'aggregated_at')) {
-    db.exec('ALTER TABLE memory_sessions ADD COLUMN aggregated_at TEXT');
+    execMigration(db, {
+      table: 'memory_sessions',
+      column: 'aggregated_at',
+      sql: 'ALTER TABLE memory_sessions ADD COLUMN aggregated_at TEXT',
+    });
   }
 }
 
@@ -133,30 +169,56 @@ function ensureSessionAggregatedAtColumn(db: SqliteDatabase): void {
  * state — the next `openMemoryDb()` resumes from where it stopped.
  */
 function ensureExperienceReplayWritebackColumns(db: SqliteDatabase): void {
+  if (!hasTable(db, 'experience_action_paths')) return;
   if (!hasColumn(db, 'experience_action_paths', 'last_replay_at')) {
-    db.exec('ALTER TABLE experience_action_paths ADD COLUMN last_replay_at TEXT');
+    execMigration(db, {
+      table: 'experience_action_paths',
+      column: 'last_replay_at',
+      sql: 'ALTER TABLE experience_action_paths ADD COLUMN last_replay_at TEXT',
+    });
   }
   if (!hasColumn(db, 'experience_action_paths', 'last_replay_outcome')) {
-    db.exec('ALTER TABLE experience_action_paths ADD COLUMN last_replay_outcome TEXT');
+    execMigration(db, {
+      table: 'experience_action_paths',
+      column: 'last_replay_outcome',
+      sql: 'ALTER TABLE experience_action_paths ADD COLUMN last_replay_outcome TEXT',
+    });
   }
   if (!hasColumn(db, 'experience_action_paths', 'last_replay_status')) {
-    db.exec('ALTER TABLE experience_action_paths ADD COLUMN last_replay_status TEXT');
+    execMigration(db, {
+      table: 'experience_action_paths',
+      column: 'last_replay_status',
+      sql: 'ALTER TABLE experience_action_paths ADD COLUMN last_replay_status TEXT',
+    });
   }
   if (!hasColumn(db, 'experience_action_paths', 'composite_score_decayed')) {
-    db.exec('ALTER TABLE experience_action_paths ADD COLUMN composite_score_decayed REAL');
+    execMigration(db, {
+      table: 'experience_action_paths',
+      column: 'composite_score_decayed',
+      sql: 'ALTER TABLE experience_action_paths ADD COLUMN composite_score_decayed REAL',
+    });
   }
   // V24-02 partial index — created idempotently so legacy DBs pick it
   // up after the column exists.
-  db.exec(
-    `CREATE INDEX IF NOT EXISTS experience_action_paths_composite_score_idx
+  execMigration(db, {
+    table: 'experience_action_paths',
+    sql: `CREATE INDEX IF NOT EXISTS experience_action_paths_composite_score_idx
        ON experience_action_paths(composite_score_decayed)
        WHERE composite_score_decayed IS NOT NULL`,
-  );
+  });
   if (!hasColumn(db, 'memory_sessions', 'composite_score_raw')) {
-    db.exec('ALTER TABLE memory_sessions ADD COLUMN composite_score_raw REAL');
+    execMigration(db, {
+      table: 'memory_sessions',
+      column: 'composite_score_raw',
+      sql: 'ALTER TABLE memory_sessions ADD COLUMN composite_score_raw REAL',
+    });
   }
   if (!hasColumn(db, 'memory_sessions', 'components_blob')) {
-    db.exec('ALTER TABLE memory_sessions ADD COLUMN components_blob TEXT');
+    execMigration(db, {
+      table: 'memory_sessions',
+      column: 'components_blob',
+      sql: 'ALTER TABLE memory_sessions ADD COLUMN components_blob TEXT',
+    });
   }
 }
 
@@ -221,6 +283,10 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   db.pragma('foreign_keys = ON');
   db.exec(MEMORY_CREATE_TABLES_SQL);
   ensureSessionAggregatedAtColumn(db);
+  // Legacy DBs may already have `experience_action_paths` without the
+  // V24-02 scoring columns. Add them before running the current schema,
+  // because the schema includes an index on `composite_score_decayed`.
+  ensureExperienceReplayWritebackColumns(db);
   db.exec(EXPERIENCE_CREATE_TABLES_SQL);
   // V24-02: legacy-DB additive migration for replay-outcome write-back
   // columns. Runs after `EXPERIENCE_CREATE_TABLES_SQL` so a virgin DB

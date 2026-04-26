@@ -323,7 +323,7 @@ describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
   const SAMPLE_BUNDLE = {
     requests: [
       {
-        url: 'https://api.github.com/repos/openai/api-test/issues?state=open&per_page=30',
+        url: 'https://api.github.com/search/repositories?q=AI助手&sort=stars&order=desc',
         method: 'GET',
         statusCode: 200,
         specificRequestHeaders: {
@@ -337,9 +337,9 @@ describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
           'Set-Cookie': 'session=NEW_VALUE_PII; HttpOnly',
         },
         requestBody: 'raw-request-body-PII=should_never_persist',
-        responseBody: JSON.stringify([
-          { id: 1, number: 10, title: 'private-title-PII', user: { login: 'octocat' } },
-        ]),
+        responseBody: JSON.stringify({
+          items: [{ id: 1, full_name: 'octocat/private-title-PII', owner: { login: 'octocat' } }],
+        }),
       },
       // A non-github request that must be silently dropped.
       {
@@ -437,16 +437,15 @@ describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
       const row = rows[0];
 
       // Useful, redacted shape:
-      expect(row.semanticTag).toBe('github.issues_list');
-      expect(row.urlPattern).toBe('api.github.com/repos/:owner/:repo/issues');
+      expect(row.semanticTag).toBe('github.search_repositories');
+      expect(row.urlPattern).toBe('api.github.com/search/repositories');
       expect(row.method).toBe('GET');
       expect(row.statusClass).toBe('2xx');
       expect(row.requestSummary.hasAuth).toBe(true);
       expect(row.requestSummary.hasCookie).toBe(true);
-      expect(row.requestSummary.queryKeys).toEqual(['per_page', 'state']);
+      expect(row.requestSummary.queryKeys).toEqual(['order', 'q', 'sort']);
       expect(row.responseSummary.shape).toMatchObject({
-        kind: 'array',
-        itemCount: 1,
+        kind: 'object',
       });
       expect(row.sourceSessionId).toBe(session.sessionId);
       expect(row.sourceStepId).toBe(step.stepId);
@@ -460,8 +459,8 @@ describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
         'NEW_VALUE_PII',
         'private-title-PII',
         'raw-request-body-PII',
-        'state=open',
-        'per_page=30',
+        'AI助手',
+        'stars',
         'hunter2',
         'octocat',
       ];

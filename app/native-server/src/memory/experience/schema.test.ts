@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openMemoryDb } from '../db/client';
+import { SessionManager } from '../../execution/session-manager';
 import { EXPERIENCE_ACTION_PATHS_TABLE, EXPERIENCE_LOCATOR_PREFS_TABLE } from './index';
 
 function fresh(): { db: ReturnType<typeof openMemoryDb>['db']; close: () => void } {
@@ -167,6 +168,72 @@ describe('Experience schema seed (B-005)', () => {
         const secondOpen = openMemoryDb({ dbPath });
         secondOpen.db.close();
       }).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('V26-S2 migration: upgrades legacy experience_action_paths scoring columns before indexes are created', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tabrix-memory-legacy-experience-'));
+    const dbPath = join(dir, 'memory.db');
+    try {
+      const openLegacy = require('better-sqlite3') as (filename: string) => {
+        exec: (sql: string) => void;
+        close: () => void;
+      };
+      const legacyDb = openLegacy(dbPath);
+      legacyDb.exec(`
+        CREATE TABLE experience_action_paths (
+          action_path_id TEXT PRIMARY KEY,
+          page_role TEXT NOT NULL,
+          intent_signature TEXT NOT NULL,
+          step_sequence TEXT NOT NULL,
+          success_count INTEGER NOT NULL DEFAULT 0,
+          failure_count INTEGER NOT NULL DEFAULT 0,
+          last_used_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+      legacyDb.close();
+
+      const firstOpen = openMemoryDb({ dbPath });
+      try {
+        const columns = firstOpen.db
+          .prepare('PRAGMA table_info(experience_action_paths)')
+          .all() as {
+          name: string;
+        }[];
+        const names = columns.map((column) => column.name);
+        expect(names).toEqual(
+          expect.arrayContaining([
+            'last_replay_at',
+            'last_replay_outcome',
+            'last_replay_status',
+            'composite_score_decayed',
+          ]),
+        );
+        const index = firstOpen.db
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='experience_action_paths_composite_score_idx'",
+          )
+          .get() as { name: string } | undefined;
+        expect(index?.name).toBe('experience_action_paths_composite_score_idx');
+      } finally {
+        firstOpen.db.close();
+      }
+
+      expect(() => {
+        const secondOpen = openMemoryDb({ dbPath });
+        secondOpen.db.close();
+      }).not.toThrow();
+
+      const manager = new SessionManager({ dbPath });
+      try {
+        expect(manager.getPersistenceStatus().mode).toBe('disk');
+      } finally {
+        manager.close();
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -74,6 +74,60 @@ function parseToolList(value?: string): Set<string> {
   );
 }
 
+function estimateJsonTokens(value: unknown): number {
+  try {
+    return Math.ceil(Buffer.byteLength(JSON.stringify(value), 'utf8') / 4);
+  } catch {
+    return 0;
+  }
+}
+
+function estimateApiRowsTokenSavings(args: {
+  rows: unknown[];
+  rowCount: number;
+  recordedFullReadTokenEstimate: number;
+}): {
+  tokenEstimateChosen: number;
+  tokenEstimateFullRead: number;
+  tokensSavedEstimate: number;
+  tokensSavedEstimateSource:
+    | 'full_read_estimate_minus_api_rows'
+    | 'api_rows_payload_floor'
+    | 'unavailable_empty_api_rows';
+} {
+  const tokenEstimateChosen = estimateJsonTokens({
+    kind: 'api_rows',
+    rows: args.rows,
+    rowCount: args.rowCount,
+    compact: true,
+  });
+  if (args.recordedFullReadTokenEstimate > tokenEstimateChosen) {
+    const tokenEstimateFullRead = Math.floor(args.recordedFullReadTokenEstimate);
+    return {
+      tokenEstimateChosen,
+      tokenEstimateFullRead,
+      tokensSavedEstimate: tokenEstimateFullRead - tokenEstimateChosen,
+      tokensSavedEstimateSource: 'full_read_estimate_minus_api_rows',
+    };
+  }
+  if (args.rowCount > 0) {
+    const rowsOnlyEstimate = estimateJsonTokens(args.rows);
+    const tokenEstimateFullRead = tokenEstimateChosen + rowsOnlyEstimate;
+    return {
+      tokenEstimateChosen,
+      tokenEstimateFullRead,
+      tokensSavedEstimate: rowsOnlyEstimate,
+      tokensSavedEstimateSource: 'api_rows_payload_floor',
+    };
+  }
+  return {
+    tokenEstimateChosen,
+    tokenEstimateFullRead: Math.max(0, Math.floor(args.recordedFullReadTokenEstimate)),
+    tokensSavedEstimate: 0,
+    tokensSavedEstimateSource: 'unavailable_empty_api_rows',
+  };
+}
+
 function filterToolsByEnvironment(tools: Tool[]): Tool[] {
   const enabledTools = parseToolList(process.env.ENABLE_MCP_TOOLS);
   const disabledTools = parseToolList(process.env.DISABLE_MCP_TOOLS);
@@ -1646,10 +1700,15 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               params: cap?.params ?? {},
             });
             if (apiResult.status === 'ok') {
+              const tokenSavings = estimateApiRowsTokenSavings({
+                rows: apiResult.rows,
+                rowCount: apiResult.rowCount,
+                recordedFullReadTokenEstimate: recordedDecision.fullReadTokenEstimate,
+              });
               taskContext.noteSkipRead({
                 source: skipPlan.sourceKind,
                 layer: recordedDecision.chosenLayer,
-                tokensSavedEstimate: skipPlan.tokensSavedEstimate,
+                tokensSavedEstimate: tokenSavings.tokensSavedEstimate,
                 actionPathId: null,
                 apiFamily: apiResult.endpointFamily,
               });
@@ -1660,7 +1719,10 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                 sourceKind: skipPlan.sourceKind,
                 sourceRoute: skipPlan.sourceRoute,
                 chosenLayer: recordedDecision.chosenLayer,
-                tokensSavedEstimate: skipPlan.tokensSavedEstimate,
+                tokenEstimateChosen: tokenSavings.tokenEstimateChosen,
+                tokenEstimateFullRead: tokenSavings.tokenEstimateFullRead,
+                tokensSavedEstimate: tokenSavings.tokensSavedEstimate,
+                tokensSavedEstimateSource: tokenSavings.tokensSavedEstimateSource,
                 fallbackUsed: 'none',
                 fallbackEntryLayer: skipPlan.fallbackEntryLayer,
                 requiresApiCall: true,
@@ -1680,7 +1742,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               };
               sessionManager.completeStep(session.sessionId, step.stepId, {
                 status: 'completed',
-                resultSummary: `chrome_read_page fulfilled via ${skipPlan.sourceKind} (saved ~${skipPlan.tokensSavedEstimate} tok)`,
+                resultSummary: `chrome_read_page fulfilled via ${skipPlan.sourceKind} (saved ~${tokenSavings.tokensSavedEstimate} tok)`,
               });
               sessionManager.finishSession(session.sessionId, {
                 status: 'completed',

@@ -439,6 +439,41 @@ describe('summariseBenchmarkRunV26 — layer evidence closeout metrics', () => {
     expect(summary.tokensSavedEstimateTotal).toBe(900);
   });
 
+  it('consumes top-level api_rows tokensSavedEstimate from real NDJSON payloads', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({
+            toolName: 'chrome_read_page',
+            kind: 'api_rows',
+            chosenSource: 'api_list',
+            sourceKind: 'api_list',
+            sourceRoute: 'knowledge_supported_read',
+            dispatcherInputSource: 'api_knowledge',
+            apiFamily: 'github_search_repositories',
+            apiTelemetry: {
+              endpointFamily: 'github_search_repositories',
+              status: 'ok',
+              reason: 'api_rows',
+              httpStatus: 200,
+              fallbackEntryLayer: 'none',
+            },
+            readPageAvoided: true,
+            tokenEstimateChosen: undefined,
+            tokenEstimateFullRead: undefined,
+            tokensSavedEstimate: 321,
+          }),
+        ],
+      }),
+    );
+
+    expect(summary.readPageAvoidedCount).toBe(1);
+    expect(summary.tokensSavedEstimateTotal).toBe(321);
+    expect(summary.evidenceFindings.map((finding) => finding.code)).not.toContain(
+      'tokens_saved_zero',
+    );
+  });
+
   it('consumes V26-07 API fallback telemetry and still counts the DOM read_page fallback', () => {
     const summary = summariseBenchmarkRunV26(
       run({

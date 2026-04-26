@@ -188,6 +188,8 @@ export interface BenchmarkToolCallRecordV26 extends BenchmarkToolCallRecordV25 {
   apiTelemetry?: BenchmarkApiTelemetryV26 | null;
   /** V26-03 task totals copied from skip-read envelopes. */
   taskTotals?: BenchmarkTaskTotalsV26 | null;
+  /** Runtime-estimated savings for skipped reads when full/chosen estimates are unavailable. */
+  tokensSavedEstimate?: number | null;
 }
 
 /**
@@ -410,6 +412,18 @@ function maxNonNegativeFromTaskTotals(
     }
   }
   return max;
+}
+
+function sumPositiveTokensSavedEstimate(toolCalls: BenchmarkToolCallRecordV26[]): number {
+  let total = 0;
+  for (const call of toolCalls) {
+    if (call.readPageAvoided !== true) continue;
+    const value = call.tokensSavedEstimate;
+    if (isFiniteNumber(value) && value > 0) {
+      total += Math.floor(value);
+    }
+  }
+  return total;
 }
 
 function effectiveSourceKind(call: BenchmarkToolCallRecordV26): string | null {
@@ -737,6 +751,7 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
   const tokensSavedEstimateTotal = Math.max(
     v25Summary.layerMetrics.tokensSavedEstimateTotal,
     maxNonNegativeFromTaskTotals(toolCalls, 'tokensSavedEstimateTotal'),
+    sumPositiveTokensSavedEstimate(toolCalls),
   );
   const medianDuration = quantile(
     [...validDurations].sort((a, b) => a - b),
