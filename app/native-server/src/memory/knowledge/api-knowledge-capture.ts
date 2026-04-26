@@ -74,6 +74,7 @@ const QUERY_KEY_LIMIT = 32;
 export interface CapturedNetworkRequest {
   url: string;
   method?: string;
+  type?: string;
   status?: number | string;
   statusCode?: number;
   mimeType?: string;
@@ -107,6 +108,28 @@ export interface CaptureKnowledgeContext {
  */
 export const KNOWLEDGE_CAPTURE_PER_BATCH_LIMIT = 50;
 
+export type CaptureKnowledgeNoiseClass =
+  | 'asset'
+  | 'analytics'
+  | 'auth'
+  | 'private'
+  | 'telemetry'
+  | 'usable'
+  | 'unknown';
+
+export interface CaptureKnowledgeDiagnostics {
+  totalRequests: number;
+  filteredCounts: Record<CaptureKnowledgeNoiseClass, number>;
+  usableCandidateCount: number;
+  upsertCandidateCount: number;
+  reason: 'usable_endpoint_found' | 'no_usable_endpoint_found';
+}
+
+export interface CaptureKnowledgeAnalysis {
+  upserts: UpsertKnowledgeApiEndpointInput[];
+  diagnostics: CaptureKnowledgeDiagnostics;
+}
+
 /**
  * Top-level entry point. Walks `bundle.requests`, classifies each one
  * against the GitHub family, and returns at most
@@ -117,17 +140,47 @@ export function deriveKnowledgeFromBundle(
   bundle: CapturedNetworkBundle,
   ctx: CaptureKnowledgeContext,
 ): UpsertKnowledgeApiEndpointInput[] {
+  return analyzeKnowledgeCaptureBundle(bundle, ctx).upserts;
+}
+
+export function analyzeKnowledgeCaptureBundle(
+  bundle: CapturedNetworkBundle,
+  ctx: CaptureKnowledgeContext,
+): CaptureKnowledgeAnalysis {
   const out: UpsertKnowledgeApiEndpointInput[] = [];
-  if (!bundle?.requests || bundle.requests.length === 0) return out;
+  const filteredCounts = createEmptyFilteredCounts();
+  if (!bundle?.requests || bundle.requests.length === 0) {
+    return {
+      upserts: out,
+      diagnostics: {
+        totalRequests: 0,
+        filteredCounts,
+        usableCandidateCount: 0,
+        upsertCandidateCount: 0,
+        reason: 'no_usable_endpoint_found',
+      },
+    };
+  }
   const commonReq = bundle.commonRequestHeaders ?? {};
   const commonRes = bundle.commonResponseHeaders ?? {};
 
   for (const req of bundle.requests) {
+    const noiseClass = classifyCapturedRequestNoise(req);
+    filteredCounts[noiseClass] += 1;
     if (out.length >= KNOWLEDGE_CAPTURE_PER_BATCH_LIMIT) break;
     const derived = deriveKnowledgeFromRequest(req, commonReq, commonRes, ctx);
     if (derived) out.push(derived);
   }
-  return out;
+  return {
+    upserts: out,
+    diagnostics: {
+      totalRequests: bundle.requests.length,
+      filteredCounts,
+      usableCandidateCount: filteredCounts.usable,
+      upsertCandidateCount: out.length,
+      reason: filteredCounts.usable > 0 ? 'usable_endpoint_found' : 'no_usable_endpoint_found',
+    },
+  };
 }
 
 export function deriveKnowledgeFromRequest(
@@ -137,6 +190,7 @@ export function deriveKnowledgeFromRequest(
   ctx: CaptureKnowledgeContext,
 ): UpsertKnowledgeApiEndpointInput | null {
   if (!req?.url || typeof req.url !== 'string') return null;
+  if (classifyCapturedRequestNoise(req) !== 'usable') return null;
   const classification = classifyGitHubFamily(req.url, normalizeMethod(req.method));
   if (!classification) return null;
 
@@ -149,7 +203,7 @@ export function deriveKnowledgeFromRequest(
     body: req.requestBody ?? null,
   });
 
-  const contentType = pickHeader(mergedResponseHeaders, 'content-type');
+  const contentType = pickHeader(mergedResponseHeaders, 'content-type') || req.mimeType || null;
   const responseSummary = buildResponseSummary({
     contentType,
     body: req.responseBody ?? null,
@@ -170,6 +224,57 @@ export function deriveKnowledgeFromRequest(
     sourceStepId: ctx.stepId,
     sourceHistoryRef: null,
     observedAt: ctx.observedAt,
+  };
+}
+
+export function classifyCapturedRequestNoise(
+  req: CapturedNetworkRequest,
+): CaptureKnowledgeNoiseClass {
+  let parsed: URL;
+  try {
+    parsed = new URL(req.url);
+  } catch {
+    return 'unknown';
+  }
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname.toLowerCase();
+  const method = normalizeMethod(req.method);
+  const type = (req.type || '').toLowerCase();
+  const mimeType = (req.mimeType || '').toLowerCase();
+  const url = req.url.toLowerCase();
+
+  if (/(doubleclick|google-analytics|googletagmanager|segment|sentry|amplitude)\./.test(url)) {
+    return 'analytics';
+  }
+  if (path.includes('/_private/') || path.includes('/private/')) return 'private';
+  if (/\b(login|logout|session|oauth|token|authorize|auth)\b/.test(path)) return 'auth';
+  if (/\b(stats|telemetry|metrics|collect|beacon|events?)\b/.test(path)) return 'telemetry';
+  if (
+    type === 'image' ||
+    type === 'stylesheet' ||
+    type === 'font' ||
+    /\.(png|jpe?g|gif|svg|webp|ico|css|js|woff2?|ttf|otf)$/i.test(path) ||
+    /^(image|font|audio|video)\//.test(mimeType)
+  ) {
+    return 'asset';
+  }
+  if (host === GITHUB_API_HOST) return 'usable';
+  if ((method === 'GET' || method === 'HEAD') && (type === 'xmlhttprequest' || type === 'fetch')) {
+    return 'usable';
+  }
+  if ((method === 'GET' || method === 'HEAD') && mimeType.includes('json')) return 'usable';
+  return 'unknown';
+}
+
+function createEmptyFilteredCounts(): Record<CaptureKnowledgeNoiseClass, number> {
+  return {
+    asset: 0,
+    analytics: 0,
+    auth: 0,
+    private: 0,
+    telemetry: 0,
+    usable: 0,
+    unknown: 0,
   };
 }
 

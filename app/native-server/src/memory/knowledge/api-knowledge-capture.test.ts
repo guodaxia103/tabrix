@@ -19,6 +19,8 @@
  */
 
 import {
+  analyzeKnowledgeCaptureBundle,
+  classifyCapturedRequestNoise,
   deriveKnowledgeFromBundle,
   deriveKnowledgeFromRequest,
   KNOWLEDGE_CAPTURE_PER_BATCH_LIMIT,
@@ -105,6 +107,23 @@ describe('classifyGitHubFamily / URL normalization', () => {
     expect(result!.semanticTag).toBe('github.unclassified');
     // Deterministic collapsing keeps the signature small and stable.
     expect(result!.urlPattern.startsWith('api.github.com/')).toBe(true);
+  });
+
+  it('filters private browser stats instead of storing it as unclassified knowledge', () => {
+    const result = classified({
+      url: 'https://api.github.com/_private/browser/stats?token=hunter2',
+      method: 'GET',
+      statusCode: 200,
+      mimeType: 'application/json',
+      responseBody: '{}',
+    });
+    expect(result).toBeNull();
+    expect(
+      classifyCapturedRequestNoise({
+        url: 'https://api.github.com/_private/browser/stats?token=secret',
+        method: 'GET',
+      }),
+    ).toBe('private');
   });
 
   describe('collapseUnknownPath identity normalization (A2)', () => {
@@ -433,5 +452,49 @@ describe('deriveKnowledgeFromBundle', () => {
     }
     const out = deriveKnowledgeFromBundle({ requests }, CTX);
     expect(out).toHaveLength(KNOWLEDGE_CAPTURE_PER_BATCH_LIMIT);
+  });
+
+  it('returns endpoint candidate diagnostics without raw query values', () => {
+    const analysis = analyzeKnowledgeCaptureBundle(
+      {
+        requests: [
+          {
+            url: 'https://api.github.com/search/repositories?q=&sort=&order=',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            statusCode: 200,
+            mimeType: 'application/json',
+          },
+          {
+            url: 'https://api.github.com/_private/browser/stats?token=',
+            method: 'GET',
+            statusCode: 200,
+            mimeType: 'application/json',
+          },
+          {
+            url: 'https://static.example.test/logo.png',
+            method: 'GET',
+            type: 'image',
+            statusCode: 200,
+            mimeType: 'image/png',
+          },
+        ],
+      },
+      CTX,
+    );
+
+    expect(analysis.upserts.map((row) => row.semanticTag)).toEqual(['github.search_repositories']);
+    expect(analysis.diagnostics).toMatchObject({
+      totalRequests: 3,
+      usableCandidateCount: 1,
+      upsertCandidateCount: 1,
+      reason: 'usable_endpoint_found',
+    });
+    expect(analysis.diagnostics.filteredCounts).toMatchObject({
+      usable: 1,
+      private: 1,
+      asset: 1,
+    });
+    expect(JSON.stringify(analysis)).not.toMatch(/hunter2|secret/);
   });
 });

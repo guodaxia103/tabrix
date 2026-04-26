@@ -44,6 +44,89 @@ const STATIC_RESOURCE_EXTENSIONS = [
 
 // Ad and analytics domain list
 const AD_ANALYTICS_DOMAINS = NETWORK_FILTERS.EXCLUDED_DOMAINS;
+const SENSITIVE_HEADER_NAMES = new Set([
+  'authorization',
+  'proxy-authorization',
+  'cookie',
+  'set-cookie',
+  'x-csrf-token',
+  'x-xsrf-token',
+  'x-api-key',
+]);
+
+export type EndpointNoiseClass =
+  | 'asset'
+  | 'analytics'
+  | 'auth'
+  | 'private'
+  | 'telemetry'
+  | 'usable'
+  | 'unknown';
+
+export function redactNetworkCaptureUrlForMetadata(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const keys = Array.from(new Set(Array.from(parsed.searchParams.keys())));
+    parsed.search = '';
+    for (const key of keys.sort()) parsed.searchParams.append(key, '');
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
+
+export function sanitizeNetworkCaptureHeaders(
+  headers: Record<string, string> | undefined,
+): Record<string, string> {
+  if (!headers) return {};
+  const safe: Record<string, string> = {};
+  for (const name of Object.keys(headers)) {
+    const normalized = name.toLowerCase();
+    if (!normalized || SENSITIVE_HEADER_NAMES.has(normalized)) continue;
+    safe[normalized] = '';
+  }
+  return safe;
+}
+
+export function classifyNetworkCaptureEndpoint(input: {
+  url: string;
+  method?: string;
+  type?: string;
+  mimeType?: string;
+}): EndpointNoiseClass {
+  let parsed: URL;
+  try {
+    parsed = new URL(input.url);
+  } catch {
+    return 'unknown';
+  }
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname.toLowerCase();
+  const normalizedUrl = input.url.toLowerCase();
+  const method = (input.method || 'GET').toUpperCase();
+  const type = (input.type || '').toLowerCase();
+  const mimeType = (input.mimeType || '').toLowerCase();
+
+  if (AD_ANALYTICS_DOMAINS.some((pattern) => normalizedUrl.includes(pattern))) return 'analytics';
+  if (path.includes('/_private/') || path.includes('/private/')) return 'private';
+  if (/\b(login|logout|session|oauth|token|authorize|auth)\b/.test(path)) return 'auth';
+  if (/\b(stats|telemetry|metrics|collect|beacon|events?)\b/.test(path)) return 'telemetry';
+  if (
+    type === 'image' ||
+    type === 'stylesheet' ||
+    type === 'font' ||
+    STATIC_RESOURCE_EXTENSIONS.some((ext) => path.endsWith(ext)) ||
+    /^(image|font|audio|video)\//.test(mimeType)
+  ) {
+    return 'asset';
+  }
+  if ((method === 'GET' || method === 'HEAD') && (type === 'xmlhttprequest' || type === 'fetch')) {
+    return 'usable';
+  }
+  if (host === 'api.github.com' && (method === 'GET' || method === 'HEAD')) return 'usable';
+  if (mimeType.includes('json') && (method === 'GET' || method === 'HEAD')) return 'usable';
+  return 'unknown';
+}
 
 interface NetworkCaptureStartToolParams {
   url?: string; // URL to navigate to or focus. If not provided, uses active tab.
@@ -387,13 +470,6 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
           requestTime: details.timeStamp,
         };
 
-        if (details.requestBody) {
-          const requestBody = this.processRequestBody(details.requestBody);
-          if (requestBody) {
-            captureInfo.requests[details.requestId].requestBody = requestBody;
-          }
-        }
-
         console.log(
           `NetworkCaptureV2: Captured request ${currentCount + 1}/${NetworkCaptureStartTool.MAX_REQUESTS_PER_CAPTURE} for tab ${details.tabId}: ${details.method} ${details.url}`,
         );
@@ -549,16 +625,73 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
     this.webRequestListenersInstalled = false;
   }
 
-  /**
-   * Process request body data
-   */
-  private processRequestBody(requestBody: chrome.webRequest.WebRequestBody): string | undefined {
-    if (requestBody.raw && requestBody.raw.length > 0) {
-      return '[Binary data]';
-    } else if (requestBody.formData) {
-      return JSON.stringify(requestBody.formData);
+  private buildEndpointDiagnostics(requests: NetworkRequestInfo[]) {
+    const filteredCounts: Record<EndpointNoiseClass, number> = {
+      asset: 0,
+      analytics: 0,
+      auth: 0,
+      private: 0,
+      telemetry: 0,
+      usable: 0,
+      unknown: 0,
+    };
+    for (const req of requests) {
+      filteredCounts[
+        classifyNetworkCaptureEndpoint({
+          url: req.url,
+          method: req.method,
+          type: req.type,
+          mimeType: req.mimeType,
+        })
+      ] += 1;
     }
-    return undefined;
+    return {
+      filteredCounts,
+      usableCandidateCount: filteredCounts.usable,
+      reason: filteredCounts.usable > 0 ? 'usable_endpoint_found' : 'no_usable_endpoint_found',
+    };
+  }
+
+  private buildEndpointCandidates(requests: NetworkRequestInfo[]) {
+    return requests.map((req) => {
+      let parsed: URL | null = null;
+      try {
+        parsed = new URL(req.url);
+      } catch {
+        parsed = null;
+      }
+      const requestHeaderNames = Object.keys(req.specificRequestHeaders ?? {}).sort();
+      const responseHeaderNames = Object.keys(req.specificResponseHeaders ?? {}).sort();
+      return {
+        method: req.method,
+        host: parsed?.hostname.toLowerCase() ?? null,
+        pathPattern: parsed?.pathname ?? null,
+        queryKeys: parsed ? Array.from(parsed.searchParams.keys()).sort() : [],
+        resourceType: req.type,
+        status: req.status ?? null,
+        timingMs:
+          typeof req.responseTime === 'number' && typeof req.requestTime === 'number'
+            ? Math.max(0, Math.round(req.responseTime - req.requestTime))
+            : null,
+        sizeClass: this.sizeClass(req.responseSize),
+        contentType: req.mimeType ? req.mimeType.split(';')[0]?.trim() || null : null,
+        headerNames: Array.from(new Set([...requestHeaderNames, ...responseHeaderNames])).sort(),
+        noiseClass: classifyNetworkCaptureEndpoint({
+          url: req.url,
+          method: req.method,
+          type: req.type,
+          mimeType: req.mimeType,
+        }),
+      };
+    });
+  }
+
+  private sizeClass(size: number | undefined): 'empty' | 'small' | 'medium' | 'large' | 'unknown' {
+    if (typeof size !== 'number' || !Number.isFinite(size)) return 'unknown';
+    if (size <= 0) return 'empty';
+    if (size <= 10_000) return 'small';
+    if (size <= 250_000) return 'medium';
+    return 'large';
   }
 
   /**
@@ -663,11 +796,17 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
       // Process request data, remove common headers
       const processedRequests = requestsArray.map((req) => {
         const finalReq: NetworkRequestInfo = { ...req };
+        finalReq.url = redactNetworkCaptureUrlForMetadata(finalReq.url);
+        delete finalReq.requestBody;
+        delete finalReq.responseBody;
 
         if (finalReq.requestHeaders) {
           finalReq.specificRequestHeaders = this.filterOutCommonHeaders(
             finalReq.requestHeaders,
             commonRequestHeaders,
+          );
+          finalReq.specificRequestHeaders = sanitizeNetworkCaptureHeaders(
+            finalReq.specificRequestHeaders,
           );
           delete finalReq.requestHeaders;
         } else {
@@ -678,6 +817,9 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
           finalReq.specificResponseHeaders = this.filterOutCommonHeaders(
             finalReq.responseHeaders,
             commonResponseHeaders,
+          );
+          finalReq.specificResponseHeaders = sanitizeNetworkCaptureHeaders(
+            finalReq.specificResponseHeaders,
           );
           delete finalReq.responseHeaders;
         } else {
@@ -704,9 +846,11 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
           includeStatic: captureInfo.includeStatic,
           maxRequests: NetworkCaptureStartTool.MAX_REQUESTS_PER_CAPTURE,
         },
-        commonRequestHeaders,
-        commonResponseHeaders,
+        commonRequestHeaders: sanitizeNetworkCaptureHeaders(commonRequestHeaders),
+        commonResponseHeaders: sanitizeNetworkCaptureHeaders(commonResponseHeaders),
         requests: processedRequests,
+        endpointCandidates: this.buildEndpointCandidates(processedRequests),
+        endpointDiagnostics: this.buildEndpointDiagnostics(processedRequests),
         requestCount: processedRequests.length,
         totalRequestsReceived: this.requestCounters.get(tabId) || 0,
         requestLimitReached: captureInfo.limitReached || false,

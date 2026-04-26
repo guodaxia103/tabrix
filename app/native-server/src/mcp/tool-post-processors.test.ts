@@ -348,6 +348,15 @@ describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
         statusCode: 200,
         responseBody: '{}',
       },
+      // A private telemetry-like GitHub endpoint must not become
+      // unclassified endpoint knowledge.
+      {
+        url: 'https://api.github.com/_private/browser/stats?token=raw_query_secret',
+        method: 'GET',
+        statusCode: 200,
+        mimeType: 'application/json',
+        responseBody: '{}',
+      },
     ],
   };
 
@@ -459,6 +468,8 @@ describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
         'NEW_VALUE_PII',
         'private-title-PII',
         'raw-request-body-PII',
+        'raw_query_secret',
+        '_private/browser/stats',
         'AI助手',
         'stars',
         'hunter2',

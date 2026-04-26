@@ -27,7 +27,7 @@ import { TOOL_NAMES } from '@tabrix/shared';
 import type { SessionManager } from '../execution/session-manager';
 import { ACTION_KIND_BY_TOOL } from '../memory/action-service';
 import {
-  deriveKnowledgeFromBundle,
+  analyzeKnowledgeCaptureBundle,
   type CapturedNetworkBundle,
 } from '../memory/knowledge/api-knowledge-capture';
 import { getCurrentCapabilityEnv, isCapabilityEnabled } from '../policy/capabilities';
@@ -220,12 +220,12 @@ export const chromeNetworkCapturePostProcessor: ToolPostProcessor = (ctx) => {
     if (!Array.isArray(bundle.requests) || bundle.requests.length === 0) return empty;
 
     const observedAt = new Date().toISOString();
-    const upserts = deriveKnowledgeFromBundle(bundle, {
+    const analysis = analyzeKnowledgeCaptureBundle(bundle, {
       sessionId: ctx.sessionId ?? null,
       stepId: ctx.stepId ?? null,
       observedAt,
     });
-    for (const input of upserts) {
+    for (const input of analysis.upserts) {
       try {
         repo.upsert(input);
       } catch (innerError) {
