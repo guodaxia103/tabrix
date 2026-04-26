@@ -165,6 +165,50 @@ CREATE INDEX IF NOT EXISTS memory_actions_captured_at_idx ON memory_actions(capt
 `;
 
 /**
+ * V26-14A operation memory log.
+ *
+ * This is a factual operation trail, not Experience. It records the
+ * tool-level decision/outcome metadata needed to explain routing,
+ * fallback, timing, token savings, and tab hygiene for benchmark
+ * reports. It deliberately avoids raw URL query values, request/response
+ * bodies, cookies, Authorization values, and API result payloads.
+ *
+ * Idempotent CREATE: old DBs pick up the table on the next
+ * `openMemoryDb()` call. No ALTER is needed for the first version.
+ */
+export const OPERATION_MEMORY_LOG_CREATE_TABLES_SQL = `
+CREATE TABLE IF NOT EXISTS operation_memory_logs (
+  operation_log_id      TEXT PRIMARY KEY,
+  task_id               TEXT NOT NULL REFERENCES memory_tasks(task_id) ON DELETE CASCADE,
+  session_id            TEXT NOT NULL REFERENCES memory_sessions(session_id) ON DELETE CASCADE,
+  step_id               TEXT NOT NULL REFERENCES memory_steps(step_id) ON DELETE CASCADE,
+  tool_name             TEXT NOT NULL,
+  url_pattern           TEXT,
+  page_role             TEXT,
+  requested_layer       TEXT,
+  selected_data_source  TEXT,
+  source_route          TEXT,
+  decision_reason       TEXT,
+  result_kind           TEXT,
+  duration_ms           INTEGER,
+  success               INTEGER NOT NULL,
+  fallback_used         TEXT,
+  error_code            TEXT,
+  read_count            INTEGER,
+  tokens_saved          INTEGER,
+  tab_hygiene_blob      TEXT,
+  created_at            TEXT NOT NULL,
+  UNIQUE(step_id)
+);
+
+CREATE INDEX IF NOT EXISTS operation_memory_logs_task_id_idx      ON operation_memory_logs(task_id);
+CREATE INDEX IF NOT EXISTS operation_memory_logs_session_id_idx   ON operation_memory_logs(session_id);
+CREATE INDEX IF NOT EXISTS operation_memory_logs_tool_name_idx    ON operation_memory_logs(tool_name);
+CREATE INDEX IF NOT EXISTS operation_memory_logs_source_route_idx ON operation_memory_logs(source_route);
+CREATE INDEX IF NOT EXISTS operation_memory_logs_created_at_idx   ON operation_memory_logs(created_at);
+`;
+
+/**
  * Stage 3b Experience schema (seeded in B-005, first writer in B-012).
  *
  * Co-located in the same `memory.db` file as Memory: Experience is a

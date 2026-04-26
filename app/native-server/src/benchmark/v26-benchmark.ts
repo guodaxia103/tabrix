@@ -190,6 +190,8 @@ export interface BenchmarkToolCallRecordV26 extends BenchmarkToolCallRecordV25 {
   taskTotals?: BenchmarkTaskTotalsV26 | null;
   /** Runtime-estimated savings for skipped reads when full/chosen estimates are unavailable. */
   tokensSavedEstimate?: number | null;
+  /** Gate B evidence: whether this tool call wrote an operation memory log row. */
+  operationLogWritten?: boolean | null;
 }
 
 /**
@@ -326,6 +328,7 @@ export interface BenchmarkSummaryV26 {
   readPageCount: number;
   primaryTabReuseRate: number | null;
   maxConcurrentBenchmarkTabs: number | null;
+  operationLogWriteRate: number | null;
   evidenceKind: BenchmarkEvidenceKindV26;
   evidenceStatus: BenchmarkEvidenceStatusV26;
   evidenceFindings: BenchmarkEvidenceFindingV26[];
@@ -671,6 +674,8 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
   let apiHitCount = 0;
   let dispatcherInputSourceCount = 0;
   let readPageCount = 0;
+  let operationLogEvidenceCount = 0;
+  let operationLogWriteCount = 0;
 
   for (const call of toolCalls) {
     const triage = triageRecord(call);
@@ -719,6 +724,11 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
 
     if (isDomReadPage(call)) readPageCount += 1;
 
+    if (typeof call.operationLogWritten === 'boolean') {
+      operationLogEvidenceCount += 1;
+      if (call.operationLogWritten) operationLogWriteCount += 1;
+    }
+
     if (typeof call.fallbackCause === 'string' && call.fallbackCause.length > 0) {
       increment(fallbackDistribution, call.fallbackCause);
     } else if (
@@ -758,6 +768,8 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
     0.5,
   );
   const apiKnowledgeHitRate = apiAttemptCount === 0 ? null : apiHitCount / apiAttemptCount;
+  const operationLogWriteRate =
+    operationLogEvidenceCount === 0 ? null : operationLogWriteCount / operationLogEvidenceCount;
   const tabHygienePresent = v25Summary.tabHygiene !== null;
   const evidenceKind: BenchmarkEvidenceKindV26 =
     input.evidenceKind ??
@@ -801,6 +813,7 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
     readPageCount,
     primaryTabReuseRate: v25Summary.tabHygiene?.primaryTabReuseRate ?? null,
     maxConcurrentBenchmarkTabs: v25Summary.tabHygiene?.maxConcurrentTabs ?? null,
+    operationLogWriteRate,
     evidenceKind,
     evidenceStatus,
     evidenceFindings,

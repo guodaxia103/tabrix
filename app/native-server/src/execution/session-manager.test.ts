@@ -103,6 +103,89 @@ describe('SessionManager', () => {
     }
   });
 
+  it('writes a fail-open operation log when a step completes', () => {
+    const manager = new SessionManager({ dbPath: ':memory:' });
+    try {
+      const task = manager.createTask({
+        taskType: 'browser-action',
+        title: 'operation log task',
+        intent: 'read list',
+        origin: 'jest',
+      });
+      const session = manager.startSession({
+        taskId: task.taskId,
+        transport: 'stdio',
+        clientName: 'jest',
+      });
+      const step = manager.startStep({
+        sessionId: session.sessionId,
+        toolName: 'chrome_read_page',
+      });
+
+      manager.completeStep(session.sessionId, step.stepId, {
+        operationLog: {
+          requestedLayer: 'L0+L1',
+          selectedDataSource: 'api_rows',
+          sourceRoute: 'knowledge_supported_read',
+          tokensSaved: 128,
+        },
+      });
+
+      const logs = manager.operationLogs?.listBySession(session.sessionId);
+      expect(logs).toHaveLength(1);
+      expect(logs?.[0]).toEqual(
+        expect.objectContaining({
+          taskId: task.taskId,
+          stepId: step.stepId,
+          toolName: 'chrome_read_page',
+          success: true,
+          selectedDataSource: 'api_rows',
+          sourceRoute: 'knowledge_supported_read',
+          tokensSaved: 128,
+        }),
+      );
+    } finally {
+      manager.close();
+    }
+  });
+
+  it('does not fail the tool lifecycle when operation-log persistence throws', () => {
+    const manager = new SessionManager({ dbPath: ':memory:' });
+    try {
+      const task = manager.createTask({
+        taskType: 'browser-action',
+        title: 'operation log fail open task',
+        intent: 'click',
+        origin: 'jest',
+      });
+      const session = manager.startSession({
+        taskId: task.taskId,
+        transport: 'stdio',
+        clientName: 'jest',
+      });
+      const step = manager.startStep({
+        sessionId: session.sessionId,
+        toolName: 'chrome_click_element',
+      });
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        const repo = manager.operationLogs as unknown as { insert: () => never };
+        repo.insert = () => {
+          throw new Error('simulated operation-log failure');
+        };
+
+        expect(() => manager.completeStep(session.sessionId, step.stepId)).not.toThrow();
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('[tabrix/operation-log] write failed:'),
+        );
+      } finally {
+        warnSpy.mockRestore();
+      }
+    } finally {
+      manager.close();
+    }
+  });
+
   it('reset() clears persisted state as well as in-memory caches', () => {
     const dir = mkdtempSync(join(tmpdir(), 'tabrix-memory-reset-'));
     const dbPath = join(dir, 'memory.db');

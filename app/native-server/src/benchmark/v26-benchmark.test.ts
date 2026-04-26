@@ -110,6 +110,20 @@ describe('summariseBenchmarkRunV26 — single record happy path', () => {
     expect(summary.chosenSourceDistribution.experience_replay).toBe(1);
     expect(summary.transformerWarnings).toEqual([]);
   });
+
+  it('aggregates explicit operation-log evidence into a write rate', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, operationLogWritten: true }),
+          call({ seq: 1, operationLogWritten: true }),
+          call({ seq: 2, operationLogWritten: false }),
+          call({ seq: 3, operationLogWritten: null }),
+        ],
+      }),
+    );
+    expect(summary.operationLogWriteRate).toBeCloseTo(2 / 3);
+  });
 });
 
 describe('summariseBenchmarkRunV26 — fail-shape contract', () => {

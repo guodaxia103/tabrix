@@ -25,6 +25,7 @@ import {
   EXPERIENCE_WRITEBACK_WARNINGS_CREATE_TABLES_SQL,
   KNOWLEDGE_CREATE_TABLES_SQL,
   MEMORY_CREATE_TABLES_SQL,
+  OPERATION_MEMORY_LOG_CREATE_TABLES_SQL,
 } from './schema';
 
 export type SqliteDatabase = Database.Database;
@@ -282,6 +283,7 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   }
   db.pragma('foreign_keys = ON');
   db.exec(MEMORY_CREATE_TABLES_SQL);
+  db.exec(OPERATION_MEMORY_LOG_CREATE_TABLES_SQL);
   ensureSessionAggregatedAtColumn(db);
   // Legacy DBs may already have `experience_action_paths` without the
   // V24-02 scoring columns. Add them before running the current schema,

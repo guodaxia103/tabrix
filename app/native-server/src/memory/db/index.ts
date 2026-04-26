@@ -6,7 +6,7 @@ export {
   type OpenMemoryDbResult,
   type SqliteDatabase,
 } from './client';
-export { MEMORY_CREATE_TABLES_SQL } from './schema';
+export { MEMORY_CREATE_TABLES_SQL, OPERATION_MEMORY_LOG_CREATE_TABLES_SQL } from './schema';
 export { TaskRepository } from './task-repository';
 export {
   SessionRepository,
@@ -23,6 +23,11 @@ export {
   type MemoryActionStatus,
   type MemoryNavigateMode,
 } from './action-repository';
+export {
+  OperationMemoryLogRepository,
+  type OperationMemoryLog,
+  type OperationMemoryLogInsert,
+} from './operation-memory-log-repository';
 export {
   rowToTask,
   taskToRow,

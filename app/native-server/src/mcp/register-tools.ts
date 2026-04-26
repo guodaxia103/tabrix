@@ -1663,6 +1663,16 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     // V26-03 §0.1 forbids. `null` means "no fallback fired, keep the
     // caller's original layer bit-identical to the pre-V26-03 path".
     let forcedReadPageLayer: 'L0' | 'L0+L1' | null = null;
+    let operationLogHint: {
+      requestedLayer?: string | null;
+      selectedDataSource?: string | null;
+      sourceRoute?: string | null;
+      decisionReason?: string | null;
+      resultKind?: string | null;
+      fallbackUsed?: string | null;
+      readCount?: number | null;
+      tokensSaved?: number | null;
+    } | null = null;
     if (taskContext && name === 'chrome_read_page') {
       // V26-03 (B-026) — skip-read orchestrator hook. We consult it
       // BEFORE the existing budget gate because a `'skip'` plan
@@ -1761,6 +1771,16 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               sessionManager.completeStep(session.sessionId, step.stepId, {
                 status: 'completed',
                 resultSummary: `chrome_read_page fulfilled via ${skipPlan.sourceKind} (saved ~${tokenSavings.tokensSavedEstimate} tok)`,
+                operationLog: {
+                  requestedLayer: recordedDecision.chosenLayer,
+                  selectedDataSource: 'api_rows',
+                  sourceRoute: skipPlan.sourceRoute,
+                  decisionReason: recordedDecision.decisionReason ?? skipPlan.diagnostic,
+                  resultKind: 'api_rows',
+                  fallbackUsed: 'none',
+                  readCount: totals.readPageAvoidedCount,
+                  tokensSaved: tokenSavings.tokensSavedEstimate,
+                },
               });
               sessionManager.finishSession(session.sessionId, {
                 status: 'completed',
@@ -1810,6 +1830,16 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
             sessionManager.completeStep(session.sessionId, step.stepId, {
               status: 'completed',
               resultSummary: `chrome_read_page skipped via ${skipPlan.sourceKind} (saved ~${skipPlan.tokensSavedEstimate} tok)`,
+              operationLog: {
+                requestedLayer: recordedDecision.chosenLayer,
+                selectedDataSource: skipPlan.sourceKind,
+                sourceRoute: skipPlan.sourceRoute,
+                decisionReason: recordedDecision.decisionReason ?? skipPlan.diagnostic,
+                resultKind: 'read_page_skipped',
+                fallbackUsed: skipPlan.fallbackUsed,
+                readCount: totals.readPageAvoidedCount,
+                tokensSaved: skipPlan.tokensSavedEstimate,
+              },
             });
             sessionManager.finishSession(session.sessionId, {
               status: 'completed',
@@ -1832,6 +1862,14 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           // `noteReadPage` bookkeeping so the three sites cannot
           // drift back to `'L0+L1+L2'`.
           forcedReadPageLayer = skipPlan.fallbackEntryLayer;
+          operationLogHint = {
+            requestedLayer: skipPlan.fallbackEntryLayer,
+            selectedDataSource: 'dom_json',
+            sourceRoute: skipPlan.sourceRoute,
+            decisionReason: skipPlan.diagnostic,
+            resultKind: 'read_page_fallback',
+            fallbackUsed: skipPlan.fallbackUsed,
+          };
         }
       }
       // P1-2 fix: read the public `requestedLayer` field (with
@@ -1857,6 +1895,12 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         sessionManager.completeStep(session.sessionId, step.stepId, {
           status: 'completed',
           resultSummary: `chrome_read_page short-circuited (${warningPayload.warning})`,
+          operationLog: {
+            ...(operationLogHint ?? {}),
+            requestedLayer,
+            resultKind: 'read_page_warning',
+            decisionReason: warningPayload.warning,
+          },
         });
         sessionManager.finishSession(session.sessionId, {
           status: 'completed',
@@ -1957,6 +2001,18 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         resultSummary: normalized.stepSummary,
         artifactRefs:
           postResult.extraArtifactRefs.length > 0 ? postResult.extraArtifactRefs : undefined,
+        operationLog:
+          name === 'chrome_read_page'
+            ? {
+                ...(operationLogHint ?? {}),
+                requestedLayer:
+                  operationLogHint?.requestedLayer ??
+                  extractRequestedLayer(outgoingArgs) ??
+                  READ_PAGE_DEFAULT_LAYER,
+                selectedDataSource: operationLogHint?.selectedDataSource ?? 'dom_json',
+                resultKind: operationLogHint?.resultKind ?? 'read_page',
+              }
+            : undefined,
       });
       sessionManager.finishSession(session.sessionId, {
         status: 'completed',

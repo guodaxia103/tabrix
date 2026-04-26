@@ -10,6 +10,7 @@ import {
 import {
   ActionRepository,
   openMemoryDb,
+  OperationMemoryLogRepository,
   PageSnapshotRepository,
   resolveMemoryDbPath,
   SessionRepository,
@@ -81,6 +82,7 @@ interface Repos {
   step: StepRepository;
   pageSnapshot: PageSnapshotRepository;
   action: ActionRepository;
+  operationLog: OperationMemoryLogRepository;
   experience: ExperienceRepository;
   knowledgeApi: KnowledgeApiRepository;
   chooseContextTelemetry: ChooseContextTelemetryRepository;
@@ -92,6 +94,7 @@ interface StorageInit {
   persistenceMode: SessionPersistenceMode;
   pageSnapshots: PageSnapshotService | null;
   actions: ActionService | null;
+  operationLog: OperationMemoryLogRepository | null;
   experienceAggregator: ExperienceAggregator | null;
   experienceQuery: ExperienceQueryService | null;
   knowledgeApi: KnowledgeApiRepository | null;
@@ -128,6 +131,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       persistenceMode: 'off',
       pageSnapshots: null,
       actions: null,
+      operationLog: null,
       experienceAggregator: null,
       experienceQuery: null,
       knowledgeApi: null,
@@ -140,6 +144,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
     const opened = openMemoryDb({ dbPath });
     const pageSnapshotRepo = new PageSnapshotRepository(opened.db);
     const actionRepo = new ActionRepository(opened.db);
+    const operationLogRepo = new OperationMemoryLogRepository(opened.db);
     const experienceRepo = new ExperienceRepository(opened.db);
     const knowledgeApiRepo = new KnowledgeApiRepository(opened.db);
     const chooseContextTelemetryRepo = new ChooseContextTelemetryRepository(opened.db);
@@ -149,6 +154,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       step: new StepRepository(opened.db),
       pageSnapshot: pageSnapshotRepo,
       action: actionRepo,
+      operationLog: operationLogRepo,
       experience: experienceRepo,
       knowledgeApi: knowledgeApiRepo,
       chooseContextTelemetry: chooseContextTelemetryRepo,
@@ -159,6 +165,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       persistenceMode: opened.persistenceMode,
       pageSnapshots: new PageSnapshotService(pageSnapshotRepo),
       actions: new ActionService(actionRepo, pageSnapshotRepo),
+      operationLog: operationLogRepo,
       experienceAggregator: new ExperienceAggregator(
         opened.db,
         repos.session,
@@ -180,6 +187,7 @@ function initStorage(options?: SessionManagerOptions): StorageInit {
       persistenceMode: 'off',
       pageSnapshots: null,
       actions: null,
+      operationLog: null,
       experienceAggregator: null,
       experienceQuery: null,
       knowledgeApi: null,
@@ -223,6 +231,7 @@ export class SessionManager {
   private readonly persistenceMode: SessionPersistenceMode;
   private readonly pageSnapshotService: PageSnapshotService | null;
   private readonly actionService: ActionService | null;
+  private readonly operationLogRepo: OperationMemoryLogRepository | null;
   private readonly experienceAggregator: ExperienceAggregator | null;
   private readonly experienceQueryService: ExperienceQueryService | null;
   private readonly knowledgeApiRepo: KnowledgeApiRepository | null;
@@ -235,6 +244,7 @@ export class SessionManager {
     this.persistenceMode = init.persistenceMode;
     this.pageSnapshotService = init.pageSnapshots;
     this.actionService = init.actions;
+    this.operationLogRepo = init.operationLog;
     this.experienceAggregator = init.experienceAggregator;
     this.experienceQueryService = init.experienceQuery;
     this.knowledgeApiRepo = init.knowledgeApi;
@@ -267,6 +277,15 @@ export class SessionManager {
    */
   public get actions(): ActionService | null {
     return this.actionService;
+  }
+
+  /**
+   * V26-14A — factual operation log repository. `null` when persistence
+   * is off. Tool calls must treat it as best-effort evidence storage,
+   * never as part of the browser-tool success path.
+   */
+  public get operationLogs(): OperationMemoryLogRepository | null {
+    return this.operationLogRepo;
   }
 
   /**
@@ -378,6 +397,19 @@ export class SessionManager {
       errorCode?: string;
       errorSummary?: string;
       artifactRefs?: string[];
+      operationLog?: {
+        urlPattern?: string | null;
+        pageRole?: string | null;
+        requestedLayer?: string | null;
+        selectedDataSource?: string | null;
+        sourceRoute?: string | null;
+        decisionReason?: string | null;
+        resultKind?: string | null;
+        fallbackUsed?: string | null;
+        readCount?: number | null;
+        tokensSaved?: number | null;
+        tabHygiene?: unknown;
+      };
     },
   ): ExecutionStep {
     const session = this.getSession(sessionId);
@@ -400,7 +432,62 @@ export class SessionManager {
       endedAt: step.endedAt,
     });
 
+    this.recordOperationLog(session, step, updates?.operationLog);
+
     return step;
+  }
+
+  private recordOperationLog(
+    session: ExecutionSession,
+    step: ExecutionStep,
+    extras?: {
+      urlPattern?: string | null;
+      pageRole?: string | null;
+      requestedLayer?: string | null;
+      selectedDataSource?: string | null;
+      sourceRoute?: string | null;
+      decisionReason?: string | null;
+      resultKind?: string | null;
+      fallbackUsed?: string | null;
+      readCount?: number | null;
+      tokensSaved?: number | null;
+      tabHygiene?: unknown;
+    },
+  ): void {
+    if (!this.operationLogRepo) return;
+    try {
+      const started = Date.parse(step.startedAt);
+      const ended = step.endedAt ? Date.parse(step.endedAt) : NaN;
+      const durationMs =
+        Number.isFinite(started) && Number.isFinite(ended) && ended >= started
+          ? ended - started
+          : null;
+      this.operationLogRepo.insert({
+        taskId: session.taskId,
+        sessionId: session.sessionId,
+        stepId: step.stepId,
+        toolName: step.toolName,
+        urlPattern: extras?.urlPattern ?? null,
+        pageRole: extras?.pageRole ?? null,
+        requestedLayer: extras?.requestedLayer ?? null,
+        selectedDataSource: extras?.selectedDataSource ?? null,
+        sourceRoute: extras?.sourceRoute ?? null,
+        decisionReason: extras?.decisionReason ?? null,
+        resultKind: extras?.resultKind ?? null,
+        durationMs,
+        success: step.status === 'completed',
+        fallbackUsed: extras?.fallbackUsed ?? null,
+        errorCode: step.errorCode ?? null,
+        readCount: extras?.readCount ?? null,
+        tokensSaved: extras?.tokensSaved ?? null,
+        tabHygiene: extras?.tabHygiene,
+        createdAt: step.endedAt ?? nowIso(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      console.warn(`[tabrix/operation-log] write failed: ${message}`);
+    }
   }
 
   public finishSession(
@@ -606,6 +693,7 @@ export class SessionManager {
       // Order matters due to FK cascade: clearing tasks cascades to
       // sessions and steps, but we clear all five explicitly so
       // behavior stays identical whether persistence is on or off.
+      this.repos.operationLog.clear();
       this.repos.action.clear();
       this.repos.pageSnapshot.clear();
       this.repos.step.clear();
