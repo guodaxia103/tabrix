@@ -1718,6 +1718,17 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                 readPageAvoided: true,
                 sourceKind: skipPlan.sourceKind,
                 sourceRoute: skipPlan.sourceRoute,
+                chosenSource: recordedDecision.chosenSource ?? skipPlan.sourceKind,
+                dataSource: recordedDecision.dataSource ?? skipPlan.sourceKind,
+                decisionReason: recordedDecision.decisionReason ?? skipPlan.diagnostic,
+                dispatcherInputSource: recordedDecision.dispatcherInputSource ?? null,
+                fallbackPlan:
+                  recordedDecision.fallbackPlan ??
+                  ({
+                    dataSource: 'dom_json',
+                    entryLayer: skipPlan.fallbackEntryLayer,
+                    reason: skipPlan.diagnostic,
+                  } as const),
                 chosenLayer: recordedDecision.chosenLayer,
                 tokenEstimateChosen: tokenSavings.tokenEstimateChosen,
                 tokenEstimateFullRead: tokenSavings.tokenEstimateFullRead,
@@ -1765,6 +1776,17 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               readPageAvoided: skipPlan.readPageAvoided,
               sourceKind: skipPlan.sourceKind,
               sourceRoute: skipPlan.sourceRoute,
+              chosenSource: recordedDecision.chosenSource ?? skipPlan.sourceKind,
+              dataSource: recordedDecision.dataSource ?? skipPlan.sourceKind,
+              decisionReason: recordedDecision.decisionReason ?? skipPlan.diagnostic,
+              dispatcherInputSource: recordedDecision.dispatcherInputSource ?? null,
+              fallbackPlan:
+                recordedDecision.fallbackPlan ??
+                ({
+                  dataSource: 'dom_json',
+                  entryLayer: skipPlan.fallbackEntryLayer,
+                  reason: skipPlan.diagnostic,
+                } as const),
               tokensSavedEstimate: skipPlan.tokensSavedEstimate,
               fallbackUsed: skipPlan.fallbackUsed,
               fallbackEntryLayer: skipPlan.fallbackEntryLayer,

@@ -28,7 +28,11 @@ import {
   buildSuggestPlanResult,
   parseExperienceSuggestPlanInput,
 } from '../memory/experience';
-import { runTabrixChooseContext, runTabrixChooseContextRecordOutcome } from './choose-context';
+import {
+  runTabrixChooseContext,
+  runTabrixChooseContextRecordOutcome,
+  type TabrixChooseContextRouterTelemetry,
+} from './choose-context';
 import { createLivePageContextProvider } from './page-context-provider';
 import { getCurrentCapabilityEnv, type CapabilityEnv } from '../policy/capabilities';
 import type { SessionManager } from '../execution/session-manager';
@@ -289,6 +293,14 @@ function persistChooseContextDecision(
     replayCandidate,
     apiCapability,
   };
+  const routerFields = result as TabrixChooseContextRouterTelemetry;
+  if (routerFields.chosenSource) snapshot.chosenSource = routerFields.chosenSource;
+  if (routerFields.dataSource) snapshot.dataSource = routerFields.dataSource;
+  if (routerFields.decisionReason) snapshot.decisionReason = routerFields.decisionReason;
+  if (routerFields.dispatcherInputSource) {
+    snapshot.dispatcherInputSource = routerFields.dispatcherInputSource;
+  }
+  if (routerFields.fallbackPlan) snapshot.fallbackPlan = routerFields.fallbackPlan;
   taskContext.noteChooseContextDecision(snapshot);
 }
 

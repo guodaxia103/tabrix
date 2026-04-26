@@ -64,6 +64,19 @@ import type { LayerSourceRoute, ReadPageRequestedLayer } from '@tabrix/shared';
  */
 export type SkipReadSourceKind = 'experience_replay' | 'api_list' | 'api_detail' | 'dom_json';
 
+export type DataSourceRouterChosenSource =
+  | 'experience_replay'
+  | 'api_list'
+  | 'api_detail'
+  | 'markdown'
+  | 'dom_json';
+
+export interface DataSourceRouterFallbackPlanSnapshot {
+  dataSource: 'dom_json';
+  entryLayer: 'L0' | 'L0+L1';
+  reason: string;
+}
+
 /**
  * Closed enum of fallback paths the orchestrator may demand when
  * `action !== 'skip'`. `'none'` is reserved for `action='skip'`
@@ -140,6 +153,11 @@ export interface ChooseContextDecisionSnapshot {
     /** Redacted request params for the internal V26-07 reader. */
     params?: Record<string, string>;
   } | null;
+  chosenSource?: DataSourceRouterChosenSource;
+  dataSource?: DataSourceRouterChosenSource;
+  decisionReason?: string;
+  dispatcherInputSource?: string;
+  fallbackPlan?: DataSourceRouterFallbackPlanSnapshot;
 }
 
 /**

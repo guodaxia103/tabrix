@@ -1064,6 +1064,10 @@ describe('runTabrixChooseContext telemetry (V23-04)', () => {
     expect(result.layerDispatchReason).toBe('knowledge_supports_summary');
     expect(result.sourceRoute).toBe('knowledge_supported_read');
     expect(result.resolved?.siteFamily).toBe('github');
+    const routerFields = result as Record<string, unknown>;
+    expect(routerFields.chosenSource).toBe('api_list');
+    expect(routerFields.dispatcherInputSource).toBe('api_knowledge');
+    expect(routerFields.decisionReason).toBe('api_knowledge_candidate_available');
   });
 
   it('routes npmjs Chinese package search through internal API knowledge without adding a public site family', () => {
@@ -1093,6 +1097,9 @@ describe('runTabrixChooseContext telemetry (V23-04)', () => {
     expect(result.strategy).toBe('knowledge_light');
     expect(result.sourceRoute).toBe('knowledge_supported_read');
     expect(result.resolved?.siteFamily).toBeUndefined();
+    const routerFields = result as Record<string, unknown>;
+    expect(routerFields.chosenSource).toBe('api_list');
+    expect(routerFields.dispatcherInputSource).toBe('api_knowledge');
   });
 
   it('telemetry write failure must not break the chooser (decisionId omitted)', () => {

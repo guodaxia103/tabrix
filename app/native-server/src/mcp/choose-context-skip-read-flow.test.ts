@@ -405,6 +405,9 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(choose.isError).toBeFalsy();
     const choosePayload = JSON.parse(String(choose.content[0].text)) as Record<string, unknown>;
     expect(choosePayload.sourceRoute).toBe('knowledge_supported_read');
+    expect(choosePayload.chosenSource).toBe('api_list');
+    expect(choosePayload.dispatcherInputSource).toBe('api_knowledge');
+    expect(choosePayload.decisionReason).toBe('api_knowledge_candidate_available');
 
     const ctx = sessionManager.getOrCreateExternalTaskContext(AUTO_DEFAULT_KEY);
     const decision = ctx.peekChooseContextDecision();
@@ -427,7 +430,14 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       rowCount: 1,
       compact: true,
       rawBodyStored: false,
+      chosenSource: 'api_list',
+      dispatcherInputSource: 'api_knowledge',
+      decisionReason: 'api_knowledge_candidate_available',
       taskTotals: { readPageAvoidedCount: 1 },
+    });
+    expect(payload.fallbackPlan).toMatchObject({
+      dataSource: 'dom_json',
+      entryLayer: 'L0',
     });
     expect(payload.tokensSavedEstimate).toEqual(expect.any(Number));
     expect(payload.tokensSavedEstimate as number).toBeGreaterThan(0);

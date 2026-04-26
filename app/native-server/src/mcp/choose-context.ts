@@ -57,6 +57,27 @@ import {
 } from './choose-context-layer-dispatch';
 import type { PageContextProvider } from './page-context-provider';
 import { resolveApiKnowledgeCandidate } from '../api/api-knowledge';
+import {
+  routeDataSource,
+  type DataSourceCostEstimate,
+  type DataSourceFallbackPlan,
+  type DataSourceKind,
+  type DataSourceRiskTier,
+} from '../execution/data-source-router';
+
+export interface TabrixChooseContextRouterTelemetry {
+  chosenSource?: DataSourceKind;
+  dataSource?: DataSourceKind;
+  routerConfidence?: number;
+  routerRiskTier?: DataSourceRiskTier;
+  decisionReason?: string;
+  fallbackPlan?: DataSourceFallbackPlan;
+  dispatcherInputSource?: string;
+  costEstimate?: DataSourceCostEstimate;
+}
+
+type TabrixChooseContextResultWithRouter = TabrixChooseContextResult &
+  TabrixChooseContextRouterTelemetry;
 
 export class TabrixChooseContextInputError extends Error {
   public readonly code: 'TABRIX_CHOOSE_CONTEXT_BAD_INPUT';
@@ -739,6 +760,17 @@ export function runTabrixChooseContext(
     0,
     layerDispatch.fullReadTokenEstimate - layerDispatch.tokenEstimate,
   );
+  const routerDecision = routeDataSource({
+    strategy: decision.strategy,
+    sourceRoute: layerDispatch.sourceRoute,
+    chosenLayer: layerDispatch.chosenLayer,
+    layerDispatchReason: layerDispatch.reason,
+    tokenEstimateChosen: layerDispatch.tokenEstimate,
+    tokenEstimateFullRead: layerDispatch.fullReadTokenEstimate,
+    tokensSavedEstimate,
+    apiCandidateAvailable: !!apiCandidate,
+    dispatcherInputSource: dispatcherInputs?.source ?? null,
+  });
   const knowledgeEndpointFamily =
     siteFamily === 'github' && knowledgeCatalog ? 'github.api.github.com' : null;
 
@@ -803,7 +835,7 @@ export function runTabrixChooseContext(
     }
   }
 
-  return {
+  const result: TabrixChooseContextResultWithRouter = {
     status: 'ok',
     strategy: decision.strategy,
     fallbackStrategy: decision.fallbackStrategy,
@@ -828,7 +860,16 @@ export function runTabrixChooseContext(
     tokenEstimateFullRead: layerDispatch.fullReadTokenEstimate,
     tokensSavedEstimate,
     readPageAvoided: layerDispatch.sourceRoute === 'experience_replay_skip_read',
+    chosenSource: routerDecision.chosenSource,
+    dataSource: routerDecision.dataSource,
+    routerConfidence: routerDecision.confidence,
+    routerRiskTier: routerDecision.riskTier,
+    decisionReason: routerDecision.decisionReason,
+    fallbackPlan: routerDecision.fallbackPlan,
+    dispatcherInputSource: routerDecision.dispatcherInputSource,
+    costEstimate: routerDecision.costEstimate,
   };
+  return result;
 }
 
 // ---------------------------------------------------------------------------
