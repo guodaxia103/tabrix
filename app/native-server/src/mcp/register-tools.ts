@@ -31,7 +31,7 @@ import {
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { planSkipRead, type SkipReadPlan } from '../execution/skip-read-orchestrator';
-import { readApiKnowledgeEndpointPlan } from '../api/api-knowledge';
+import { readApiKnowledgeEndpointPlan, type ApiKnowledgeReadFallback } from '../api/api-knowledge';
 import { mapDataSourceToLayerContract } from '../execution/layer-contract';
 import { runPostProcessor } from './tool-post-processors';
 import { getNativeToolHandler } from './native-tool-handlers';
@@ -127,6 +127,63 @@ function estimateApiRowsTokenSavings(args: {
     tokensSavedEstimate: 0,
     tokensSavedEstimateSource: 'unavailable_empty_api_rows',
   };
+}
+
+type ApiReadFallbackCauseV26 = 'api_timeout' | 'semantic_mismatch' | 'api_unavailable';
+
+interface ApiReadFallbackEvidenceV26 {
+  kind: 'read_page_fallback';
+  readPageAvoided: false;
+  sourceKind: 'dom_json';
+  sourceRoute: string;
+  fallbackCause: ApiReadFallbackCauseV26;
+  fallbackUsed: 'dom_compact';
+  fallbackEntryLayer: 'L0+L1';
+  apiFamily?: string;
+  apiTelemetry: ApiKnowledgeReadFallback['telemetry'];
+}
+
+function normalizeApiFallbackCause(reason: string | null | undefined): ApiReadFallbackCauseV26 {
+  if (reason === 'network_timeout') return 'api_timeout';
+  if (reason === 'semantic_mismatch') return 'semantic_mismatch';
+  return 'api_unavailable';
+}
+
+function withFallbackEvidence(
+  rawResult: CallToolResult,
+  evidence: ApiReadFallbackEvidenceV26 | null,
+): CallToolResult {
+  if (!evidence || !Array.isArray(rawResult.content)) return rawResult;
+
+  let attached = false;
+  const content = rawResult.content.map((item) => {
+    if (
+      attached ||
+      !item ||
+      typeof item !== 'object' ||
+      (item as { type?: unknown }).type !== 'text' ||
+      typeof (item as { text?: unknown }).text !== 'string'
+    ) {
+      return item;
+    }
+
+    try {
+      const parsed = JSON.parse((item as { text: string }).text);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return item;
+      attached = true;
+      return {
+        ...item,
+        text: JSON.stringify({
+          ...parsed,
+          ...evidence,
+        }),
+      };
+    } catch {
+      return item;
+    }
+  });
+
+  return attached ? { ...rawResult, content } : rawResult;
 }
 
 function filterToolsByEnvironment(tools: Tool[]): Tool[] {
@@ -1673,6 +1730,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       readCount?: number | null;
       tokensSaved?: number | null;
     } | null = null;
+    let apiFallbackEvidence: ApiReadFallbackEvidenceV26 | null = null;
     if (taskContext && name === 'chrome_read_page') {
       // V26-03 (B-026) — skip-read orchestrator hook. We consult it
       // BEFORE the existing budget gate because a `'skip'` plan
@@ -1788,7 +1846,27 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               });
               return apiCallResult;
             }
+            const fallbackCause = normalizeApiFallbackCause(apiResult.reason);
             forcedReadPageLayer = apiResult.fallbackEntryLayer;
+            apiFallbackEvidence = {
+              kind: 'read_page_fallback',
+              readPageAvoided: false,
+              sourceKind: 'dom_json',
+              sourceRoute: skipPlan.sourceRoute,
+              fallbackCause,
+              fallbackUsed: 'dom_compact',
+              fallbackEntryLayer: apiResult.fallbackEntryLayer,
+              apiFamily: apiResult.endpointFamily,
+              apiTelemetry: apiResult.telemetry,
+            };
+            operationLogHint = {
+              requestedLayer: apiResult.fallbackEntryLayer,
+              selectedDataSource: 'dom_json',
+              sourceRoute: skipPlan.sourceRoute,
+              decisionReason: fallbackCause,
+              resultKind: 'read_page_fallback',
+              fallbackUsed: 'dom_compact',
+            };
           } else {
             taskContext.noteSkipRead({
               source: skipPlan.sourceKind,
@@ -1995,7 +2073,8 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           source: 'unknown',
         });
       }
-      const normalized = normalizeToolCallResult(name, postResult.rawResult);
+      const rawResultWithEvidence = withFallbackEvidence(postResult.rawResult, apiFallbackEvidence);
+      const normalized = normalizeToolCallResult(name, rawResultWithEvidence);
       sessionManager.completeStep(session.sessionId, step.stepId, {
         status: 'completed',
         resultSummary: normalized.stepSummary,
@@ -2018,7 +2097,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         status: 'completed',
         summary: normalized.executionResult.summary,
       });
-      return postResult.rawResult;
+      return rawResultWithEvidence;
     } else {
       const responseError = String(response.error || 'Unknown tool error');
       const isBridgeError =

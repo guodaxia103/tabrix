@@ -116,6 +116,26 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(callToolInvocations).toHaveLength(0);
   }
 
+  function expectApiFallbackEvidence(
+    payload: Record<string, unknown>,
+    expected: { fallbackCause: string; apiReason: string },
+  ): void {
+    expect(payload).toMatchObject({
+      kind: 'read_page_fallback',
+      readPageAvoided: false,
+      sourceKind: 'dom_json',
+      sourceRoute: 'knowledge_supported_read',
+      fallbackCause: expected.fallbackCause,
+      fallbackUsed: 'dom_compact',
+      fallbackEntryLayer: 'L0+L1',
+      apiTelemetry: {
+        reason: expected.apiReason,
+        readAllowed: false,
+        fallbackEntryLayer: 'L0+L1',
+      },
+    });
+  }
+
   beforeEach(() => {
     previousCapabilities = process.env[CAPABILITIES_ENV_KEY];
     configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tabrix-skip-read-capabilities-'));
@@ -466,7 +486,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     assertNoCallToolInvocation(bridgeSpy);
   });
 
-  it('API failure falls back to bridge chrome_read_page at L0+L1 and does not count as avoided', async () => {
+  it('API unavailable falls back to bridge chrome_read_page at L0+L1 with explicit evidence', async () => {
     markBridgeReady();
     const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:7');
     ctx.noteUrlChange('https://github.com/search', null);
@@ -500,6 +520,10 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
     expect(payload).not.toHaveProperty('kind', 'api_rows');
     expect(payload.pageContent).toBe('api-fallback-dom');
+    expectApiFallbackEvidence(payload, {
+      fallbackCause: 'api_unavailable',
+      apiReason: 'http_forbidden',
+    });
     const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
       const messageType = call[1];
       return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
@@ -515,6 +539,73 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       readPageAvoidedCount: 0,
       tokensSavedEstimateTotal: 0,
     });
+  });
+
+  it('API timeout falls back to bridge chrome_read_page at L0+L1 with api_timeout evidence', async () => {
+    jest.useFakeTimers();
+    try {
+      markBridgeReady();
+      const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:10');
+      ctx.noteUrlChange('https://github.com/search', null);
+      ctx.noteChooseContextDecision({
+        sourceRoute: 'knowledge_supported_read',
+        chosenLayer: 'L0+L1+L2',
+        fullReadTokenEstimate: 12000,
+        replayCandidate: null,
+        apiCapability: {
+          available: true,
+          family: 'github_search_repositories',
+          dataPurpose: 'search_list',
+          params: { query: 'tabrix' },
+        },
+      });
+      jest.spyOn(globalThis, 'fetch').mockImplementation(((_url: unknown, init?: unknown) => {
+        const signal = (init as { signal?: AbortSignal } | undefined)?.signal;
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => {
+            const error = new Error('aborted');
+            error.name = 'AbortError';
+            reject(error);
+          });
+        });
+      }) as never);
+      const bridgeSpy = mockBridgeRoundTrip(
+        JSON.stringify({ kind: 'page', pageContent: 'api-timeout-fallback-dom' }),
+      );
+
+      const pending = handleToolCall('chrome_read_page', {
+        requestedLayer: 'L0+L1+L2',
+        tabId: 10,
+      });
+      await jest.advanceTimersByTimeAsync(2600);
+      const result = await pending;
+
+      expect(result.isError).toBeFalsy();
+      const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
+      expect(payload.pageContent).toBe('api-timeout-fallback-dom');
+      expectApiFallbackEvidence(payload, {
+        fallbackCause: 'api_timeout',
+        apiReason: 'network_timeout',
+      });
+      expect((payload.apiTelemetry as { waitedMs?: number }).waitedMs).toBeGreaterThanOrEqual(2500);
+      const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
+        const messageType = call[1];
+        return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
+      });
+      expect(callToolInvocations).toHaveLength(1);
+      const forwarded = callToolInvocations[0]?.[0] as {
+        name: string;
+        args: Record<string, unknown>;
+      };
+      expect(forwarded.name).toBe('chrome_read_page');
+      expect(forwarded.args.requestedLayer).toBe('L0+L1');
+      expect(ctx.getTaskTotals()).toEqual({
+        readPageAvoidedCount: 0,
+        tokensSavedEstimateTotal: 0,
+      });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('API semantic mismatch falls back to bridge L0+L1 without calling public fetch', async () => {
@@ -546,6 +637,10 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(result.isError).toBeFalsy();
     const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
     expect(payload.pageContent).toBe('api-semantic-fallback-dom');
+    expectApiFallbackEvidence(payload, {
+      fallbackCause: 'semantic_mismatch',
+      apiReason: 'semantic_mismatch',
+    });
     expect(fetchSpy).not.toHaveBeenCalled();
     const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
       const messageType = call[1];
