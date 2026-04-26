@@ -14,6 +14,7 @@ export type ApiKnowledgeFallbackReason =
   | 'rate_limited'
   | 'http_error'
   | 'decode_error'
+  | 'network_timeout'
   | 'network_error';
 
 export interface ApiKnowledgeMetadataInput {
@@ -93,7 +94,7 @@ interface FetchResponseLike {
 
 export type ApiKnowledgeFetch = (
   url: string,
-  init?: { method?: string; headers?: Record<string, string> },
+  init?: { method?: string; headers?: Record<string, string>; signal?: AbortSignal },
 ) => Promise<FetchResponseLike>;
 
 export interface ApiKnowledgeReadInput {
@@ -116,6 +117,7 @@ export interface ApiKnowledgeIntentReadInput {
 }
 
 const READ_METHODS = new Set(['GET', 'HEAD']);
+const API_KNOWLEDGE_READ_TIMEOUT_MS = 2500;
 
 export function classifyApiKnowledgeMetadata(
   input: ApiKnowledgeMetadataInput,
@@ -165,12 +167,17 @@ export function resolveApiKnowledgeCandidate(input: {
       };
     }
     if (isSearchListIntent(intent, input.intent, 'github')) {
+      const params: Record<string, string> = { query: extractSearchQuery(input.intent) };
+      if (isGithubHotSearchIntent(intent, input.intent)) {
+        params.sort = 'stars';
+        params.order = 'desc';
+      }
       return {
         endpointFamily: 'github_search_repositories',
         dataPurpose: 'search_list',
         confidence: 0.82,
         method: 'GET',
-        params: { query: extractSearchQuery(input.intent) },
+        params,
       };
     }
   }
@@ -233,13 +240,35 @@ export async function readApiKnowledgeRows(
   }
   try {
     const fetchFn = input.fetchFn ?? resolveFetch();
-    const response = await fetchFn(request.url, {
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeout = new Promise<'timeout'>((resolve) => {
+      timeoutId = setTimeout(() => {
+        resolve('timeout');
+        controller?.abort();
+      }, API_KNOWLEDGE_READ_TIMEOUT_MS);
+    });
+    const fetched = fetchFn(request.url, {
       method: 'GET',
       headers: {
         accept: 'application/json',
         'user-agent': 'tabrix-api-knowledge/1.0',
       },
+      ...(controller ? { signal: controller.signal } : {}),
     });
+    const responseOrTimeout = await Promise.race([fetched, timeout]).finally(() => {
+      if (timeoutId) clearTimeout(timeoutId);
+    });
+    if (responseOrTimeout === 'timeout') {
+      return fallback({
+        reason: 'network_timeout',
+        method,
+        status: null,
+        waitedMs: elapsed(),
+        endpointFamily,
+      });
+    }
+    const response = responseOrTimeout;
     if (response.status === 429) {
       return fallback({
         reason: 'rate_limited',
@@ -395,6 +424,13 @@ function buildPublicRequest(
       if (!q) return null;
       const url = new URL('https://api.github.com/search/repositories');
       url.searchParams.set('q', q);
+      if (cleanParam(params.sort).toLowerCase() === 'stars') {
+        url.searchParams.set('sort', 'stars');
+        url.searchParams.set(
+          'order',
+          cleanParam(params.order).toLowerCase() === 'asc' ? 'asc' : 'desc',
+        );
+      }
       url.searchParams.set('per_page', String(boundedLimit));
       return { url: url.toString(), limit: boundedLimit, dataPurpose: 'search_list' };
     }
@@ -570,16 +606,23 @@ function isSearchListIntent(
   return /软件包|依赖包|npm\s*包|包/.test(rawIntent);
 }
 
+function isGithubHotSearchIntent(normalizedIntent: string, rawIntent: string): boolean {
+  return (
+    /热门|star\s*最多|前\s*\d+\s*个热门项目/i.test(rawIntent) ||
+    /\b(top|most starred|stars?|starred)\b/.test(normalizedIntent)
+  );
+}
+
 function extractSearchQuery(intent: string): string {
   const cleaned = intent
     .replace(
-      /\b(search|find|list|top|repositories|repos|repository|packages|package|npmjs|npm)\b/gi,
+      /\b(search|find|list|top|most\s+starred|starred|stars?|repositories|repos|repository|packages|package|npmjs|npm)\b/gi,
       ' ',
     )
     .replace(/\b(first|top)\s+\d+\b/gi, ' ')
     .replace(/前\s*\d+\s*个/g, ' ')
     .replace(
-      /搜索|查找|检索|列出|热门|相关|项目|仓库|代码库|软件包|依赖包|npm\s*包|包|上|的|和|以及/g,
+      /搜索|查找|检索|列出|热门|star\s*最多|相关|项目|仓库|代码库|软件包|依赖包|npm\s*包|包|上|的|和|以及/gi,
       ' ',
     )
     .replace(/GitHub|github|NPMJS|npmjs|NPM|npm/g, ' ')

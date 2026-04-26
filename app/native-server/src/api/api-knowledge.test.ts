@@ -14,6 +14,10 @@ function jsonFetch(status: number, body: unknown): ApiKnowledgeFetch {
   });
 }
 
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 describe('V26-07 API Knowledge substrate', () => {
   it('classifies GitHub seed endpoint metadata without retaining raw query or secrets', () => {
     const metadata = classifyApiKnowledgeMetadata({
@@ -148,6 +152,40 @@ describe('V26-07 API Knowledge substrate', () => {
     });
   });
 
+  it('times out a never-resolving public API fetch and falls back to compact DOM', async () => {
+    jest.useFakeTimers();
+    let now = 0;
+    let signal: AbortSignal | undefined;
+    const fetchFn: ApiKnowledgeFetch = jest.fn((_url, init) => {
+      signal = init?.signal;
+      return new Promise<never>(() => undefined);
+    });
+
+    const pending = readApiKnowledgeRows({
+      endpointFamily: 'github_search_repositories',
+      method: 'GET',
+      params: { query: 'tabrix' },
+      fetchFn,
+      nowMs: () => now,
+    });
+
+    now = 2500;
+    await jest.advanceTimersByTimeAsync(2500);
+    const result = await pending;
+
+    expect(signal?.aborted).toBe(true);
+    expect(result).toMatchObject({
+      status: 'fallback_required',
+      reason: 'network_timeout',
+      fallbackEntryLayer: 'L0+L1',
+      telemetry: {
+        reason: 'network_timeout',
+        fallbackEntryLayer: 'L0+L1',
+      },
+    });
+    expect(result.telemetry.waitedMs).toBeGreaterThanOrEqual(2500);
+  });
+
   it('returns compact GitHub rows without raw response body fields', async () => {
     const result = await readApiKnowledgeRows({
       endpointFamily: 'github_search_repositories',
@@ -260,7 +298,7 @@ describe('V26-07 API Knowledge substrate', () => {
     ).toMatchObject({
       endpointFamily: 'github_search_repositories',
       dataPurpose: 'search_list',
-      params: { query: 'AI助手' },
+      params: { query: 'AI助手', sort: 'stars', order: 'desc' },
     });
 
     expect(
@@ -273,5 +311,53 @@ describe('V26-07 API Knowledge substrate', () => {
       dataPurpose: 'package_search',
       params: { query: 'browser automation' },
     });
+  });
+
+  it('does not add GitHub hot-search sort params for ordinary search intent', () => {
+    expect(
+      resolveApiKnowledgeCandidate({
+        intent: '搜索 GitHub 上 AI助手 相关项目，列出前10个',
+        url: 'https://github.com/search',
+      }),
+    ).toMatchObject({
+      endpointFamily: 'github_search_repositories',
+      params: { query: 'AI助手' },
+    });
+    expect(
+      resolveApiKnowledgeCandidate({
+        intent: '搜索 GitHub 上 AI助手 相关项目，列出前10个',
+        url: 'https://github.com/search',
+      })?.params,
+    ).not.toMatchObject({ sort: expect.any(String), order: expect.any(String) });
+  });
+
+  it('builds GitHub hot-search URL with stars sorting only when candidate params request it', async () => {
+    const fetchFn = jsonFetch(200, { items: [] });
+    await readApiKnowledgeRows({
+      endpointFamily: 'github_search_repositories',
+      method: 'GET',
+      params: { query: 'AI助手', sort: 'stars', order: 'desc' },
+      fetchFn,
+    });
+
+    const url = new URL((fetchFn as jest.Mock).mock.calls[0][0]);
+    expect(url.searchParams.get('q')).toBe('AI助手');
+    expect(url.searchParams.get('sort')).toBe('stars');
+    expect(url.searchParams.get('order')).toBe('desc');
+  });
+
+  it('builds ordinary GitHub search URL without sort/order params', async () => {
+    const fetchFn = jsonFetch(200, { items: [] });
+    await readApiKnowledgeRows({
+      endpointFamily: 'github_search_repositories',
+      method: 'GET',
+      params: { query: 'AI助手' },
+      fetchFn,
+    });
+
+    const url = new URL((fetchFn as jest.Mock).mock.calls[0][0]);
+    expect(url.searchParams.get('q')).toBe('AI助手');
+    expect(url.searchParams.has('sort')).toBe(false);
+    expect(url.searchParams.has('order')).toBe(false);
   });
 });
