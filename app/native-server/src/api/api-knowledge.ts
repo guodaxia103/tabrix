@@ -162,7 +162,8 @@ export function resolveApiKnowledgeCandidate(input: {
 
   if (host === 'github.com' || host.endsWith('.github.com')) {
     const repo = parsed ? parseGithubRepo(parsed) : null;
-    if (repo && (pageRole.includes('issues') || /\bissues?\b/.test(intent))) {
+    const wantsIssues = pageRole.includes('issues') || /\bissues?\b/.test(intent);
+    if (repo && wantsIssues) {
       return {
         endpointFamily: 'github_issues_list',
         dataPurpose: 'issue_list',
@@ -171,6 +172,7 @@ export function resolveApiKnowledgeCandidate(input: {
         params: { owner: repo.owner, repo: repo.repo, state: 'open' },
       };
     }
+    if (wantsIssues) return null;
     if (isSearchListIntent(intent, input.intent, 'github')) {
       const params: Record<string, string> = { query: extractSearchQuery(input.intent) };
       if (isGithubHotSearchIntent(intent, input.intent)) {

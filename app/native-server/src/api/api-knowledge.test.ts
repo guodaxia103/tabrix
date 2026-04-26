@@ -334,6 +334,14 @@ describe('V26-07 API Knowledge substrate', () => {
 
     expect(
       resolveApiKnowledgeCandidate({
+        intent: '搜索 GitHub issues，列出前10条 issue',
+        url: 'https://github.com/search?q=AI%20assistant&type=issues',
+        pageRole: 'issues_list',
+      }),
+    ).toBeNull();
+
+    expect(
+      resolveApiKnowledgeCandidate({
         intent: 'search npm package zod',
         url: 'https://www.npmjs.com/search?q=zod',
       }),
