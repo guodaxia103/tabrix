@@ -439,6 +439,13 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       dataSource: 'dom_json',
       entryLayer: 'L0',
     });
+    expect(payload.layerContract).toMatchObject({
+      dataSource: 'api_rows',
+      layer: 'L0+L1',
+      locatorAuthority: false,
+      executionAuthority: false,
+      fallbackEntryLayer: 'L0',
+    });
     expect(payload.tokensSavedEstimate).toEqual(expect.any(Number));
     expect(payload.tokensSavedEstimate as number).toBeGreaterThan(0);
     expect(

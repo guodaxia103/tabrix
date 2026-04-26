@@ -32,6 +32,7 @@ import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
 import { planSkipRead, type SkipReadPlan } from '../execution/skip-read-orchestrator';
 import { readApiKnowledgeEndpointPlan } from '../api/api-knowledge';
+import { mapDataSourceToLayerContract } from '../execution/layer-contract';
 import { runPostProcessor } from './tool-post-processors';
 import { getNativeToolHandler } from './native-tool-handlers';
 import type {
@@ -1730,6 +1731,11 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                     entryLayer: skipPlan.fallbackEntryLayer,
                     reason: skipPlan.diagnostic,
                   } as const),
+                layerContract: mapDataSourceToLayerContract({
+                  dataSource: 'api_rows',
+                  requestedLayer: recordedDecision.chosenLayer,
+                  fallbackEntryLayer: skipPlan.fallbackEntryLayer,
+                }),
                 chosenLayer: recordedDecision.chosenLayer,
                 tokenEstimateChosen: tokenSavings.tokenEstimateChosen,
                 tokenEstimateFullRead: tokenSavings.tokenEstimateFullRead,
