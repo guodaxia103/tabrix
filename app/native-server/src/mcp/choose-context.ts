@@ -580,7 +580,10 @@ function projectExperienceHit(
 
 export interface RunTabrixChooseContextDeps {
   experience: Pick<ExperienceQueryService, 'suggestActionPaths'> | null;
-  knowledgeApi: Pick<KnowledgeApiRepository, 'listBySite' | 'countAll'> | null;
+  knowledgeApi:
+    | (Pick<KnowledgeApiRepository, 'listBySite' | 'countAll'> &
+        Partial<Pick<KnowledgeApiRepository, 'listScoredBySite'>>)
+    | null;
   capabilityEnv: CapabilityEnv;
   /**
    * V23-04 / B-018 v1.5 — telemetry write-back. `null` means
@@ -688,7 +691,12 @@ export function runTabrixChooseContext(
       // requires touching the capture seed in lockstep — see
       // `app/native-server/src/memory/knowledge/api-knowledge-capture.ts`.
       const site = 'api.github.com';
-      const rows = deps.knowledgeApi.listBySite(site, KNOWLEDGE_LIGHT_SAMPLE_LIMIT);
+      const rows =
+        typeof deps.knowledgeApi.listScoredBySite === 'function'
+          ? deps.knowledgeApi
+              .listScoredBySite(site, KNOWLEDGE_LIGHT_SAMPLE_LIMIT)
+              .filter((row) => row.usableForTask)
+          : deps.knowledgeApi.listBySite(site, KNOWLEDGE_LIGHT_SAMPLE_LIMIT);
       if (rows.length > 0) {
         // We intentionally use the row count of `listBySite` (capped
         // by `KNOWLEDGE_LIGHT_SAMPLE_LIMIT`) as `totalEndpoints` for

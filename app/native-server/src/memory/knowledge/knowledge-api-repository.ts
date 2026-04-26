@@ -71,6 +71,22 @@ export interface KnowledgeApiEndpoint {
   lastSeenAt: string;
 }
 
+export type EndpointSemanticType =
+  | 'search'
+  | 'list'
+  | 'detail'
+  | 'pagination'
+  | 'filter'
+  | 'noise'
+  | 'unknown';
+
+export interface ScoredKnowledgeApiEndpoint extends KnowledgeApiEndpoint {
+  semanticType: EndpointSemanticType;
+  confidence: number;
+  usableForTask: boolean;
+  fallbackReason: string | null;
+}
+
 export interface UpsertKnowledgeApiEndpointInput {
   site: string;
   family: string;
@@ -236,10 +252,87 @@ export class KnowledgeApiRepository {
     return rows.map(rowToEndpoint);
   }
 
+  listScoredBySite(site: string, limit = 100): ScoredKnowledgeApiEndpoint[] {
+    return this.listBySite(site, limit)
+      .map(scoreEndpointKnowledge)
+      .sort((a, b) => {
+        if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+        if (b.sampleCount !== a.sampleCount) return b.sampleCount - a.sampleCount;
+        return b.lastSeenAt.localeCompare(a.lastSeenAt);
+      });
+  }
+
   countAll(): number {
     const row = this.db.prepare(`SELECT COUNT(*) AS n FROM knowledge_api_endpoints`).get() as {
       n: number;
     };
     return row.n;
   }
+}
+
+export function scoreEndpointKnowledge(endpoint: KnowledgeApiEndpoint): ScoredKnowledgeApiEndpoint {
+  const semanticType = classifyEndpointSemanticType(endpoint);
+  const fallbackReason = deriveEndpointFallbackReason(endpoint, semanticType);
+  return {
+    ...endpoint,
+    semanticType,
+    confidence: computeEndpointConfidence(endpoint, semanticType, fallbackReason),
+    usableForTask: fallbackReason === null,
+    fallbackReason,
+  };
+}
+
+function classifyEndpointSemanticType(endpoint: KnowledgeApiEndpoint): EndpointSemanticType {
+  const tag = (endpoint.semanticTag || '').toLowerCase();
+  if (tag.includes('search')) return 'search';
+  if (tag.includes('list') || tag.endsWith('_runs') || tag.endsWith('_workflows')) return 'list';
+  if (tag.includes('detail') || tag.includes('metadata')) return 'detail';
+  if (
+    endpoint.requestSummary.queryKeys.some((key) =>
+      /^(page|per_page|cursor|after|before)$/.test(key),
+    )
+  ) {
+    return 'pagination';
+  }
+  if (
+    endpoint.requestSummary.queryKeys.some((key) => /^(q|query|filter|state|sort|order)$/.test(key))
+  ) {
+    return 'filter';
+  }
+  if (tag.includes('private') || tag.includes('telemetry') || tag.includes('analytics')) {
+    return 'noise';
+  }
+  return 'unknown';
+}
+
+function deriveEndpointFallbackReason(
+  endpoint: KnowledgeApiEndpoint,
+  semanticType: EndpointSemanticType,
+): string | null {
+  if (semanticType === 'noise') return 'noise_endpoint';
+  if (endpoint.method !== 'GET' && endpoint.method !== 'HEAD') return 'non_read_method';
+  if (endpoint.statusClass && endpoint.statusClass !== '2xx' && endpoint.statusClass !== '3xx') {
+    return `status_${endpoint.statusClass}`;
+  }
+  if (semanticType === 'unknown') return 'unknown_semantic_type';
+  return null;
+}
+
+function computeEndpointConfidence(
+  endpoint: KnowledgeApiEndpoint,
+  semanticType: EndpointSemanticType,
+  fallbackReason: string | null,
+): number {
+  if (fallbackReason) return 0.1;
+  let score = 0.4;
+  if (semanticType === 'search' || semanticType === 'list') score += 0.25;
+  else if (semanticType === 'detail') score += 0.2;
+  else if (semanticType === 'pagination' || semanticType === 'filter') score += 0.12;
+
+  if (endpoint.statusClass === '2xx') score += 0.15;
+  else if (endpoint.statusClass === '3xx') score += 0.05;
+
+  if (endpoint.responseSummary.shape.kind !== 'unknown') score += 0.1;
+  if (endpoint.sampleCount > 1) score += Math.min(0.1, Math.log2(endpoint.sampleCount) * 0.03);
+  return Math.max(0, Math.min(0.99, Number(score.toFixed(2))));
 }

@@ -16,6 +16,7 @@
 import { openMemoryDb } from '../db/client';
 import {
   KnowledgeApiRepository,
+  scoreEndpointKnowledge,
   type UpsertKnowledgeApiEndpointInput,
 } from './knowledge-api-repository';
 
@@ -154,6 +155,62 @@ describe('KnowledgeApiRepository (B-017)', () => {
     const { db } = openMemoryDb({ dbPath: ':memory:' });
     const repo = new KnowledgeApiRepository(db);
     expect(repo.findBySignature('api.github.com', 'GET api.github.com/missing')).toBeNull();
+    db.close();
+  });
+
+  it('scores endpoint knowledge from existing metadata without a schema migration', () => {
+    const { db } = openMemoryDb({ dbPath: ':memory:' });
+    const repo = new KnowledgeApiRepository(db);
+    const search = repo.upsert(
+      makeInput({
+        endpointSignature: 'GET api.github.com/search/repositories',
+        urlPattern: 'api.github.com/search/repositories',
+        semanticTag: 'github.search_repositories',
+        statusClass: '2xx',
+        observedAt: '2026-04-22T12:00:00.000Z',
+      }),
+    );
+    repo.upsert(
+      makeInput({
+        endpointSignature: 'POST api.github.com/repos/:owner/:repo/issues',
+        method: 'POST',
+        urlPattern: 'api.github.com/repos/:owner/:repo/issues',
+        semanticTag: 'github.issues_list',
+        statusClass: '2xx',
+        observedAt: '2026-04-22T13:00:00.000Z',
+      }),
+    );
+
+    const scored = scoreEndpointKnowledge(search);
+    expect(scored).toMatchObject({
+      semanticType: 'search',
+      usableForTask: true,
+      fallbackReason: null,
+    });
+    expect(scored.confidence).toBeGreaterThan(0.7);
+
+    const candidates = repo.listScoredBySite('api.github.com');
+    expect(candidates[0].semanticType).toBe('search');
+    expect(candidates[0].usableForTask).toBe(true);
+    const postCandidate = candidates.find((candidate) => candidate.method === 'POST');
+    expect(postCandidate).toMatchObject({
+      usableForTask: false,
+      fallbackReason: 'non_read_method',
+    });
+    db.close();
+  });
+
+  it('raises sampleCount and lastSeen on repeated observations for candidate ranking', () => {
+    const { db } = openMemoryDb({ dbPath: ':memory:' });
+    const repo = new KnowledgeApiRepository(db);
+    repo.upsert(makeInput({ observedAt: '2026-04-22T10:00:00.000Z' }));
+    repo.upsert(makeInput({ observedAt: '2026-04-22T11:00:00.000Z' }));
+    repo.upsert(makeInput({ observedAt: '2026-04-22T12:00:00.000Z' }));
+
+    const [candidate] = repo.listScoredBySite('api.github.com');
+    expect(candidate.sampleCount).toBe(3);
+    expect(candidate.lastSeenAt).toBe('2026-04-22T12:00:00.000Z');
+    expect(candidate.confidence).toBeGreaterThan(0.7);
     db.close();
   });
 });
