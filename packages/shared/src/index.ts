@@ -3,6 +3,7 @@ export * from './types';
 export * from './tools';
 export * from './labels';
 export * from './bridge-ws';
+export * from './browser-fact';
 export * from './read-page-contract';
 export * from './memory';
 export * from './experience';

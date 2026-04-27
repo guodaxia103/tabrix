@@ -49,9 +49,11 @@ if (typeof globalThis.chrome === 'undefined') {
       onErrorOccurred: { addListener: vi.fn(), removeListener: vi.fn() },
     },
     webNavigation: {
+      onBeforeNavigate: { addListener: vi.fn(), removeListener: vi.fn() },
       onCommitted: { addListener: vi.fn(), removeListener: vi.fn() },
       onDOMContentLoaded: { addListener: vi.fn(), removeListener: vi.fn() },
       onCompleted: { addListener: vi.fn(), removeListener: vi.fn() },
+      onHistoryStateUpdated: { addListener: vi.fn(), removeListener: vi.fn() },
     },
     debugger: {
       onEvent: { addListener: vi.fn(), removeListener: vi.fn() },

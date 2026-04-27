@@ -12,6 +12,7 @@ import { isNoServiceWorkerError } from '@/common/is-no-service-worker-error';
 import { handleCallTool } from './tools';
 import { registerNativeBridgeForwarder, registerNativeBridgeRequester } from './native-bridge';
 import { acquireKeepalive } from './keepalive-manager';
+import { attachLifecycleObserver } from './observers/lifecycle';
 
 const LOG_PREFIX = '[NativeHost]';
 
@@ -1255,6 +1256,21 @@ export const initNativeHostListener = () => {
   ensureHeartbeatLoop();
   clearBridgeSocketReconnectTimer();
   void connectBridgeSocket('sw_init').catch(() => {});
+  // V27-01: Attach the v2.7 lifecycle observer once per SW activation. The
+  // observer drops messages silently when the bridge socket is not yet
+  // connected (no connectionId), so it is safe to attach before the first
+  // bridge handshake completes.
+  attachLifecycleObserver({
+    send: (message) => {
+      void sendBridgeSocketMessage(message).catch(() => {
+        // Bridge can be transiently down; lifecycle observations are
+        // best-effort and must not fail the navigation handler chain.
+      });
+    },
+    getConnectionId: () => bridgeSocketConnectionId,
+    getExtensionId: () => chrome.runtime.id,
+    warn: (msg, error) => console.warn(`${LOG_PREFIX} ${msg}`, error),
+  });
   pulseBridgeHeartbeat('sw_init');
   void flushPendingExtensionReloadCallback().catch((error) => {
     console.warn(`${LOG_PREFIX} Failed to process pending extension reload callback`, error);
