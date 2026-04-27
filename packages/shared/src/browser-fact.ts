@@ -729,17 +729,200 @@ export interface RecommendedLayerBudget {
 }
 
 // ---------------------------------------------------------------------------
-// V27-05 — placeholders (declared here so downstream batch tasks can
-// extend them without re-opening this file's enum allowlist). The
-// concrete fields land in their respective batch task.
+// V27-05 — Tab/window context manager + invalidation (Batch A)
 // ---------------------------------------------------------------------------
 
 /**
- * Placeholder for V27-05 tab/window context events. Shape is finalised
- * in V27-05.
+ * Closed-enum kind of tab/window event the V27-05 observer emits over
+ * the bridge. The runtime ContextManager folds these into per-tab
+ * versioned context records; the events carry no raw URLs and no
+ * frame ids.
+ *
+ * Always includes `'unknown'` per V27-00 invariant.
+ *
+ * - `tab_created`         — new tab opened in this browser session.
+ * - `tab_removed`         — `chrome.tabs.onRemoved`. The manager uses
+ *                           this for cleanup.
+ * - `tab_replaced`        — `chrome.tabs.onReplaced` (e.g. prerender
+ *                           swap). Treated like a closure of the old
+ *                           tab and a fresh creation of the new one.
+ * - `window_focus_changed`— `chrome.windows.onFocusChanged`.
+ * - `bfcache_restored`    — main frame restored from the back/forward
+ *                           cache (subscribed via `chrome.webNavigation
+ *                           .onCommitted` `transitionQualifiers` carrying
+ *                           `'forward_back'`). The observer pairs this
+ *                           with the stable-target-ref-registry liveness
+ *                           probe (`StableRefRevalidationResult`).
+ */
+export type TabWindowEventKind =
+  | 'tab_created'
+  | 'tab_removed'
+  | 'tab_replaced'
+  | 'window_focus_changed'
+  | 'bfcache_restored'
+  | 'unknown';
+
+export const TAB_WINDOW_EVENT_KINDS = [
+  'tab_created',
+  'tab_removed',
+  'tab_replaced',
+  'window_focus_changed',
+  'bfcache_restored',
+  'unknown',
+] as const satisfies ReadonlyArray<TabWindowEventKind>;
+
+/**
+ * Closed-enum reason the V27-05 ContextManager bumps a tab's context
+ * version. Mirrors `OperationLogMetadata.contextInvalidationReason`
+ * (already declared by V27-00 — do not bump the metadata-key allowlist
+ * here; this enum just pins the wire-side closed set).
+ *
+ * Always includes `'unknown'` per V27-00 invariant.
+ */
+export type ContextInvalidationReason =
+  | 'navigation'
+  | 'route_change'
+  | 'tab_closed'
+  | 'tab_replaced'
+  | 'task_ended'
+  | 'bfcache_restored'
+  | 'manual_reset'
+  | 'unknown';
+
+export const CONTEXT_INVALIDATION_REASONS = [
+  'navigation',
+  'route_change',
+  'tab_closed',
+  'tab_replaced',
+  'task_ended',
+  'bfcache_restored',
+  'manual_reset',
+  'unknown',
+] as const satisfies ReadonlyArray<ContextInvalidationReason>;
+
+/**
+ * Closed-enum level the ContextManager tags an invalidation event
+ * with. The Router/Policy uses this hint to decide whether a
+ * cascade (e.g. site -> page -> region -> action) needs a complete
+ * re-read or only a localised refresh.
+ *
+ * Always includes `'unknown'` per V27-00 invariant.
+ */
+export type ContextLevel = 'site' | 'page' | 'region' | 'action' | 'unknown';
+
+export const CONTEXT_LEVELS = [
+  'site',
+  'page',
+  'region',
+  'action',
+  'unknown',
+] as const satisfies ReadonlyArray<ContextLevel>;
+
+/**
+ * Closed-enum verdict the extension reports back when the
+ * stable-target-ref-registry is probed after a bfcache restore (or
+ * any other invalidation that does not necessarily mean refs are
+ * dead). Producer is the extension `observers/tab-window-context.ts`;
+ * consumer is the runtime `v27-context-manager.ts`.
+ *
+ * Always includes `'unknown'` per V27-00 invariant.
+ *
+ * - `live`     — registry still has entries for the tab AND a
+ *                non-empty live count. Refs may be reused.
+ * - `stale`    — registry has entries but the producer suspects they
+ *                no longer match the live DOM. Refs must be
+ *                re-derived before reuse.
+ * - `missing`  — registry has no entries for the tab. There was
+ *                nothing to invalidate.
+ * - `unknown`  — registry probe failed or was skipped.
+ */
+export type StableRefRevalidationOutcome = 'live' | 'stale' | 'missing' | 'unknown';
+
+export const STABLE_REF_REVALIDATION_OUTCOMES = [
+  'live',
+  'stale',
+  'missing',
+  'unknown',
+] as const satisfies ReadonlyArray<StableRefRevalidationOutcome>;
+
+/**
+ * Result of a stable-target-ref-registry liveness probe. Carries
+ * counts only — the registry's internal map (tabId, targetRef -> ref)
+ * never crosses the bridge. This way the runtime can reason about
+ * "do we still trust the refs?" without re-implementing the
+ * extension-side authority on DOM identity.
+ */
+export interface StableRefRevalidationResult {
+  outcome: StableRefRevalidationOutcome;
+  /** Count of live ref entries the registry still holds for the tab. */
+  liveCount: number;
+  /** Count of entries the producer flagged as stale during the probe. */
+  staleCount: number;
+  /** Producer wallclock (ms). */
+  observedAtMs: number;
+}
+
+/**
+ * V27-05 — wire envelope the extension `observers/tab-window-context.ts`
+ * emits over the bridge. Lives inside the v2.7 additive `observation`
+ * bridge union member; see `bridge-ws.ts`.
+ *
+ * Privacy: every optional field is closed-enum or numeric. No raw URL
+ * traverses this envelope; the optional `urlPattern` is the
+ * brand-neutral path-only form already used by the lifecycle observer.
  */
 export interface TabWindowContextEventEnvelope {
+  /** Closed-enum event kind. Always includes `'unknown'`. */
+  eventKind: TabWindowEventKind;
+  /** The tab the event is about. For `window_focus_changed`, the tab
+   *  that gained focus (or `-1` if focus left Chrome). */
   tabId: number;
+  /** Producer wallclock (ms). */
+  observedAtMs: number;
+  /** Optional brand-neutral path-only urlPattern — main-frame only.
+   *  `null` for events that do not carry a url (`tab_removed`,
+   *  `window_focus_changed`). */
+  urlPattern?: string | null;
+  /** For `tab_replaced`: the id of the tab that took over from the
+   *  one named in `tabId`. The manager treats this as a fresh tab. */
+  newTabId?: number | null;
+  /** For `window_focus_changed`: the id of the focused window
+   *  (or `chrome.windows.WINDOW_ID_NONE` (`-1`) if focus left). */
+  windowId?: number | null;
+  /** For `bfcache_restored`: stable-target-ref-registry probe result.
+   *  `null` when the producer skipped the probe (e.g. no entries for
+   *  the tab). The runtime ContextManager uses this to decide whether
+   *  to bump the page version under a `bfcache_restored` reason. */
+  stableRefRevalidation?: StableRefRevalidationResult | null;
+}
+
+/**
+ * V27-05 — versioned context record per tab. The Router/Policy
+ * consults the `version` (a monotonic counter) to detect "the page
+ * the AI thought it was looking at has changed" without having to
+ * snapshot the entire lifecycle/fact bag.
+ *
+ * The `contextId` is producer-stable per (tab, urlPattern) tuple; a
+ * navigation that lands on a new urlPattern mints a fresh contextId
+ * AND bumps the version on the previous record before its eviction.
+ */
+export interface ContextVersion {
+  /** Stable producer-side id. */
+  contextId: string;
+  /** Tab the context belongs to. */
+  tabId: number;
+  /** Brand-neutral path-only urlPattern. May be `null` when the
+   *  manager has only seen tab-level events for this tab so far. */
+  urlPattern: string | null;
+  /** Monotonic version counter. Bumps on every invalidation. */
+  version: number;
+  /** Closed-enum context level the most recent invalidation tagged.
+   *  Defaults to `'page'` for navigation, `'region'` for SPA partial
+   *  updates, `'action'` for action-outcome triggered bumps. */
+  level: ContextLevel;
+  /** Closed-enum reason for the most recent invalidation. */
+  lastInvalidationReason: ContextInvalidationReason;
+  /** Producer wallclock for the latest update (ms). */
   observedAtMs: number;
 }
 

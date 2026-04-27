@@ -15,6 +15,11 @@ import { acquireKeepalive } from './keepalive-manager';
 import { attachLifecycleObserver } from './observers/lifecycle';
 import { attachNetworkFactObserver } from './observers/network-fact';
 import { attachActionOutcomeObserver } from './observers/action-outcome';
+import {
+  attachTabWindowContextObserver,
+  classifyStableRefRevalidation,
+} from './observers/tab-window-context';
+import { getStableTargetRefRegistrySnapshot } from './tools/browser/stable-target-ref-registry';
 
 const LOG_PREFIX = '[NativeHost]';
 
@@ -1302,6 +1307,27 @@ export const initNativeHostListener = () => {
     },
     getConnectionId: () => bridgeSocketConnectionId,
     getExtensionId: () => chrome.runtime.id,
+    warn: (msg, error) => console.warn(`${LOG_PREFIX} ${msg}`, error),
+  });
+  // V27-05: Attach the v2.7 tab/window context observer. Emits
+  // tab_created / tab_removed / tab_replaced / window_focus_changed
+  // events to the runtime ContextManager. bfcache restoration is
+  // surfaced via notifyBfcacheRestored() invoked from the lifecycle
+  // observer when it sees a 'forward_back' qualifier.
+  attachTabWindowContextObserver({
+    send: (message) => {
+      void sendBridgeSocketMessage(message).catch(() => {
+        // Bridge can be transiently down; tab/window observations are
+        // best-effort and must not fail the tabs/windows handler chain.
+      });
+    },
+    getConnectionId: () => bridgeSocketConnectionId,
+    getExtensionId: () => chrome.runtime.id,
+    probeStableRefs: (tabId) => {
+      const snap = getStableTargetRefRegistrySnapshot();
+      const staleCount = snap.entryCounts?.[tabId] ?? 0;
+      return classifyStableRefRevalidation(0, staleCount);
+    },
     warn: (msg, error) => console.warn(`${LOG_PREFIX} ${msg}`, error),
   });
   pulseBridgeHeartbeat('sw_init');
