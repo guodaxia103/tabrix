@@ -14,6 +14,7 @@ import { registerNativeBridgeForwarder, registerNativeBridgeRequester } from './
 import { acquireKeepalive } from './keepalive-manager';
 import { attachLifecycleObserver } from './observers/lifecycle';
 import { attachNetworkFactObserver } from './observers/network-fact';
+import { attachActionOutcomeObserver } from './observers/action-outcome';
 
 const LOG_PREFIX = '[NativeHost]';
 
@@ -1281,6 +1282,22 @@ export const initNativeHostListener = () => {
       void sendBridgeSocketMessage(message).catch(() => {
         // Bridge can be transiently down; fact observations are
         // best-effort and must not fail the webRequest handler chain.
+      });
+    },
+    getConnectionId: () => bridgeSocketConnectionId,
+    getExtensionId: () => chrome.runtime.id,
+    warn: (msg, error) => console.warn(`${LOG_PREFIX} ${msg}`, error),
+  });
+  // V27-03: Attach the v2.7 action outcome observer alongside the
+  // lifecycle/network observers. Tools (click/fill/etc.) call
+  // observe()/pushSignal() on the returned handle; the observer
+  // races browser-side signals into a per-action timeline and emits
+  // ActionOutcomeEventEnvelope on flush. Best-effort send.
+  attachActionOutcomeObserver({
+    send: (message) => {
+      void sendBridgeSocketMessage(message).catch(() => {
+        // Bridge can be transiently down; outcome observations are
+        // best-effort and must not fail the action's main path.
       });
     },
     getConnectionId: () => bridgeSocketConnectionId,

@@ -423,18 +423,144 @@ export interface BrowserFactSnapshotEnvelope {
 }
 
 // ---------------------------------------------------------------------------
-// V27-03..05 — placeholders (declared here so downstream batch tasks can
-// extend them without re-opening this file's enum allowlist). The
-// concrete fields land in their respective batch task.
+// V27-03 — Action outcome classifier (Batch A)
 // ---------------------------------------------------------------------------
 
 /**
- * Placeholder for V27-03 action outcomes. Shape is finalised in V27-03.
+ * Closed-enum kind of action being classified. The runtime keeps the
+ * set narrow on purpose: the v2.7 outcome classifier only cares whether
+ * something likely-mutating happened, not the exact UI affordance.
+ *
+ * Always includes `'unknown'` per V27-00 invariant.
+ */
+export type ActionKind = 'click' | 'fill' | 'submit' | 'navigate' | 'keyboard' | 'unknown';
+
+export const ACTION_KINDS = [
+  'click',
+  'fill',
+  'submit',
+  'navigate',
+  'keyboard',
+  'unknown',
+] as const satisfies ReadonlyArray<ActionKind>;
+
+/**
+ * Closed-enum signal kinds the V27-03 race observer emits during the
+ * post-action settle window. Each signal is small, brand-neutral, and
+ * pre-classified — the runtime never re-derives a signal kind from a
+ * raw URL or DOM string.
+ *
+ * Always includes `'unknown'`.
+ */
+export type ActionSignalKind =
+  | 'lifecycle_committed'
+  | 'tab_created'
+  | 'dom_region_changed'
+  | 'network_completed'
+  | 'dialog_opened'
+  | 'unknown';
+
+export const ACTION_SIGNAL_KINDS = [
+  'lifecycle_committed',
+  'tab_created',
+  'dom_region_changed',
+  'network_completed',
+  'dialog_opened',
+  'unknown',
+] as const satisfies ReadonlyArray<ActionSignalKind>;
+
+/**
+ * V27-03 — single signal in the post-action timeline. Carries closed-enum
+ * descriptors only; the producer is responsible for stripping URL
+ * query/fragment, raw HTML, and header values before emit. The
+ * persistence-side V27-00 PrivacyGate is the belt-and-suspenders defence.
+ */
+export interface ActionSignal {
+  kind: ActionSignalKind;
+  /** Producer wallclock for the signal (ms). */
+  observedAtMs: number;
+  /** Optional brand-neutral region tag (DOM signals only). */
+  regionTag?: string | null;
+  /** Optional brand-neutral host (network signals only). */
+  host?: string | null;
+  /** Optional path-only pattern (network signals only). */
+  pathPattern?: string | null;
+  /** Optional new-tab id (tab_created signals only). */
+  newTabId?: number | null;
+}
+
+/**
+ * Closed-enum classification of an action's observed effect. Includes
+ * `'multiple_signals'` (several non-overlapping signals fired, e.g.
+ * navigation + new-tab) and `'ambiguous'` (signals fired but the
+ * confidence is too low to commit to a verdict). Always includes
+ * `'unknown'` per V27-00 invariant.
+ */
+export type ActionOutcome =
+  | 'navigated_same_tab'
+  | 'navigated_new_tab'
+  | 'spa_partial_update'
+  | 'modal_opened'
+  | 'no_observed_change'
+  | 'multiple_signals'
+  | 'ambiguous'
+  | 'unknown';
+
+export const ACTION_OUTCOMES = [
+  'navigated_same_tab',
+  'navigated_new_tab',
+  'spa_partial_update',
+  'modal_opened',
+  'no_observed_change',
+  'multiple_signals',
+  'ambiguous',
+  'unknown',
+] as const satisfies ReadonlyArray<ActionOutcome>;
+
+/**
+ * V27-03 — wire envelope the extension `observers/action-outcome.ts`
+ * emits over the bridge. Carries the action descriptor + the closed-enum
+ * signal timeline. The native classifier is pure: given this envelope,
+ * it returns `ActionOutcomeSnapshot` deterministically.
  */
 export interface ActionOutcomeEventEnvelope {
+  /** Producer-side opaque id, stable across retries. */
   actionId: string;
+  /** Closed-enum action kind. */
+  actionKind: ActionKind;
+  /** Tab the action was dispatched against. */
+  tabId: number;
+  /** Path-only urlPattern at the time of the action; brand-neutral. */
+  urlPattern: string | null;
+  /** Producer wallclock for the action itself (ms). */
   observedAtMs: number;
+  /** Pre-summarised signal timeline (closed-enum kinds only). */
+  signals: ActionSignal[];
 }
+
+/**
+ * V27-03 — output of `v27-action-outcome.ts`. Lives inside the
+ * runtime; the operation-log writer copies `outcome` and the
+ * formatted confidence into `actionOutcome` / `outcomeConfidence`
+ * metadata keys (already declared by V27-00).
+ */
+export interface ActionOutcomeSnapshot {
+  actionId: string;
+  outcome: ActionOutcome;
+  /** Clamped float in `[0, 1]`. */
+  outcomeConfidence: number;
+  /** Closed-enum signal kinds that fired during the settle window
+   *  (deduplicated). Useful for the operation-log evidence trail. */
+  observedSignalKinds: ActionSignalKind[];
+  /** Producer wallclock for the snapshot (ms). */
+  producedAtMs: number;
+}
+
+// ---------------------------------------------------------------------------
+// V27-04..05 — placeholders (declared here so downstream batch tasks can
+// extend them without re-opening this file's enum allowlist). The
+// concrete fields land in their respective batch task.
+// ---------------------------------------------------------------------------
 
 /**
  * Placeholder for V27-05 tab/window context events. Shape is finalised
