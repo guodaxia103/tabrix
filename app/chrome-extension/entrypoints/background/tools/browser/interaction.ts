@@ -793,10 +793,15 @@ class ClickTool extends BaseBrowserToolExecutor {
       // background-derived signals (lifecycle/tab/network) on its own.
       try {
         const pageSig = result && typeof result === 'object' ? (result as any).signals : null;
-        if (pageSig && pageSig.domRegionChanged === true) {
+        // Real click-helper field names are `domChanged` / `domAddedDialog`
+        // (see app/chrome-extension/inject-scripts/click-helper.js). The
+        // `domRegionChanged` / `dialogOpened` aliases below exist only as a
+        // forward-compat hook in case the helper is ever renamed; tests must
+        // exercise the real names so we never silently regress.
+        if (pageSig && (pageSig.domChanged === true || pageSig.domRegionChanged === true)) {
           actionOutcomeHandle.pushSignal({ kind: 'dom_region_changed' });
         }
-        if (pageSig && pageSig.dialogOpened === true) {
+        if (pageSig && (pageSig.domAddedDialog === true || pageSig.dialogOpened === true)) {
           actionOutcomeHandle.pushSignal({ kind: 'dialog_opened' });
         }
       } catch {

@@ -57,20 +57,23 @@ describe('clickTool — V27-03 action-outcome arming', () => {
     __resetActionOutcomeObserverHandleForTests();
   });
 
-  it('arms the observer for chrome_click_element and emits an action_outcome envelope', async () => {
+  it('arms the observer for chrome_click_element and emits an action_outcome envelope (real click-helper field names)', async () => {
     vi.spyOn(clickTool as any, 'tryGetTab').mockResolvedValue({
       id: 7,
       url: 'https://example.com/list?q=secret',
       windowId: 1,
     });
     vi.spyOn(clickTool as any, 'injectContentScript').mockResolvedValue(undefined);
-    // Page-local helper reports a successful click with a DOM region change.
+    // Page-local helper reports a successful click with a real-shape signals
+    // payload. The shape MUST match
+    // app/chrome-extension/inject-scripts/click-helper.js (`domChanged` and
+    // `domAddedDialog`); the previous `domRegionChanged`/`dialogOpened` keys
+    // were a bridge-side fiction and would never be set in production.
     vi.spyOn(clickTool as any, 'sendMessageToTab').mockResolvedValue({
       success: true,
       dispatchSucceeded: true,
-      signals: { domRegionChanged: true },
+      signals: { domChanged: true, domAddedDialog: true },
     });
-    // Defang the download preflight script-injection.
     vi.spyOn(clickTool as any, 'preflightDownloadIntercept').mockResolvedValue({
       interceptedDownload: false,
     });
@@ -81,15 +84,9 @@ describe('clickTool — V27-03 action-outcome arming', () => {
     });
     expect(result.isError).toBe(false);
 
-    // Force the observer to flush by yielding the auto-flush timer
-    // forward. The default settle window is 1.5s; vi.advanceTimersByTime
-    // would be cleaner but we are not in fake-timer mode here, so wait
-    // a real but short interval and then explicitly fall back to a
-    // direct flush via the singleton handle when test infra demands
-    // determinism. We rely on the fact that `pushSignal` was already
-    // recorded synchronously inside `execute()`; the envelope is emitted
-    // when the auto-flush timer fires. To keep the test deterministic,
-    // wait until the bridge has seen something.
+    // The observer auto-flushes after the default settle window (1.5s).
+    // We rely on the fact that pushSignal() was recorded synchronously in
+    // execute(), then wait a short real interval for the flush to fire.
     await new Promise((r) => setTimeout(r, 1700));
 
     expect(sent.length).toBeGreaterThanOrEqual(1);
@@ -102,6 +99,41 @@ describe('clickTool — V27-03 action-outcome arming', () => {
     expect(env.tabId).toBe(7);
     // Brand-neutral urlPattern: host + path only, query stripped.
     expect(env.urlPattern).toBe('example.com/list');
-    expect(env.signals.map((s) => s.kind)).toContain('dom_region_changed');
+    const kinds = env.signals.map((s) => s.kind);
+    expect(kinds).toContain('dom_region_changed');
+    expect(kinds).toContain('dialog_opened');
+  }, 10000);
+
+  it('also accepts the alias field names (forward-compat regression guard)', async () => {
+    vi.spyOn(clickTool as any, 'tryGetTab').mockResolvedValue({
+      id: 8,
+      url: 'https://example.com/page',
+      windowId: 1,
+    });
+    vi.spyOn(clickTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(clickTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      dispatchSucceeded: true,
+      // Alias path: same boolean meaning, future-proofs against a rename.
+      signals: { domRegionChanged: true, dialogOpened: true },
+    });
+    vi.spyOn(clickTool as any, 'preflightDownloadIntercept').mockResolvedValue({
+      interceptedDownload: false,
+    });
+
+    const result = await clickTool.execute({
+      selector: '#go',
+      tabId: 8,
+    });
+    expect(result.isError).toBe(false);
+
+    await new Promise((r) => setTimeout(r, 1700));
+
+    expect(sent.length).toBeGreaterThanOrEqual(1);
+    const msg = sent[0];
+    if (msg.payload.kind !== 'action_outcome') throw new Error('payload kind');
+    const kinds = msg.payload.data.signals.map((s) => s.kind);
+    expect(kinds).toContain('dom_region_changed');
+    expect(kinds).toContain('dialog_opened');
   }, 10000);
 });
