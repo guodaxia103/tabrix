@@ -2053,6 +2053,25 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           // `noteReadPage` bookkeeping so the three sites cannot
           // drift back to `'L0+L1+L2'`.
           forcedReadPageLayer = skipPlan.fallbackEntryLayer;
+          if (skipPlan.sourceRoute === 'knowledge_supported_read') {
+            apiFallbackEvidence = {
+              kind: 'read_page_fallback',
+              readPageAvoided: false,
+              sourceKind: 'dom_json',
+              sourceRoute: skipPlan.sourceRoute,
+              fallbackCause: 'api_unavailable',
+              fallbackUsed: 'dom_compact',
+              fallbackEntryLayer: 'L0+L1',
+              apiTelemetry: {
+                method: 'GET',
+                reason: skipPlan.fallbackCause || 'fallback_required',
+                status: null,
+                waitedMs: 0,
+                readAllowed: false,
+                fallbackEntryLayer: 'L0+L1',
+              },
+            };
+          }
           operationLogHint = {
             requestedLayer: skipPlan.fallbackEntryLayer,
             selectedDataSource: 'dom_json',

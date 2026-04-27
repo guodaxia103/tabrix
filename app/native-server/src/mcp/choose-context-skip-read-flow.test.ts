@@ -659,6 +659,40 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     });
   });
 
+  it('knowledge_supported_read fallback_required returns explicit DOM fallback evidence', async () => {
+    markBridgeReady();
+    const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:12');
+    ctx.noteUrlChange('https://github.com/search', null);
+    ctx.noteChooseContextDecision({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0+L1',
+      fullReadTokenEstimate: 12000,
+      replayCandidate: null,
+      apiCapability: null,
+    });
+    const bridgeSpy = mockBridgeRoundTrip(
+      JSON.stringify({ kind: 'page', pageContent: 'api-unavailable-fallback-dom' }),
+    );
+
+    const result = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 12,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
+    expect(payload.pageContent).toBe('api-unavailable-fallback-dom');
+    expectApiFallbackEvidence(payload, {
+      fallbackCause: 'api_unavailable',
+      apiReason: 'api_layer_not_available',
+    });
+    const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
+      const messageType = call[1];
+      return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
+    });
+    expect(callToolInvocations).toHaveLength(1);
+  });
+
   // ------------------------------------------------------------------
   // (e2) fallback_required clamps the bridge requestedLayer to L0+L1
   //      even when the caller asked for L0+L1+L2. V26-03 review
