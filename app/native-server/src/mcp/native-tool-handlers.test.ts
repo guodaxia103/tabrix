@@ -213,7 +213,7 @@ describe('native-tool-handlers · tabrix_choose_context (B-018 v1)', () => {
     });
   });
 
-  it('routes to knowledge_light only when capability is enabled and repo non-empty', async () => {
+  it('routes to knowledge_light only when capability is enabled and catalog is non-empty', async () => {
     const handler = getChooseHandler();
     const fakeExperience = {
       suggestActionPaths: jest.fn().mockReturnValue([]),
@@ -247,7 +247,7 @@ describe('native-tool-handlers · tabrix_choose_context (B-018 v1)', () => {
     const knowledgeApi = { listBySite } as unknown as KnowledgeApiRepository;
 
     const enabledResult = await handler(
-      { intent: 'open issues', url: 'https://github.com/octocat/hello' },
+      { intent: 'inspect captured endpoint catalog', url: 'https://github.com/octocat/hello' },
       makeDeps({
         experience: fakeExperience,
         knowledgeApi,
@@ -260,7 +260,7 @@ describe('native-tool-handlers · tabrix_choose_context (B-018 v1)', () => {
 
     listBySite.mockClear();
     const disabledResult = await handler(
-      { intent: 'open issues', url: 'https://github.com/octocat/hello' },
+      { intent: 'inspect captured endpoint catalog', url: 'https://github.com/octocat/hello' },
       makeDeps({
         experience: fakeExperience,
         knowledgeApi,

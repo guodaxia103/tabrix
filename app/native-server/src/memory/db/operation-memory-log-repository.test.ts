@@ -193,22 +193,26 @@ describe('OperationMemoryLogRepository', () => {
     it('serialises tabHygiene + metadata under the schema-v2 wrapper', () => {
       const { repo, close } = bootstrap();
       try {
-        repo.insert(
+        const inserted = repo.insert(
           logFixture({
             metadata: { decisionReason: 'router_fail_safe_dom_compact' },
           }),
         );
         const raw = (
-          (repo as unknown as { db: { prepare: (sql: string) => { get: () => unknown } } }).db
+          (
+            repo as unknown as {
+              db: { prepare: (sql: string) => { get: (id: string) => unknown } };
+            }
+          ).db
             ? (
                 repo as unknown as {
-                  db: { prepare: (sql: string) => { get: () => unknown } };
+                  db: { prepare: (sql: string) => { get: (id: string) => unknown } };
                 }
               ).db
                 .prepare(
                   'SELECT tab_hygiene_blob FROM operation_memory_logs WHERE operation_log_id = ?',
                 )
-                .get()
+                .get(inserted.operationLogId)
             : null
         ) as { tab_hygiene_blob: string } | null;
         // Repo intentionally hides its db handle; if we cannot peek
