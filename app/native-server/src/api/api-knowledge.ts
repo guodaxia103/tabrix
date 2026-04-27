@@ -600,7 +600,8 @@ function buildPublicRequest(
   params: Record<string, string | number | null | undefined>,
   limit?: number,
 ): { url: string; limit: number; dataPurpose: ApiDataPurpose } | null {
-  const requestedLimit = Number(limit ?? 10);
+  const defaultLimit = endpointFamily === 'github_workflow_runs_list' ? 3 : 10;
+  const requestedLimit = Number(limit ?? defaultLimit);
   const boundedLimit = Number.isFinite(requestedLimit)
     ? Math.max(1, Math.min(10, Math.floor(requestedLimit)))
     : 10;

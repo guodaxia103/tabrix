@@ -595,6 +595,39 @@ describe('V26-07 API Knowledge substrate', () => {
     expect(JSON.stringify(result)).not.toContain('SHOULD_NOT_LEAK');
   });
 
+  it('caps GitHub workflow runs to three rows by default for fast detail reads', async () => {
+    let requestedUrl = '';
+    const result = await readApiKnowledgeRows({
+      endpointFamily: 'github_workflow_runs_list',
+      method: 'GET',
+      params: { owner: 'guodaxia103', repo: 'tabrix' },
+      fetchFn: async (url) => {
+        requestedUrl = String(url);
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => 'application/json' },
+          json: async () => ({
+            workflow_runs: Array.from({ length: 10 }, (_, index) => ({
+              name: 'CI',
+              status: 'completed',
+              conclusion: 'success',
+              head_branch: 'main',
+              event: 'push',
+              display_title: `Run ${index}`,
+              created_at: '2026-04-27T00:00:00Z',
+              html_url: `https://github.com/guodaxia103/tabrix/actions/runs/${index}`,
+            })),
+          }),
+        } as any;
+      },
+    });
+
+    expect(requestedUrl).toContain('per_page=3');
+    expect(result.status).toBe('ok');
+    expect(result.rowCount).toBe(3);
+  });
+
   // ---------------------------------------------------------------------
   // V26-PGB-01 — verified-empty API result envelope.
   //
