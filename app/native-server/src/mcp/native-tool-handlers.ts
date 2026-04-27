@@ -31,6 +31,7 @@ import {
 import {
   runTabrixChooseContext,
   runTabrixChooseContextRecordOutcome,
+  runTabrixChooseContextWithDirectApi,
   type TabrixChooseContextRouterTelemetry,
 } from './choose-context';
 import { createLivePageContextProvider } from './page-context-provider';
@@ -167,7 +168,7 @@ const handleExperienceSuggestPlan: NativeToolHandler = (args, deps) => {
   return jsonResult(buildSuggestPlanResult(rows, mode), false);
 };
 
-const handleTabrixChooseContext: NativeToolHandler = (args, deps) => {
+const handleTabrixChooseContext: NativeToolHandler = async (args, deps) => {
   // V26-04 (B-027): wire the live page context provider so the
   // dispatcher receives real candidateActions / HVO counts instead
   // of the v25 hard-coded zeros. When persistence is off
@@ -175,7 +176,14 @@ const handleTabrixChooseContext: NativeToolHandler = (args, deps) => {
   // `fallback_zero` with cause `persistence_off` — honest telemetry,
   // same numerical dispatcher input the chooser used to ship.
   const pageContext = createLivePageContextProvider(deps.sessionManager.pageSnapshots ?? null);
-  const result = runTabrixChooseContext(args, {
+  // V26-FIX-01: wrap the synchronous chooser with the
+  // direct-api-executor so a high-confidence read-only
+  // `knowledge_supported_read` route may execute the API inline
+  // (compact rows arrive on `result.directApiExecution`). For every
+  // other route + every capability-disabled invocation the wrapper
+  // returns the synchronous chooser result bit-identical, so the
+  // pre-V26-FIX-01 happy path is preserved.
+  const result = await runTabrixChooseContextWithDirectApi(args, {
     experience: deps.sessionManager.experience,
     knowledgeApi: deps.sessionManager.knowledgeApi,
     capabilityEnv: deps.capabilityEnv ?? {},
@@ -292,6 +300,33 @@ function persistChooseContextDecision(
         : 0,
     replayCandidate,
     apiCapability,
+    // V26-FIX-01: echo the closed-enum execution mode the chooser
+    // produced so the orchestrator's `SkipReadPlan` carries the same
+    // signal downstream. Defaults to `'via_read_page'` for every
+    // non-direct-api route — same wire shape as pre-V26-FIX-01 plus
+    // an explicit declarative flag.
+    executionMode:
+      result.directApiExecution?.executionMode === 'direct_api' ? 'direct_api' : 'via_read_page',
+    // V26-FIX-01: persist the inline direct-api rows so the read-side
+    // shim can short-circuit its own `readApiKnowledgeEndpointPlan`
+    // call. Without this the wrapper executes the API once and a
+    // follow-up `chrome_read_page` would issue a redundant second
+    // fetch (the regression V26-FIX-01 tests pin against).
+    directApiResult:
+      result.directApiExecution?.executionMode === 'direct_api' &&
+      result.directApiExecution.rows &&
+      result.directApiExecution.endpointFamily &&
+      result.directApiExecution.apiTelemetry
+        ? {
+            endpointFamily: result.directApiExecution.endpointFamily,
+            dataPurpose: apiCapability?.dataPurpose ?? result.directApiExecution.endpointFamily,
+            rows: result.directApiExecution.rows.map((row) => ({ ...row })),
+            rowCount: result.directApiExecution.rowCount ?? result.directApiExecution.rows.length,
+            compact: true,
+            rawBodyStored: false,
+            telemetry: result.directApiExecution.apiTelemetry,
+          }
+        : null,
   };
   const routerFields = result as TabrixChooseContextRouterTelemetry;
   if (routerFields.chosenSource) snapshot.chosenSource = routerFields.chosenSource;

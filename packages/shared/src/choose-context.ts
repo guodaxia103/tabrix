@@ -368,6 +368,115 @@ export interface TabrixChooseContextResult {
    * exact branch; the chooser never claims a generic "do not read".
    */
   readPageAvoided?: boolean;
+  /**
+   * V26-FIX-01 — optional inline API execution envelope. Present only
+   * when (a) the chooser routed to `'knowledge_supported_read'`, (b)
+   * a high-confidence read-only endpoint candidate was resolved, and
+   * (c) the executor actually attempted the call. The closed-enum
+   * `executionMode` discriminator distinguishes:
+   *   - `'direct_api'`           — rows are present; upstream MAY
+   *                                skip the chrome_navigate +
+   *                                chrome_read_page round-trip.
+   *   - `'fallback_required'`    — the API call failed (timeout /
+   *                                rate-limit / decode error /
+   *                                semantic mismatch); upstream MUST
+   *                                fall back to chrome_read_page at
+   *                                the suggested entry layer.
+   *   - `'skipped_*'`            — the executor short-circuited
+   *                                without attempting a call (low
+   *                                confidence / non-read-only intent
+   *                                / no candidate / route mismatch);
+   *                                upstream behaves exactly like a
+   *                                pre-V26-FIX-01 chooser caller.
+   *
+   * Absent on every other strategy / status combination so legacy
+   * callers stay bit-identical pre-V26-FIX-01. Field is additive on
+   * the JSON wire shape; no MCP `tools.ts` schema change.
+   */
+  directApiExecution?: TabrixDirectApiExecution;
+}
+
+/**
+ * V26-FIX-01 — closed-enum executor state surfaced on
+ * {@link TabrixChooseContextResult.directApiExecution}.
+ */
+export type TabrixDirectApiExecutionMode =
+  | 'direct_api'
+  | 'fallback_required'
+  | 'skipped_low_confidence'
+  | 'skipped_not_read_only'
+  | 'skipped_no_candidate'
+  | 'skipped_route_mismatch';
+
+/**
+ * V26-FIX-01 — closed-enum reason the executor reached its
+ * {@link TabrixDirectApiExecutionMode}. The
+ * `'api_call_failed_<reason>'` family is intentionally a string union
+ * over the underlying API knowledge fallback reasons (rate_limited /
+ * network_timeout / decode_error / …) so a post-mortem can group by
+ * the failure class without parsing free-form strings.
+ */
+export type TabrixDirectApiDecisionReason =
+  | 'endpoint_knowledge_high_confidence'
+  | 'endpoint_low_confidence'
+  | 'endpoint_not_resolved'
+  | 'route_mismatch_not_knowledge_supported'
+  | 'intent_not_read_only'
+  | `api_call_failed_${string}`;
+
+/**
+ * V26-FIX-01 — compact API row shape mirrored from the underlying
+ * reader (`ApiKnowledgeCompactRow`). Kept as a flat string-or-scalar
+ * map so the JSON wire shape never carries nested raw bodies.
+ */
+export type TabrixDirectApiCompactRow = Record<string, string | number | boolean | null>;
+
+/**
+ * V26-FIX-01 — public view of the executor result the chooser ships.
+ * Intentionally narrower than the internal
+ * `DirectApiExecutionResult` to keep the wire surface stable while
+ * V26-FIX-04 swaps the underlying lookup module.
+ */
+export interface TabrixDirectApiExecution {
+  executionMode: TabrixDirectApiExecutionMode;
+  decisionReason: TabrixDirectApiDecisionReason;
+  /** True iff `executionMode === 'direct_api'`. */
+  browserNavigationSkipped: boolean;
+  /** Mirrors {@link browserNavigationSkipped}; preserved for the chrome_read_page contract. */
+  readPageAvoided: boolean;
+  /** Endpoint family the executor (would have) called; null when no candidate was eligible. */
+  endpointFamily: string | null;
+  /** Confidence score the executor saw on the candidate; null when the candidate was missing. */
+  candidateConfidence: number | null;
+  /**
+   * Closed-enum reader fallback cause; null on `direct_api` and on
+   * the `'skipped_*'` short-circuits. Surfaced so V26-FIX-07 can log
+   * a single closed-enum value to the operation log.
+   */
+  fallbackCause: string | null;
+  /** Suggested entry layer when `'fallback_required'`; null otherwise. */
+  fallbackEntryLayer: 'L0+L1' | null;
+  /**
+   * Compact rows; present ONLY when `executionMode === 'direct_api'`.
+   * Same scrubbed shape `chrome_read_page`'s API path returns —
+   * upstream consumers can treat the two surfaces interchangeably.
+   */
+  rows: TabrixDirectApiCompactRow[] | null;
+  /** Row count; null when no fetch was attempted. */
+  rowCount: number | null;
+  /** Optional API telemetry forwarded from the underlying reader. */
+  apiTelemetry?: TabrixDirectApiTelemetry | null;
+}
+
+/** V26-FIX-01 — read-only API telemetry fields surfaced upward. */
+export interface TabrixDirectApiTelemetry {
+  endpointFamily?: string;
+  method: string;
+  reason: string;
+  status: number | null;
+  waitedMs: number;
+  readAllowed: boolean;
+  fallbackEntryLayer: 'L0+L1' | 'none';
 }
 
 /**

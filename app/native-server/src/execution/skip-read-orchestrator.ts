@@ -158,6 +158,50 @@ export interface ChooseContextDecisionSnapshot {
   decisionReason?: string;
   dispatcherInputSource?: string;
   fallbackPlan?: DataSourceRouterFallbackPlanSnapshot;
+  /**
+   * V26-FIX-01 — closed-enum execution mode the chooser already
+   * resolved (NOT a re-runnable hint). `'direct_api'` means
+   * `tabrix_choose_context` itself fetched the API rows inline;
+   * downstream `chrome_read_page` (if it still fires) MUST treat
+   * the read as already satisfied. `'via_read_page'` (default for
+   * every legacy call site) means the chooser left execution to the
+   * existing chrome_read_page shim path. The orchestrator only
+   * forwards this onto the {@link SkipReadPlan} so the operation-log
+   * / telemetry side (V26-FIX-07) can write a single closed-enum
+   * value rather than re-deriving the mode from row counts.
+   */
+  executionMode?: 'direct_api' | 'via_read_page';
+  /**
+   * V26-FIX-01 — cached direct-API rows the chooser produced inline.
+   * Present iff `executionMode === 'direct_api'` AND the chooser's
+   * direct-api-executor returned `executionMode='direct_api'`.
+   * Downstream `chrome_read_page` (if it still fires) MUST consume
+   * these rows verbatim instead of re-issuing a network fetch — that
+   * is the whole point of FIX-01: one user-visible task = one API
+   * round-trip, not two. The orchestrator does not inspect this
+   * field; it is the read-side shim's responsibility to short-circuit
+   * its `requiresApiCall` branch when this is set.
+   */
+  directApiResult?: {
+    endpointFamily: string;
+    dataPurpose: string;
+    rows: Array<Record<string, unknown>>;
+    rowCount: number;
+    /** Always `true` — direct-api-executor never persists raw bodies. */
+    compact: true;
+    /** Always `false` — direct-api-executor never persists raw bodies. */
+    rawBodyStored: false;
+    /** Underlying API telemetry forwarded from the reader. */
+    telemetry: {
+      endpointFamily?: string;
+      method: string;
+      reason: string;
+      status: number | null;
+      waitedMs: number;
+      readAllowed: boolean;
+      fallbackEntryLayer: 'L0+L1' | 'none';
+    };
+  } | null;
 }
 
 /**
@@ -219,6 +263,17 @@ export interface SkipReadPlan {
    * cross-referencing the source route enum.
    */
   diagnostic: string;
+  /**
+   * V26-FIX-01 — closed-enum execution mode echoed from the
+   * recorded `ChooseContextDecisionSnapshot`. `'via_read_page'` is
+   * the default for every pre-V26-FIX-01 caller; `'direct_api'`
+   * surfaces only when the chooser already executed the API inline
+   * AND the upstream caller still chose to send `chrome_read_page`
+   * (in which case the shim must short-circuit because the rows
+   * are already on the wire). The orchestrator never DECIDES this
+   * mode — it copies what the chooser wrote.
+   */
+  executionMode: 'direct_api' | 'via_read_page';
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +319,7 @@ export interface SkipReadPlan {
 export function planSkipRead(input: SkipReadPlanInput): SkipReadPlan {
   const { decision, taskCtx } = input;
   const fallbackEntryLayer = clampFallbackLayer(decision.chosenLayer);
+  const executionMode = pickExecutionMode(decision);
 
   if (taskCtx.readPageCount >= taskCtx.readBudget) {
     return forwardPlan({
@@ -272,15 +328,16 @@ export function planSkipRead(input: SkipReadPlanInput): SkipReadPlan {
       action: 'forward',
       diagnostic: `forward: read budget already exhausted (${taskCtx.readPageCount}/${taskCtx.readBudget})`,
       fallbackCause: 'budget_exhausted',
+      executionMode,
     });
   }
 
   switch (decision.sourceRoute) {
     case 'experience_replay_skip_read':
-      return planExperienceReplay(decision, fallbackEntryLayer);
+      return planExperienceReplay(decision, fallbackEntryLayer, executionMode);
 
     case 'knowledge_supported_read':
-      return planKnowledgeBacked(decision, fallbackEntryLayer);
+      return planKnowledgeBacked(decision, fallbackEntryLayer, executionMode);
 
     case 'read_page_required':
       return forwardPlan({
@@ -289,6 +346,7 @@ export function planSkipRead(input: SkipReadPlanInput): SkipReadPlan {
         action: 'forward',
         diagnostic: 'forward: dispatcher requires a real chrome_read_page call',
         fallbackCause: '',
+        executionMode,
       });
 
     case 'dispatcher_fallback_safe':
@@ -298,6 +356,7 @@ export function planSkipRead(input: SkipReadPlanInput): SkipReadPlan {
         action: 'forward',
         diagnostic: 'forward: dispatcher returned the fail-safe row',
         fallbackCause: '',
+        executionMode,
       });
 
     default:
@@ -311,6 +370,7 @@ export function planSkipRead(input: SkipReadPlanInput): SkipReadPlan {
         action: 'forward',
         diagnostic: `forward: unknown sourceRoute '${String(decision.sourceRoute)}'`,
         fallbackCause: 'unknown_source_route',
+        executionMode,
       });
   }
 }
@@ -348,6 +408,7 @@ export function escalateAfterSkipFailure(
     requiresApiCall: false,
     requiresExperienceReplay: false,
     diagnostic: `escalate: skip path failed (${reason}); forwarding to chrome_read_page at L0+L1 (never L0+L1+L2)`,
+    executionMode: plan.executionMode,
   };
 }
 
@@ -358,6 +419,7 @@ export function escalateAfterSkipFailure(
 function planExperienceReplay(
   decision: ChooseContextDecisionSnapshot,
   fallbackEntryLayer: 'L0' | 'L0+L1',
+  executionMode: 'direct_api' | 'via_read_page',
 ): SkipReadPlan {
   const candidate = decision.replayCandidate;
   if (!candidate) {
@@ -374,6 +436,7 @@ function planExperienceReplay(
       requiresExperienceReplay: false,
       diagnostic:
         'fallback_required: experience_replay_skip_read recorded but no executable replay candidate was attached to the choose_context decision',
+      executionMode,
     };
   }
   if (!candidate.policyOk) {
@@ -389,6 +452,7 @@ function planExperienceReplay(
       requiresApiCall: false,
       requiresExperienceReplay: false,
       diagnostic: `fallback_required: replay candidate ${candidate.actionPathId} blocked by policy/capability gate`,
+      executionMode,
     };
   }
   if (!candidate.portableArgsOk) {
@@ -404,6 +468,7 @@ function planExperienceReplay(
       requiresApiCall: false,
       requiresExperienceReplay: false,
       diagnostic: `fallback_required: replay candidate ${candidate.actionPathId} missing stable portable args`,
+      executionMode,
     };
   }
   return {
@@ -418,12 +483,14 @@ function planExperienceReplay(
     requiresApiCall: false,
     requiresExperienceReplay: true,
     diagnostic: `skip: replay candidate ${candidate.actionPathId} eligible (policy + portable args ok)`,
+    executionMode,
   };
 }
 
 function planKnowledgeBacked(
   decision: ChooseContextDecisionSnapshot,
   fallbackEntryLayer: 'L0' | 'L0+L1',
+  executionMode: 'direct_api' | 'via_read_page',
 ): SkipReadPlan {
   const cap = decision.apiCapability;
   if (!cap || cap.available !== true) {
@@ -440,6 +507,7 @@ function planKnowledgeBacked(
       requiresExperienceReplay: false,
       diagnostic:
         'fallback_required: knowledge_supported_read recorded but knowledge_call_api capability is not yet wired (V26-07/08)',
+      executionMode,
     };
   }
   return {
@@ -454,6 +522,7 @@ function planKnowledgeBacked(
     requiresApiCall: true,
     requiresExperienceReplay: false,
     diagnostic: `skip: knowledge_call_api family ${cap.family} available; bypassing chrome_read_page`,
+    executionMode,
   };
 }
 
@@ -463,6 +532,7 @@ function forwardPlan(args: {
   action: 'forward';
   diagnostic: string;
   fallbackCause: SkipReadFallbackCause;
+  executionMode: 'direct_api' | 'via_read_page';
 }): SkipReadPlan {
   return {
     action: 'forward',
@@ -476,7 +546,22 @@ function forwardPlan(args: {
     requiresApiCall: false,
     requiresExperienceReplay: false,
     diagnostic: args.diagnostic,
+    executionMode: args.executionMode,
   };
+}
+
+/**
+ * V26-FIX-01 — pick the executionMode the chooser already wrote onto
+ * the decision, defaulting to `'via_read_page'` for any pre-V26-FIX-01
+ * call site (the chooser wrote no `executionMode` because it never
+ * executed the API inline). The default keeps the v2.5 happy path
+ * bit-identical and only the new direct-execute branch sets
+ * `'direct_api'`.
+ */
+function pickExecutionMode(
+  decision: ChooseContextDecisionSnapshot,
+): 'direct_api' | 'via_read_page' {
+  return decision.executionMode === 'direct_api' ? 'direct_api' : 'via_read_page';
 }
 
 /**

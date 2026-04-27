@@ -1795,13 +1795,37 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           if (skipPlan.requiresApiCall) {
             const cap = recordedDecision.apiCapability;
             const acceptanceApiFault = readAcceptanceApiFault(args);
-            const apiResult = await readApiKnowledgeEndpointPlan({
-              endpointFamily: cap?.family ?? '',
-              dataPurpose: apiFaultDataPurposeOverride(acceptanceApiFault, cap?.dataPurpose),
-              method: 'GET',
-              params: cap?.params ?? {},
-              fetchFn: apiFaultFetchOverride(acceptanceApiFault),
-            });
+            // V26-FIX-01: when `tabrix_choose_context` already executed
+            // the API inline (executionMode='direct_api'), reuse the
+            // cached rows verbatim instead of re-issuing the request.
+            // One user-visible task ↔ one API round-trip — that's the
+            // whole point of FIX-01. The acceptance-fault override is
+            // only honoured when the cached result is absent so tests
+            // can still simulate a fresh-API failure path.
+            const cachedDirect =
+              recordedDecision.executionMode === 'direct_api' &&
+              recordedDecision.directApiResult &&
+              !acceptanceApiFault
+                ? recordedDecision.directApiResult
+                : null;
+            const apiResult = cachedDirect
+              ? ({
+                  status: 'ok' as const,
+                  endpointFamily: cachedDirect.endpointFamily,
+                  dataPurpose: cachedDirect.dataPurpose,
+                  rows: cachedDirect.rows,
+                  rowCount: cachedDirect.rowCount,
+                  compact: cachedDirect.compact,
+                  rawBodyStored: cachedDirect.rawBodyStored,
+                  telemetry: cachedDirect.telemetry,
+                } as Awaited<ReturnType<typeof readApiKnowledgeEndpointPlan>>)
+              : await readApiKnowledgeEndpointPlan({
+                  endpointFamily: cap?.family ?? '',
+                  dataPurpose: apiFaultDataPurposeOverride(acceptanceApiFault, cap?.dataPurpose),
+                  method: 'GET',
+                  params: cap?.params ?? {},
+                  fetchFn: apiFaultFetchOverride(acceptanceApiFault),
+                });
             if (apiResult.status === 'ok') {
               const tokenSavings = estimateApiRowsTokenSavings({
                 rows: apiResult.rows,

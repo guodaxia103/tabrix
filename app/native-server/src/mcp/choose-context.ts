@@ -57,6 +57,7 @@ import {
 } from './choose-context-layer-dispatch';
 import type { PageContextProvider } from './page-context-provider';
 import { resolveApiKnowledgeCandidate } from '../api/api-knowledge';
+import type { ApiKnowledgeFetch } from '../api/api-knowledge';
 import {
   routeDataSource,
   type DataSourceCostEstimate,
@@ -64,6 +65,7 @@ import {
   type DataSourceKind,
   type DataSourceRiskTier,
 } from '../execution/data-source-router';
+import { tryDirectApiExecute, type DirectApiIntentClass } from '../execution/direct-api-executor';
 
 export interface TabrixChooseContextRouterTelemetry {
   chosenSource?: DataSourceKind;
@@ -1024,5 +1026,124 @@ export function runTabrixChooseContextRecordOutcome(
     status: 'ok',
     decisionId: parsed.decisionId,
     outcome: parsed.outcome,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// V26-FIX-01 — API Direct Execution Path wrapper
+// ---------------------------------------------------------------------------
+
+export interface RunTabrixChooseContextWithDirectApiDeps extends RunTabrixChooseContextDeps {
+  /**
+   * V26-FIX-01 — optional fetch override forwarded to the
+   * direct-api-executor. When omitted the executor falls through to
+   * the underlying default in `readApiKnowledgeRows`. Tests inject a
+   * stub fetch.
+   */
+  directApiFetchFn?: ApiKnowledgeFetch;
+  /**
+   * V26-FIX-01 — capability gate. When `false`, direct execution
+   * never fires — the wrapper returns the synchronous chooser result
+   * unchanged so the v2.5 pre-V26-FIX-01 happy path is bit-identical.
+   * Default: enabled.
+   */
+  directApiEnabled?: boolean;
+  /**
+   * Test seam for the executor's clock.
+   */
+  directApiNowMs?: () => number;
+}
+
+/**
+ * V26-FIX-01 — async wrapper that delegates to {@link runTabrixChooseContext}
+ * for policy + telemetry, and then optionally executes the chosen
+ * read-only API endpoint inline. The compact rows (or the
+ * `'fallback_required'` / `'skipped_*'` advisory) land on
+ * `result.directApiExecution`. Upstream MCP callers may then skip the
+ * subsequent `chrome_navigate` + `chrome_read_page` round-trip when
+ * `executionMode === 'direct_api'`.
+ *
+ * Hard contracts:
+ *   1. Invariant for every non-`knowledge_supported_read` route AND
+ *      every `directApiEnabled === false` invocation: the returned
+ *      result is the exact value `runTabrixChooseContext` would have
+ *      returned, with NO `directApiExecution` field. The legacy v2.5
+ *      contract is preserved bit-identical.
+ *   2. The wrapper NEVER throws on direct-execute failure. A failed
+ *      API call collapses to `executionMode === 'fallback_required'`
+ *      with a closed-enum `decisionReason` and the upstream caller
+ *      falls back through the existing chrome_read_page chain
+ *      (which is unchanged).
+ *   3. Only `read_only` intents trigger an actual fetch. `action` /
+ *      `unknown` intents short-circuit to `skipped_not_read_only`
+ *      WITHOUT calling the underlying reader.
+ */
+export async function runTabrixChooseContextWithDirectApi(
+  rawArgs: unknown,
+  deps: RunTabrixChooseContextWithDirectApiDeps,
+): Promise<TabrixChooseContextResult> {
+  const result = runTabrixChooseContext(rawArgs, deps);
+  if (result.status !== 'ok') return result;
+  if (deps.directApiEnabled === false) return result;
+  if (result.sourceRoute !== 'knowledge_supported_read') return result;
+
+  // Re-parse the validated args. Cheap + deterministic — the underlying
+  // chooser already accepted them so a re-parse cannot widen the
+  // surface (any failure here is a programmer error). Mirrors the
+  // re-resolution `persistChooseContextDecision` already does for
+  // `apiCapability`.
+  let parsed: ParsedChooseContextInput;
+  try {
+    parsed = parseTabrixChooseContextInput(rawArgs);
+  } catch {
+    return result;
+  }
+
+  const candidate = isCapabilityEnabled('api_knowledge', deps.capabilityEnv)
+    ? resolveApiKnowledgeCandidate({
+        intent: parsed.input.intent,
+        url: parsed.input.url,
+        pageRole: parsed.input.pageRole,
+      })
+    : null;
+
+  // V26-FIX-01 — derive the read-only gate from the layer-dispatch
+  // outcome rather than re-classifying the raw user intent. Rationale:
+  //   * The V25-02 rule table routes "搜索/list" intents to
+  //     `chosenLayer='L0' / sourceRoute='knowledge_supported_read'`
+  //     even when `userIntent === 'form_or_submit'` (search is a
+  //     DOM-land form, but an API-land read).
+  //   * Rules that fire on a generic `knowledgeAvailable` action
+  //     intent emit `chosenLayer='L0+L1'`, NOT `L0`. So the L0+
+  //     knowledge_supported_read pair is exactly the read-only
+  //     surface — the candidate's `method='GET'` is the second gate.
+  // Falling back through the keyword classifier here would
+  // over-suppress legitimate API search intents, which is the
+  // mistake V26-FIX-01 is correcting.
+  const intentClass: DirectApiIntentClass = result.chosenLayer === 'L0' ? 'read_only' : 'action';
+
+  const exec = await tryDirectApiExecute({
+    sourceRoute: result.sourceRoute,
+    candidate,
+    intentClass,
+    fetchFn: deps.directApiFetchFn,
+    nowMs: deps.directApiNowMs,
+  });
+
+  return {
+    ...result,
+    directApiExecution: {
+      executionMode: exec.executionMode,
+      decisionReason: exec.decisionReason,
+      browserNavigationSkipped: exec.browserNavigationSkipped,
+      readPageAvoided: exec.readPageAvoided,
+      endpointFamily: exec.endpointFamily,
+      candidateConfidence: exec.candidateConfidence,
+      fallbackCause: exec.fallbackCause,
+      fallbackEntryLayer: exec.fallbackEntryLayer,
+      rows: exec.rows?.rows ?? null,
+      rowCount: exec.rows?.rowCount ?? null,
+      apiTelemetry: exec.apiTelemetry,
+    },
   };
 }
