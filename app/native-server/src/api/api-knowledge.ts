@@ -1,3 +1,39 @@
+/**
+ * V26-FIX-05 — seed-adapter classification.
+ *
+ * Every symbol in this file is part of the V25 GitHub/npmjs *seed
+ * adapter*: a hardcoded family table the v2.5 codebase used as the
+ * sole API entry point. Starting with v2.6 the mainline reader is the
+ * Knowledge-driven on-demand path (`api-knowledge/endpoint-lookup` +
+ * `api-knowledge/safe-request-builder` + `api-knowledge/knowledge-driven-reader`),
+ * which is fed by the generic `network-observe-classifier` (FIX-03).
+ *
+ * This file is therefore a *compatibility surface*, not the mainline:
+ *   - `direct-api-executor.tryDirectApiExecute` ALWAYS tries
+ *     `lookupEndpointFamily` first when given a `dataNeed` +
+ *     `knowledgeRepo`, and only falls back to `resolveApiKnowledgeCandidate`
+ *     when the lookup misses.
+ *   - Every result that this adapter feeds to the executor is labelled
+ *     `endpointSource='seed_adapter'` in
+ *     `DirectApiExecutionTelemetry` so the FIX-08 Gate B transformer
+ *     can split the run mix into `observed` (mainline) vs
+ *     `seed_adapter` (compatibility) vs `manual_seed` (reserved).
+ *
+ * Do NOT add new platform `*Family` entries here. Any new endpoint a
+ * v2.6 contributor wants to teach the reader about must go through
+ * the network-observe classifier so it lands in the Memory DB as an
+ * `observed` row first; the executor will then pick it up via the
+ * lookup path.
+ *
+ * The `seed_adapter` lineage is the only kind this file emits; the
+ * other two members of the `endpointSource` closed enum are produced
+ * elsewhere:
+ *   - `observed` — emitted by `api-knowledge/safe-request-builder` when
+ *     the looked-up row was captured by `chrome_network_capture`.
+ *   - `manual_seed` — reserved for an operator-curated catalog; not
+ *     produced by any current code path. Documented in the closed
+ *     enum so future contributors do not re-invent it.
+ */
 export type ApiEndpointFamily =
   | 'github_search_repositories'
   | 'github_issues_list'

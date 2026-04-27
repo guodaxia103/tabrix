@@ -184,6 +184,16 @@ export interface BenchmarkToolCallRecordV26 extends BenchmarkToolCallRecordV25 {
   apiFamily?: string | null;
   /** Redacted API purpose emitted by the V26-07 internal reader. */
   dataPurpose?: string | null;
+  /**
+   * V26-FIX-05 — closed-enum lineage marker for the API row this
+   * tool call produced. `'observed'` rows came from the FIX-03
+   * network-observe classifier; `'seed_adapter'` rows came from the
+   * V25 GitHub/npmjs hardcoded adapter (now compatibility-only);
+   * `'manual_seed'` is reserved for an operator-curated catalog.
+   * Optional + open-ended `string` so legacy v25 NDJSON parses
+   * cleanly; values outside the closed enum bucket into `unknown`.
+   */
+  endpointSource?: 'observed' | 'seed_adapter' | 'manual_seed' | string | null;
   /** V26-07 API telemetry, kept redacted and optional for legacy NDJSON. */
   apiTelemetry?: BenchmarkApiTelemetryV26 | null;
   /** V26-03 task totals copied from skip-read envelopes. */
@@ -264,6 +274,20 @@ export interface BenchmarkChosenSourceCountersV26 {
 }
 
 /**
+ * V26-FIX-05 — closed-enum counters for the lineage of every tool
+ * call that emitted an API row. Mirrors the
+ * {@link BenchmarkChosenSourceCountersV26} pattern: open-ended values
+ * bucket into `unknown` so the report stays stable when a future
+ * closed-enum extension lands.
+ */
+export interface BenchmarkEndpointSourceCountersV26 {
+  observed: number;
+  seed_adapter: number;
+  manual_seed: number;
+  unknown: number;
+}
+
+/**
  * Closed enum of v26 transformer warning codes. Open-ended `string`
  * NOT accepted — the transformer is the only producer.
  */
@@ -271,7 +295,8 @@ export type BenchmarkTransformerWarningCodeV26 =
   | 'malformed_duration'
   | 'missing_timestamps'
   | 'invalid_component'
-  | 'invalid_chosen_source';
+  | 'invalid_chosen_source'
+  | 'invalid_endpoint_source';
 
 export interface BenchmarkTransformerWarningV26 {
   code: BenchmarkTransformerWarningCodeV26;
@@ -318,6 +343,15 @@ export interface BenchmarkSummaryV26 {
   /** Open-ended map; key is the `failureCode` string. */
   failureCodeDistribution: Record<string, number>;
   chosenSourceDistribution: BenchmarkChosenSourceCountersV26;
+  /**
+   * V26-FIX-05 — counts of tool calls grouped by the
+   * `endpointSource` lineage marker the executor wrote. Sums over
+   * every tool call that had an `endpointSource` value (regardless
+   * of `chosenSource`); calls without the field are NOT counted into
+   * `unknown` (that bucket is reserved for explicit-but-invalid
+   * values, mirroring `chosenSourceDistribution`).
+   */
+  endpointSourceDistribution: BenchmarkEndpointSourceCountersV26;
   readPageAvoidedCount: number;
   tokensSavedEstimateTotal: number;
   layerDistribution: BenchmarkSummaryV25['layerMetrics']['chosenLayerDistribution'];
@@ -365,6 +399,17 @@ const CHOSEN_SOURCE_ENUM: ReadonlySet<BenchmarkChosenSource> = new Set([
   'unknown',
 ]);
 
+/**
+ * V26-FIX-05 — closed-enum members that the transformer counts as
+ * "known lineage". Anything outside this set buckets into the
+ * `unknown` counter and emits an `invalid_endpoint_source` warning.
+ */
+const ENDPOINT_SOURCE_ENUM: ReadonlySet<'observed' | 'seed_adapter' | 'manual_seed'> = new Set([
+  'observed',
+  'seed_adapter',
+  'manual_seed',
+]);
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -375,6 +420,13 @@ function isComponent(value: unknown): value is BenchmarkStepComponent {
 
 function isChosenSource(value: unknown): value is BenchmarkChosenSource {
   return typeof value === 'string' && CHOSEN_SOURCE_ENUM.has(value as BenchmarkChosenSource);
+}
+
+function isEndpointSource(value: unknown): value is 'observed' | 'seed_adapter' | 'manual_seed' {
+  return (
+    typeof value === 'string' &&
+    ENDPOINT_SOURCE_ENUM.has(value as 'observed' | 'seed_adapter' | 'manual_seed')
+  );
 }
 
 function emptyComponentCounters(): BenchmarkComponentCountersV26 {
@@ -394,6 +446,15 @@ function emptyChosenSourceCounters(): BenchmarkChosenSourceCountersV26 {
     api_detail: 0,
     markdown: 0,
     dom_json: 0,
+    unknown: 0,
+  };
+}
+
+function emptyEndpointSourceCounters(): BenchmarkEndpointSourceCountersV26 {
+  return {
+    observed: 0,
+    seed_adapter: 0,
+    manual_seed: 0,
     unknown: 0,
   };
 }
@@ -634,6 +695,22 @@ function triageRecord(call: BenchmarkToolCallRecordV26): RecordTriage {
     });
   }
 
+  // V26-FIX-05 — endpoint-source validation. Only warn when the
+  // runner emitted a value at all; undefined `endpointSource` is
+  // normal for v25 NDJSON and for non-API tool calls.
+  if (
+    call.endpointSource !== undefined &&
+    call.endpointSource !== null &&
+    !isEndpointSource(call.endpointSource)
+  ) {
+    warnings.push({
+      code: 'invalid_endpoint_source',
+      seq: isFiniteNumber(call.seq) ? call.seq : undefined,
+      toolName: typeof call.toolName === 'string' ? call.toolName : undefined,
+      detail: `endpointSource=${String(call.endpointSource)}`,
+    });
+  }
+
   return {
     durationValid,
     duration: durationValid ? duration : 0,
@@ -659,6 +736,7 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
 
   const componentDistribution = emptyComponentCounters();
   const chosenSourceDistribution = emptyChosenSourceCounters();
+  const endpointSourceDistribution = emptyEndpointSourceCounters();
   const failureCodeDistribution: Record<string, number> = {};
   const dispatcherInputSourceDistribution: Record<string, number> = {};
   const fallbackDistribution: Record<string, number> = {};
@@ -705,6 +783,12 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
       chosenSourceDistribution[call.chosenSource] += 1;
     } else if (call.chosenSource !== undefined && call.chosenSource !== null) {
       chosenSourceDistribution.unknown += 1;
+    }
+
+    if (isEndpointSource(call.endpointSource)) {
+      endpointSourceDistribution[call.endpointSource] += 1;
+    } else if (call.endpointSource !== undefined && call.endpointSource !== null) {
+      endpointSourceDistribution.unknown += 1;
     }
 
     if (isFiniteNumber(call.waitedMs) && call.waitedMs >= 0) {
@@ -803,6 +887,7 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
     componentDistribution,
     failureCodeDistribution,
     chosenSourceDistribution,
+    endpointSourceDistribution,
     readPageAvoidedCount,
     tokensSavedEstimateTotal,
     layerDistribution: v25Summary.layerMetrics.chosenLayerDistribution,

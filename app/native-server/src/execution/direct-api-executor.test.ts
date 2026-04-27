@@ -343,6 +343,11 @@ describe('V26-FIX-04 tryDirectApiExecute — knowledge-driven path', () => {
     expect(result.endpointFamily).toBe('github');
     expect(result.candidateConfidence).toBeCloseTo(0.92);
     expect(result.rows!.rowCount).toBe(1);
+    // V26-FIX-05 — GitHub urlPattern matches the seed builder; the
+    // lineage marker MUST be `seed_adapter`, not `observed`.
+    expect(result.endpointSource).toBe('seed_adapter');
+    expect(result.adapterBypass).toBe(false);
+    expect(result.knowledgeLookupRequired).toBe(true);
   });
 
   it('npmjs fixture: lookup-driven seed_adapter URL → direct_api', async () => {
@@ -385,6 +390,9 @@ describe('V26-FIX-04 tryDirectApiExecute — knowledge-driven path', () => {
     expect(result.endpointPattern).toBe('registry.npmjs.org/-/v1/search');
     expect(result.requestShapeUsed).toEqual(['size', 'text']);
     expect(result.rows!.rows[0]!.name).toBe('tabrix');
+    expect(result.endpointSource).toBe('seed_adapter');
+    expect(result.adapterBypass).toBe(false);
+    expect(result.knowledgeLookupRequired).toBe(true);
   });
 
   it('generic non-platform fixture: observed wikipedia REST search → direct_api with generic compactor', async () => {
@@ -430,6 +438,12 @@ describe('V26-FIX-04 tryDirectApiExecute — knowledge-driven path', () => {
     expect(result.rows!.dataPurpose).toBe('observed_search');
     expect(result.rows!.rowCount).toBe(2);
     expect(result.rows!.rows[0]!.title).toBe('Albert Einstein');
+    // V26-FIX-05 — wikipedia row was captured by network-observe so
+    // the safe-builder used the generic branch; lineage MUST be
+    // `observed`, NOT `seed_adapter`.
+    expect(result.endpointSource).toBe('observed');
+    expect(result.adapterBypass).toBe(false);
+    expect(result.knowledgeLookupRequired).toBe(true);
   });
 
   it('lookup miss → falls through to legacy candidate path', async () => {
@@ -460,6 +474,11 @@ describe('V26-FIX-04 tryDirectApiExecute — knowledge-driven path', () => {
     expect(result.readerMode).toBe('legacy_candidate');
     expect(result.knowledgeEndpointId).toBeNull();
     expect(result.endpointPattern).toBeNull();
+    // V26-FIX-05 — the legacy candidate path is the V25 hardcoded
+    // GitHub/npmjs adapter; lineage MUST be `seed_adapter`.
+    expect(result.endpointSource).toBe('seed_adapter');
+    expect(result.adapterBypass).toBe(false);
+    expect(result.knowledgeLookupRequired).toBe(true);
   });
 
   it('knowledge-driven fetch failure → fallback_required with knowledge_driven evidence', async () => {
@@ -491,6 +510,11 @@ describe('V26-FIX-04 tryDirectApiExecute — knowledge-driven path', () => {
     expect(result.fallbackEntryLayer).toBe('L0+L1');
     expect(result.knowledgeEndpointId).toBe('kn-github-search');
     expect(result.rows).toBeNull();
+    // V26-FIX-05 — even on `fallback_required` the lineage marker
+    // remains attached so a post-mortem can group the failure by source.
+    expect(result.endpointSource).toBe('seed_adapter');
+    expect(result.adapterBypass).toBe(false);
+    expect(result.knowledgeLookupRequired).toBe(true);
   });
 
   it('low-confidence Knowledge row → falls through to legacy candidate path', async () => {
@@ -520,5 +544,8 @@ describe('V26-FIX-04 tryDirectApiExecute — knowledge-driven path', () => {
     );
     expect(result.executionMode).toBe('direct_api');
     expect(result.readerMode).toBe('legacy_candidate');
+    expect(result.endpointSource).toBe('seed_adapter');
+    expect(result.adapterBypass).toBe(false);
+    expect(result.knowledgeLookupRequired).toBe(true);
   });
 });

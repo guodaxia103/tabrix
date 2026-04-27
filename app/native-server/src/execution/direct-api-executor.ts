@@ -175,6 +175,43 @@ export interface DirectApiExecutionTelemetry {
   requestShapeUsed: ReadonlyArray<string> | null;
   /** V26-FIX-04 — `'pass' | 'fail'` semantic-validation outcome; null when not knowledge-driven. */
   semanticValidation: 'pass' | 'fail' | null;
+  /**
+   * V26-FIX-05 — closed-enum lineage marker that distinguishes how the
+   * endpoint we ended up calling was sourced:
+   *   - `'observed'`     — the row came from `chrome_network_capture`
+   *                        (`family='observed'`); the safe-builder used
+   *                        the persisted `urlPattern` + observed query
+   *                        keys. This is the new mainline path.
+   *   - `'seed_adapter'` — the row came from (or was equivalent to) the
+   *                        V25 hardcoded GitHub/npmjs adapter. Includes
+   *                        the legacy candidate path that has not yet
+   *                        gone through Knowledge lookup.
+   *   - `'manual_seed'`  — reserved for an operator-curated seed
+   *                        catalog; not produced by any current code
+   *                        path but kept in the closed enum so the
+   *                        report consumer's stacked-bar chart stays
+   *                        stable when we add it.
+   *   - `null`           — every short-circuit branch (no fetch was
+   *                        ever attempted).
+   */
+  endpointSource: 'observed' | 'seed_adapter' | 'manual_seed' | null;
+  /**
+   * V26-FIX-05 — invariant marker. After FIX-04 + FIX-05 the executor
+   * always tries `lookupEndpointFamily` first when given a Knowledge
+   * repo; falling through to the legacy candidate is a *fallback*, not
+   * a bypass. We therefore hard-code `false` here and surface the field
+   * so the operation log (FIX-07) and Gate B transformer (FIX-08) can
+   * cite "no adapter bypass observed" as evidence rather than re-deriving
+   * the negative.
+   */
+  adapterBypass: false;
+  /**
+   * V26-FIX-05 — companion marker to `adapterBypass`. Always `true`
+   * starting with FIX-05; the executor now treats Knowledge lookup as
+   * the required entry point, with the seed adapter only filling in
+   * when the lookup misses.
+   */
+  knowledgeLookupRequired: true;
 }
 
 export interface DirectApiExecutionRows {
@@ -297,6 +334,14 @@ export async function tryDirectApiExecute(
       endpointSemanticType: null,
       requestShapeUsed: null,
       semanticValidation: null,
+      // V26-FIX-05 — the legacy candidate path consumes
+      // `resolveApiKnowledgeCandidate`, which is the V25 hardcoded
+      // GitHub/npmjs seed adapter. Label every result we get from this
+      // path as `seed_adapter` so the FIX-08 transformer can split the
+      // mix of `observed` vs `seed_adapter` reads in Gate B reports.
+      endpointSource: 'seed_adapter',
+      adapterBypass: false,
+      knowledgeLookupRequired: true,
       rows: {
         rows: reader.rows,
         rowCount: reader.rowCount,
@@ -323,6 +368,9 @@ export async function tryDirectApiExecute(
     endpointSemanticType: null,
     requestShapeUsed: null,
     semanticValidation: null,
+    endpointSource: 'seed_adapter',
+    adapterBypass: false,
+    knowledgeLookupRequired: true,
     rows: null,
   };
 }
@@ -360,6 +408,16 @@ async function tryKnowledgeDrivenPath(
     limit: input.limit,
   });
 
+  // V26-FIX-05 — the knowledge-driven path itself routes between two
+  // sources: a `seed_adapter` builder hint means we matched a known
+  // GitHub/npmjs URL pattern and reused the V25 seed builder; a
+  // `generic` builder hint means the row was observed via FIX-03's
+  // `chrome_network_capture` classifier and the safe-builder built
+  // the URL from scratch. Map the closed enum onto the FIX-05
+  // `endpointSource` lineage marker so transformers / operation logs
+  // can distinguish the two without re-deriving the join.
+  const endpointSource: 'observed' | 'seed_adapter' =
+    plan.builderHint === 'seed_adapter' ? 'seed_adapter' : 'observed';
   const baseTelemetry = {
     readerMode: 'knowledge_driven' as const,
     knowledgeEndpointId: match.endpoint.endpointId,
@@ -368,6 +426,9 @@ async function tryKnowledgeDrivenPath(
     requestShapeUsed: plan.requestShapeUsed,
     semanticValidation: match.semanticValidation,
     candidateConfidence: match.score,
+    endpointSource,
+    adapterBypass: false as const,
+    knowledgeLookupRequired: true as const,
   };
 
   if (reader.status === 'ok') {
@@ -429,6 +490,9 @@ function short(input: ShortCircuitInput): DirectApiExecutionResult {
     endpointSemanticType: null,
     requestShapeUsed: null,
     semanticValidation: null,
+    endpointSource: null,
+    adapterBypass: false,
+    knowledgeLookupRequired: true,
     rows: null,
   };
 }

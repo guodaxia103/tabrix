@@ -83,6 +83,12 @@ describe('summariseBenchmarkRunV26 — empty input', () => {
       dom_json: 0,
       unknown: 0,
     });
+    expect(summary.endpointSourceDistribution).toEqual({
+      observed: 0,
+      seed_adapter: 0,
+      manual_seed: 0,
+      unknown: 0,
+    });
     // v25 surface is fully populated even when v26 input is empty.
     expect(summary.v25Summary.reportVersion).toBe(1);
     expect(summary.v25Summary.totalToolCalls).toBe(0);
@@ -304,6 +310,108 @@ describe('summariseBenchmarkRunV26 — chosenSource distribution', () => {
     const invalid = summary.transformerWarnings.filter((w) => w.code === 'invalid_chosen_source');
     expect(invalid).toHaveLength(1);
     expect(invalid[0].seq).toBe(5);
+  });
+});
+
+describe('summariseBenchmarkRunV26 — endpointSource distribution (V26-FIX-05)', () => {
+  it('counts observed/seed_adapter/manual_seed values and buckets unknown values', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({
+            seq: 0,
+            toolName: 'chrome_read_page',
+            kind: 'api_rows',
+            chosenSource: 'api_list',
+            endpointSource: 'observed',
+          }),
+          call({
+            seq: 1,
+            toolName: 'chrome_read_page',
+            kind: 'api_rows',
+            chosenSource: 'api_list',
+            endpointSource: 'seed_adapter',
+          }),
+          call({
+            seq: 2,
+            toolName: 'chrome_read_page',
+            kind: 'api_rows',
+            chosenSource: 'api_list',
+            endpointSource: 'manual_seed',
+          }),
+          call({ seq: 3, endpointSource: 'mystery_lineage' }),
+          // Calls without endpointSource (legacy v25 NDJSON) are NOT
+          // counted into `unknown` — the bucket is reserved for
+          // explicit-but-invalid values, mirroring chosenSource.
+          call({ seq: 4, endpointSource: undefined }),
+          call({ seq: 5, endpointSource: null }),
+        ],
+      }),
+    );
+    expect(summary.endpointSourceDistribution).toEqual({
+      observed: 1,
+      seed_adapter: 1,
+      manual_seed: 1,
+      unknown: 1,
+    });
+    const invalid = summary.transformerWarnings.filter((w) => w.code === 'invalid_endpoint_source');
+    expect(invalid).toHaveLength(1);
+    expect(invalid[0].seq).toBe(3);
+  });
+
+  it('does not warn for legacy v25 records that omit endpointSource', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, endpointSource: undefined }),
+          call({ seq: 1, endpointSource: null }),
+        ],
+      }),
+    );
+    expect(
+      summary.transformerWarnings.filter((w) => w.code === 'invalid_endpoint_source'),
+    ).toHaveLength(0);
+  });
+
+  it('aggregates an observed-endpoint fixture path distinctly from seed_adapter', () => {
+    // observed-only fixture — every API row was emitted by the FIX-03
+    // network-observe classifier (e.g. hackernews search). The
+    // transformer must NOT bucket these into seed_adapter even when
+    // the dispatcherInputSource is api_knowledge.
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({
+            seq: 0,
+            toolName: 'chrome_read_page',
+            kind: 'api_rows',
+            chosenSource: 'api_list',
+            sourceKind: 'api_list',
+            sourceRoute: 'knowledge_supported_read',
+            dispatcherInputSource: 'api_knowledge',
+            endpointSource: 'observed',
+            readPageAvoided: true,
+            tokensSavedEstimate: 200,
+          }),
+          call({
+            seq: 1,
+            toolName: 'chrome_read_page',
+            kind: 'api_rows',
+            chosenSource: 'api_list',
+            sourceKind: 'api_list',
+            sourceRoute: 'knowledge_supported_read',
+            dispatcherInputSource: 'api_knowledge',
+            endpointSource: 'observed',
+            readPageAvoided: true,
+            tokensSavedEstimate: 250,
+          }),
+        ],
+      }),
+    );
+    expect(summary.endpointSourceDistribution.observed).toBe(2);
+    expect(summary.endpointSourceDistribution.seed_adapter).toBe(0);
+    expect(summary.endpointSourceDistribution.manual_seed).toBe(0);
+    expect(summary.endpointSourceDistribution.unknown).toBe(0);
   });
 });
 
