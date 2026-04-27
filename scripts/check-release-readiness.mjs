@@ -61,6 +61,10 @@ function getReleaseEvidenceDir(version) {
   return path.join(baseDir, version);
 }
 
+function isGitHubActionsFreshCheckout() {
+  return process.env.GITHUB_ACTIONS === 'true' && !process.env.TABRIX_RELEASE_EVIDENCE_DIR;
+}
+
 function parseArgs(argv) {
   const options = {
     tag: process.env.RELEASE_TAG || '',
@@ -105,6 +109,19 @@ function fail(errors) {
   console.error('release readiness check failed:');
   for (const error of errors) console.error(`- ${error}`);
   process.exit(1);
+}
+
+function pushV26ReleaseNotesGateErrors(selectedNotesFile, errors) {
+  if (selectedNotesFile && fileExists(selectedNotesFile)) {
+    const notesResult = requireReleaseNotesSummaryV26(path.join(ROOT, selectedNotesFile));
+    for (const reason of notesResult.reasons || []) {
+      errors.push(`v2.6.0+ release gate: ${reason}`);
+    }
+  } else {
+    errors.push(
+      `v2.6.0+ release gate: cannot verify release notes summary because no notes file is available.`,
+    );
+  }
 }
 
 const options = parseArgs(process.argv.slice(2));
@@ -223,11 +240,19 @@ const BENCHMARK_REPORT_MAX_AGE_DAYS = 7;
 // existing, so it stays harmless under `--allow-missing-notes`.
 if (benchmarkGateAppliesV26(nativePkg.version)) {
   const benchmarkDir = getReleaseEvidenceDir('v26');
+  const publicNotesOnlyGate = isGitHubActionsFreshCheckout();
   if (!fs.existsSync(benchmarkDir)) {
-    errors.push(
-      `v2.6.0+ release gate: missing benchmark directory ${path.relative(ROOT, benchmarkDir)}. ` +
-        `Run the maintainer-private Gate B real-browser acceptance first; raw evidence stays under TABRIX_RELEASE_EVIDENCE_DIR or .claude/private-docs/benchmarks.`,
-    );
+    if (publicNotesOnlyGate) {
+      warnings.push(
+        `v2.6.0+ release gate: private benchmark directory ${path.relative(ROOT, benchmarkDir)} is absent in GitHub Actions fresh checkout; validating public release notes summary only.`,
+      );
+      pushV26ReleaseNotesGateErrors(selectedNotesFile, errors);
+    } else {
+      errors.push(
+        `v2.6.0+ release gate: missing benchmark directory ${path.relative(ROOT, benchmarkDir)}. ` +
+          `Run the maintainer-private Gate B real-browser acceptance first; raw evidence stays under TABRIX_RELEASE_EVIDENCE_DIR or .claude/private-docs/benchmarks.`,
+      );
+    }
   } else {
     const reports = fs
       .readdirSync(benchmarkDir)
@@ -240,10 +265,17 @@ if (benchmarkGateAppliesV26(nativePkg.version)) {
       .sort((a, b) => b.mtimeMs - a.mtimeMs);
 
     if (reports.length === 0) {
-      errors.push(
-        `v2.6.0+ release gate: no benchmark reports under ${path.relative(ROOT, benchmarkDir)}. ` +
-          `Copy the transformed Gate B report into the private release-evidence directory first.`,
-      );
+      if (publicNotesOnlyGate) {
+        warnings.push(
+          `v2.6.0+ release gate: no private benchmark reports under ${path.relative(ROOT, benchmarkDir)} in GitHub Actions fresh checkout; validating public release notes summary only.`,
+        );
+        pushV26ReleaseNotesGateErrors(selectedNotesFile, errors);
+      } else {
+        errors.push(
+          `v2.6.0+ release gate: no benchmark reports under ${path.relative(ROOT, benchmarkDir)}. ` +
+            `Copy the transformed Gate B report into the private release-evidence directory first.`,
+        );
+      }
     } else {
       const newest = reports[0];
       const ageDays = (Date.now() - newest.mtimeMs) / (1000 * 60 * 60 * 24);
@@ -261,16 +293,7 @@ if (benchmarkGateAppliesV26(nativePkg.version)) {
         );
       }
 
-      if (selectedNotesFile && fileExists(selectedNotesFile)) {
-        const notesResult = requireReleaseNotesSummaryV26(path.join(ROOT, selectedNotesFile));
-        for (const reason of notesResult.reasons || []) {
-          errors.push(`v2.6.0+ release gate: ${reason}`);
-        }
-      } else {
-        errors.push(
-          `v2.6.0+ release gate: cannot verify release notes summary because no notes file is available.`,
-        );
-      }
+      pushV26ReleaseNotesGateErrors(selectedNotesFile, errors);
     }
   }
 } else if (benchmarkGateAppliesV25(nativePkg.version)) {
