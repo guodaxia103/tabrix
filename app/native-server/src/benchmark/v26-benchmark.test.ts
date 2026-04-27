@@ -1056,3 +1056,45 @@ describe('summariseBenchmarkRunV26 — V26-FIX-08 fixture coverage (pass / bound
     expect(summary.directApiPathRatio).toBeCloseTo(7 / 10);
   });
 });
+
+describe('summariseBenchmarkRunV26 — V26-PGB-02 emptyResult aggregation', () => {
+  it('counts only literal `emptyResult: true` records and de-duplicates scenarios', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, scenarioId: 'S-EMPTY-A', emptyResult: true }),
+          call({ seq: 1, scenarioId: 'S-EMPTY-A', emptyResult: true }),
+          call({ seq: 2, scenarioId: 'S-EMPTY-B', emptyResult: true }),
+          call({ seq: 3, scenarioId: 'S-NON-EMPTY', emptyResult: false }),
+          call({ seq: 4, scenarioId: 'S-LEGACY' }),
+        ],
+      }),
+    );
+    expect(summary.emptyResultCount).toBe(3);
+    expect(summary.emptyResultScenarios).toEqual(['S-EMPTY-A', 'S-EMPTY-B']);
+  });
+
+  it('returns empty defaults when no record carries emptyResult', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [call({ seq: 0, scenarioId: 'S-A' }), call({ seq: 1, scenarioId: 'S-B' })],
+      }),
+    );
+    expect(summary.emptyResultCount).toBe(0);
+    expect(summary.emptyResultScenarios).toEqual([]);
+  });
+
+  it('treats non-boolean / truthy-but-not-true values as not-empty (closed-enum strictness)', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, scenarioId: 'S-T', emptyResult: 1 as unknown as boolean }),
+          call({ seq: 1, scenarioId: 'S-S', emptyResult: 'true' as unknown as boolean }),
+          call({ seq: 2, scenarioId: 'S-N', emptyResult: null }),
+        ],
+      }),
+    );
+    expect(summary.emptyResultCount).toBe(0);
+    expect(summary.emptyResultScenarios).toEqual([]);
+  });
+});

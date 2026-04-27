@@ -224,6 +224,24 @@ export interface BenchmarkToolCallRecordV26 extends BenchmarkToolCallRecordV25 {
    * rare in execution-mode runs, common in learning-mode runs).
    */
   observeMode?: 'foreground' | 'background' | 'disabled' | string | null;
+  /**
+   * V26-PGB-01 / V26-PGB-02 — `true` iff the API call this tool
+   * call represents succeeded but returned zero rows (a verified
+   * empty list, not a 0-row miss). The shim and direct API path
+   * both stamp this on the api_rows envelope; legacy NDJSON without
+   * the field parses cleanly (treated as `undefined`, not an empty
+   * result). Optional and additive on the wire so older runners
+   * stay compatible.
+   */
+  emptyResult?: boolean | null;
+  /**
+   * V26-PGB-01 / V26-PGB-02 — closed-enum reason for the empty
+   * result; `null` on the non-empty happy path. Currently the only
+   * value emitted by the readers is `'no_matching_records'`; new
+   * values may be added without a v26 report version bump (the
+   * transformer counts presence, not specific reasons).
+   */
+  emptyReason?: 'no_matching_records' | string | null;
 }
 
 /**
@@ -502,6 +520,24 @@ export interface BenchmarkSummaryV26 {
    * non-negative `waitedMs`. `null` when no qualifying samples.
    */
   totalWaitedMs: number | null;
+  /**
+   * V26-PGB-02 — number of tool calls whose `emptyResult === true`.
+   * Counts the number of "verified empty" API answers in the run.
+   * Distinct from `readPageCount === 0` (which simply means no DOM
+   * read happened). Records without the field count as 0; records
+   * with `emptyResult === false` are also 0. Used by Gate B's strict
+   * mode to assert that an `expectEmptyResult` scenario carried real
+   * `emptyResult` evidence, not a silent rowCount=0 miss.
+   */
+  emptyResultCount: number;
+  /**
+   * V26-PGB-02 — sorted, de-duplicated list of `scenarioId` values
+   * that produced at least one tool call with `emptyResult === true`.
+   * Empty array when no scenario produced a verified-empty answer.
+   * The list is sorted lexicographically for deterministic output;
+   * consumers MUST NOT mutate.
+   */
+  emptyResultScenarios: string[];
   /**
    * Sorted by `(code, seq)` ascending for deterministic output. The
    * transformer is the sole producer; consumers MUST NOT mutate.
@@ -1103,6 +1139,13 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
   let executionModeKnownCount = 0;
   let directApiPathCount = 0;
   let foregroundObserveCount = 0;
+  // V26-PGB-02 — track verified-empty API answers so the Gate B
+  // strict gate can assert that an `expectEmptyResult` scenario
+  // actually carried `emptyResult=true` evidence (and not a silent
+  // rowCount=0 miss). `emptyResultCount` is the simple total;
+  // `emptyResultScenarioSet` is de-duplicated and sorted on emit.
+  let emptyResultCount = 0;
+  const emptyResultScenarioSet = new Set<string>();
 
   for (const call of toolCalls) {
     const triage = triageRecord(call);
@@ -1169,6 +1212,17 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
 
     if (isObserveMode(call.observeMode) && call.observeMode === 'foreground') {
       foregroundObserveCount += 1;
+    }
+
+    // V26-PGB-02 — only the literal boolean `true` counts. Records
+    // without the field, or with `emptyResult === false`, are
+    // explicitly NOT counted (so legacy NDJSON without the field
+    // never silently inflates the metric).
+    if (call.emptyResult === true) {
+      emptyResultCount += 1;
+      if (typeof call.scenarioId === 'string' && call.scenarioId.length > 0) {
+        emptyResultScenarioSet.add(call.scenarioId);
+      }
     }
 
     if (typeof call.fallbackCause === 'string' && call.fallbackCause.length > 0) {
@@ -1274,6 +1328,8 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
     directApiPathRatio,
     foregroundObserveCount,
     totalWaitedMs: waitedMsSamples > 0 ? waitedMsTotal : null,
+    emptyResultCount,
+    emptyResultScenarios: [...emptyResultScenarioSet].sort((a, b) => a.localeCompare(b)),
     transformerWarnings,
   };
 }
