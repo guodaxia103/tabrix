@@ -201,7 +201,7 @@ export interface ApiKnowledgeIntentReadInput {
 
 const READ_METHODS = new Set(['GET', 'HEAD']);
 const API_KNOWLEDGE_READ_TIMEOUT_MS = 2500;
-const API_KNOWLEDGE_COMPACT_RESULT_CACHE_TTL_MS = 30_000;
+const API_KNOWLEDGE_COMPACT_RESULT_CACHE_TTL_MS = 120_000;
 const API_KNOWLEDGE_COMPACT_RESULT_CACHE_MAX = 64;
 
 interface ApiKnowledgeCompactResultCacheEntry {

@@ -673,7 +673,7 @@ describe('V26-07 API Knowledge substrate', () => {
     expect(second).toMatchObject({
       status: 'ok',
       rowCount: 1,
-      telemetry: { cacheHit: true, waitedMs: 0 },
+      telemetry: { cacheHit: true, waitedMs: 0, cacheTtlMs: 120_000 },
     });
     expect(JSON.stringify(second)).not.toContain('SHOULD_NOT_LEAK');
   });
