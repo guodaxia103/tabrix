@@ -75,9 +75,53 @@ export interface OperationLogMetadata {
    * enforced by the writers, not the storage type.
    */
   emptyResult: string | NotApplicable;
+  /**
+   * V27-00 — closed-enum lifecycle state observed at this step.
+   * Producer: V27-01 LifecycleStateMachine. Stored as the string form
+   * of `LifecycleState` (always includes `'unknown'`).
+   */
+  lifecycleState: string | NotApplicable;
+  /**
+   * V27-00 — confidence in the lifecycle state, formatted as
+   * `'0.00'..'1.00'`. Producer: V27-01.
+   */
+  lifecycleConfidence: string | NotApplicable;
+  /**
+   * V27-00 — closed-enum action outcome. Producer: V27-03
+   * ActionOutcomeClassifier.
+   */
+  actionOutcome: string | NotApplicable;
+  /** V27-00 — confidence in the action outcome (`'0.00'..'1.00'`). */
+  outcomeConfidence: string | NotApplicable;
+  /**
+   * V27-00 — closed-enum reason the v2.7 context tree was invalidated
+   * before this step. Producer: V27-05 ContextManager.
+   */
+  contextInvalidationReason: string | NotApplicable;
+  /** V27-00 — closed-enum readiness state. Producer: V27-04. */
+  readinessState: string | NotApplicable;
+  /** V27-00 — closed-enum page-complexity kind. Producer: V27-04. */
+  complexityKind: string | NotApplicable;
+  /**
+   * V27-00 — opaque short id pointing at the in-memory fact-collector
+   * snapshot that backed this step. Producer: V27-02. Never persists
+   * the snapshot itself.
+   */
+  factSnapshotId: string | NotApplicable;
+  /**
+   * V27-00 — synthetic per-event observer overhead recorded by V27-02
+   * (`'<N>ms'`). Evidence-only; the production path does not block on
+   * this value.
+   */
+  observerOverhead: string | NotApplicable;
+  /**
+   * V27-00 — opaque short id of the executable-budget rule that
+   * produced this step. Reserved for V27-15.
+   */
+  decisionRuleId: string | NotApplicable;
 }
 
-const METADATA_KEYS = [
+export const METADATA_KEYS = [
   'externalTaskKey',
   'runId',
   'scenarioId',
@@ -89,6 +133,20 @@ const METADATA_KEYS = [
   'fallbackPlan',
   'apiTelemetry',
   'emptyResult',
+  // V27-00 additive keys (producers in V27-01..V27-15). All default to
+  // `not_applicable` so v2.6 rows replay with these as sentinel-filled
+  // metadata, and v2.7 rows can stamp the concrete value as it becomes
+  // available.
+  'lifecycleState',
+  'lifecycleConfidence',
+  'actionOutcome',
+  'outcomeConfidence',
+  'contextInvalidationReason',
+  'readinessState',
+  'complexityKind',
+  'factSnapshotId',
+  'observerOverhead',
+  'decisionRuleId',
 ] as const satisfies ReadonlyArray<keyof OperationLogMetadata>;
 
 /**
@@ -127,6 +185,16 @@ export function makeOperationLogMetadataDefaults(): OperationLogMetadata {
     fallbackPlan: NOT_APPLICABLE,
     apiTelemetry: NOT_APPLICABLE,
     emptyResult: NOT_APPLICABLE,
+    lifecycleState: NOT_APPLICABLE,
+    lifecycleConfidence: NOT_APPLICABLE,
+    actionOutcome: NOT_APPLICABLE,
+    outcomeConfidence: NOT_APPLICABLE,
+    contextInvalidationReason: NOT_APPLICABLE,
+    readinessState: NOT_APPLICABLE,
+    complexityKind: NOT_APPLICABLE,
+    factSnapshotId: NOT_APPLICABLE,
+    observerOverhead: NOT_APPLICABLE,
+    decisionRuleId: NOT_APPLICABLE,
   };
 }
 

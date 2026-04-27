@@ -237,3 +237,54 @@ describe('renderOperationChainSummary — V26-PGB-05', () => {
     expect(text).not.toContain('secret=should-not-leak');
   });
 });
+
+/**
+ * V27-00 — invariant: a v2.6-shape operation log replays unchanged under
+ * the v2.7 metadata extension. v2.6 callers only stamped the FIX-07 +
+ * PGB-01 keys; v2.7 added 10 more (lifecycleState, factSnapshotId, …).
+ * `buildOperationLogMetadata` defaults missing keys to `'not_applicable'`,
+ * so a v2.6 row must replay with all v2.7 keys rendered as the sentinel.
+ */
+describe('summariseOperationChain — V27-00 v2.6 NDJSON replay invariant', () => {
+  it('replays a v2.6-only metadata blob without v2.7 keys present', () => {
+    const v26OnlyMetadata = {
+      ...makeMetadata({
+        emptyResult: 'false',
+        decisionReason: 'api_knowledge_candidate_available',
+        routerDecision: 'api_rows',
+      }),
+    } as OperationLogMetadata;
+    const reader = makeReader([
+      makeLog({
+        stepId: 'v26-step',
+        selectedDataSource: 'api_rows',
+        sourceRoute: 'api_knowledge',
+        decisionReason: 'api_knowledge_candidate_available',
+        resultKind: 'api_rows',
+        durationMs: 105,
+        success: true,
+        metadata: v26OnlyMetadata,
+      }),
+    ]);
+    const summary = summariseOperationChain(reader, 'session-1');
+    expect(summary.stepCount).toBe(1);
+    expect(summary.steps[0].routeOutcome).toBe('api_success');
+    const v27SentinelKeys: ReadonlyArray<keyof OperationLogMetadata> = [
+      'lifecycleState',
+      'lifecycleConfidence',
+      'actionOutcome',
+      'outcomeConfidence',
+      'contextInvalidationReason',
+      'readinessState',
+      'complexityKind',
+      'factSnapshotId',
+      'observerOverhead',
+      'decisionRuleId',
+    ];
+    for (const key of v27SentinelKeys) {
+      expect(v26OnlyMetadata[key]).toBe(NOT_APPLICABLE);
+    }
+    const text = renderOperationChainSummary(summary);
+    expect(text).toContain('api_success');
+  });
+});
