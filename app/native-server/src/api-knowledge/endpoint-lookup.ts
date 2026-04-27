@@ -1,0 +1,141 @@
+/**
+ * V26-FIX-04 — Knowledge-driven endpoint lookup.
+ *
+ * Pure function module. Given a `DataNeed` and a structural
+ * `EndpointKnowledgeReader` (`KnowledgeApiRepository` satisfies it),
+ * picks the highest-scoring usable endpoint for the requested
+ * `(site, semanticTypeWanted)` pair.
+ *
+ * This is the *replacement entry point* for `direct-api-executor`:
+ * pre-FIX-04 the executor ran with a hardcoded
+ * `resolveApiKnowledgeCandidate` (GitHub/npmjs literal table); FIX-04
+ * inverts that — the lookup is now driven by what the Knowledge DB
+ * actually observed (FIX-03 captures any `usable` JSON GET into
+ * Knowledge under `family='observed'`), and the V25 GitHub/npmjs
+ * adapter is downgraded to "builder hint after lookup hits" in
+ * `safe-request-builder.ts`.
+ *
+ * Lookup contract:
+ *   1. The `site` is derived from `dataNeed.urlHint` host. When the
+ *      hint is missing or unparseable, we cannot look up anything and
+ *      return `null` — the caller falls through to the legacy
+ *      candidate path (which V26-FIX-05 will further constrain to
+ *      `seed_adapter` compatibility).
+ *   2. We only consider rows that the repository's
+ *      `scoreEndpointKnowledge` already marked as `usableForTask`. A
+ *      `mutation`/`asset`/`auth`/etc. semantic type is never a read
+ *      candidate — those branches are handled exclusively by the
+ *      legacy DOM `chrome_read_page` chain.
+ *   3. When `semanticTypeWanted` is non-null, we prefer rows whose
+ *      `semanticType` matches; rows with a different (but still
+ *      usable) semanticType are only returned with
+ *      `semanticValidation='fail'` so the caller can record the
+ *      evidence even though it still issues the request.
+ *   4. Among matching rows the highest `confidence` wins; ties break
+ *      on `sampleCount` (more observations → more reliable). We never
+ *      pick a row with `confidence < CONFIDENCE_FLOOR` — the executor
+ *      collapses that into `skipped_low_confidence` so the chooser
+ *      can still try the legacy path or fall through to DOM L0+L1.
+ */
+
+import type { DataNeed, EndpointKnowledgeReader, EndpointMatch } from './types';
+
+/**
+ * Floor below which a Knowledge endpoint is treated as "we don't
+ * trust this enough to skip the browser". Calibrated to match the V25
+ * candidate threshold (`DIRECT_API_HIGH_CONFIDENCE_THRESHOLD = 0.7`)
+ * so a knowledge-driven hit is at least as conservative as the
+ * pre-FIX-04 path. A row that the repository scored ≥ 0.7 already
+ * required a `2xx` status class + a structured response shape + a
+ * read-only semantic type, which is the same trust profile.
+ */
+export const KNOWLEDGE_LOOKUP_CONFIDENCE_FLOOR = 0.7;
+
+/**
+ * Look up the best candidate endpoint for the caller's `dataNeed`.
+ * Returns `null` when:
+ *   - the urlHint is missing / unparseable
+ *   - the repository has no usable rows for that site
+ *   - the highest-scoring row is below `KNOWLEDGE_LOOKUP_CONFIDENCE_FLOOR`
+ *
+ * The function performs no IO beyond a single `listScoredBySite`
+ * call. It does not consult `Date.now()` and is therefore safe to
+ * unit-test deterministically.
+ */
+export function lookupEndpointFamily(
+  dataNeed: DataNeed,
+  repo: EndpointKnowledgeReader,
+): EndpointMatch | null {
+  const site = deriveSiteFromUrlHint(dataNeed.urlHint);
+  if (!site) return null;
+
+  // Cap: we only ever evaluate the top-50 most recently observed
+  // endpoints for a site. The repository already orders by confidence
+  // → sampleCount → lastSeenAt, so the head of the list is always
+  // the strongest candidate set.
+  const scored = repo.listScoredBySite(site, 50);
+  if (scored.length === 0) return null;
+
+  const usable = scored.filter((row) => row.usableForTask);
+  if (usable.length === 0) return null;
+
+  const wanted = dataNeed.semanticTypeWanted;
+  let pool = wanted ? usable.filter((row) => row.semanticType === wanted) : usable.slice();
+
+  // V26-FIX-04 — when no semanticType-matching row exists, fall
+  // through to "any usable" but mark `semanticValidation='fail'`. The
+  // caller still gets a result and the evidence contract records the
+  // mismatch so a downstream post-mortem can group by it.
+  let semanticValidation: EndpointMatch['semanticValidation'] = 'pass';
+  if (pool.length === 0) {
+    pool = usable.slice();
+    semanticValidation = 'fail';
+  }
+
+  pool.sort((a, b) => {
+    if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+    if (b.sampleCount !== a.sampleCount) return b.sampleCount - a.sampleCount;
+    return b.lastSeenAt.localeCompare(a.lastSeenAt);
+  });
+
+  const top = pool[0];
+  if (!top) return null;
+  if (top.confidence < KNOWLEDGE_LOOKUP_CONFIDENCE_FLOOR) return null;
+
+  // V26-FIX-04 — the score we return is a deliberate copy of the
+  // repository's `confidence`, with a small penalty when we had to
+  // widen the semantic match. The penalty is large enough to
+  // de-prioritize a `semanticValidation='fail'` hit relative to a
+  // pass-validated peer at the same confidence, and small enough that
+  // a strong observed endpoint still beats the legacy candidate's
+  // 0.7 floor.
+  const score = semanticValidation === 'pass' ? top.confidence : Math.max(0, top.confidence - 0.05);
+  if (score < KNOWLEDGE_LOOKUP_CONFIDENCE_FLOOR) return null;
+
+  return {
+    endpoint: top,
+    semanticValidation,
+    score,
+  };
+}
+
+/**
+ * Internal — derives the `site` Knowledge row key from the URL the
+ * user is currently on. `KnowledgeApiRepository` keys on the *host*
+ * (lower-cased), and `api-knowledge-capture.ts` writes the same key,
+ * so this normalisation must stay in lockstep.
+ *
+ * Returns `null` when the url is missing / unparseable so the caller
+ * can fall back to the legacy candidate path.
+ */
+function deriveSiteFromUrlHint(urlHint: string | null): string | null {
+  if (!urlHint) return null;
+  try {
+    const parsed = new URL(urlHint);
+    const host = parsed.hostname.trim().toLowerCase();
+    if (!host) return null;
+    return host;
+  } catch {
+    return null;
+  }
+}

@@ -68,6 +68,7 @@ import {
   type DataSourceRiskTier,
 } from '../execution/data-source-router';
 import { tryDirectApiExecute, type DirectApiIntentClass } from '../execution/direct-api-executor';
+import type { DataNeed, EndpointKnowledgeReader } from '../api-knowledge/types';
 
 export interface TabrixChooseContextRouterTelemetry {
   chosenSource?: DataSourceKind;
@@ -1180,12 +1181,43 @@ export async function runTabrixChooseContextWithDirectApi(
   // mistake V26-FIX-01 is correcting.
   const intentClass: DirectApiIntentClass = result.chosenLayer === 'L0' ? 'read_only' : 'action';
 
+  // V26-FIX-04 — the executor's knowledge-driven branch is only
+  // exercised when both `dataNeed` and `knowledgeRepo` are present.
+  // We only wire `knowledgeRepo` through when the repository actually
+  // implements `listScoredBySite` (older test seams may inject only
+  // `listBySite`), which keeps the v2.5 candidate-only path
+  // bit-identical for those callers.
+  const knowledgeRepo: EndpointKnowledgeReader | undefined =
+    isCapabilityEnabled('api_knowledge', deps.capabilityEnv) &&
+    deps.knowledgeApi &&
+    typeof deps.knowledgeApi.listScoredBySite === 'function'
+      ? (deps.knowledgeApi as EndpointKnowledgeReader)
+      : undefined;
+  const dataNeed: DataNeed | undefined = knowledgeRepo
+    ? {
+        intent: parsed.input.intent.toLowerCase(),
+        intentClass,
+        // V26-FIX-04 — leave the closed-enum hint at `null` for now.
+        // The lookup falls through to "any usable read" semantics,
+        // which is the behaviour the FIX-04 minimum success criteria
+        // require. A future FIX may map intent keywords (`search` /
+        // `list` / `detail` / `pagination` / `filter`) onto the
+        // closed enum once we have telemetry showing it actually
+        // helps disambiguate.
+        semanticTypeWanted: null,
+        urlHint: parsed.input.url ?? null,
+        pageRole: parsed.input.pageRole ?? null,
+      }
+    : undefined;
+
   const exec = await tryDirectApiExecute({
     sourceRoute: result.sourceRoute,
     candidate,
     intentClass,
     fetchFn: deps.directApiFetchFn,
     nowMs: deps.directApiNowMs,
+    dataNeed,
+    knowledgeRepo,
   });
 
   return {
@@ -1202,6 +1234,15 @@ export async function runTabrixChooseContextWithDirectApi(
       rows: exec.rows?.rows ?? null,
       rowCount: exec.rows?.rowCount ?? null,
       apiTelemetry: exec.apiTelemetry,
+      // V26-FIX-04 — `readerMode / knowledgeEndpointId / endpointPattern /
+      // endpointSemanticType / requestShapeUsed / semanticValidation`
+      // exist on the executor's internal result but are intentionally
+      // NOT surfaced on `TabrixDirectApiExecution` (a cross-process
+      // wire type in `packages/shared/src/choose-context.ts`). FIX-07
+      // is the package that wires them into the operation-memory-log
+      // evidence contract; widening the public chooser schema here
+      // would require a `packages/shared` change which is out-of-scope
+      // for FIX-04 per the plan's "Out of scope" list.
     },
   };
 }

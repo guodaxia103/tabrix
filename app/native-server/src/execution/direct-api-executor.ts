@@ -45,6 +45,13 @@ import type {
   ApiKnowledgeTelemetry,
 } from '../api/api-knowledge';
 import { readApiKnowledgeRows } from '../api/api-knowledge';
+import {
+  KNOWLEDGE_LOOKUP_CONFIDENCE_FLOOR,
+  lookupEndpointFamily,
+} from '../api-knowledge/endpoint-lookup';
+import { buildSafeRequest } from '../api-knowledge/safe-request-builder';
+import { readKnowledgeDrivenEndpoint } from '../api-knowledge/knowledge-driven-reader';
+import type { DataNeed, EndpointKnowledgeReader, ReaderMode } from '../api-knowledge/types';
 
 /**
  * Closed enum the chooser surfaces back to telemetry / operation-log
@@ -120,6 +127,16 @@ export interface DirectApiExecutorInput {
   limit?: number;
   /** Optional confidence threshold override (defaults to {@link DIRECT_API_HIGH_CONFIDENCE_THRESHOLD}). */
   confidenceThreshold?: number;
+  /**
+   * V26-FIX-04 — when both `dataNeed` and `knowledgeRepo` are
+   * supplied, the executor first tries a Knowledge-driven lookup
+   * (`lookupEndpointFamily` + `buildSafeRequest`) before falling
+   * back to the legacy `candidate` path. When either is missing
+   * (e.g. the caller did not load Memory yet) the executor behaves
+   * exactly like pre-FIX-04. This is the FIX-04 entry point.
+   */
+  dataNeed?: DataNeed | null;
+  knowledgeRepo?: EndpointKnowledgeReader | null;
 }
 
 export interface DirectApiExecutionTelemetry {
@@ -140,6 +157,24 @@ export interface DirectApiExecutionTelemetry {
   fallbackCause: ApiKnowledgeFallbackReason | null;
   /** Suggested entry layer when `fallback_required`; null otherwise. */
   fallbackEntryLayer: 'L0+L1' | null;
+  /**
+   * V26-FIX-04 — closed enum identifying which entry path the
+   * executor actually took. `'knowledge_driven'` when the
+   * lookup-first path produced the result; `'legacy_candidate'` when
+   * the executor fell through to the V25 hardcoded candidate; `null`
+   * for short-circuit branches that never reached either.
+   */
+  readerMode: ReaderMode | null;
+  /** V26-FIX-04 — Knowledge endpoint id of the looked-up row; null when not knowledge-driven. */
+  knowledgeEndpointId: string | null;
+  /** V26-FIX-04 — `<host><path>` pattern of the looked-up endpoint; null when not knowledge-driven. */
+  endpointPattern: string | null;
+  /** V26-FIX-04 — closed-enum semantic type of the looked-up endpoint; null when not knowledge-driven. */
+  endpointSemanticType: string | null;
+  /** V26-FIX-04 — sorted list of query keys the safe builder emitted; null when not knowledge-driven. */
+  requestShapeUsed: ReadonlyArray<string> | null;
+  /** V26-FIX-04 — `'pass' | 'fail'` semantic-validation outcome; null when not knowledge-driven. */
+  semanticValidation: 'pass' | 'fail' | null;
 }
 
 export interface DirectApiExecutionRows {
@@ -198,21 +233,32 @@ export async function tryDirectApiExecute(
     });
   }
 
+  if (input.intentClass !== 'read_only') {
+    return short({
+      executionMode: 'skipped_not_read_only',
+      decisionReason: 'intent_not_read_only',
+      endpointFamily: input.candidate?.endpointFamily ?? null,
+      candidateConfidence: input.candidate?.confidence ?? null,
+    });
+  }
+
+  // V26-FIX-04 — try the lookup-first knowledge-driven path before
+  // falling through to the legacy candidate path. The knowledge path
+  // returns `null` whenever it cannot produce a result (no urlHint /
+  // no Knowledge row / build refused / low confidence) so the legacy
+  // path remains the safety net for the V25 GitHub/npmjs Gate B
+  // fixtures.
+  if (input.dataNeed && input.knowledgeRepo) {
+    const knowledgeResult = await tryKnowledgeDrivenPath(input);
+    if (knowledgeResult) return knowledgeResult;
+  }
+
   if (!input.candidate) {
     return short({
       executionMode: 'skipped_no_candidate',
       decisionReason: 'endpoint_not_resolved',
       endpointFamily: null,
       candidateConfidence: null,
-    });
-  }
-
-  if (input.intentClass !== 'read_only') {
-    return short({
-      executionMode: 'skipped_not_read_only',
-      decisionReason: 'intent_not_read_only',
-      endpointFamily: input.candidate.endpointFamily,
-      candidateConfidence: input.candidate.confidence,
     });
   }
 
@@ -245,6 +291,12 @@ export async function tryDirectApiExecute(
       apiTelemetry: reader.telemetry,
       fallbackCause: null,
       fallbackEntryLayer: null,
+      readerMode: 'legacy_candidate',
+      knowledgeEndpointId: null,
+      endpointPattern: null,
+      endpointSemanticType: null,
+      requestShapeUsed: null,
+      semanticValidation: null,
       rows: {
         rows: reader.rows,
         rowCount: reader.rowCount,
@@ -265,6 +317,90 @@ export async function tryDirectApiExecute(
     apiTelemetry: reader.telemetry,
     fallbackCause: reader.reason,
     fallbackEntryLayer: reader.fallbackEntryLayer,
+    readerMode: 'legacy_candidate',
+    knowledgeEndpointId: null,
+    endpointPattern: null,
+    endpointSemanticType: null,
+    requestShapeUsed: null,
+    semanticValidation: null,
+    rows: null,
+  };
+}
+
+/**
+ * V26-FIX-04 — knowledge-driven entry path. Returns `null` when the
+ * caller's {@link DataNeed} cannot be resolved against the
+ * Knowledge repository; the executor then falls through to the
+ * pre-FIX-04 legacy candidate path. Returns a fully-formed
+ * `DirectApiExecutionResult` whenever the lookup hits with high
+ * confidence — even when the underlying fetch fails (in which case
+ * the result is `executionMode='fallback_required'` with the
+ * knowledge-driven evidence still attached).
+ */
+async function tryKnowledgeDrivenPath(
+  input: DirectApiExecutorInput,
+): Promise<DirectApiExecutionResult | null> {
+  const dataNeed = input.dataNeed;
+  const repo = input.knowledgeRepo;
+  if (!dataNeed || !repo) return null;
+
+  const match = lookupEndpointFamily(dataNeed, repo);
+  if (!match) return null;
+  if (match.score < KNOWLEDGE_LOOKUP_CONFIDENCE_FLOOR) return null;
+
+  const plan = buildSafeRequest(match, dataNeed);
+  if (!plan) return null;
+
+  const reader = await readKnowledgeDrivenEndpoint({
+    match,
+    plan,
+    seedParams: dataNeed.params as Record<string, string | number | null | undefined> | undefined,
+    fetchFn: input.fetchFn,
+    nowMs: input.nowMs,
+    limit: input.limit,
+  });
+
+  const baseTelemetry = {
+    readerMode: 'knowledge_driven' as const,
+    knowledgeEndpointId: match.endpoint.endpointId,
+    endpointPattern: match.endpoint.urlPattern,
+    endpointSemanticType: match.endpoint.semanticType,
+    requestShapeUsed: plan.requestShapeUsed,
+    semanticValidation: match.semanticValidation,
+    candidateConfidence: match.score,
+  };
+
+  if (reader.status === 'ok') {
+    return {
+      executionMode: 'direct_api',
+      decisionReason: 'endpoint_knowledge_high_confidence',
+      browserNavigationSkipped: true,
+      readPageAvoided: true,
+      endpointFamily: match.endpoint.family,
+      apiTelemetry: reader.telemetry,
+      fallbackCause: null,
+      fallbackEntryLayer: null,
+      ...baseTelemetry,
+      rows: {
+        rows: reader.rows,
+        rowCount: reader.rowCount,
+        compact: true,
+        rawBodyStored: false,
+        dataPurpose: plan.dataPurpose,
+      },
+    };
+  }
+
+  return {
+    executionMode: 'fallback_required',
+    decisionReason: `api_call_failed_${reader.reason}` as DirectApiDecisionReason,
+    browserNavigationSkipped: false,
+    readPageAvoided: false,
+    endpointFamily: match.endpoint.family,
+    apiTelemetry: reader.telemetry,
+    fallbackCause: reader.reason,
+    fallbackEntryLayer: reader.fallbackEntryLayer,
+    ...baseTelemetry,
     rows: null,
   };
 }
@@ -287,6 +423,12 @@ function short(input: ShortCircuitInput): DirectApiExecutionResult {
     apiTelemetry: null,
     fallbackCause: null,
     fallbackEntryLayer: null,
+    readerMode: null,
+    knowledgeEndpointId: null,
+    endpointPattern: null,
+    endpointSemanticType: null,
+    requestShapeUsed: null,
+    semanticValidation: null,
     rows: null,
   };
 }

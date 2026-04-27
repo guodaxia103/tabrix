@@ -26,6 +26,11 @@ import {
   type DirectApiExecutorInput,
 } from './direct-api-executor';
 import type { ApiKnowledgeCandidate, ApiKnowledgeFetch } from '../api/api-knowledge';
+import type { DataNeed, EndpointKnowledgeReader } from '../api-knowledge/types';
+import type {
+  EndpointSemanticType,
+  KnowledgeApiEndpoint,
+} from '../memory/knowledge/knowledge-api-repository';
 
 function jsonFetch(status: number, body: unknown): ApiKnowledgeFetch {
   return jest.fn().mockResolvedValue({
@@ -219,5 +224,301 @@ describe('V26-FIX-01 tryDirectApiExecute — failure → fallback_required', () 
     const serialised = JSON.stringify(result);
     expect(serialised).not.toContain('secret-session-cookie');
     expect(serialised).not.toContain('secret-token');
+  });
+});
+
+// ---------------------------------------------------------------------
+// V26-FIX-04 — knowledge-driven on-demand reader path
+// ---------------------------------------------------------------------
+
+type ScoredFixtureRow = KnowledgeApiEndpoint & {
+  semanticType: EndpointSemanticType;
+  confidence: number;
+  usableForTask: boolean;
+  fallbackReason: string | null;
+};
+
+function knowledgeRow(overrides: Partial<ScoredFixtureRow>): ScoredFixtureRow {
+  return {
+    endpointId: 'knowledge-endpoint-id',
+    site: 'api.example.com',
+    family: 'observed',
+    method: 'GET',
+    urlPattern: 'api.example.com/items',
+    endpointSignature: 'GET api.example.com/items',
+    semanticTag: null,
+    statusClass: '2xx',
+    requestSummary: {
+      headerKeys: [],
+      queryKeys: ['q'],
+      bodyKeys: [],
+      hasAuth: false,
+      hasCookie: false,
+    },
+    responseSummary: {
+      contentType: 'application/json',
+      sizeBytes: 1024,
+      shape: { kind: 'array', itemCount: 5, sampleItemKeys: ['id', 'name'] },
+    },
+    sourceSessionId: null,
+    sourceStepId: null,
+    sourceHistoryRef: null,
+    sampleCount: 1,
+    firstSeenAt: '2026-01-01T00:00:00Z',
+    lastSeenAt: '2026-01-01T00:00:00Z',
+    semanticTypePersisted: 'search',
+    queryParamsShape: 'q',
+    responseShapeSummary: null,
+    usableForTaskPersisted: true,
+    noiseReason: null,
+    semanticType: 'search',
+    confidence: 0.8,
+    usableForTask: true,
+    fallbackReason: null,
+    ...overrides,
+  };
+}
+
+function makeRepo(rows: ScoredFixtureRow[]): EndpointKnowledgeReader {
+  return {
+    listScoredBySite(site: string) {
+      return rows.filter((r) => r.site === site);
+    },
+  };
+}
+
+const knowledgeDrivenInput = (
+  overrides: Partial<DirectApiExecutorInput> & {
+    dataNeed: DataNeed;
+    knowledgeRepo: EndpointKnowledgeReader;
+  },
+): DirectApiExecutorInput => ({
+  sourceRoute: 'knowledge_supported_read',
+  candidate: null,
+  intentClass: 'read_only',
+  ...overrides,
+});
+
+describe('V26-FIX-04 tryDirectApiExecute — knowledge-driven path', () => {
+  it('GitHub fixture: lookup-driven seed_adapter URL → direct_api with knowledge_driven evidence', async () => {
+    const fetchFn = jsonFetch(200, {
+      total_count: 1,
+      items: [
+        {
+          full_name: 'tabrix/tabrix',
+          html_url: 'https://github.com/tabrix/tabrix',
+          stargazers_count: 42,
+          description: 'desc',
+        },
+      ],
+    });
+    const repo = makeRepo([
+      knowledgeRow({
+        endpointId: 'kn-github-search',
+        site: 'api.github.com',
+        family: 'github',
+        urlPattern: 'api.github.com/search/repositories',
+        semanticType: 'search',
+        confidence: 0.92,
+      }),
+    ]);
+    const dataNeed: DataNeed = {
+      intent: 'search github tabrix',
+      intentClass: 'read_only',
+      semanticTypeWanted: 'search',
+      urlHint: 'https://api.github.com/search/repositories?q=tabrix',
+      pageRole: null,
+      params: { query: 'tabrix' },
+    };
+    const result = await tryDirectApiExecute(
+      knowledgeDrivenInput({ dataNeed, knowledgeRepo: repo, fetchFn }),
+    );
+    expect(result.executionMode).toBe('direct_api');
+    expect(result.readerMode).toBe('knowledge_driven');
+    expect(result.knowledgeEndpointId).toBe('kn-github-search');
+    expect(result.endpointPattern).toBe('api.github.com/search/repositories');
+    expect(result.endpointSemanticType).toBe('search');
+    expect(result.semanticValidation).toBe('pass');
+    expect(result.requestShapeUsed).toEqual(['per_page', 'q']);
+    expect(result.endpointFamily).toBe('github');
+    expect(result.candidateConfidence).toBeCloseTo(0.92);
+    expect(result.rows!.rowCount).toBe(1);
+  });
+
+  it('npmjs fixture: lookup-driven seed_adapter URL → direct_api', async () => {
+    const fetchFn = jsonFetch(200, {
+      objects: [
+        {
+          package: {
+            name: 'tabrix',
+            version: '0.1.0',
+            description: 'demo',
+            links: { npm: 'https://www.npmjs.com/package/tabrix' },
+          },
+          score: { detail: { quality: 0.9 } },
+        },
+      ],
+    });
+    const repo = makeRepo([
+      knowledgeRow({
+        endpointId: 'kn-npmjs-search',
+        site: 'registry.npmjs.org',
+        family: 'npmjs',
+        urlPattern: 'registry.npmjs.org/-/v1/search',
+        semanticType: 'search',
+        confidence: 0.9,
+      }),
+    ]);
+    const dataNeed: DataNeed = {
+      intent: 'find tabrix package',
+      intentClass: 'read_only',
+      semanticTypeWanted: 'search',
+      urlHint: 'https://registry.npmjs.org/-/v1/search?text=tabrix',
+      pageRole: null,
+      params: { query: 'tabrix' },
+    };
+    const result = await tryDirectApiExecute(
+      knowledgeDrivenInput({ dataNeed, knowledgeRepo: repo, fetchFn }),
+    );
+    expect(result.executionMode).toBe('direct_api');
+    expect(result.readerMode).toBe('knowledge_driven');
+    expect(result.endpointPattern).toBe('registry.npmjs.org/-/v1/search');
+    expect(result.requestShapeUsed).toEqual(['size', 'text']);
+    expect(result.rows!.rows[0]!.name).toBe('tabrix');
+  });
+
+  it('generic non-platform fixture: observed wikipedia REST search → direct_api with generic compactor', async () => {
+    const fetchFn = jsonFetch(200, {
+      pages: [
+        { id: 736, key: 'Albert_Einstein', title: 'Albert Einstein', excerpt: 'physicist' },
+        { id: 12345, key: 'Einstein_field_equations', title: 'Equations', excerpt: 'physics' },
+      ],
+    });
+    const repo = makeRepo([
+      knowledgeRow({
+        endpointId: 'kn-wp-search',
+        site: 'en.wikipedia.org',
+        family: 'observed',
+        urlPattern: 'en.wikipedia.org/w/rest.php/v1/search/page',
+        semanticType: 'search',
+        confidence: 0.82,
+        requestSummary: {
+          headerKeys: [],
+          queryKeys: ['limit', 'q'],
+          bodyKeys: [],
+          hasAuth: false,
+          hasCookie: false,
+        },
+      }),
+    ]);
+    const dataNeed: DataNeed = {
+      intent: 'search wikipedia einstein',
+      intentClass: 'read_only',
+      semanticTypeWanted: 'search',
+      urlHint: 'https://en.wikipedia.org/wiki/Albert_Einstein',
+      pageRole: null,
+      params: { query: 'einstein', limit: 2 },
+    };
+    const result = await tryDirectApiExecute(
+      knowledgeDrivenInput({ dataNeed, knowledgeRepo: repo, fetchFn }),
+    );
+    expect(result.executionMode).toBe('direct_api');
+    expect(result.readerMode).toBe('knowledge_driven');
+    expect(result.endpointFamily).toBe('observed');
+    expect(result.endpointPattern).toBe('en.wikipedia.org/w/rest.php/v1/search/page');
+    expect(result.requestShapeUsed).toEqual(['limit', 'q']);
+    expect(result.rows!.dataPurpose).toBe('observed_search');
+    expect(result.rows!.rowCount).toBe(2);
+    expect(result.rows!.rows[0]!.title).toBe('Albert Einstein');
+  });
+
+  it('lookup miss → falls through to legacy candidate path', async () => {
+    const fetchFn = jsonFetch(200, { total_count: 0, items: [] });
+    const repo = makeRepo([
+      knowledgeRow({
+        site: 'other.example.com',
+        urlPattern: 'other.example.com/items',
+      }),
+    ]);
+    const dataNeed: DataNeed = {
+      intent: 'find tabrix on github',
+      intentClass: 'read_only',
+      semanticTypeWanted: 'search',
+      urlHint: 'https://api.github.com/some/other/path',
+      pageRole: null,
+      params: { query: 'tabrix' },
+    };
+    const result = await tryDirectApiExecute(
+      knowledgeDrivenInput({
+        dataNeed,
+        knowledgeRepo: repo,
+        candidate: HIGH_CONFIDENCE_GITHUB_SEARCH,
+        fetchFn,
+      }),
+    );
+    expect(result.executionMode).toBe('direct_api');
+    expect(result.readerMode).toBe('legacy_candidate');
+    expect(result.knowledgeEndpointId).toBeNull();
+    expect(result.endpointPattern).toBeNull();
+  });
+
+  it('knowledge-driven fetch failure → fallback_required with knowledge_driven evidence', async () => {
+    const fetchFn = jsonFetch(429, { message: 'too many' });
+    const repo = makeRepo([
+      knowledgeRow({
+        endpointId: 'kn-github-search',
+        site: 'api.github.com',
+        family: 'github',
+        urlPattern: 'api.github.com/search/repositories',
+        semanticType: 'search',
+        confidence: 0.9,
+      }),
+    ]);
+    const dataNeed: DataNeed = {
+      intent: 'search github tabrix',
+      intentClass: 'read_only',
+      semanticTypeWanted: 'search',
+      urlHint: 'https://api.github.com/search/repositories',
+      pageRole: null,
+      params: { query: 'tabrix' },
+    };
+    const result = await tryDirectApiExecute(
+      knowledgeDrivenInput({ dataNeed, knowledgeRepo: repo, fetchFn }),
+    );
+    expect(result.executionMode).toBe('fallback_required');
+    expect(result.readerMode).toBe('knowledge_driven');
+    expect(result.fallbackCause).toBe('rate_limited');
+    expect(result.fallbackEntryLayer).toBe('L0+L1');
+    expect(result.knowledgeEndpointId).toBe('kn-github-search');
+    expect(result.rows).toBeNull();
+  });
+
+  it('low-confidence Knowledge row → falls through to legacy candidate path', async () => {
+    const fetchFn = jsonFetch(200, { total_count: 0, items: [] });
+    const repo = makeRepo([
+      knowledgeRow({
+        site: 'api.github.com',
+        urlPattern: 'api.github.com/search/repositories',
+        confidence: 0.5,
+      }),
+    ]);
+    const dataNeed: DataNeed = {
+      intent: 'search github tabrix',
+      intentClass: 'read_only',
+      semanticTypeWanted: 'search',
+      urlHint: 'https://api.github.com/search/repositories',
+      pageRole: null,
+      params: { query: 'tabrix' },
+    };
+    const result = await tryDirectApiExecute(
+      knowledgeDrivenInput({
+        dataNeed,
+        knowledgeRepo: repo,
+        candidate: HIGH_CONFIDENCE_GITHUB_SEARCH,
+        fetchFn,
+      }),
+    );
+    expect(result.executionMode).toBe('direct_api');
+    expect(result.readerMode).toBe('legacy_candidate');
   });
 });
