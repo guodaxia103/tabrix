@@ -454,6 +454,13 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       dispatcherInputSource: 'api_knowledge',
       decisionReason: 'api_knowledge_candidate_available',
       taskTotals: { readPageAvoidedCount: 1 },
+      // V26-PGB-04 — chrome_read_page api_rows envelope MUST carry the
+      // closed-enum endpoint-source lineage so the Gate B benchmark
+      // transformer can attribute the call into the right bucket.
+      // This live (non-cached) path goes through `readApiKnowledgeEndpointPlan`
+      // which is the V25 hardcoded GitHub adapter, so it is
+      // `seed_adapter` by construction.
+      endpointSource: 'seed_adapter',
     });
     expect(payload.fallbackPlan).toMatchObject({
       dataSource: 'dom_json',

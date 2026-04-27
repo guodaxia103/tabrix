@@ -202,6 +202,14 @@ export interface ChooseContextDecisionSnapshot {
     emptyReason: 'no_matching_records' | null;
     /** V26-PGB-01 — human-readable message; `null` on the non-empty path. */
     emptyMessage: string | null;
+    /**
+     * V26-PGB-04 — closed-enum lineage marker carried verbatim from
+     * the executor. Surfaced here so the read-side shim can pipe it
+     * onto the `chrome_read_page` `kind:'api_rows'` envelope without
+     * re-deriving it from the endpoint-family string. `null` on every
+     * short-circuit branch where no reader was reached.
+     */
+    endpointSource: 'observed' | 'seed_adapter' | 'manual_seed' | null;
     /** Underlying API telemetry forwarded from the reader. */
     telemetry: {
       endpointFamily?: string;

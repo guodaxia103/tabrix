@@ -1911,6 +1911,18 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                 emptyResult: apiResult.emptyResult ?? false,
                 emptyReason: apiResult.emptyReason ?? null,
                 emptyMessage: apiResult.emptyMessage ?? null,
+                // V26-PGB-04 — closed-enum endpoint-source lineage on
+                // every `chrome_read_page` `kind:'api_rows'` envelope.
+                // The cached path inherits the chooser's
+                // `direct-api-executor` value verbatim; the live
+                // `readApiKnowledgeEndpointPlan` branch always uses
+                // the V25 hardcoded GitHub/npmjs adapter, so its
+                // lineage is `seed_adapter` by construction. Surfacing
+                // this on the public envelope lets the Gate B
+                // benchmark transformer aggregate
+                // `endpointSourceDistribution` without re-deriving
+                // the bucket from the family string.
+                endpointSource: cachedDirect ? cachedDirect.endpointSource : 'seed_adapter',
                 apiTelemetry: apiResult.telemetry,
                 diagnostic: skipPlan.diagnostic,
                 taskTotals: totals,

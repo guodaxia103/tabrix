@@ -558,6 +558,18 @@ export interface TabrixDirectApiExecution {
   emptyMessage?: string | null;
   /** Optional API telemetry forwarded from the underlying reader. */
   apiTelemetry?: TabrixDirectApiTelemetry | null;
+  /**
+   * V26-PGB-04 — closed-enum lineage marker that classifies how the
+   * endpoint we (would have) called was sourced. Mirrors the
+   * executor's internal `endpointSource` field so the Gate B
+   * benchmark transformer / report can split the run mix into
+   * `observed` (mainline, came from `chrome_network_capture`) vs
+   * `seed_adapter` (legacy hardcoded family) vs `manual_seed`
+   * (operator-curated). `null` on every short-circuit branch where
+   * no fetch was attempted; left optional so a pre-PGB-04 caller
+   * stays bit-identical on the wire.
+   */
+  endpointSource?: 'observed' | 'seed_adapter' | 'manual_seed' | null;
 }
 
 /** V26-FIX-01 — read-only API telemetry fields surfaced upward. */

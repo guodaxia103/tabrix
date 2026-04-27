@@ -1242,6 +1242,14 @@ export async function runTabrixChooseContextWithDirectApi(
       emptyReason: exec.rows?.emptyReason ?? null,
       emptyMessage: exec.rows?.emptyMessage ?? null,
       apiTelemetry: exec.apiTelemetry,
+      // V26-PGB-04 — surface the closed-enum endpoint lineage marker
+      // so the operation log (PGB-05) and the Gate B benchmark
+      // transformer can attribute every direct-API call into the
+      // `observed` / `seed_adapter` / `manual_seed` / `unknown`
+      // bucket without re-deriving it from the endpoint family
+      // string. `null` on every short-circuit branch (the executor
+      // never reached a reader).
+      endpointSource: exec.endpointSource ?? null,
       // V26-FIX-04 — `readerMode / knowledgeEndpointId / endpointPattern /
       // endpointSemanticType / requestShapeUsed / semanticValidation`
       // exist on the executor's internal result but are intentionally
