@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import type { SqliteDatabase } from './client';
+import {
+  buildOperationLogBlobV2,
+  buildOperationLogMetadata,
+  parseOperationLogBlob,
+  type OperationLogMetadata,
+} from './operation-log-metadata';
 
 export interface OperationMemoryLogInsert {
   operationLogId?: string;
@@ -22,6 +28,15 @@ export interface OperationMemoryLogInsert {
   readCount?: number | null;
   tokensSaved?: number | null;
   tabHygiene?: unknown;
+  /**
+   * V26-FIX-07 — closed-shape "why" envelope persisted alongside
+   * `tabHygiene` inside the existing `tab_hygiene_blob` column. The
+   * repository fills in any missing field with the
+   * `'not_applicable'` sentinel; callers MAY pass `undefined` for
+   * legacy back-compat (the row will still carry a fully-formed
+   * metadata block on read).
+   */
+  metadata?: Partial<OperationLogMetadata>;
   createdAt: string;
 }
 
@@ -45,6 +60,13 @@ export interface OperationMemoryLog {
   readCount: number | null;
   tokensSaved: number | null;
   tabHygiene: unknown | null;
+  /**
+   * V26-FIX-07 — always non-null on read. Legacy rows (written
+   * before FIX-07) surface the `'not_applicable'` sentinel for
+   * every field so a downstream join never has to special-case
+   * "old vs new" rows.
+   */
+  metadata: OperationLogMetadata;
   createdAt: string;
 }
 
@@ -86,6 +108,7 @@ function parseJsonBlob(value: string | null): unknown | null {
 }
 
 function rowToOperationMemoryLog(row: OperationMemoryLogRow): OperationMemoryLog {
+  const { tabHygiene, metadata } = parseOperationLogBlob(parseJsonBlob(row.tab_hygiene_blob));
   return {
     operationLogId: row.operation_log_id,
     taskId: row.task_id,
@@ -105,7 +128,8 @@ function rowToOperationMemoryLog(row: OperationMemoryLogRow): OperationMemoryLog
     errorCode: row.error_code,
     readCount: row.read_count,
     tokensSaved: row.tokens_saved,
-    tabHygiene: parseJsonBlob(row.tab_hygiene_blob),
+    tabHygiene,
+    metadata,
     createdAt: row.created_at,
   };
 }
@@ -137,6 +161,17 @@ export class OperationMemoryLogRepository {
   }
 
   public insert(input: OperationMemoryLogInsert): OperationMemoryLog {
+    // V26-FIX-07 — always serialise to the schema-v2 wrapper so a
+    // downstream `taskSessionId` join never has to branch on
+    // "legacy vs structured". Even when the caller passes neither
+    // `tabHygiene` nor `metadata`, we still emit a wrapper carrying
+    // the all-`'not_applicable'` defaults: it costs ~140 bytes per
+    // row and removes a whole class of "missing field" bugs.
+    const metadata = buildOperationLogMetadata(input.metadata);
+    const blob = buildOperationLogBlobV2({
+      tabHygiene: input.tabHygiene ?? null,
+      metadata,
+    });
     const row = {
       operation_log_id: input.operationLogId ?? randomUUID(),
       task_id: input.taskId,
@@ -156,7 +191,7 @@ export class OperationMemoryLogRepository {
       error_code: input.errorCode ?? null,
       read_count: normalizeOptionalInteger(input.readCount),
       tokens_saved: normalizeOptionalInteger(input.tokensSaved),
-      tab_hygiene_blob: input.tabHygiene === undefined ? null : JSON.stringify(input.tabHygiene),
+      tab_hygiene_blob: JSON.stringify(blob),
       created_at: input.createdAt,
     };
     this.insertStmt.run(row);

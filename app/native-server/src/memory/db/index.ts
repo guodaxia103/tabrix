@@ -29,6 +29,16 @@ export {
   type OperationMemoryLogInsert,
 } from './operation-memory-log-repository';
 export {
+  NOT_APPLICABLE,
+  OPERATION_LOG_BLOB_SCHEMA_VERSION,
+  buildOperationLogBlobV2,
+  buildOperationLogMetadata,
+  makeOperationLogMetadataDefaults,
+  parseOperationLogBlob,
+  type OperationLogBlobV2,
+  type OperationLogMetadata,
+} from './operation-log-metadata';
+export {
   rowToTask,
   taskToRow,
   rowToSession,

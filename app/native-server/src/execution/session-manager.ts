@@ -28,6 +28,7 @@ import {
 } from '../memory/experience';
 import { KnowledgeApiRepository } from '../memory/knowledge/knowledge-api-repository';
 import { ChooseContextTelemetryRepository } from '../memory/telemetry/choose-context-telemetry';
+import type { OperationLogMetadata } from '../memory/db/operation-log-metadata';
 import { TaskSessionContext } from './task-session-context';
 
 export interface CreateTaskInput {
@@ -409,6 +410,14 @@ export class SessionManager {
         readCount?: number | null;
         tokensSaved?: number | null;
         tabHygiene?: unknown;
+        /**
+         * V26-FIX-07 — partial structured "why" envelope. Forwarded
+         * verbatim to the repository, which fills in any missing
+         * field with `'not_applicable'`. Pass through whatever the
+         * call site already knows (decisionReason, sourceRoute,
+         * fallbackPlan, etc.) — do NOT invent values.
+         */
+        metadata?: Partial<OperationLogMetadata>;
       };
     },
   ): ExecutionStep {
@@ -452,6 +461,7 @@ export class SessionManager {
       readCount?: number | null;
       tokensSaved?: number | null;
       tabHygiene?: unknown;
+      metadata?: Partial<OperationLogMetadata>;
     },
   ): void {
     if (!this.operationLogRepo) return;
@@ -481,6 +491,16 @@ export class SessionManager {
         readCount: extras?.readCount ?? null,
         tokensSaved: extras?.tokensSaved ?? null,
         tabHygiene: extras?.tabHygiene,
+        // V26-FIX-07 — auto-derive a metadata floor from the
+        // already-known operationLog fields so every step lands a
+        // structured "why" record even when the caller did not pass
+        // an explicit `metadata` block. Caller-provided fields win.
+        metadata: {
+          decisionReason: extras?.decisionReason ?? undefined,
+          routerDecision: extras?.selectedDataSource ?? undefined,
+          fallbackPlan: extras?.fallbackUsed ?? undefined,
+          ...(extras?.metadata ?? {}),
+        },
         createdAt: step.endedAt ?? nowIso(),
       });
     } catch (error) {

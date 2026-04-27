@@ -3,6 +3,11 @@ import {
   OperationMemoryLogRepository,
   type OperationMemoryLogInsert,
 } from './operation-memory-log-repository';
+import {
+  NOT_APPLICABLE,
+  OPERATION_LOG_BLOB_SCHEMA_VERSION,
+  makeOperationLogMetadataDefaults,
+} from './operation-log-metadata';
 import { SessionRepository } from './session-repository';
 import { StepRepository } from './step-repository';
 import { TaskRepository } from './task-repository';
@@ -121,5 +126,158 @@ describe('OperationMemoryLogRepository', () => {
     } finally {
       close();
     }
+  });
+
+  describe('V26-FIX-07 — structured operation-log metadata', () => {
+    it('persists a complete metadata envelope when none is provided', () => {
+      const { repo, close } = bootstrap();
+      try {
+        const inserted = repo.insert(logFixture({ tabHygiene: undefined }));
+        expect(inserted.metadata).toEqual(makeOperationLogMetadataDefaults());
+        expect(inserted.metadata.decisionReason).toBe(NOT_APPLICABLE);
+        expect(inserted.metadata.routerDecision).toBe(NOT_APPLICABLE);
+        expect(inserted.metadata.fallbackPlan).toBe(NOT_APPLICABLE);
+        expect(inserted.metadata.apiTelemetry).toBe(NOT_APPLICABLE);
+      } finally {
+        close();
+      }
+    });
+
+    it('round-trips a partial metadata block and fills the rest with not_applicable', () => {
+      const { repo, close } = bootstrap();
+      try {
+        const inserted = repo.insert(
+          logFixture({
+            metadata: {
+              decisionReason: 'api_knowledge_high_confidence',
+              routerDecision: 'api_rows',
+              confidence: '0.92',
+              apiTelemetry: 'http_200_compact',
+            },
+          }),
+        );
+        expect(inserted.metadata).toEqual({
+          ...makeOperationLogMetadataDefaults(),
+          decisionReason: 'api_knowledge_high_confidence',
+          routerDecision: 'api_rows',
+          confidence: '0.92',
+          apiTelemetry: 'http_200_compact',
+        });
+        const fromDb = repo.listBySession('session-1')[0];
+        expect(fromDb.metadata).toEqual(inserted.metadata);
+      } finally {
+        close();
+      }
+    });
+
+    it('coerces empty / whitespace metadata values to not_applicable', () => {
+      const { repo, close } = bootstrap();
+      try {
+        const inserted = repo.insert(
+          logFixture({
+            metadata: {
+              decisionReason: '',
+              routerDecision: '   ',
+              confidence: 'high',
+            },
+          }),
+        );
+        expect(inserted.metadata.decisionReason).toBe(NOT_APPLICABLE);
+        expect(inserted.metadata.routerDecision).toBe(NOT_APPLICABLE);
+        expect(inserted.metadata.confidence).toBe('high');
+      } finally {
+        close();
+      }
+    });
+
+    it('serialises tabHygiene + metadata under the schema-v2 wrapper', () => {
+      const { repo, close } = bootstrap();
+      try {
+        repo.insert(
+          logFixture({
+            metadata: { decisionReason: 'router_fail_safe_dom_compact' },
+          }),
+        );
+        const raw = (
+          (repo as unknown as { db: { prepare: (sql: string) => { get: () => unknown } } }).db
+            ? (
+                repo as unknown as {
+                  db: { prepare: (sql: string) => { get: () => unknown } };
+                }
+              ).db
+                .prepare(
+                  'SELECT tab_hygiene_blob FROM operation_memory_logs WHERE operation_log_id = ?',
+                )
+                .get()
+            : null
+        ) as { tab_hygiene_blob: string } | null;
+        // Repo intentionally hides its db handle; if we cannot peek
+        // (test rig isolation), at least round-trip the read path
+        // and assert the structured envelope is stable.
+        const fromDb = repo.listBySession('session-1')[0];
+        expect(fromDb.metadata.decisionReason).toBe('router_fail_safe_dom_compact');
+        if (raw && typeof raw.tab_hygiene_blob === 'string') {
+          const parsed = JSON.parse(raw.tab_hygiene_blob);
+          expect(parsed.schemaVersion).toBe(OPERATION_LOG_BLOB_SCHEMA_VERSION);
+          expect(parsed.metadata.decisionReason).toBe('router_fail_safe_dom_compact');
+        }
+      } finally {
+        close();
+      }
+    });
+
+    it('reads legacy raw-blob rows and surfaces metadata defaults', () => {
+      const { repo, close } = bootstrap();
+      try {
+        // Inject a legacy blob shape directly (pre-FIX-07 writers
+        // stored the raw `tabHygiene` object, no schemaVersion
+        // wrapper). Use the underlying db handle exposed via the
+        // private field — TypeScript `private` is compile-time only
+        // so the property still exists at runtime.
+        const dbHandle = (repo as unknown as { db: unknown }).db as {
+          prepare: (sql: string) => { run: (...args: unknown[]) => void };
+        };
+        // INSERT OR REPLACE on the legacy row, replacing the
+        // step-1 slot (UNIQUE(step_id) constraint).
+        dbHandle
+          .prepare(
+            `INSERT OR REPLACE INTO operation_memory_logs
+              (operation_log_id, task_id, session_id, step_id, tool_name,
+               url_pattern, page_role, requested_layer, selected_data_source,
+               source_route, decision_reason, result_kind, duration_ms, success,
+               fallback_used, error_code, read_count, tokens_saved, tab_hygiene_blob, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            'op-legacy',
+            'task-1',
+            'session-1',
+            'step-1',
+            'chrome_read_page',
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            1,
+            null,
+            null,
+            null,
+            null,
+            JSON.stringify({ primaryTabReuseRate: 1 }),
+            '2026-04-26T00:00:09.000Z',
+          );
+        const fromDb = repo.listBySession('session-1');
+        const legacy = fromDb.find((row) => row.operationLogId === 'op-legacy');
+        expect(legacy).toBeDefined();
+        expect(legacy!.tabHygiene).toEqual({ primaryTabReuseRate: 1 });
+        expect(legacy!.metadata).toEqual(makeOperationLogMetadataDefaults());
+      } finally {
+        close();
+      }
+    });
   });
 });
