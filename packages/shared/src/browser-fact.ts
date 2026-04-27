@@ -191,22 +191,242 @@ export interface LifecycleEventPayload {
 }
 
 // ---------------------------------------------------------------------------
-// V27-02..05 — placeholders (declared in V27-01 so downstream tasks can
-// extend them without re-opening this file's enum allowlist). They will be
-// fleshed out in their respective batch task; the type surface here is the
-// minimum needed so V27-01's `bridge-ws.ts` extension is internally
-// consistent.
+// V27-02 — Browser Fact Collector (Batch A)
 // ---------------------------------------------------------------------------
 
 /**
- * Placeholder for V27-02 fact snapshots. Declared as an opaque shape
- * here so the bridge `observation` union member can reference it; the
- * concrete fields land in V27-02's commit.
+ * Closed-enum HTTP method bucket the v2.7 fact collector understands.
+ * Anything outside the closed set lands in `'OTHER'` so a future
+ * RFC-9110 verb does not need a schema-cite migration.
  */
+export type NetworkFactMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OTHER' | 'unknown';
+
+export const NETWORK_FACT_METHODS = [
+  'GET',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+  'OTHER',
+  'unknown',
+] as const satisfies ReadonlyArray<NetworkFactMethod>;
+
+/**
+ * Closed-enum response-size bucket. Identical to the legacy
+ * `endpointCandidates.sizeClass` enum so the v2.7 fact collector can
+ * be cross-checked against the existing on-demand capture tool
+ * during owner-lane Gate B.
+ */
+export type NetworkFactSizeClass = 'empty' | 'small' | 'medium' | 'large' | 'unknown';
+
+export const NETWORK_FACT_SIZE_CLASSES = [
+  'empty',
+  'small',
+  'medium',
+  'large',
+  'unknown',
+] as const satisfies ReadonlyArray<NetworkFactSizeClass>;
+
+/**
+ * Closed-enum noise classification reused from
+ * `network-capture-web-request.ts` (v2.5/v2.6 EndpointNoiseClass) so
+ * the new ambient observer never invents a parallel taxonomy. The
+ * extension side classifies before sending; the runtime trusts the
+ * closed-enum tag and never re-derives it from a raw URL.
+ */
+export type NetworkFactNoiseClass =
+  | 'asset'
+  | 'analytics'
+  | 'auth'
+  | 'private'
+  | 'telemetry'
+  | 'usable'
+  | 'unknown';
+
+export const NETWORK_FACT_NOISE_CLASSES = [
+  'asset',
+  'analytics',
+  'auth',
+  'private',
+  'telemetry',
+  'usable',
+  'unknown',
+] as const satisfies ReadonlyArray<NetworkFactNoiseClass>;
+
+/**
+ * V27-02 — pre-summarised network request metadata. Carries NO header
+ * values, NO request/response body, NO raw URL — only the closed-enum
+ * shape needed for endpoint candidacy reasoning. The producer (the
+ * extension `observers/network-fact.ts` listener) is responsible for
+ * stripping query strings into key-only form before emit; the runtime
+ * V27-00 PrivacyGate is the persistence-side belt alongside this
+ * suspenders.
+ */
+export interface NetworkRequestFact {
+  /** Method bucket (closed enum). */
+  method: NetworkFactMethod;
+  /** Brand-neutral host string (lowercased, no port). */
+  host: string;
+  /** Path without query, fragment, or trailing dynamic segments. */
+  pathPattern: string;
+  /** Sorted array of query parameter keys. Values are NEVER carried. */
+  queryKeys: string[];
+  /** HTTP status code. `null` for fetch errors. */
+  status: number | null;
+  /** Request type bucket (`xmlhttprequest`, `fetch`, ...). */
+  resourceType: string;
+  /** Closed-enum content-type bucket. */
+  contentType: string | null;
+  /** Closed-enum response-size bucket. */
+  sizeClass: NetworkFactSizeClass;
+  /** Round-trip timing in milliseconds. `null` if unknown. */
+  timingMs: number | null;
+  /** Closed-enum noise classification. */
+  noiseClass: NetworkFactNoiseClass;
+  /** Producer wallclock for the request completion (ms). */
+  observedAtMs: number;
+}
+
+/**
+ * V27-02 — DOM region fingerprint. Carries NO raw HTML, NO innerText.
+ * Producer normalises a small allowlist of region signals (e.g.
+ * `header.title`, `list.itemCount`, `form.fieldNames`) into stable
+ * deterministic strings, then the helper hashes them into
+ * `regionHashes`. The runtime compares hashes between snapshots to
+ * decide whether the visible structure changed.
+ */
+export interface DomRegionFingerprint {
+  /**
+   * Map of region tag (e.g. `'header'`, `'main_list'`) to a hash. Tag
+   * keys are stable and brand-neutral; the hash is the SHA-1 of the
+   * region's pre-summarised signal bag.
+   */
+  regionHashes: Record<string, string>;
+  /** Deterministic hash of the entire `regionHashes` map (stable order). */
+  domSnapshotHash: string;
+  /** Producer wallclock (ms). */
+  observedAtMs: number;
+}
+
+/**
+ * V27-02 — readiness signal panel. Each signal is `true | false |
+ * unknown` (closed enum, V27-00 invariant). The runtime composes these
+ * with the lifecycle snapshot when answering "is this page ready for
+ * a list-shaped read?".
+ */
+export interface ReadinessSignals {
+  documentComplete: 'true' | 'false' | 'unknown';
+  routeStable: 'true' | 'false' | 'unknown';
+  keyRegionReady: 'true' | 'false' | 'unknown';
+  networkQuiet: 'true' | 'false' | 'unknown';
+  /** Producer wallclock (ms). */
+  observedAtMs: number;
+}
+
+/**
+ * V27-02 — top-level fact snapshot. The fact collector hands these out
+ * by `factSnapshotId` to V27-04 / V27-05 consumers.
+ *
+ * Privacy posture: every field is either a closed-enum bucket, a
+ * brand-neutral path-only string, a deterministic hash, or a count.
+ * The runtime PrivacyGate `assertNoSensitive` runs on every snapshot
+ * before persistence as a defence-in-depth check.
+ */
+export interface BrowserFactSnapshot {
+  /** Producer-side opaque id (stable per producer per snapshot). */
+  factSnapshotId: string;
+  /** Sub-id for the network arm of the snapshot. `null` if no network
+   *  facts were attached. */
+  networkSnapshotId: string | null;
+  /** Sub-id for the DOM arm of the snapshot. `null` if no DOM
+   *  fingerprint was attached. */
+  domSnapshotId: string | null;
+  /** Producer-side session id; lets a consumer correlate snapshots
+   *  produced during the same task. */
+  sessionId: string | null;
+  /** Closed-enum signals (`'unknown'` is allowed). */
+  readiness: ReadinessSignals;
+  /** Brand-neutral urlPattern (host+path only, no query, no
+   *  fragment). */
+  urlPattern: string | null;
+  /** Tab id is producer-side state. The runtime keeps it for
+   *  bookkeeping but the V27-00 PrivacyGate strips it before
+   *  persistence. */
+  tabId: number | null;
+  /** Producer wallclock (ms). */
+  producedAtMs: number;
+  /** TTL after which the fact collector treats this snapshot as
+   *  stale. The runtime rejects `getFactSnapshot(id)` once the TTL
+   *  expires. */
+  ttlMs: number;
+  /** Closed-enum, redaction-safe array of network request facts.
+   *  May be empty. */
+  networkFacts: NetworkRequestFact[];
+  /** DOM region fingerprint, or `null` if none. */
+  domFingerprint: DomRegionFingerprint | null;
+}
+
+/**
+ * V27-02 — wire envelope the extension `observers/network-fact.ts` /
+ * `observers/dom-fact.ts` / `observers/readiness.ts` push over the
+ * bridge. The native fact collector ingests these and folds them into
+ * a single `BrowserFactSnapshot`.
+ */
+export type FactObservationEventKind =
+  | 'network_request'
+  | 'dom_fingerprint'
+  | 'readiness_signal'
+  | 'unknown';
+
+export const FACT_OBSERVATION_EVENT_KINDS = [
+  'network_request',
+  'dom_fingerprint',
+  'readiness_signal',
+  'unknown',
+] as const satisfies ReadonlyArray<FactObservationEventKind>;
+
+export type FactObservationPayload =
+  | {
+      eventKind: 'network_request';
+      fact: NetworkRequestFact;
+      tabId: number;
+      urlPattern: string | null;
+      sessionId: string | null;
+    }
+  | {
+      eventKind: 'dom_fingerprint';
+      fingerprint: DomRegionFingerprint;
+      tabId: number;
+      urlPattern: string | null;
+      sessionId: string | null;
+    }
+  | {
+      eventKind: 'readiness_signal';
+      signals: ReadinessSignals;
+      tabId: number;
+      urlPattern: string | null;
+      sessionId: string | null;
+    }
+  | {
+      eventKind: 'unknown';
+      tabId: number;
+      urlPattern: string | null;
+      sessionId: string | null;
+      observedAtMs: number;
+    };
+
+/** Bridge envelope outer type for the V27-02 fact arm. */
 export interface BrowserFactSnapshotEnvelope {
   factSnapshotId: string;
   observedAtMs: number;
+  payload: FactObservationPayload;
 }
+
+// ---------------------------------------------------------------------------
+// V27-03..05 — placeholders (declared here so downstream batch tasks can
+// extend them without re-opening this file's enum allowlist). The
+// concrete fields land in their respective batch task.
+// ---------------------------------------------------------------------------
 
 /**
  * Placeholder for V27-03 action outcomes. Shape is finalised in V27-03.

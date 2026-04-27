@@ -13,6 +13,7 @@ import { handleCallTool } from './tools';
 import { registerNativeBridgeForwarder, registerNativeBridgeRequester } from './native-bridge';
 import { acquireKeepalive } from './keepalive-manager';
 import { attachLifecycleObserver } from './observers/lifecycle';
+import { attachNetworkFactObserver } from './observers/network-fact';
 
 const LOG_PREFIX = '[NativeHost]';
 
@@ -1265,6 +1266,21 @@ export const initNativeHostListener = () => {
       void sendBridgeSocketMessage(message).catch(() => {
         // Bridge can be transiently down; lifecycle observations are
         // best-effort and must not fail the navigation handler chain.
+      });
+    },
+    getConnectionId: () => bridgeSocketConnectionId,
+    getExtensionId: () => chrome.runtime.id,
+    warn: (msg, error) => console.warn(`${LOG_PREFIX} ${msg}`, error),
+  });
+  // V27-02: Attach the v2.7 network fact observer alongside the lifecycle
+  // observer. Same producer contract: brand-neutral envelope only, drops
+  // silently when the bridge is not yet connected, and never blocks the
+  // webRequest handler chain.
+  attachNetworkFactObserver({
+    send: (message) => {
+      void sendBridgeSocketMessage(message).catch(() => {
+        // Bridge can be transiently down; fact observations are
+        // best-effort and must not fail the webRequest handler chain.
       });
     },
     getConnectionId: () => bridgeSocketConnectionId,
