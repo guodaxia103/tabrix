@@ -8,8 +8,18 @@ import type {
   BridgeCommandMessage,
   BridgeHeartbeatMessage,
   BridgeHelloMessage,
+  BridgeObservationMessage,
   BridgeResultMessage,
 } from '@tabrix/shared';
+import {
+  getDefaultContextManager,
+  resetDefaultContextManager,
+} from '../runtime/v27-context-manager';
+import {
+  getDefaultLifecycleStateMachine,
+  resetDefaultLifecycleStateMachine,
+} from '../runtime/v27-lifecycle';
+import { getDefaultFactCollector, resetDefaultFactCollector } from '../runtime/v27-fact-collector';
 
 async function listen(server: HttpServer): Promise<number> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
@@ -154,6 +164,255 @@ describe('BridgeCommandChannelManager', () => {
       status: 'success',
       data: { content: [{ type: 'text', text: 'ok' }], isError: false },
     });
+
+    ws.close();
+  });
+
+  test('ingests v27 lifecycle observation through the websocket and bumps ContextManager', async () => {
+    resetDefaultLifecycleStateMachine();
+    resetDefaultContextManager();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/bridge/ws`);
+    await new Promise<void>((resolve) => ws.once('open', () => resolve()));
+    ws.send(
+      JSON.stringify({
+        type: 'hello',
+        connectionId: 'conn-obs-1',
+        extensionId: 'ext-1',
+        sentAt: Date.now(),
+      } satisfies BridgeHelloMessage),
+    );
+    await waitForCondition(() => bridgeRuntimeState.getSnapshot().commandChannelConnected);
+
+    const obs: BridgeObservationMessage = {
+      type: 'observation',
+      kind: 'lifecycle_event',
+      connectionId: 'conn-obs-1',
+      extensionId: 'ext-1',
+      sentAt: Date.now(),
+      payload: {
+        kind: 'lifecycle_event',
+        data: {
+          eventKind: 'committed',
+          tabId: 101,
+          urlPattern: 'example.com/list',
+          navigationIntent: 'user_initiated',
+          observedAtMs: Date.now(),
+        },
+      },
+    };
+    ws.send(JSON.stringify(obs));
+
+    // Lifecycle ingest is fire-and-forget; wait for the ContextManager
+    // to have recorded a context for this tab.
+    await waitForCondition(() => getDefaultContextManager().getContext(101) !== null);
+    const ctx = getDefaultContextManager().getContext(101);
+    expect(ctx).not.toBeNull();
+    expect(ctx?.tabId).toBe(101);
+    expect(ctx?.version).toBeGreaterThanOrEqual(1);
+    expect(ctx?.urlPattern).toBe('example.com/list');
+
+    ws.close();
+  });
+
+  test('ingests v27 fact_snapshot observation', async () => {
+    resetDefaultFactCollector();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/bridge/ws`);
+    await new Promise<void>((resolve) => ws.once('open', () => resolve()));
+    ws.send(
+      JSON.stringify({
+        type: 'hello',
+        connectionId: 'conn-obs-2',
+        extensionId: 'ext-1',
+        sentAt: Date.now(),
+      } satisfies BridgeHelloMessage),
+    );
+    await waitForCondition(() => bridgeRuntimeState.getSnapshot().commandChannelConnected);
+
+    const obs: BridgeObservationMessage = {
+      type: 'observation',
+      kind: 'fact_snapshot',
+      connectionId: 'conn-obs-2',
+      extensionId: 'ext-1',
+      sentAt: Date.now(),
+      payload: {
+        kind: 'fact_snapshot',
+        data: {
+          factSnapshotId: 'snap-1',
+          observedAtMs: Date.now(),
+          payload: {
+            eventKind: 'unknown',
+            tabId: 5,
+            urlPattern: 'example.com/x',
+            sessionId: null,
+            observedAtMs: Date.now(),
+          },
+        },
+      },
+    };
+    ws.send(JSON.stringify(obs));
+
+    await waitForCondition(() => {
+      const lookup = getDefaultFactCollector().getFactSnapshot('snap-1');
+      return lookup.verdict === 'fresh' || lookup.verdict === 'stale';
+    });
+    const lookup = getDefaultFactCollector().getFactSnapshot('snap-1');
+    expect(['fresh', 'stale']).toContain(lookup.verdict);
+
+    ws.close();
+  });
+
+  test('ingests v27 action_outcome observation and applies to ContextManager', async () => {
+    resetDefaultContextManager();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/bridge/ws`);
+    await new Promise<void>((resolve) => ws.once('open', () => resolve()));
+    ws.send(
+      JSON.stringify({
+        type: 'hello',
+        connectionId: 'conn-obs-3',
+        extensionId: 'ext-1',
+        sentAt: Date.now(),
+      } satisfies BridgeHelloMessage),
+    );
+    await waitForCondition(() => bridgeRuntimeState.getSnapshot().commandChannelConnected);
+
+    const baseTs = Date.now();
+    const obs: BridgeObservationMessage = {
+      type: 'observation',
+      kind: 'action_outcome',
+      connectionId: 'conn-obs-3',
+      extensionId: 'ext-1',
+      sentAt: baseTs,
+      payload: {
+        kind: 'action_outcome',
+        data: {
+          actionId: 'act-1',
+          actionKind: 'click',
+          tabId: 202,
+          urlPattern: 'example.com/page',
+          observedAtMs: baseTs,
+          signals: [{ kind: 'lifecycle_committed', observedAtMs: baseTs + 50 }],
+        },
+      },
+    };
+    ws.send(JSON.stringify(obs));
+
+    await waitForCondition(() => getDefaultContextManager().getContext(202) !== null);
+    const ctx = getDefaultContextManager().getContext(202);
+    expect(ctx?.tabId).toBe(202);
+
+    ws.close();
+  });
+
+  test('ingests v27 tab_event observation and applies to ContextManager', async () => {
+    resetDefaultContextManager();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/bridge/ws`);
+    await new Promise<void>((resolve) => ws.once('open', () => resolve()));
+    ws.send(
+      JSON.stringify({
+        type: 'hello',
+        connectionId: 'conn-obs-4',
+        extensionId: 'ext-1',
+        sentAt: Date.now(),
+      } satisfies BridgeHelloMessage),
+    );
+    await waitForCondition(() => bridgeRuntimeState.getSnapshot().commandChannelConnected);
+
+    // Seed a context first so bfcache_restored has something to bump.
+    getDefaultContextManager().applyLifecycleSnapshot(
+      getDefaultLifecycleStateMachine().ingest({
+        eventKind: 'committed',
+        tabId: 303,
+        urlPattern: 'example.com/page',
+        navigationIntent: 'user_initiated',
+        observedAtMs: Date.now(),
+      }),
+    );
+    const before = getDefaultContextManager().getContext(303);
+    expect(before).not.toBeNull();
+
+    const obs: BridgeObservationMessage = {
+      type: 'observation',
+      kind: 'tab_event',
+      connectionId: 'conn-obs-4',
+      extensionId: 'ext-1',
+      sentAt: Date.now(),
+      payload: {
+        kind: 'tab_event',
+        data: {
+          eventKind: 'bfcache_restored',
+          tabId: 303,
+          observedAtMs: Date.now(),
+          urlPattern: 'example.com/page',
+          stableRefRevalidation: {
+            outcome: 'stale',
+            liveCount: 0,
+            staleCount: 2,
+            observedAtMs: Date.now(),
+          },
+        },
+      },
+    };
+    ws.send(JSON.stringify(obs));
+
+    await waitForCondition(
+      () =>
+        (getDefaultContextManager().getContext(303)?.lastInvalidationReason ?? null) ===
+        'bfcache_restored',
+    );
+    const after = getDefaultContextManager().getContext(303);
+    expect(after?.lastInvalidationReason).toBe('bfcache_restored');
+    expect(after?.version).toBeGreaterThan(before!.version);
+
+    ws.close();
+  });
+
+  test('ignores malformed and unknown observation envelopes without crashing the websocket', async () => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/bridge/ws`);
+    await new Promise<void>((resolve) => ws.once('open', () => resolve()));
+    ws.send(
+      JSON.stringify({
+        type: 'hello',
+        connectionId: 'conn-obs-5',
+        extensionId: 'ext-1',
+        sentAt: Date.now(),
+      } satisfies BridgeHelloMessage),
+    );
+    await waitForCondition(() => bridgeRuntimeState.getSnapshot().commandChannelConnected);
+
+    // Unknown discriminator
+    ws.send(
+      JSON.stringify({
+        type: 'observation',
+        kind: 'unknown',
+        connectionId: 'conn-obs-5',
+        extensionId: 'ext-1',
+        sentAt: Date.now(),
+        payload: { kind: 'unknown', data: {} },
+      }),
+    );
+    // Malformed payload entirely
+    ws.send(
+      JSON.stringify({
+        type: 'observation',
+        kind: 'lifecycle_event',
+        connectionId: 'conn-obs-5',
+        extensionId: 'ext-1',
+        sentAt: Date.now(),
+        payload: { kind: 'lifecycle_event', data: null },
+      }),
+    );
+    // Confirm the bridge is still alive — heartbeat round-trip after.
+    ws.send(
+      JSON.stringify({
+        type: 'heartbeat',
+        connectionId: 'conn-obs-5',
+        extensionId: 'ext-1',
+        sentAt: Date.now(),
+        nativeConnected: false,
+      } satisfies BridgeHeartbeatMessage),
+    );
+    await waitForCondition(() => bridgeRuntimeState.getSnapshot().bridgeState === 'READY');
+    expect(bridgeRuntimeState.getSnapshot().commandChannelConnected).toBe(true);
 
     ws.close();
   });

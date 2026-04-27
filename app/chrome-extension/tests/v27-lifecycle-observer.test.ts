@@ -204,6 +204,76 @@ describe('attachLifecycleObserver — synthetic event flow', () => {
     expect(store.tabRemoved).toHaveLength(0);
   });
 
+  it('invokes onForwardBackCommitted on a forward_back committed event (V27-05 bfcache path)', () => {
+    const calls: { tabId: number; urlPattern: string | null }[] = [];
+    const handle = attachLifecycleObserver({
+      send: (msg) => {
+        sent.push(msg);
+      },
+      getConnectionId: () => 'conn-1',
+      getExtensionId: () => 'ext-test',
+      onForwardBackCommitted: (tabId, urlPattern) => {
+        calls.push({ tabId, urlPattern });
+      },
+    });
+    store.committed[0]?.({
+      tabId: 9,
+      frameId: 0,
+      url: 'https://example.com/page?q=1',
+      transitionType: 'link',
+      transitionQualifiers: ['forward_back'],
+    });
+    expect(calls).toEqual([{ tabId: 9, urlPattern: 'example.com/page' }]);
+    handle.detach();
+  });
+
+  it('does not invoke onForwardBackCommitted for non-forward_back transitions', () => {
+    const calls: { tabId: number; urlPattern: string | null }[] = [];
+    const handle = attachLifecycleObserver({
+      send: (msg) => {
+        sent.push(msg);
+      },
+      getConnectionId: () => 'conn-1',
+      getExtensionId: () => 'ext-test',
+      onForwardBackCommitted: (tabId, urlPattern) => {
+        calls.push({ tabId, urlPattern });
+      },
+    });
+    store.committed[0]?.({
+      tabId: 9,
+      frameId: 0,
+      url: 'https://example.com/page',
+      transitionType: 'link',
+      transitionQualifiers: [],
+    });
+    expect(calls).toEqual([]);
+    handle.detach();
+  });
+
+  it('swallows onForwardBackCommitted exceptions', () => {
+    const handle = attachLifecycleObserver({
+      send: (msg) => {
+        sent.push(msg);
+      },
+      getConnectionId: () => 'conn-1',
+      getExtensionId: () => 'ext-test',
+      warn: () => undefined,
+      onForwardBackCommitted: () => {
+        throw new Error('boom');
+      },
+    });
+    expect(() =>
+      store.committed[0]?.({
+        tabId: 9,
+        frameId: 0,
+        url: 'https://example.com/page',
+        transitionType: 'link',
+        transitionQualifiers: ['forward_back'],
+      }),
+    ).not.toThrow();
+    handle.detach();
+  });
+
   it('does not throw when send() rejects asynchronously', async () => {
     const handle = attachLifecycleObserver({
       send: () => Promise.reject(new Error('bridge down')),

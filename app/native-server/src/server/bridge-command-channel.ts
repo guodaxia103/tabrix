@@ -8,10 +8,12 @@ import type {
   BridgeCommandMessage,
   BridgeHelloMessage,
   BridgeHeartbeatMessage,
+  BridgeObservationMessage,
   BridgeResultMessage,
   BridgeWsMessage,
 } from '@tabrix/shared';
 import { bridgeRuntimeState } from './bridge-state';
+import { ingestBridgeObservation } from '../runtime/v27-observation-ingest';
 
 interface PendingCommand {
   resolve: (value: any) => void;
@@ -234,6 +236,29 @@ export class BridgeCommandChannelManager {
 
     if (message.type === 'result') {
       this.handleResult(message);
+      return;
+    }
+
+    if (message.type === 'observation') {
+      this.handleObservation(message);
+    }
+  }
+
+  /**
+   * V27 runtime ingestion arm. Observation envelopes are pre-summarised,
+   * brand-neutral, and routed by `kind` to the matching default runtime
+   * module (lifecycle state machine -> context manager, fact collector,
+   * action outcome classifier -> context manager, tab/window event ->
+   * context manager). Unknown / malformed envelopes are dropped without
+   * crashing the websocket. Raw payloads are never persisted here.
+   */
+  private handleObservation(message: BridgeObservationMessage): void {
+    try {
+      ingestBridgeObservation(message);
+    } catch {
+      // ingestBridgeObservation is best-effort. Anything that escapes
+      // is intentionally swallowed: the bridge socket must keep
+      // accepting commands even if a producer-side schema bug ships.
     }
   }
 

@@ -44,6 +44,18 @@ export interface LifecycleObserverContext {
   getExtensionId: () => string;
   /** Optional logger; defaults to a noop. */
   warn?: (message: string, error?: unknown) => void;
+  /**
+   * V27-05 hook — invoked on a main-frame `committed` event whose
+   * `navigationIntent` resolves to `'forward_back'`. The native-host
+   * wires this to the tab-window-context observer's
+   * `notifyBfcacheRestored(tabId, urlPattern)` so a bfcache restore
+   * gets a `tab_event:bfcache_restored` envelope on the bridge with
+   * the stable-target-ref-registry verdict attached.
+   *
+   * Best-effort: any throw is caught by the observer; failures here
+   * must not block the lifecycle handler chain.
+   */
+  onForwardBackCommitted?: (tabId: number, urlPattern: string | null) => void;
 }
 
 interface LifecycleObserverHandle {
@@ -158,7 +170,15 @@ export function attachLifecycleObserver(
   ): void => {
     if (details.frameId !== MAIN_FRAME_ID) return;
     const intent = classifyNavigationIntent(details.transitionType, details.transitionQualifiers);
-    emit('committed', details.tabId, toUrlPattern(details.url), intent);
+    const urlPattern = toUrlPattern(details.url);
+    emit('committed', details.tabId, urlPattern, intent);
+    if (intent === 'forward_back' && context.onForwardBackCommitted) {
+      try {
+        context.onForwardBackCommitted(details.tabId, urlPattern);
+      } catch (error) {
+        warn('lifecycle observer onForwardBackCommitted threw', error);
+      }
+    }
   };
 
   const onDomContentLoaded = (

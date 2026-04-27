@@ -15,6 +15,7 @@ import { acquireKeepalive } from './keepalive-manager';
 import { attachLifecycleObserver } from './observers/lifecycle';
 import { attachNetworkFactObserver } from './observers/network-fact';
 import { attachActionOutcomeObserver } from './observers/action-outcome';
+import { setActionOutcomeObserverHandle } from './observers/action-outcome-singleton';
 import {
   attachTabWindowContextObserver,
   classifyStableRefRevalidation,
@@ -1263,10 +1264,16 @@ export const initNativeHostListener = () => {
   ensureHeartbeatLoop();
   clearBridgeSocketReconnectTimer();
   void connectBridgeSocket('sw_init').catch(() => {});
-  // V27-01: Attach the v2.7 lifecycle observer once per SW activation. The
-  // observer drops messages silently when the bridge socket is not yet
-  // connected (no connectionId), so it is safe to attach before the first
-  // bridge handshake completes.
+  // V27-01 / V27-05: Attach the v2.7 lifecycle observer once per SW
+  // activation. The observer drops messages silently when the bridge
+  // socket is not yet connected (no connectionId), so it is safe to
+  // attach before the first bridge handshake completes.
+  // `onForwardBackCommitted` is wired below after the tab/window
+  // context observer is attached, so a bfcache restore turns into a
+  // `tab_event:bfcache_restored` envelope with the stable-ref verdict.
+  let tabWindowContextHandle: {
+    notifyBfcacheRestored: (tabId: number, urlPattern: string | null) => void;
+  } | null = null;
   attachLifecycleObserver({
     send: (message) => {
       void sendBridgeSocketMessage(message).catch(() => {
@@ -1277,6 +1284,9 @@ export const initNativeHostListener = () => {
     getConnectionId: () => bridgeSocketConnectionId,
     getExtensionId: () => chrome.runtime.id,
     warn: (msg, error) => console.warn(`${LOG_PREFIX} ${msg}`, error),
+    onForwardBackCommitted: (tabId, urlPattern) => {
+      tabWindowContextHandle?.notifyBfcacheRestored(tabId, urlPattern);
+    },
   });
   // V27-02: Attach the v2.7 network fact observer alongside the lifecycle
   // observer. Same producer contract: brand-neutral envelope only, drops
@@ -1298,7 +1308,7 @@ export const initNativeHostListener = () => {
   // observe()/pushSignal() on the returned handle; the observer
   // races browser-side signals into a per-action timeline and emits
   // ActionOutcomeEventEnvelope on flush. Best-effort send.
-  attachActionOutcomeObserver({
+  const actionOutcomeHandle = attachActionOutcomeObserver({
     send: (message) => {
       void sendBridgeSocketMessage(message).catch(() => {
         // Bridge can be transiently down; outcome observations are
@@ -1309,12 +1319,16 @@ export const initNativeHostListener = () => {
     getExtensionId: () => chrome.runtime.id,
     warn: (msg, error) => console.warn(`${LOG_PREFIX} ${msg}`, error),
   });
+  // Wire the singleton seam so existing tools (chrome_click_element, ...)
+  // can call `armActionOutcome()` without taking the handle through
+  // every constructor.
+  setActionOutcomeObserverHandle(actionOutcomeHandle);
   // V27-05: Attach the v2.7 tab/window context observer. Emits
   // tab_created / tab_removed / tab_replaced / window_focus_changed
   // events to the runtime ContextManager. bfcache restoration is
   // surfaced via notifyBfcacheRestored() invoked from the lifecycle
   // observer when it sees a 'forward_back' qualifier.
-  attachTabWindowContextObserver({
+  tabWindowContextHandle = attachTabWindowContextObserver({
     send: (message) => {
       void sendBridgeSocketMessage(message).catch(() => {
         // Bridge can be transiently down; tab/window observations are

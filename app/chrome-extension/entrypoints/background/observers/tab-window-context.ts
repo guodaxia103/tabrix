@@ -57,7 +57,7 @@ export interface TabWindowContextObserverContext {
   warn?: (message: string, error?: unknown) => void;
 }
 
-interface TabWindowContextObserverHandle {
+export interface TabWindowContextObserverHandle {
   /**
    * Mark a tab as having just emerged from bfcache (i.e. the lifecycle
    * observer just received `webNavigation.onCommitted` with a

@@ -12,6 +12,7 @@ import { handleDownloadTool, markNextDownloadAsInteractive } from './download';
 import { prearmDialogHandling } from './dialog-prearm';
 import { type CandidateActionInput, resolveCandidateActionTarget } from './candidate-action';
 import { lookupStableTargetRef } from './stable-target-ref-registry';
+import { armActionOutcome } from '../../observers/action-outcome-singleton';
 import {
   CLICK_VERIFIER_READBACK_MAX_MS,
   type ClickVerifierContext,
@@ -730,6 +731,29 @@ class ClickTool extends BaseBrowserToolExecutor {
         markNextDownloadAsInteractive(tab.id);
       }
 
+      // V27-03: arm the v2.7 action-outcome observer right before
+      // dispatch. Best-effort; the helper returns a no-op handle when
+      // the bridge socket is not yet up, so the click main path is
+      // untouched on failure. The dispatched envelope's `urlPattern`
+      // is the brand-neutral host+path form (no query/fragment) that
+      // the lifecycle/network observers already use.
+      const actionUrlPattern = (() => {
+        if (typeof beforeUrl !== 'string') return null;
+        try {
+          const u = new URL(beforeUrl);
+          if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+          return `${u.hostname.toLowerCase()}${u.pathname || '/'}`;
+        } catch {
+          return null;
+        }
+      })();
+      const actionOutcomeHandle = armActionOutcome({
+        actionId: `click-${tab.id}-${Date.now()}`,
+        actionKind: 'click',
+        tabId: tab.id,
+        urlPattern: actionUrlPattern,
+      });
+
       // B-023: arm browser-level observation before dispatch, but keep it alive
       // until the page-local helper has finished its own verification window.
       // This prevents a slow `_blank` click from being downgraded to
@@ -763,6 +787,21 @@ class ClickTool extends BaseBrowserToolExecutor {
 
       // Send click message to content script
       const result = await resultPromise;
+
+      // V27-03: surface page-local DOM-region change to the action
+      // outcome observer (best-effort). The observer also folds in
+      // background-derived signals (lifecycle/tab/network) on its own.
+      try {
+        const pageSig = result && typeof result === 'object' ? (result as any).signals : null;
+        if (pageSig && pageSig.domRegionChanged === true) {
+          actionOutcomeHandle.pushSignal({ kind: 'dom_region_changed' });
+        }
+        if (pageSig && pageSig.dialogOpened === true) {
+          actionOutcomeHandle.pushSignal({ kind: 'dialog_opened' });
+        }
+      } catch {
+        // best-effort
+      }
 
       if (result?.interceptedDownload && result?.downloadUrl) {
         const downloadResult = await handleDownloadTool.execute({

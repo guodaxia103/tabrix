@@ -254,6 +254,11 @@ export function getDefaultFactCollector(): FactCollector {
   return defaultCollector;
 }
 
+/** Drop the singleton. Test-only. */
+export function resetDefaultFactCollector(): void {
+  defaultCollector = null;
+}
+
 /**
  * Funnel a `BrowserFactSnapshot` through the V27-00 privacy gate
  * before any persistence write (operation log, future Experience).

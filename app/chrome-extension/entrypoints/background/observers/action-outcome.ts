@@ -79,7 +79,7 @@ export interface ActionOutcomeHandle {
   dispose(): void;
 }
 
-interface ActionOutcomeObserverHandle {
+export interface ActionOutcomeObserverHandle {
   observe(action: ActionDescriptor, options?: { settleWindowMs?: number }): ActionOutcomeHandle;
   detach(): void;
 }

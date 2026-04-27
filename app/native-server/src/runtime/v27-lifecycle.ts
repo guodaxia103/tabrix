@@ -274,3 +274,8 @@ export function getDefaultLifecycleStateMachine(): LifecycleStateMachine {
   if (!defaultMachine) defaultMachine = createLifecycleStateMachine();
   return defaultMachine;
 }
+
+/** Drop the singleton. Test-only. */
+export function resetDefaultLifecycleStateMachine(): void {
+  defaultMachine = null;
+}
