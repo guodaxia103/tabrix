@@ -128,7 +128,7 @@ describe('V26-PGB-01 knowledge-driven-reader emptyResult', () => {
     expect((result as { emptyResult?: unknown }).emptyResult).toBeUndefined();
   });
 
-  it('honours the seed request plan limit when delegating workflow runs', async () => {
+  it('honours the task-derived seed request plan limit when delegating workflow runs', async () => {
     let requestedUrl = '';
     const result = await readKnowledgeDrivenEndpoint({
       match: makeWorkflowSeedMatch(),

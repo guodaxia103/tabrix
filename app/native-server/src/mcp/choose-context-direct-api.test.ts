@@ -129,6 +129,29 @@ describe('runTabrixChooseContextWithDirectApi', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('derives API row limit from task wording instead of endpoint family defaults', async () => {
+    const fetchSpy = jsonFetch(200, { workflow_runs: [{ name: 'CI' }, { name: 'Nightly' }] });
+    const wrapped = await runTabrixChooseContextWithDirectApi(
+      {
+        intent: '读取 GitHub Actions 最近一次工作流运行的名称、状态、分支、触发时间和失败原因摘要',
+        url: 'https://github.com/guodaxia103/tabrix/actions',
+        pageRole: 'actions_detail',
+      },
+      {
+        experience: emptyExperience(),
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'api_knowledge' },
+        directApiFetchFn: fetchSpy,
+      },
+    );
+
+    expect(wrapped.directApiExecution?.executionMode).toBe('direct_api');
+    expect(wrapped.directApiExecution?.endpointFamily).toBe('github_workflow_runs_list');
+    expect(wrapped.directApiExecution?.rowCount).toBe(1);
+    const url = new URL((fetchSpy as jest.Mock).mock.calls[0][0]);
+    expect(url.searchParams.get('per_page')).toBe('1');
+  });
+
   it('GitHub repo-qualified issue search URL returns direct_api emptyResult instead of DOM fallback', async () => {
     const fetchSpy = jsonFetch(200, GITHUB_EMPTY_ISSUES_BODY);
     const wrapped = await runTabrixChooseContextWithDirectApi(

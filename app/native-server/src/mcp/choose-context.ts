@@ -192,6 +192,40 @@ export function parseTabrixChooseContextInput(rawArgs: unknown): ParsedChooseCon
   };
 }
 
+function buildDataNeedParams(
+  intent: string,
+): Readonly<Record<string, string | number | null | undefined>> | undefined {
+  const limit = deriveRequestedRowLimit(intent);
+  return limit === undefined ? undefined : { limit };
+}
+
+function deriveRequestedRowLimit(intent: string): number | undefined {
+  const text = String(intent || '')
+    .trim()
+    .toLowerCase();
+  if (!text) return undefined;
+
+  if (
+    /最近一次|最新一次|最近一条|最新一条/.test(text) ||
+    /\b(latest|last|newest)\b/.test(text) ||
+    /\bmost\s+recent\b/.test(text)
+  ) {
+    return 1;
+  }
+
+  const explicit =
+    /前\s*(\d{1,2})\s*[个条项]?/.exec(text) ??
+    /(?:列出|返回|读取|取)\s*(\d{1,2})\s*[个条项]?/.exec(text) ??
+    /最近\s*(\d{1,2})\s*(?:次|条|个|项)/.exec(text) ??
+    /\btop\s*(\d{1,2})\b/.exec(text) ??
+    /\bfirst\s*(\d{1,2})\b/.exec(text);
+  if (!explicit) return undefined;
+
+  const value = Number.parseInt(explicit[1] ?? '', 10);
+  if (!Number.isFinite(value)) return undefined;
+  return Math.max(1, Math.min(10, value));
+}
+
 /**
  * Derive a `siteFamily` from an explicit `siteId` (highest precedence)
  * or, failing that, from the URL host. Returns `undefined` for any
@@ -1207,9 +1241,11 @@ export async function runTabrixChooseContextWithDirectApi(
         semanticTypeWanted: null,
         urlHint: parsed.input.url ?? null,
         pageRole: parsed.input.pageRole ?? null,
+        params: buildDataNeedParams(parsed.input.intent),
       }
     : undefined;
 
+  const requestedRowLimit = deriveRequestedRowLimit(parsed.input.intent);
   const exec = await tryDirectApiExecute({
     sourceRoute: result.sourceRoute,
     candidate,
@@ -1218,6 +1254,7 @@ export async function runTabrixChooseContextWithDirectApi(
     nowMs: deps.directApiNowMs,
     dataNeed,
     knowledgeRepo,
+    limit: requestedRowLimit,
   });
 
   return {

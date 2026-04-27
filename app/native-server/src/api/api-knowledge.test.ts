@@ -595,12 +595,13 @@ describe('V26-07 API Knowledge substrate', () => {
     expect(JSON.stringify(result)).not.toContain('SHOULD_NOT_LEAK');
   });
 
-  it('caps GitHub workflow runs to one row by default for latest-run detail reads', async () => {
+  it('honours caller-supplied GitHub workflow run limits for latest-run detail reads', async () => {
     let requestedUrl = '';
     const result = await readApiKnowledgeRows({
       endpointFamily: 'github_workflow_runs_list',
       method: 'GET',
       params: { owner: 'guodaxia103', repo: 'tabrix' },
+      limit: 1,
       fetchFn: async (url) => {
         requestedUrl = String(url);
         return {

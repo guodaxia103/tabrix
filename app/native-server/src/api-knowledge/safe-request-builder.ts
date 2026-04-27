@@ -316,13 +316,13 @@ function numericParam(value: unknown): number | null {
 }
 
 function defaultLimitForSeedFamily(
-  family:
+  _family:
     | 'github_search_repositories'
     | 'github_issues_list'
     | 'github_workflow_runs_list'
     | 'npmjs_search_packages',
 ): number {
-  return family === 'github_workflow_runs_list' ? 1 : DEFAULT_LIMIT;
+  return DEFAULT_LIMIT;
 }
 
 function clampLimit(value: number | null, defaultLimit = DEFAULT_LIMIT): number {

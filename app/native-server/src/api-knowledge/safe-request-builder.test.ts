@@ -187,7 +187,7 @@ describe('V26-FIX-04 buildSafeRequest — seed_adapter branch', () => {
     expect(plan!.requestShapeUsed).toEqual(['per_page']);
   });
 
-  it('defaults github_workflow_runs_list to one row for latest-run detail reads', () => {
+  it('uses the generic default when no workflow run limit is supplied', () => {
     const m = match({
       site: 'api.github.com',
       urlPattern: 'api.github.com/repos/:owner/:repo/actions/runs',
@@ -201,7 +201,7 @@ describe('V26-FIX-04 buildSafeRequest — seed_adapter branch', () => {
     });
     expect(plan).not.toBeNull();
     expect(plan!.url).toBe(
-      'https://api.github.com/repos/guodaxia103/tabrix/actions/runs?per_page=1',
+      'https://api.github.com/repos/guodaxia103/tabrix/actions/runs?per_page=10',
     );
   });
 
