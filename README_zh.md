@@ -56,6 +56,7 @@ Tabrix 不是“再开一个新浏览器”，而是把你正在使用的 Chrome
 - 后台自动化更高效：覆盖 CMS、工单、运营后台等已登录流程，减少重复点击与人工切换
 - 团队协作更灵活：支持局域网远程接入，同一浏览器能力可被多客户端安全调用
 - 回归排障更高效：通过 `doctor --fix` 与 `smoke` 快速定位连接链路问题，显著缩短处理时间
+- 页面理解更低噪声：结构化读取、Endpoint Knowledge 和操作日志帮助 AI 在安全可用时避免不必要的整页读取
 
 ## 你可以用它做什么
 
@@ -63,6 +64,7 @@ Tabrix 不是“再开一个新浏览器”，而是把你正在使用的 Chrome
 - 带语义上下文的跨标签页自动化
 - 带人工确认节点的安全网页工作流
 - 浏览器能力与文件/API 的 MCP 工具链组合
+- 基于 Knowledge 的页面读取：在 DOM 摘要、接口形态数据和 fallback 路径之间做更小、更稳的选择
 
 ## 前 5 分钟你会得到什么
 
@@ -199,8 +201,21 @@ Tabrix 当前正式支持两条 MCP 主链路：
 - 页面交互（点击、输入、键盘、上传）
 - 内容读取（网页内容、可交互元素、控制台）
 - 网络捕获与请求重放辅助
+- Knowledge 辅助的数据源路由：当观察到或种子化的 endpoint 安全可用时，走更紧凑的读取路径
+- Operation Memory 日志：记录任务/会话/步骤证据，包括路由、fallback、耗时、节省 token 和 tab hygiene 元数据
 - 截图、GIF 录制、性能追踪分析
 - 书签/历史记录操作与 JS 执行
+
+### Knowledge、Memory 与 fallback 边界
+
+Tabrix 正在朝 MKEP 模型演进：Memory 记录发生了什么，Knowledge 记录站点/页面/接口能力，Experience 复用经过验证的成功路径，Policy 决定当前任务使用哪种数据源。
+
+当前公开边界：
+
+- Endpoint Knowledge 记录 endpoint pattern、语义提示、confidence 和 shape summary；不存 API response body、cookie、Authorization 或 raw request body。
+- 已知公开场景的 seed adapter 仍是过渡路径。任意网站 observed endpoint 的通用复用是路线图方向，不是当前对所有网站的保证。
+- 当 endpoint 不可用、不安全或语义不确定时，Tabrix 应 fallback 到 scoped DOM reading，而不是把接口路径当成绝对权威。
+- Operation Memory 日志是诊断和报告用的事实证据，不是自动发布 Experience，也不是用户数据缓存。
 
 ### CLI 命令总览
 
@@ -310,9 +325,9 @@ tabrix daemon stop
 Tabrix 的目标不是只做一个“能跑”的浏览器工具，而是做成面向 AI 助手的顶级真实浏览器执行层。
 路线图会保持公开，但只会写那些当前代码基线能真实承接的方向。
 
-- Now：把 `Streamable HTTP`、`stdio`、重连和诊断能力做得更稳
-- Next：补齐结构化页面快照、自动恢复、真实浏览器 E2E 回归
-- Later：演进 URL Experience Memory、replay artifact 和更强协作工作流
+- Now：把 `Streamable HTTP`、`stdio`、重连、诊断和紧凑结构化读取做得更稳
+- Next：增强 observed Endpoint Knowledge、操作日志解释能力、Markdown/文档阅读面和真实浏览器 E2E 回归
+- Later：演进经审核的 Experience 复用、replay artifact 和更安全的协作工作流
 
 完整公开路线图见：[ROADMAP.md](docs/ROADMAP.md)（英文）
 

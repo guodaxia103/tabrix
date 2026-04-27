@@ -31,6 +31,7 @@ It is the combination of:
 - MCP-native access for AI assistants
 - local-first deployment with optional remote access
 - diagnostics and recovery for day-to-day operation
+- Memory and Knowledge evidence that can help assistants choose smaller, safer read paths instead of defaulting to full-page context
 
 This is the path most likely to make Tabrix uniquely useful for Codex, Claude Desktop, Cursor, Cline, and similar MCP-connected assistants.
 
@@ -41,6 +42,7 @@ Current near-term priorities:
 - make `Streamable HTTP` and `stdio` the most reliable MCP entry paths
 - improve reconnect, diagnostics, and install recovery
 - reduce first-success friction for new users and contributors
+- keep compact page reading, endpoint provenance, fallback evidence, and operation logs understandable
 - keep the public docs tightly aligned with the actual code surface
 
 In public terms, this is about making Tabrix easier to trust, easier to install, and easier to use in a real browser workflow.
@@ -50,8 +52,10 @@ In public terms, this is about making Tabrix easier to trust, easier to install,
 Once the main connection path is stable, the next major product upgrades are:
 
 - structured page snapshots instead of long noisy page text by default
-- MKEP Memory-backed run history (Session / Task / Step viewers in the sidepanel)
-- MKEP Knowledge expansion beyond the GitHub seed (URL catalogue, menu / region / API knowledge for additional sites)
+- MKEP Memory-backed run history and operation-log explainability (Session / Task / Step viewers in the sidepanel)
+- MKEP Knowledge expansion beyond the GitHub seed (URL catalogue, menu / region / endpoint knowledge for additional sites)
+- broader browser-observed endpoint classification for safe read-only data paths
+- a Markdown / document reading surface for documents, help pages, README files, and long-form content
 - MKEP Policy risk-tier gating for every P3-classified tool, with an explicit opt-in flow exposed via MCP
 - stronger real-browser MCP E2E coverage and fixture-based regression testing
 - browser auto-launch and recovery when an assistant calls Tabrix and Chrome is not ready
@@ -59,11 +63,14 @@ Once the main connection path is stable, the next major product upgrades are:
 
 These upgrades matter because they improve success rate, reduce token cost, and make browser actions more predictable.
 
+Important boundary: public roadmap items about endpoint knowledge mean storing endpoint capability, provenance, and shape summaries. They do not mean storing API response bodies, cookies, Authorization values, raw request bodies, or user data caches.
+
 ## Later
 
 Longer-term public directions:
 
 - MKEP Experience reuse: per-site reusable recipes that let repeated tasks skip redundant page reads
+- reviewed Memory-to-Experience candidate extraction, with human or policy approval before high-confidence reuse
 - community sharing / import / export of Experience packs
 - replay artifacts for failed flows and nightly regression diagnosis
 - safer team collaboration and multi-operator browser workflows
@@ -81,6 +88,7 @@ To keep the product sharp, Tabrix should not drift into headline messaging such 
 - "default workflow builder"
 - "semantic search product"
 - "general-purpose browser IDE"
+- "universal automatic website API learner"
 
 Some related subsystems exist in the repository, but they are not the current public center of gravity.
 
@@ -97,6 +105,8 @@ High-value contribution areas right now:
 - reliability and reconnect behavior
 - first-success onboarding and install quality
 - structured browser reading and extraction
+- endpoint provenance, redaction, and safe fallback behavior
+- Memory-backed diagnostics and operation-log explainability
 - fixture sites, smoke coverage, and regression evidence
 - tool schema clarity and client integration quality
 

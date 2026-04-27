@@ -57,6 +57,7 @@ If your workflow depends on a real logged-in browser, the difference is immediat
 - Higher back-office automation efficiency: automate logged-in CMS, ticketing, and operations workflows with fewer repetitive clicks
 - Better team collaboration: secure LAN remote access lets multiple MCP clients call the same browser capability
 - Faster regression troubleshooting: `doctor --fix` and `smoke` quickly pinpoint connection-path issues and shorten resolution time
+- Lower-noise page understanding: structured reads, endpoint knowledge, and operation logs help assistants avoid unnecessary full-page reads when a safer compact path exists
 
 ## What You Can Build
 
@@ -64,6 +65,7 @@ If your workflow depends on a real logged-in browser, the difference is immediat
 - Cross-tab task automation with semantic context
 - Safe web workflows with human-in-the-loop checkpoints
 - MCP toolchains that combine browser, filesystem, and APIs
+- Knowledge-assisted browser readers that choose between DOM summaries, endpoint-shaped data, and fallback paths without exposing raw private payloads
 
 ## First 5 Minutes
 
@@ -201,8 +203,21 @@ Turn on `Remote Access` in extension popup and expose:
 - Page interaction (click, fill, keyboard, upload)
 - Rich extraction (web content, interactive elements, console)
 - Network capture and request replay helpers
+- Knowledge-assisted data-source routing for compact read paths when an observed or seeded endpoint is safe to use
+- Operation Memory logs for task/session/step evidence, including route, fallback, timing, token-saving, and tab-hygiene metadata
 - Screenshot, GIF recording, performance trace analysis
 - Bookmarks/history operations and JavaScript execution
+
+### Knowledge, Memory, and Fallback Boundaries
+
+Tabrix is moving toward a policy-routed MKEP model: Memory records what happened, Knowledge records site/page/endpoint capability, Experience will reuse verified successful paths, and Policy decides which data source to use.
+
+Current public boundaries:
+
+- Endpoint Knowledge records endpoint patterns, semantic hints, confidence, and shape summaries; it does not store API response bodies, cookies, Authorization values, or raw request bodies.
+- Seed adapters for known public scenarios may still be used as transition paths. Generic observed-endpoint reuse across arbitrary sites is a roadmap direction, not a universal product guarantee.
+- When an endpoint is unavailable, unsafe, or semantically uncertain, Tabrix should fall back to scoped DOM reading instead of treating the API path as authoritative.
+- Operation Memory logs are factual evidence for diagnostics and reports. They are not automatic Experience publishing or user-data caching.
 
 ### CLI Commands
 
@@ -312,9 +327,9 @@ Full tool list: [TOOLS API](docs/TOOLS.md)
 Tabrix is aiming to become a top-tier browser automation execution layer for AI assistants.
 The roadmap stays public, but we keep it grounded in what the current codebase can realistically absorb next.
 
-- Now: make real-Chrome MCP access more reliable across `Streamable HTTP`, `stdio`, reconnects, and diagnostics
-- Next: ship structured page snapshots, browser auto-recovery, and stronger real-browser E2E coverage
-- Later: add URL Experience Memory, replay artifacts, and richer team collaboration workflows
+- Now: make real-Chrome MCP access more reliable across `Streamable HTTP`, `stdio`, reconnects, diagnostics, and compact structured reading
+- Next: improve observed Endpoint Knowledge, operation-log explainability, Markdown/document reading surfaces, and stronger real-browser E2E coverage
+- Later: add reviewed Experience reuse, richer replay artifacts, and safer team collaboration workflows
 
 Read the full public roadmap: [ROADMAP.md](docs/ROADMAP.md)
 

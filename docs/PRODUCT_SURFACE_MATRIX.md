@@ -34,9 +34,14 @@ This matrix is the public source of truth for capability classification.
 | Runtime diagnostics (`status`, `doctor`, `smoke`, `report`) | `GA` | Required for trust, support, and operations |
 | Remote access with token based control | `Beta` | High strategic value, but still needs continued hardening |
 | Policy risk tier gating (P0–P3, explicit opt in for P3) | `Beta` | MKEP Policy layer guardrail for assistant driven sessions |
-| Knowledge Registry (GitHub site profile + HVO classifier, data ified) | `Beta` | MKEP Knowledge layer seed for registry first page understanding |
+| Knowledge Registry (site/page/object seed data, currently GitHub anchored) | `Beta` | MKEP Knowledge layer seed for registry first page understanding |
+| Endpoint Knowledge and data-source lineage (`observed` / `seed_adapter` / `manual_seed`) | `Beta` | Records endpoint capability and provenance without storing raw API results |
+| Knowledge-assisted compact read paths | `Beta` | Lets read operations use safe endpoint-shaped data when available, with DOM fallback when not |
+| Operation Memory logs | `Beta` | Records factual task/session/step evidence for routing, fallback, timing, token savings, and tab hygiene |
 | Memory persistence (Session / Task / Step / PageSnapshot / Action in SQLite) | `Beta` | MKEP Memory layer; survives SW / native server restarts |
 | Multi client compatibility guidance | `Beta` | Important for adoption, but should not outrun core reliability |
+| Generic observed-endpoint reuse across arbitrary site families | `Experimental` | Strategic direction; should not be marketed as a universal guarantee until broader real-site evidence exists |
+| Markdown / document reading surface | `Experimental` | Useful future reading surface for documents and long-form content; not yet the default public path |
 | Sidepanel Memory / Knowledge / Experience tabs (placeholders) | `Experimental` | Stage 3x viewers for the MKEP data layers |
 | Experience reuse / locator fallback / memory like recovery helpers | `Experimental` | Strong future direction, but not yet a default public promise |
 | Internal review systems, acceptance evidence, nightly reports, PM execution docs | `Internal` | Governance material, not public product surface |
@@ -62,6 +67,7 @@ Today, Tabrix should primarily be described as:
 1. A way to turn a real daily Chrome session into an AI executable runtime
 2. A browser automation layer exposed through MCP
 3. A local first and remotely callable system with diagnostics and recovery
+4. A policy-routed execution layer that can use Memory and Knowledge to reduce unnecessary page reads when the evidence is safe
 
 It should not primarily be described as:
 
@@ -69,6 +75,7 @@ a general workflow SaaS
 a browser IDE
 an all in one agent operating system
 a semantic search product
+a universal website API learner
 
 ## Planning Rules
 
@@ -78,6 +85,7 @@ When choosing what to build next:
 2. Do not market `Experimental` modules as default public product surface
 3. If a feature is externally visible but unstable, classify it as `Beta`, not `GA`
 4. If a subsystem exists mainly to support future directions, keep it out of the headline product story until it has a stable user path
+5. Do not present seed adapters as proof that arbitrary observed endpoints are product-grade
 
 ## Related Docs
 
