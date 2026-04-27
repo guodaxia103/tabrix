@@ -595,7 +595,7 @@ describe('V26-07 API Knowledge substrate', () => {
     expect(JSON.stringify(result)).not.toContain('SHOULD_NOT_LEAK');
   });
 
-  it('caps GitHub workflow runs to three rows by default for fast detail reads', async () => {
+  it('caps GitHub workflow runs to one row by default for latest-run detail reads', async () => {
     let requestedUrl = '';
     const result = await readApiKnowledgeRows({
       endpointFamily: 'github_workflow_runs_list',
@@ -623,9 +623,9 @@ describe('V26-07 API Knowledge substrate', () => {
       },
     });
 
-    expect(requestedUrl).toContain('per_page=3');
+    expect(requestedUrl).toContain('per_page=1');
     expect(result.status).toBe('ok');
-    expect(result.rowCount).toBe(3);
+    expect(result.rowCount).toBe(1);
   });
 
   // ---------------------------------------------------------------------

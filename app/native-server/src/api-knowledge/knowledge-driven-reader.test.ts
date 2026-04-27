@@ -133,7 +133,7 @@ describe('V26-PGB-01 knowledge-driven-reader emptyResult', () => {
     const result = await readKnowledgeDrivenEndpoint({
       match: makeWorkflowSeedMatch(),
       plan: makePlan({
-        url: 'https://api.github.com/repos/guodaxia103/tabrix/actions/runs?per_page=3',
+        url: 'https://api.github.com/repos/guodaxia103/tabrix/actions/runs?per_page=1',
         dataPurpose: 'workflow_runs_list',
         builderHint: 'seed_adapter',
         requestShapeUsed: ['per_page'],
@@ -160,8 +160,8 @@ describe('V26-PGB-01 knowledge-driven-reader emptyResult', () => {
       },
     });
 
-    expect(requestedUrl).toContain('per_page=3');
+    expect(requestedUrl).toContain('per_page=1');
     expect(result.status).toBe('ok');
-    expect(result.rowCount).toBe(3);
+    expect(result.rowCount).toBe(1);
   });
 });

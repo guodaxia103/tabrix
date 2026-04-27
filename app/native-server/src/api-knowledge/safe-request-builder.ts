@@ -322,7 +322,7 @@ function defaultLimitForSeedFamily(
     | 'github_workflow_runs_list'
     | 'npmjs_search_packages',
 ): number {
-  return family === 'github_workflow_runs_list' ? 3 : DEFAULT_LIMIT;
+  return family === 'github_workflow_runs_list' ? 1 : DEFAULT_LIMIT;
 }
 
 function clampLimit(value: number | null, defaultLimit = DEFAULT_LIMIT): number {
