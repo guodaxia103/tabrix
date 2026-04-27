@@ -82,10 +82,22 @@ export async function readKnowledgeDrivenEndpoint(
       params: input.seedParams ?? {},
       fetchFn: input.fetchFn,
       nowMs: input.nowMs,
-      limit: input.limit,
+      limit: input.limit ?? readLimitFromPlan(input.plan),
     });
   }
   return readGenericEndpoint(input);
+}
+
+function readLimitFromPlan(plan: SafeRequestPlan): number | undefined {
+  try {
+    const url = new URL(plan.url);
+    const raw = url.searchParams.get('per_page') ?? url.searchParams.get('size');
+    if (!raw) return undefined;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function readGenericEndpoint(

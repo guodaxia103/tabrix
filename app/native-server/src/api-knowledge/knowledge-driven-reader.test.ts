@@ -54,6 +54,23 @@ function makePlan(overrides?: Partial<SafeRequestPlan>): SafeRequestPlan {
   } as SafeRequestPlan;
 }
 
+function makeWorkflowSeedMatch(): EndpointMatch {
+  return {
+    endpoint: {
+      ...makeMatch().endpoint,
+      endpointId: 'seed-workflow-runs',
+      site: 'api.github.com',
+      family: 'github',
+      urlPattern: 'api.github.com/repos/:owner/:repo/actions/runs',
+      endpointSignature: 'GET api.github.com/repos/:owner/:repo/actions/runs',
+      semanticType: 'list',
+      confidence: 0.9,
+    },
+    score: 0.9,
+    semanticValidation: 'pass',
+  } as unknown as EndpointMatch;
+}
+
 function jsonFetchOnce(status: number, body: unknown) {
   return jest.fn().mockResolvedValue({
     status,
@@ -109,5 +126,42 @@ describe('V26-PGB-01 knowledge-driven-reader emptyResult', () => {
       reason: 'http_forbidden',
     });
     expect((result as { emptyResult?: unknown }).emptyResult).toBeUndefined();
+  });
+
+  it('honours the seed request plan limit when delegating workflow runs', async () => {
+    let requestedUrl = '';
+    const result = await readKnowledgeDrivenEndpoint({
+      match: makeWorkflowSeedMatch(),
+      plan: makePlan({
+        url: 'https://api.github.com/repos/guodaxia103/tabrix/actions/runs?per_page=3',
+        dataPurpose: 'workflow_runs_list',
+        builderHint: 'seed_adapter',
+        requestShapeUsed: ['per_page'],
+      }),
+      seedParams: { owner: 'guodaxia103', repo: 'tabrix' },
+      fetchFn: async (url) => {
+        requestedUrl = String(url);
+        return {
+          status: 200,
+          headers: { get: jest.fn().mockReturnValue('application/json') },
+          json: jest.fn().mockResolvedValue({
+            workflow_runs: Array.from({ length: 10 }, (_, index) => ({
+              name: 'CI',
+              status: 'completed',
+              conclusion: 'success',
+              head_branch: 'main',
+              event: 'push',
+              display_title: `Run ${index}`,
+              created_at: '2026-04-27T00:00:00Z',
+              html_url: `https://github.com/guodaxia103/tabrix/actions/runs/${index}`,
+            })),
+          }),
+        } as any;
+      },
+    });
+
+    expect(requestedUrl).toContain('per_page=3');
+    expect(result.status).toBe('ok');
+    expect(result.rowCount).toBe(3);
   });
 });
