@@ -539,6 +539,23 @@ export interface BenchmarkSummaryV26 {
    */
   emptyResultScenarios: string[];
   /**
+   * V26-PGB-06 — closed-vocab distribution of competitor verdicts
+   * across `perScenarioLatency`. Lets a release-note / Gate report
+   * renderer answer "how many scenarios were a *resilience* win
+   * versus an absolute speed lead?" without re-deriving it from the
+   * per-scenario list. Sum of all values equals the length of
+   * `perScenarioLatency`.
+   */
+  competitorDeltaDistribution: Record<BenchmarkCompetitorDeltaV26, number>;
+  /**
+   * V26-PGB-06 — sorted, de-duplicated list of `scenarioId` values
+   * whose `competitorDelta === 'resilience_win'`. A renderer that
+   * cannot inspect each scenario's verdict (e.g. a top-level
+   * release-note bullet) MUST consult this list before claiming any
+   * scenario as an "absolute speed lead". Sorted lexicographically.
+   */
+  resilienceWinScenarios: string[];
+  /**
    * Sorted by `(code, seq)` ascending for deterministic output. The
    * transformer is the sole producer; consumers MUST NOT mutate.
    */
@@ -644,6 +661,80 @@ const LATENCY_GATE_FAIL_MULTIPLIER = 1.25;
  */
 const COMPETITOR_LEAD_RATIO = 0.9;
 const COMPETITOR_BEHIND_RATIO = 1.1;
+
+/**
+ * V26-PGB-06 — closed-vocab descriptor for a competitor verdict.
+ * Renderers (Gate B markdown summary, release-note draft, transformer
+ * output) MUST consult this helper before producing free-form text so
+ * a `'resilience_win'` scenario is never described as an "absolute
+ * speed lead" or "faster than competitor". The semantic shape is
+ * stable closed enums:
+ *
+ *   - `category`: closed enum mirroring {@link BenchmarkCompetitorDeltaV26}
+ *     to drive structured rendering (badge color, emoji, sort order).
+ *   - `headline`: short, neutral phrase suitable for a table cell.
+ *   - `forbiddenInRender`: tokens a renderer MUST NOT pair with the
+ *     verdict (e.g. when delta is `'resilience_win'`, the words
+ *     `'absolute lead'`, `'faster'`, and `'speed lead'` are forbidden;
+ *     when delta is `'lead'`, `'resilience'` is forbidden so a
+ *     resilience-mode scenario is not silently re-classified). Used
+ *     by the v26-benchmark unit tests to lock the contract in place.
+ */
+export interface CompetitorDeltaSemanticsV26 {
+  category: BenchmarkCompetitorDeltaV26;
+  headline: string;
+  forbiddenInRender: readonly string[];
+}
+
+const COMPETITOR_DELTA_SEMANTICS: Record<BenchmarkCompetitorDeltaV26, CompetitorDeltaSemanticsV26> =
+  {
+    lead: {
+      category: 'lead',
+      headline: 'speed lead',
+      forbiddenInRender: ['resilience win', 'availability lead', 'resilience-only'],
+    },
+    near: {
+      category: 'near',
+      headline: 'near parity',
+      forbiddenInRender: ['absolute lead', 'speed lead', 'resilience win'],
+    },
+    behind: {
+      category: 'behind',
+      headline: 'behind competitor',
+      forbiddenInRender: ['lead', 'faster', 'resilience win'],
+    },
+    blocked: {
+      category: 'blocked',
+      headline: 'comparison blocked',
+      forbiddenInRender: ['lead', 'behind', 'resilience win'],
+    },
+    // Resilience-mode scenarios (currently npmjs Cloudflare challenge):
+    // Tabrix completes the task while the competitor's fast-path is
+    // unavailable. This is *not* an absolute speed lead — the renderer
+    // MUST say "resilience" / "availability" rather than "faster" /
+    // "absolute lead". Locked by the unit tests.
+    resilience_win: {
+      category: 'resilience_win',
+      headline: 'resilience win (availability)',
+      forbiddenInRender: ['absolute lead', 'speed lead', 'faster than competitor'],
+    },
+    not_compared: {
+      category: 'not_compared',
+      headline: 'no competitor baseline',
+      forbiddenInRender: ['lead', 'behind', 'resilience win'],
+    },
+  };
+
+/**
+ * V26-PGB-06 — pure accessor returning the closed-vocab semantics for
+ * a competitor verdict. Renderers MUST go through this helper instead
+ * of mapping the enum to text inline.
+ */
+export function describeCompetitorDeltaV26(
+  delta: BenchmarkCompetitorDeltaV26,
+): CompetitorDeltaSemanticsV26 {
+  return COMPETITOR_DELTA_SEMANTICS[delta];
+}
 
 function evaluateLatencyGate(
   median: number | null,
@@ -1299,6 +1390,27 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
 
   transformerWarnings.sort(compareWarnings);
 
+  // V26-PGB-06 — competitor verdict distribution + resilience-win
+  // scenario list. Computed in lockstep with `perScenarioLatency` so
+  // a renderer can answer "any resilience_win scenarios in this run?"
+  // from a single field instead of scanning the full list.
+  const competitorDeltaDistribution: Record<BenchmarkCompetitorDeltaV26, number> = {
+    lead: 0,
+    near: 0,
+    behind: 0,
+    blocked: 0,
+    resilience_win: 0,
+    not_compared: 0,
+  };
+  const resilienceWinScenarioSet = new Set<string>();
+  for (const entry of perScenarioLatency) {
+    competitorDeltaDistribution[entry.competitorDelta] += 1;
+    if (entry.competitorDelta === 'resilience_win') {
+      resilienceWinScenarioSet.add(entry.scenarioId);
+    }
+  }
+  const resilienceWinScenarios = [...resilienceWinScenarioSet].sort((a, b) => a.localeCompare(b));
+
   return {
     reportVersion: BENCHMARK_REPORT_VERSION,
     v25Summary,
@@ -1330,6 +1442,8 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
     totalWaitedMs: waitedMsSamples > 0 ? waitedMsTotal : null,
     emptyResultCount,
     emptyResultScenarios: [...emptyResultScenarioSet].sort((a, b) => a.localeCompare(b)),
+    competitorDeltaDistribution,
+    resilienceWinScenarios,
     transformerWarnings,
   };
 }

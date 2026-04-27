@@ -3,6 +3,7 @@ import {
   V23_REPORT_VERSION,
   V24_REPORT_VERSION,
   V25_REPORT_VERSION,
+  describeCompetitorDeltaV26,
   summariseBenchmarkRunV26,
   type BenchmarkRunInputV26,
   type BenchmarkToolCallRecordV26,
@@ -1096,5 +1097,72 @@ describe('summariseBenchmarkRunV26 — V26-PGB-02 emptyResult aggregation', () =
     );
     expect(summary.emptyResultCount).toBe(0);
     expect(summary.emptyResultScenarios).toEqual([]);
+  });
+});
+
+describe('describeCompetitorDeltaV26 — V26-PGB-06 resilience semantics', () => {
+  it('returns resilience-flavoured wording for resilience_win and forbids absolute-lead phrasing', () => {
+    const semantics = describeCompetitorDeltaV26('resilience_win');
+    expect(semantics.category).toBe('resilience_win');
+    expect(semantics.headline.toLowerCase()).toContain('resilience');
+    // Locked: a renderer MUST NOT pair resilience_win with these
+    // tokens. Owner-lane release-note review will fail otherwise.
+    for (const forbidden of ['absolute lead', 'speed lead', 'faster than competitor']) {
+      expect(semantics.forbiddenInRender).toContain(forbidden);
+      expect(semantics.headline.toLowerCase()).not.toContain(forbidden);
+    }
+  });
+
+  it('returns speed-flavoured wording for `lead` and forbids resilience phrasing', () => {
+    const semantics = describeCompetitorDeltaV26('lead');
+    expect(semantics.category).toBe('lead');
+    expect(semantics.headline.toLowerCase()).toContain('speed');
+    expect(semantics.forbiddenInRender).toContain('resilience win');
+    expect(semantics.headline.toLowerCase()).not.toContain('resilience');
+  });
+
+  it('returns neutral wording for `near` / `behind` / `blocked` / `not_compared`', () => {
+    const cases: Array<{ key: 'near' | 'behind' | 'blocked' | 'not_compared'; phrase: string }> = [
+      { key: 'near', phrase: 'near' },
+      { key: 'behind', phrase: 'behind' },
+      { key: 'blocked', phrase: 'blocked' },
+      { key: 'not_compared', phrase: 'no competitor' },
+    ];
+    for (const { key, phrase } of cases) {
+      const semantics = describeCompetitorDeltaV26(key);
+      expect(semantics.headline.toLowerCase()).toContain(phrase);
+      expect(semantics.headline.toLowerCase()).not.toContain('resilience');
+    }
+  });
+});
+
+describe('summariseBenchmarkRunV26 — V26-PGB-06 competitor delta distribution', () => {
+  it('aggregates resilience_win scenarios into a dedicated list, separate from speed leads', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, scenarioId: 'S-LEAD', durationMs: 800 }),
+          call({ seq: 1, scenarioId: 'S-RES', durationMs: 950 }),
+          call({ seq: 2, scenarioId: 'S-NEAR', durationMs: 1000 }),
+        ],
+        competitorBaselines: {
+          'S-LEAD': { medianMs: 1500, mode: 'speed' },
+          'S-RES': { medianMs: 600, mode: 'resilience_win' },
+          'S-NEAR': { medianMs: 1000, mode: 'speed' },
+        },
+      }),
+    );
+    expect(summary.competitorDeltaDistribution.lead).toBe(1);
+    expect(summary.competitorDeltaDistribution.resilience_win).toBe(1);
+    expect(summary.competitorDeltaDistribution.near).toBe(1);
+    expect(summary.competitorDeltaDistribution.behind).toBe(0);
+    expect(summary.resilienceWinScenarios).toEqual(['S-RES']);
+  });
+
+  it('returns all-zero distribution and an empty resilience list when no scenarios are compared', () => {
+    const summary = summariseBenchmarkRunV26(run({ toolCalls: [call()] }));
+    const total = Object.values(summary.competitorDeltaDistribution).reduce((a, b) => a + b, 0);
+    expect(total).toBe(summary.perScenarioLatency.length);
+    expect(summary.resilienceWinScenarios).toEqual([]);
   });
 });
