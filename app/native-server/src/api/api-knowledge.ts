@@ -37,9 +37,10 @@
 export type ApiEndpointFamily =
   | 'github_search_repositories'
   | 'github_issues_list'
+  | 'github_workflow_runs_list'
   | 'npmjs_search_packages';
 
-export type ApiDataPurpose = 'search_list' | 'issue_list' | 'package_search';
+export type ApiDataPurpose = 'search_list' | 'issue_list' | 'workflow_runs_list' | 'package_search';
 
 export type ApiKnowledgeFallbackReason =
   | 'unsupported_family'
@@ -209,6 +210,20 @@ export function resolveApiKnowledgeCandidate(input: {
       };
     }
     if (wantsIssues) return null;
+    const wantsActions =
+      pageRole.includes('actions') ||
+      pageRole.includes('workflow') ||
+      /\b(actions?|workflow|workflows?|runs?)\b/.test(intent);
+    if (repo && wantsActions) {
+      return {
+        endpointFamily: 'github_workflow_runs_list',
+        dataPurpose: 'workflow_runs_list',
+        confidence: 0.84,
+        method: 'GET',
+        params: { owner: repo.owner, repo: repo.repo },
+      };
+    }
+    if (wantsActions) return null;
     if (isSearchListIntent(intent, input.intent, 'github')) {
       const params: Record<string, string> = { query: extractSearchQuery(input.intent) };
       if (isGithubHotSearchIntent(intent, input.intent)) {
@@ -460,6 +475,14 @@ function classifySeedEndpoint(parsed: URL, method: ApiKnowledgeMetadata['method'
       confidence: method === 'GET' || method === 'HEAD' ? 0.94 : 0.7,
     };
   }
+  if (host === 'api.github.com' && /^\/repos\/[^/]+\/[^/]+\/actions\/runs\/?$/.test(path)) {
+    return {
+      endpointFamily: 'github_workflow_runs_list' as const,
+      dataPurpose: 'workflow_runs_list' as const,
+      pathPattern: '/repos/:owner/:repo/actions/runs',
+      confidence: method === 'GET' || method === 'HEAD' ? 0.93 : 0.7,
+    };
+  }
   if (host === 'registry.npmjs.org' && path === '/-/v1/search') {
     return {
       endpointFamily: 'npmjs_search_packages' as const,
@@ -475,6 +498,7 @@ function normalizeEndpointFamily(value: string): ApiEndpointFamily | null {
   if (
     value === 'github_search_repositories' ||
     value === 'github_issues_list' ||
+    value === 'github_workflow_runs_list' ||
     value === 'npmjs_search_packages'
   ) {
     return value;
@@ -483,7 +507,12 @@ function normalizeEndpointFamily(value: string): ApiEndpointFamily | null {
 }
 
 function normalizeDataPurpose(value: unknown): ApiDataPurpose | null {
-  if (value === 'search_list' || value === 'issue_list' || value === 'package_search') {
+  if (
+    value === 'search_list' ||
+    value === 'issue_list' ||
+    value === 'workflow_runs_list' ||
+    value === 'package_search'
+  ) {
     return value;
   }
   return null;
@@ -495,6 +524,8 @@ function dataPurposeForFamily(endpointFamily: ApiEndpointFamily): ApiDataPurpose
       return 'search_list';
     case 'github_issues_list':
       return 'issue_list';
+    case 'github_workflow_runs_list':
+      return 'workflow_runs_list';
     case 'npmjs_search_packages':
       return 'package_search';
   }
@@ -529,10 +560,21 @@ function buildPublicRequest(
       const owner = cleanParam(params.owner);
       const repo = cleanParam(params.repo);
       if (!owner || !repo) return null;
-      const url = new URL(`https://api.github.com/repos/${owner}/${repo}/issues`);
-      url.searchParams.set('state', cleanParam(params.state) || 'open');
+      const state = cleanParam(params.state) || 'open';
+      const url = new URL('https://api.github.com/search/issues');
+      url.searchParams.set('q', `repo:${owner}/${repo} is:issue state:${state}`);
+      url.searchParams.set('sort', 'created');
+      url.searchParams.set('order', 'desc');
       url.searchParams.set('per_page', String(boundedLimit));
       return { url: url.toString(), limit: boundedLimit, dataPurpose: 'issue_list' };
+    }
+    case 'github_workflow_runs_list': {
+      const owner = cleanParam(params.owner);
+      const repo = cleanParam(params.repo);
+      if (!owner || !repo) return null;
+      const url = new URL(`https://api.github.com/repos/${owner}/${repo}/actions/runs`);
+      url.searchParams.set('per_page', String(boundedLimit));
+      return { url: url.toString(), limit: boundedLimit, dataPurpose: 'workflow_runs_list' };
     }
     case 'npmjs_search_packages': {
       const text = cleanParam(params.query);
@@ -566,22 +608,39 @@ function compactRows(
       });
     }
     case 'github_issues_list': {
-      return asArray(body)
-        .slice(0, limit)
-        .map((item) => {
-          const obj = asRecord(item);
-          const labels = asArray(obj.labels)
-            .map((label) => stringOrNull(asRecord(label).name))
-            .filter((label): label is string => !!label)
-            .join(',');
-          return {
-            number: numberOrZero(obj.number),
-            title: stringOrNull(obj.title),
-            state: stringOrNull(obj.state),
-            labels,
-            url: stringOrNull(obj.html_url),
-          };
-        });
+      const bodyRecord = asRecord(body);
+      const items = Array.isArray(body) ? body : asArray(bodyRecord.items);
+      return items.slice(0, limit).map((item) => {
+        const obj = asRecord(item);
+        const labels = asArray(obj.labels)
+          .map((label) => stringOrNull(asRecord(label).name))
+          .filter((label): label is string => !!label)
+          .join(',');
+        return {
+          number: numberOrZero(obj.number),
+          title: stringOrNull(obj.title),
+          state: stringOrNull(obj.state),
+          labels,
+          url: stringOrNull(obj.html_url),
+        };
+      });
+    }
+    case 'github_workflow_runs_list': {
+      const bodyRecord = asRecord(body);
+      const runs = Array.isArray(body) ? body : asArray(bodyRecord.workflow_runs);
+      return runs.slice(0, limit).map((item) => {
+        const obj = asRecord(item);
+        return {
+          name: stringOrNull(obj.name),
+          status: stringOrNull(obj.status),
+          conclusion: stringOrNull(obj.conclusion),
+          branch: stringOrNull(obj.head_branch),
+          event: stringOrNull(obj.event),
+          title: stringOrNull(obj.display_title),
+          createdAt: stringOrNull(obj.created_at),
+          url: stringOrNull(obj.html_url),
+        };
+      });
     }
     case 'npmjs_search_packages': {
       const objects = asArray((body as { objects?: unknown })?.objects).slice(0, limit);

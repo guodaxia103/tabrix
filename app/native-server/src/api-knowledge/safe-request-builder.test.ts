@@ -107,7 +107,7 @@ describe('V26-FIX-04 buildSafeRequest — seed_adapter branch', () => {
     expect(plan!.requestShapeUsed).toEqual(['order', 'per_page', 'q', 'sort']);
   });
 
-  it('builds a github_issues_list URL when owner/repo are supplied', () => {
+  it('builds a github_issues_list URL through search/issues when owner/repo are supplied', () => {
     const m = match({
       site: 'api.github.com',
       urlPattern: 'api.github.com/repos/:owner/:repo/issues',
@@ -122,10 +122,13 @@ describe('V26-FIX-04 buildSafeRequest — seed_adapter branch', () => {
     expect(plan).not.toBeNull();
     expect(plan!.builderHint).toBe('seed_adapter');
     expect(plan!.dataPurpose).toBe('issue_list');
-    expect(plan!.url).toBe(
-      'https://api.github.com/repos/tabrix/tabrix/issues?state=open&per_page=10',
-    );
-    expect(plan!.requestShapeUsed).toEqual(['per_page', 'state']);
+    const url = new URL(plan!.url);
+    expect(`${url.origin}${url.pathname}`).toBe('https://api.github.com/search/issues');
+    expect(url.searchParams.get('q')).toBe('repo:tabrix/tabrix is:issue state:open');
+    expect(url.searchParams.get('sort')).toBe('created');
+    expect(url.searchParams.get('order')).toBe('desc');
+    expect(url.searchParams.get('per_page')).toBe('10');
+    expect(plan!.requestShapeUsed).toEqual(['order', 'per_page', 'q', 'sort']);
   });
 
   it('refuses github_issues_list when owner/repo missing', () => {
@@ -137,6 +140,27 @@ describe('V26-FIX-04 buildSafeRequest — seed_adapter branch', () => {
     });
     const plan = buildSafeRequest(m, { ...baseDataNeed, params: {} });
     expect(plan).toBeNull();
+  });
+
+  it('builds a github_workflow_runs_list URL when owner/repo are supplied', () => {
+    const m = match({
+      site: 'api.github.com',
+      urlPattern: 'api.github.com/repos/:owner/:repo/actions/runs',
+      family: 'github',
+      semanticType: 'list',
+    });
+    const plan = buildSafeRequest(m, {
+      ...baseDataNeed,
+      semanticTypeWanted: 'list',
+      params: { owner: 'guodaxia103', repo: 'tabrix', limit: 1 },
+    });
+    expect(plan).not.toBeNull();
+    expect(plan!.builderHint).toBe('seed_adapter');
+    expect(plan!.dataPurpose).toBe('workflow_runs_list');
+    expect(plan!.url).toBe(
+      'https://api.github.com/repos/guodaxia103/tabrix/actions/runs?per_page=1',
+    );
+    expect(plan!.requestShapeUsed).toEqual(['per_page']);
   });
 
   it('builds an npmjs_search_packages URL', () => {

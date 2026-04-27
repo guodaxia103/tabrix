@@ -45,7 +45,7 @@ describe('V26-07 API Knowledge substrate', () => {
     expect(JSON.stringify(metadata)).not.toContain('per_page');
   });
 
-  it('classifies GitHub issues and npmjs search seed families', () => {
+  it('classifies GitHub issues, workflow runs, and npmjs search seed families', () => {
     expect(
       classifyApiKnowledgeMetadata({
         url: 'https://api.github.com/repos/octocat/hello-world/issues?state=open',
@@ -55,6 +55,18 @@ describe('V26-07 API Knowledge substrate', () => {
       endpointFamily: 'github_issues_list',
       dataPurpose: 'issue_list',
       pathPattern: '/repos/:owner/:repo/issues',
+      readAllowed: true,
+    });
+
+    expect(
+      classifyApiKnowledgeMetadata({
+        url: 'https://api.github.com/repos/octocat/hello-world/actions/runs?per_page=1',
+        method: 'GET',
+      }),
+    ).toMatchObject({
+      endpointFamily: 'github_workflow_runs_list',
+      dataPurpose: 'workflow_runs_list',
+      pathPattern: '/repos/:owner/:repo/actions/runs',
       readAllowed: true,
     });
 
@@ -375,6 +387,20 @@ describe('V26-07 API Knowledge substrate', () => {
     });
   });
 
+  it('resolves GitHub Actions read-only tasks to workflow runs rows', () => {
+    expect(
+      resolveApiKnowledgeCandidate({
+        intent: '读取 GitHub Actions 最近一次工作流运行的名称、状态、分支、触发时间',
+        url: 'https://github.com/guodaxia103/tabrix/actions',
+        pageRole: 'actions_detail',
+      }),
+    ).toMatchObject({
+      endpointFamily: 'github_workflow_runs_list',
+      dataPurpose: 'workflow_runs_list',
+      params: { owner: 'guodaxia103', repo: 'tabrix' },
+    });
+  });
+
   it('does not add GitHub hot-search sort params for ordinary search intent', () => {
     expect(
       resolveApiKnowledgeCandidate({
@@ -421,5 +447,106 @@ describe('V26-07 API Knowledge substrate', () => {
     expect(url.searchParams.get('q')).toBe('AI助手');
     expect(url.searchParams.has('sort')).toBe(false);
     expect(url.searchParams.has('order')).toBe(false);
+  });
+
+  it('routes GitHub issue lists through search/issues instead of the core REST issues endpoint', async () => {
+    const fetchFn = jsonFetch(200, { items: [] });
+    await readApiKnowledgeRows({
+      endpointFamily: 'github_issues_list',
+      method: 'GET',
+      params: { owner: 'octocat', repo: 'hello-world', state: 'open' },
+      fetchFn,
+    });
+
+    const url = new URL((fetchFn as jest.Mock).mock.calls[0][0]);
+    expect(`${url.origin}${url.pathname}`).toBe('https://api.github.com/search/issues');
+    expect(url.searchParams.get('q')).toBe('repo:octocat/hello-world is:issue state:open');
+    expect(url.searchParams.get('sort')).toBe('created');
+    expect(url.searchParams.get('order')).toBe('desc');
+    expect(url.searchParams.get('per_page')).toBe('10');
+  });
+
+  it('compacts GitHub issue search results from the items envelope', async () => {
+    const result = await readApiKnowledgeRows({
+      endpointFamily: 'github_issues_list',
+      method: 'GET',
+      params: { owner: 'octocat', repo: 'hello-world' },
+      fetchFn: jsonFetch(200, {
+        items: [
+          {
+            number: 42,
+            title: 'Crash on startup',
+            state: 'open',
+            labels: [{ name: 'bug' }],
+            html_url: 'https://github.com/octocat/hello-world/issues/42',
+            raw: 'SHOULD_NOT_LEAK',
+          },
+        ],
+      }),
+    });
+
+    expect(result).toMatchObject({
+      status: 'ok',
+      kind: 'api_rows',
+      endpointFamily: 'github_issues_list',
+      dataPurpose: 'issue_list',
+      rowCount: 1,
+      rawBodyStored: false,
+      rows: [
+        {
+          number: 42,
+          title: 'Crash on startup',
+          state: 'open',
+          labels: 'bug',
+          url: 'https://github.com/octocat/hello-world/issues/42',
+        },
+      ],
+    });
+    expect(JSON.stringify(result)).not.toContain('SHOULD_NOT_LEAK');
+  });
+
+  it('returns compact GitHub workflow run rows without raw response body fields', async () => {
+    const result = await readApiKnowledgeRows({
+      endpointFamily: 'github_workflow_runs_list',
+      method: 'GET',
+      params: { owner: 'guodaxia103', repo: 'tabrix' },
+      fetchFn: jsonFetch(200, {
+        workflow_runs: [
+          {
+            name: 'CI',
+            status: 'completed',
+            conclusion: 'success',
+            head_branch: 'main',
+            event: 'push',
+            display_title: 'Release polish',
+            created_at: '2026-04-27T00:00:00Z',
+            html_url: 'https://github.com/guodaxia103/tabrix/actions/runs/1',
+            raw: 'SHOULD_NOT_LEAK',
+          },
+        ],
+      }),
+    });
+
+    expect(result).toMatchObject({
+      status: 'ok',
+      kind: 'api_rows',
+      endpointFamily: 'github_workflow_runs_list',
+      dataPurpose: 'workflow_runs_list',
+      rowCount: 1,
+      rawBodyStored: false,
+      rows: [
+        {
+          name: 'CI',
+          status: 'completed',
+          conclusion: 'success',
+          branch: 'main',
+          event: 'push',
+          title: 'Release polish',
+          createdAt: '2026-04-27T00:00:00Z',
+          url: 'https://github.com/guodaxia103/tabrix/actions/runs/1',
+        },
+      ],
+    });
+    expect(JSON.stringify(result)).not.toContain('SHOULD_NOT_LEAK');
   });
 });

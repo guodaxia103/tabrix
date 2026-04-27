@@ -641,11 +641,15 @@ function evaluateCompetitorDelta(
 
 function buildScenarioLatencyEntries(args: {
   perTaskBuckets: Map<string, number[]>;
+  perScenarioBuckets?: Map<string, number[]>;
   latencyBudgetsMs: Record<string, number> | undefined;
   competitorBaselines: Record<string, BenchmarkCompetitorBaselineV26> | undefined;
 }): BenchmarkScenarioLatencyV26[] {
   const scenarioIds = new Set<string>();
   for (const id of args.perTaskBuckets.keys()) scenarioIds.add(id);
+  if (args.perScenarioBuckets) {
+    for (const id of args.perScenarioBuckets.keys()) scenarioIds.add(id);
+  }
   if (args.latencyBudgetsMs) {
     for (const id of Object.keys(args.latencyBudgetsMs)) scenarioIds.add(id);
   }
@@ -656,7 +660,12 @@ function buildScenarioLatencyEntries(args: {
   const sortedIds = [...scenarioIds].sort((a, b) => a.localeCompare(b));
   const entries: BenchmarkScenarioLatencyV26[] = [];
   for (const scenarioId of sortedIds) {
-    const samples = args.perTaskBuckets.get(scenarioId) ?? [];
+    // Prefer scenario wall-clock durations when the real-browser runner
+    // emits them. Tool-call buckets are still accepted for legacy v26
+    // fixtures, but release latency gates must not silently compare a
+    // single tool's p50 against a whole-scenario budget.
+    const samples =
+      args.perScenarioBuckets?.get(scenarioId) ?? args.perTaskBuckets.get(scenarioId) ?? [];
     const sorted = [...samples].sort((a, b) => a - b);
     const count = sorted.length;
     const medianMs = quantile(sorted, 0.5);
@@ -682,6 +691,23 @@ function buildScenarioLatencyEntries(args: {
     });
   }
   return entries;
+}
+
+function buildScenarioDurationBuckets(
+  scenarios: BenchmarkRunInputV26['scenarios'],
+): Map<string, number[]> {
+  const buckets = new Map<string, number[]>();
+  for (const scenario of scenarios ?? []) {
+    const scenarioId = scenario?.scenarioId;
+    const duration = (scenario as BenchmarkScenarioRecord & { durationMs?: number | null })
+      ?.durationMs;
+    if (typeof scenarioId !== 'string' || scenarioId.length === 0) continue;
+    if (!isFiniteNumber(duration) || duration < 0) continue;
+    const arr = buckets.get(scenarioId) ?? [];
+    arr.push(duration);
+    buckets.set(scenarioId, arr);
+  }
+  return buckets;
 }
 
 function emptyComponentCounters(): BenchmarkComponentCountersV26 {
@@ -736,13 +762,19 @@ function maxNonNegativeFromTaskTotals(
 function sumPositiveTokensSavedEstimate(toolCalls: BenchmarkToolCallRecordV26[]): number {
   let total = 0;
   for (const call of toolCalls) {
-    if (call.readPageAvoided !== true) continue;
+    if (call.readPageAvoided !== true && call.executionMode !== 'direct_api') continue;
     const value = call.tokensSavedEstimate;
     if (isFiniteNumber(value) && value > 0) {
       total += Math.floor(value);
     }
   }
   return total;
+}
+
+function countReadPageAvoidanceSignals(toolCalls: BenchmarkToolCallRecordV26[]): number {
+  return toolCalls.filter(
+    (call) => call.readPageAvoided === true || call.executionMode === 'direct_api',
+  ).length;
 }
 
 function effectiveSourceKind(call: BenchmarkToolCallRecordV26): string | null {
@@ -1167,6 +1199,7 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
   const readPageAvoidedCount = Math.max(
     v25Summary.layerMetrics.readPageAvoidedCount,
     maxNonNegativeFromTaskTotals(toolCalls, 'readPageAvoidedCount'),
+    countReadPageAvoidanceSignals(toolCalls),
   );
   const tokensSavedEstimateTotal = Math.max(
     v25Summary.layerMetrics.tokensSavedEstimateTotal,
@@ -1188,6 +1221,7 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
       : 'unknown');
   const perScenarioLatency = buildScenarioLatencyEntries({
     perTaskBuckets,
+    perScenarioBuckets: buildScenarioDurationBuckets(input.scenarios),
     latencyBudgetsMs: input.latencyBudgetsMs,
     competitorBaselines: input.competitorBaselines,
   });

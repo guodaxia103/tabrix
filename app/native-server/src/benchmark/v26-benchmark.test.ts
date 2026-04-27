@@ -701,6 +701,27 @@ describe('summariseBenchmarkRunV26 — layer evidence closeout metrics', () => {
 });
 
 describe('summariseBenchmarkRunV26 — V26-FIX-08 latency gate', () => {
+  it('uses scenario wall-clock durations for release latency gates when present', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, scenarioId: 'T-WALL-CLOCK', durationMs: 200 }),
+          call({ seq: 1, scenarioId: 'T-WALL-CLOCK', durationMs: 300 }),
+          call({ seq: 2, scenarioId: 'T-WALL-CLOCK', durationMs: 400 }),
+        ],
+        scenarios: [
+          { scenarioId: 'T-WALL-CLOCK', completed: true, durationMs: 900 },
+          { scenarioId: 'T-WALL-CLOCK', completed: true, durationMs: 1100 },
+          { scenarioId: 'T-WALL-CLOCK', completed: true, durationMs: 1300 },
+        ] as BenchmarkRunInputV26['scenarios'],
+        latencyBudgetsMs: { 'T-WALL-CLOCK': 500 },
+      }),
+    );
+    const entry = summary.perScenarioLatency.find((item) => item.scenarioId === 'T-WALL-CLOCK');
+    expect(entry?.medianMs).toBe(1100);
+    expect(entry?.latencyGateStatus).toBe('fail');
+  });
+
   it('emits pass when median is at or below the configured budget', () => {
     const summary = summariseBenchmarkRunV26(
       run({
@@ -912,6 +933,26 @@ describe('summariseBenchmarkRunV26 — V26-FIX-08 directApiPathRatio + foregroun
     );
     expect(invalid).toHaveLength(1);
     expect(invalid[0].seq).toBe(5);
+  });
+
+  it('counts direct_api execution as read_page avoidance even when legacy flag is false', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({
+            seq: 0,
+            executionMode: 'direct_api',
+            readPageAvoided: false,
+            tokensSavedEstimate: 123,
+          }),
+        ],
+      }),
+    );
+    expect(summary.readPageAvoidedCount).toBe(1);
+    expect(summary.tokensSavedEstimateTotal).toBe(123);
+    expect(summary.evidenceFindings.map((finding) => finding.code)).not.toContain(
+      'read_page_avoided_zero',
+    );
   });
 
   it('returns null directApiPathRatio when no record sets executionMode', () => {

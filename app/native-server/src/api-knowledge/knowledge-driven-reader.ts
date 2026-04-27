@@ -50,10 +50,14 @@ const GENERIC_STRING_VALUE_CAP = 240;
 /** Mirror of the V25 SEED_PATTERN_MAP; kept private to avoid coupling. */
 const SEED_PATTERN_FAMILY: ReadonlyMap<
   string,
-  'github_search_repositories' | 'github_issues_list' | 'npmjs_search_packages'
+  | 'github_search_repositories'
+  | 'github_issues_list'
+  | 'github_workflow_runs_list'
+  | 'npmjs_search_packages'
 > = new Map([
   ['api.github.com/search/repositories', 'github_search_repositories'],
   ['api.github.com/repos/:owner/:repo/issues', 'github_issues_list'],
+  ['api.github.com/repos/:owner/:repo/actions/runs', 'github_workflow_runs_list'],
   ['registry.npmjs.org/-/v1/search', 'npmjs_search_packages'],
 ]);
 

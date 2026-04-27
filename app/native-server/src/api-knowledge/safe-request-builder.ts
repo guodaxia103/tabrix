@@ -55,10 +55,14 @@ const MAX_PARAM_VALUE_LENGTH = 160;
  */
 const SEED_PATTERN_MAP: ReadonlyMap<
   string,
-  'github_search_repositories' | 'github_issues_list' | 'npmjs_search_packages'
+  | 'github_search_repositories'
+  | 'github_issues_list'
+  | 'github_workflow_runs_list'
+  | 'npmjs_search_packages'
 > = new Map([
   ['api.github.com/search/repositories', 'github_search_repositories'],
   ['api.github.com/repos/:owner/:repo/issues', 'github_issues_list'],
+  ['api.github.com/repos/:owner/:repo/actions/runs', 'github_workflow_runs_list'],
   ['registry.npmjs.org/-/v1/search', 'npmjs_search_packages'],
 ]);
 
@@ -83,7 +87,11 @@ export function buildSafeRequest(match: EndpointMatch, dataNeed: DataNeed): Safe
 }
 
 function buildSeedAdapterRequest(
-  family: 'github_search_repositories' | 'github_issues_list' | 'npmjs_search_packages',
+  family:
+    | 'github_search_repositories'
+    | 'github_issues_list'
+    | 'github_workflow_runs_list'
+    | 'npmjs_search_packages',
   dataNeed: DataNeed,
 ): SafeRequestPlan | null {
   const params = dataNeed.params ?? {};
@@ -120,14 +128,31 @@ function buildSeedAdapterRequest(
       const owner = stringParam(params.owner);
       const repo = stringParam(params.repo);
       if (!owner || !repo) return null;
-      const url = new URL(`https://api.github.com/repos/${owner}/${repo}/issues`);
-      url.searchParams.set('state', stringParam(params.state) || 'open');
+      const state = stringParam(params.state) || 'open';
+      const url = new URL('https://api.github.com/search/issues');
+      url.searchParams.set('q', `repo:${owner}/${repo} is:issue state:${state}`);
+      url.searchParams.set('sort', 'created');
+      url.searchParams.set('order', 'desc');
       url.searchParams.set('per_page', String(limit));
       return {
         url: url.toString(),
         method: 'GET',
         dataPurpose: 'issue_list',
-        requestShapeUsed: sortedDistinctKeys(['state', 'per_page']),
+        requestShapeUsed: sortedDistinctKeys(['q', 'sort', 'order', 'per_page']),
+        builderHint: 'seed_adapter',
+      };
+    }
+    case 'github_workflow_runs_list': {
+      const owner = stringParam(params.owner);
+      const repo = stringParam(params.repo);
+      if (!owner || !repo) return null;
+      const url = new URL(`https://api.github.com/repos/${owner}/${repo}/actions/runs`);
+      url.searchParams.set('per_page', String(limit));
+      return {
+        url: url.toString(),
+        method: 'GET',
+        dataPurpose: 'workflow_runs_list',
+        requestShapeUsed: sortedDistinctKeys(['per_page']),
         builderHint: 'seed_adapter',
       };
     }
