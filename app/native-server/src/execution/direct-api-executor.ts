@@ -52,6 +52,7 @@ import {
 import { buildSafeRequest } from '../api-knowledge/safe-request-builder';
 import { readKnowledgeDrivenEndpoint } from '../api-knowledge/knowledge-driven-reader';
 import type { DataNeed, EndpointKnowledgeReader, ReaderMode } from '../api-knowledge/types';
+import { mapDataSourceToLayerContract, type LayerContractEnvelope } from './layer-contract';
 
 /**
  * Closed enum the chooser surfaces back to telemetry / operation-log
@@ -108,6 +109,19 @@ export type DirectApiIntentClass = 'read_only' | 'action' | 'unknown';
  * pin its value rather than re-deriving it from the candidate table.
  */
 export const DIRECT_API_HIGH_CONFIDENCE_THRESHOLD = 0.7;
+
+/**
+ * V26-FIX-06 — singleton layer-contract envelope every direct-API
+ * branch surfaces. The executor only emits row-shape data
+ * (`api_rows`); the constant lives here so every branch quotes the
+ * same frozen object instead of re-deriving the envelope on each
+ * call. Fallback paths reuse the same envelope because the rows we
+ * *would* have produced were row-shape; the contract is the same
+ * irrespective of whether the fetch succeeded.
+ */
+const API_ROWS_LAYER_CONTRACT: LayerContractEnvelope = mapDataSourceToLayerContract({
+  dataSource: 'api_rows',
+});
 
 export interface DirectApiExecutorInput {
   /**
@@ -212,6 +226,20 @@ export interface DirectApiExecutionTelemetry {
    * when the lookup misses.
    */
   knowledgeLookupRequired: true;
+  /**
+   * V26-FIX-06 — frozen layer-contract envelope describing what the
+   * downstream reader/orchestrator may do with the rows the executor
+   * surfaces. Always present (even on fallback / short-circuit
+   * branches) so the operation log + Gate B transformer can quote a
+   * stable shape regardless of which executor branch fired. The
+   * envelope is the `api_rows` shape on every direct-API attempt
+   * (including the fallback_required branch — the rows we *would*
+   * have produced still came from a list-class API), so every
+   * downstream consumer must call
+   * `assertLayerContract(envelope, 'list_read')` before using the
+   * row content as a click locator or execution target.
+   */
+  layerContract: LayerContractEnvelope;
 }
 
 export interface DirectApiExecutionRows {
@@ -342,6 +370,7 @@ export async function tryDirectApiExecute(
       endpointSource: 'seed_adapter',
       adapterBypass: false,
       knowledgeLookupRequired: true,
+      layerContract: API_ROWS_LAYER_CONTRACT,
       rows: {
         rows: reader.rows,
         rowCount: reader.rowCount,
@@ -371,6 +400,7 @@ export async function tryDirectApiExecute(
     endpointSource: 'seed_adapter',
     adapterBypass: false,
     knowledgeLookupRequired: true,
+    layerContract: API_ROWS_LAYER_CONTRACT,
     rows: null,
   };
 }
@@ -429,6 +459,7 @@ async function tryKnowledgeDrivenPath(
     endpointSource,
     adapterBypass: false as const,
     knowledgeLookupRequired: true as const,
+    layerContract: API_ROWS_LAYER_CONTRACT,
   };
 
   if (reader.status === 'ok') {
@@ -489,6 +520,7 @@ function short(input: ShortCircuitInput): DirectApiExecutionResult {
     endpointPattern: null,
     endpointSemanticType: null,
     requestShapeUsed: null,
+    layerContract: API_ROWS_LAYER_CONTRACT,
     semanticValidation: null,
     endpointSource: null,
     adapterBypass: false,

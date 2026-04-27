@@ -1,4 +1,5 @@
 import type { ContextStrategyName, LayerSourceRoute, ReadPageRequestedLayer } from '@tabrix/shared';
+import { mapDataSourceToLayerContract, type LayerContractEnvelope } from './layer-contract';
 
 export type DataSourceKind =
   | 'experience_replay'
@@ -43,6 +44,16 @@ export interface DataSourceDecision {
   fallbackPlan: DataSourceFallbackPlan;
   decisionReason: string;
   dispatcherInputSource: string;
+  /**
+   * V26-FIX-06 — frozen layer-contract envelope describing what the
+   * downstream reader/orchestrator may do with this data source.
+   * Always present. Read-only at the boundary; consumers MUST call
+   * `assertLayerContract(layerContract, intendedUse)` before using
+   * the row as a locator/execution target. The envelope's
+   * `allowedUses` / `disallowedUses` / `escalationReason` fields are
+   * the GA evidence the operation log writes.
+   */
+  layerContract: LayerContractEnvelope;
 }
 
 export function routeDataSource(input: DataSourceDecisionInput): DataSourceDecision {
@@ -61,6 +72,16 @@ export function routeDataSource(input: DataSourceDecisionInput): DataSourceDecis
       fallbackPlan,
       decisionReason: 'experience_replay_route_selected',
       dispatcherInputSource,
+      // V26-FIX-06 — experience replay is recorded action playback, not
+      // a fresh data fetch. The contract envelope it surfaces is the
+      // dom_json envelope of the recorded session: the replay engine
+      // will issue a real DOM action, so the contract layer must
+      // permit `execution`.
+      layerContract: mapDataSourceToLayerContract({
+        dataSource: 'dom_json',
+        requestedLayer: input.chosenLayer,
+        fallbackEntryLayer: fallbackPlan.entryLayer,
+      }),
     };
   }
 
@@ -75,6 +96,11 @@ export function routeDataSource(input: DataSourceDecisionInput): DataSourceDecis
       fallbackPlan,
       decisionReason: 'api_knowledge_candidate_available',
       dispatcherInputSource: 'api_knowledge',
+      layerContract: mapDataSourceToLayerContract({
+        dataSource: 'api_rows',
+        requestedLayer: input.chosenLayer,
+        fallbackEntryLayer: fallbackPlan.entryLayer,
+      }),
     };
   }
 
@@ -89,6 +115,11 @@ export function routeDataSource(input: DataSourceDecisionInput): DataSourceDecis
       fallbackPlan,
       decisionReason: 'markdown_reading_surface_preferred',
       dispatcherInputSource,
+      layerContract: mapDataSourceToLayerContract({
+        dataSource: 'markdown',
+        requestedLayer: input.chosenLayer,
+        fallbackEntryLayer: fallbackPlan.entryLayer,
+      }),
     };
   }
 
@@ -105,6 +136,11 @@ export function routeDataSource(input: DataSourceDecisionInput): DataSourceDecis
         ? 'router_fail_safe_dom_compact'
         : 'dom_compact_required',
     dispatcherInputSource,
+    layerContract: mapDataSourceToLayerContract({
+      dataSource: 'dom_json',
+      requestedLayer: input.chosenLayer,
+      fallbackEntryLayer: fallbackPlan.entryLayer,
+    }),
   };
 }
 

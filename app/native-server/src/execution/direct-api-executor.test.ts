@@ -348,6 +348,15 @@ describe('V26-FIX-04 tryDirectApiExecute — knowledge-driven path', () => {
     expect(result.endpointSource).toBe('seed_adapter');
     expect(result.adapterBypass).toBe(false);
     expect(result.knowledgeLookupRequired).toBe(true);
+    // V26-FIX-06 — direct-api result MUST surface the api_rows
+    // contract envelope. Rows are list-shape; the executor never
+    // grants locator/execution authority to API rows even on the
+    // happy path.
+    expect(result.layerContract.dataSource).toBe('api_rows');
+    expect(result.layerContract.allowedUses).toEqual(['list_read']);
+    expect(result.layerContract.disallowedUses).toEqual(
+      expect.arrayContaining(['execution', 'locator']),
+    );
   });
 
   it('npmjs fixture: lookup-driven seed_adapter URL → direct_api', async () => {
