@@ -111,6 +111,46 @@ export type DirectApiIntentClass = 'read_only' | 'action' | 'unknown';
 export const DIRECT_API_HIGH_CONFIDENCE_THRESHOLD = 0.7;
 
 /**
+ * V26-FIX-09 — closed enum naming the cold-start guard mode. When
+ * `'enabled'` the executor wraps each reader call in a single bounded
+ * retry on transient network failures (see
+ * {@link COLD_START_TRANSIENT_REASONS}); when `'disabled'` the
+ * executor performs exactly one attempt per branch (legacy V26-FIX-04
+ * behaviour). The guard is `'enabled'` by default so a real Gate B
+ * cold-start does not flap, but tests / fast-lane runners can pin
+ * `'disabled'` for deterministic single-attempt semantics.
+ */
+export type DirectApiColdStartGuard = 'enabled' | 'disabled';
+
+/**
+ * V26-FIX-09 default total budget across the first attempt + the
+ * (single) retry. Calibrated to keep the executor well under the
+ * Gate B per-scenario latency budget (median ~1500–3000 ms). When
+ * the first attempt already consumes more than the budget, the
+ * retry is skipped — `apiFinalReason` then reports the original
+ * failure cause so a post-mortem can distinguish "no budget" from
+ * "retry attempted and failed".
+ */
+export const DIRECT_API_COLD_START_BUDGET_MS_DEFAULT = 5_000;
+
+/**
+ * V26-FIX-09 — closed set of {@link ApiKnowledgeFallbackReason}
+ * values the cold-start guard treats as "transient enough to retry
+ * once". Anything else (rate_limited / http_forbidden /
+ * unsupported_family / decode_error / semantic_mismatch / …) is a
+ * deterministic upstream condition that retrying would not flip.
+ *
+ * Keeping this set narrow is intentional: a wider retry loop would
+ * mask 5xx waves on a real outage and inflate Gate B latency
+ * silently. The two reasons in the set are the ones empirically tied
+ * to Chrome/native-server cold-start sequences (DNS warm-up + first
+ * TLS handshake), which is exactly what FIX-09 calls "release-
+ * blocking polish".
+ */
+export const COLD_START_TRANSIENT_REASONS: ReadonlySet<ApiKnowledgeFallbackReason> =
+  new Set<ApiKnowledgeFallbackReason>(['network_timeout', 'network_error']);
+
+/**
  * V26-FIX-06 — singleton layer-contract envelope every direct-API
  * branch surfaces. The executor only emits row-shape data
  * (`api_rows`); the constant lives here so every branch quotes the
@@ -151,6 +191,19 @@ export interface DirectApiExecutorInput {
    */
   dataNeed?: DataNeed | null;
   knowledgeRepo?: EndpointKnowledgeReader | null;
+  /**
+   * V26-FIX-09 — cold-start guard mode. Defaults to `'enabled'` so
+   * a single bounded retry kicks in on transient network failures.
+   * Pass `'disabled'` (or omit entirely from a deterministic test)
+   * to keep pre-FIX-09 single-attempt behaviour.
+   */
+  coldStartGuard?: DirectApiColdStartGuard;
+  /**
+   * V26-FIX-09 — total budget (ms) covering both attempts. Defaults
+   * to {@link DIRECT_API_COLD_START_BUDGET_MS_DEFAULT}. The retry is
+   * skipped when the first attempt already exceeds the budget.
+   */
+  coldStartBudgetMs?: number;
 }
 
 export interface DirectApiExecutionTelemetry {
@@ -240,6 +293,32 @@ export interface DirectApiExecutionTelemetry {
    * row content as a click locator or execution target.
    */
   layerContract: LayerContractEnvelope;
+  /**
+   * V26-FIX-09 — wall-clock duration (ms) of the first reader
+   * attempt, including the retry candidate's first attempt. Always
+   * `null` for short-circuit branches that never reached a reader.
+   */
+  apiFirstAttemptMs: number | null;
+  /**
+   * V26-FIX-09 — number of retries the cold-start guard performed
+   * (always `0` or `1`). Short-circuit branches stay at `0`.
+   */
+  apiRetryCount: 0 | 1;
+  /**
+   * V26-FIX-09 — final fallback reason after all attempts. `null`
+   * when the executor produced rows or never reached a reader. Use
+   * this rather than the legacy `fallbackCause` when you want to
+   * group telemetry by post-retry outcome (e.g. "retry succeeded
+   * vs. retry exhausted").
+   */
+  apiFinalReason: ApiKnowledgeFallbackReason | null;
+  /**
+   * V26-FIX-09 — closed enum showing whether the guard was active
+   * for this call. The chooser fills this in even on short-circuit
+   * branches so the operation log can cite the configured posture
+   * without reaching into the input.
+   */
+  coldStartGuard: DirectApiColdStartGuard;
 }
 
 export interface DirectApiExecutionRows {
@@ -288,6 +367,9 @@ export async function tryDirectApiExecute(
   input: DirectApiExecutorInput,
 ): Promise<DirectApiExecutionResult> {
   const threshold = input.confidenceThreshold ?? DIRECT_API_HIGH_CONFIDENCE_THRESHOLD;
+  const coldStartGuard: DirectApiColdStartGuard = input.coldStartGuard ?? 'enabled';
+  const coldStartBudgetMs = input.coldStartBudgetMs ?? DIRECT_API_COLD_START_BUDGET_MS_DEFAULT;
+  const clock = input.nowMs ?? Date.now;
 
   if (input.sourceRoute !== 'knowledge_supported_read') {
     return short({
@@ -295,6 +377,7 @@ export async function tryDirectApiExecute(
       decisionReason: 'route_mismatch_not_knowledge_supported',
       endpointFamily: input.candidate?.endpointFamily ?? null,
       candidateConfidence: input.candidate?.confidence ?? null,
+      coldStartGuard,
     });
   }
 
@@ -304,6 +387,7 @@ export async function tryDirectApiExecute(
       decisionReason: 'intent_not_read_only',
       endpointFamily: input.candidate?.endpointFamily ?? null,
       candidateConfidence: input.candidate?.confidence ?? null,
+      coldStartGuard,
     });
   }
 
@@ -314,7 +398,11 @@ export async function tryDirectApiExecute(
   // path remains the safety net for the V25 GitHub/npmjs Gate B
   // fixtures.
   if (input.dataNeed && input.knowledgeRepo) {
-    const knowledgeResult = await tryKnowledgeDrivenPath(input);
+    const knowledgeResult = await tryKnowledgeDrivenPath(input, {
+      coldStartGuard,
+      coldStartBudgetMs,
+      clock,
+    });
     if (knowledgeResult) return knowledgeResult;
   }
 
@@ -324,6 +412,7 @@ export async function tryDirectApiExecute(
       decisionReason: 'endpoint_not_resolved',
       endpointFamily: null,
       candidateConfidence: null,
+      coldStartGuard,
     });
   }
 
@@ -333,17 +422,24 @@ export async function tryDirectApiExecute(
       decisionReason: 'endpoint_low_confidence',
       endpointFamily: input.candidate.endpointFamily,
       candidateConfidence: input.candidate.confidence,
+      coldStartGuard,
     });
   }
 
-  const reader: ApiKnowledgeReadResult = await readApiKnowledgeRows({
-    endpointFamily: input.candidate.endpointFamily,
-    method: input.candidate.method,
-    params: input.candidate.params,
-    fetchFn: input.fetchFn,
-    nowMs: input.nowMs,
-    limit: input.limit,
-  });
+  const candidate = input.candidate;
+  const guarded = await runWithColdStartGuard(
+    () =>
+      readApiKnowledgeRows({
+        endpointFamily: candidate.endpointFamily,
+        method: candidate.method,
+        params: candidate.params,
+        fetchFn: input.fetchFn,
+        nowMs: input.nowMs,
+        limit: input.limit,
+      }),
+    { coldStartGuard, coldStartBudgetMs, clock },
+  );
+  const reader: ApiKnowledgeReadResult = guarded.result;
 
   if (reader.status === 'ok') {
     return {
@@ -371,6 +467,10 @@ export async function tryDirectApiExecute(
       adapterBypass: false,
       knowledgeLookupRequired: true,
       layerContract: API_ROWS_LAYER_CONTRACT,
+      apiFirstAttemptMs: guarded.apiFirstAttemptMs,
+      apiRetryCount: guarded.apiRetryCount,
+      apiFinalReason: guarded.apiFinalReason,
+      coldStartGuard,
       rows: {
         rows: reader.rows,
         rowCount: reader.rowCount,
@@ -401,6 +501,10 @@ export async function tryDirectApiExecute(
     adapterBypass: false,
     knowledgeLookupRequired: true,
     layerContract: API_ROWS_LAYER_CONTRACT,
+    apiFirstAttemptMs: guarded.apiFirstAttemptMs,
+    apiRetryCount: guarded.apiRetryCount,
+    apiFinalReason: guarded.apiFinalReason,
+    coldStartGuard,
     rows: null,
   };
 }
@@ -417,6 +521,11 @@ export async function tryDirectApiExecute(
  */
 async function tryKnowledgeDrivenPath(
   input: DirectApiExecutorInput,
+  guardConfig: {
+    coldStartGuard: DirectApiColdStartGuard;
+    coldStartBudgetMs: number;
+    clock: () => number;
+  },
 ): Promise<DirectApiExecutionResult | null> {
   const dataNeed = input.dataNeed;
   const repo = input.knowledgeRepo;
@@ -429,14 +538,21 @@ async function tryKnowledgeDrivenPath(
   const plan = buildSafeRequest(match, dataNeed);
   if (!plan) return null;
 
-  const reader = await readKnowledgeDrivenEndpoint({
-    match,
-    plan,
-    seedParams: dataNeed.params as Record<string, string | number | null | undefined> | undefined,
-    fetchFn: input.fetchFn,
-    nowMs: input.nowMs,
-    limit: input.limit,
-  });
+  const guarded = await runWithColdStartGuard(
+    () =>
+      readKnowledgeDrivenEndpoint({
+        match,
+        plan,
+        seedParams: dataNeed.params as
+          | Record<string, string | number | null | undefined>
+          | undefined,
+        fetchFn: input.fetchFn,
+        nowMs: input.nowMs,
+        limit: input.limit,
+      }),
+    guardConfig,
+  );
+  const reader = guarded.result;
 
   // V26-FIX-05 — the knowledge-driven path itself routes between two
   // sources: a `seed_adapter` builder hint means we matched a known
@@ -460,6 +576,10 @@ async function tryKnowledgeDrivenPath(
     adapterBypass: false as const,
     knowledgeLookupRequired: true as const,
     layerContract: API_ROWS_LAYER_CONTRACT,
+    apiFirstAttemptMs: guarded.apiFirstAttemptMs,
+    apiRetryCount: guarded.apiRetryCount,
+    apiFinalReason: guarded.apiFinalReason,
+    coldStartGuard: guardConfig.coldStartGuard,
   };
 
   if (reader.status === 'ok') {
@@ -502,6 +622,7 @@ interface ShortCircuitInput {
   decisionReason: DirectApiDecisionReason;
   endpointFamily: string | null;
   candidateConfidence: number | null;
+  coldStartGuard: DirectApiColdStartGuard;
 }
 
 function short(input: ShortCircuitInput): DirectApiExecutionResult {
@@ -525,6 +646,76 @@ function short(input: ShortCircuitInput): DirectApiExecutionResult {
     endpointSource: null,
     adapterBypass: false,
     knowledgeLookupRequired: true,
+    apiFirstAttemptMs: null,
+    apiRetryCount: 0,
+    apiFinalReason: null,
+    coldStartGuard: input.coldStartGuard,
     rows: null,
+  };
+}
+
+/**
+ * V26-FIX-09 — bounded retry / cold-start guard helper.
+ *
+ * Calls `attempt()` once and:
+ *   - returns immediately on `status === 'ok'`,
+ *   - returns immediately when the fallback reason is NOT in
+ *     {@link COLD_START_TRANSIENT_REASONS},
+ *   - returns immediately when the cold-start guard is `'disabled'`,
+ *   - returns immediately when the first attempt already exceeded
+ *     `coldStartBudgetMs` (no time left to retry safely),
+ *   - otherwise runs `attempt()` once more and surfaces whichever
+ *     result the second call produced.
+ *
+ * The helper is deliberately ignorant of the underlying reader's
+ * shape — both `readApiKnowledgeRows` and
+ * `readKnowledgeDrivenEndpoint` produce `ApiKnowledgeReadResult`,
+ * so wrapping them here avoids duplicating the retry policy.
+ */
+async function runWithColdStartGuard(
+  attempt: () => Promise<ApiKnowledgeReadResult>,
+  config: {
+    coldStartGuard: DirectApiColdStartGuard;
+    coldStartBudgetMs: number;
+    clock: () => number;
+  },
+): Promise<{
+  result: ApiKnowledgeReadResult;
+  apiFirstAttemptMs: number;
+  apiRetryCount: 0 | 1;
+  apiFinalReason: ApiKnowledgeFallbackReason | null;
+}> {
+  const startedAtMs = config.clock();
+  const first = await attempt();
+  const firstAttemptMs = Math.max(0, config.clock() - startedAtMs);
+
+  if (first.status === 'ok') {
+    return {
+      result: first,
+      apiFirstAttemptMs: firstAttemptMs,
+      apiRetryCount: 0,
+      apiFinalReason: null,
+    };
+  }
+
+  const transient = COLD_START_TRANSIENT_REASONS.has(first.reason);
+  const elapsedMs = Math.max(0, config.clock() - startedAtMs);
+  const retryAllowed =
+    config.coldStartGuard === 'enabled' && transient && elapsedMs < config.coldStartBudgetMs;
+  if (!retryAllowed) {
+    return {
+      result: first,
+      apiFirstAttemptMs: firstAttemptMs,
+      apiRetryCount: 0,
+      apiFinalReason: first.reason,
+    };
+  }
+
+  const second = await attempt();
+  return {
+    result: second,
+    apiFirstAttemptMs: firstAttemptMs,
+    apiRetryCount: 1,
+    apiFinalReason: second.status === 'ok' ? null : second.reason,
   };
 }

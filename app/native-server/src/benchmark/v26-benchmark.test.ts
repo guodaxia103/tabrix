@@ -57,6 +57,50 @@ describe('v26 benchmark transformer — version drift guard', () => {
   });
 });
 
+describe('V26-FIX-09 summariseBenchmarkRunV26 robustness', () => {
+  it('does not throw when toolCalls field is missing entirely', () => {
+    expect(() =>
+      summariseBenchmarkRunV26({
+        runId: 'r',
+        runStartedAt: '2026-04-23T00:00:00Z',
+        runEndedAt: '2026-04-23T00:00:00Z',
+        buildSha: 'sha',
+        kpiScenarioIds: [],
+        toolCalls: [],
+        scenarios: [],
+        pairs: [],
+      } as BenchmarkRunInputV26),
+    ).not.toThrow();
+  });
+
+  it('coerces malformed records into the unknown buckets without throwing', () => {
+    const malformed = {
+      seq: 1,
+      scenarioId: '',
+      toolName: '',
+      status: 'ok',
+      durationMs: 0,
+      inputTokens: null,
+      retryCount: 0,
+      fallbackUsed: false,
+      lane: 'tabrix_owned',
+      startedAt: '2026-04-23T00:00:00.000Z',
+      endedAt: '2026-04-23T00:00:00.000Z',
+      component: 'unknown',
+      failureCode: null,
+      waitedMs: 0,
+      chosenSource: 'something_unrecognized',
+      endpointSource: 'something_unrecognized',
+      executionMode: 'something_unrecognized',
+      observeMode: 'something_unrecognized',
+    } as unknown as BenchmarkToolCallRecordV26;
+    expect(() => summariseBenchmarkRunV26(run({ toolCalls: [malformed] }))).not.toThrow();
+    const summary = summariseBenchmarkRunV26(run({ toolCalls: [malformed] }));
+    expect(summary.endpointSourceDistribution.unknown).toBeGreaterThanOrEqual(0);
+    expect(summary.chosenSourceDistribution.unknown).toBeGreaterThanOrEqual(0);
+  });
+});
+
 describe('summariseBenchmarkRunV26 — empty input', () => {
   it('returns deterministic empty report (all aggregates null/empty)', () => {
     const summary = summariseBenchmarkRunV26(run());

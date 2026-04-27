@@ -9,8 +9,25 @@ import { daemonStatus, getDaemonRuntimePaths } from './daemon';
 
 export type RuntimeConsistencyVerdict = 'consistent' | 'inconsistent' | 'unknown';
 
+/**
+ * V26-FIX-09 — flat closed-enum marker that maps {@link RuntimeConsistencyVerdict}
+ * onto the vocabulary the v2.6 evidence contract uses
+ * (`consistent | stale | unknown`). The original `verdict` enum is
+ * retained for backward compatibility with existing doctor / status
+ * consumers; `marker` is the field a Gate B consumer should grep for
+ * when answering "is the runtime stale?".
+ *
+ * Mapping is intentionally lossless:
+ *   - `verdict='consistent'`   → `marker='consistent'`
+ *   - `verdict='inconsistent'` → `marker='stale'`
+ *   - `verdict='unknown'`      → `marker='unknown'`
+ */
+export type RuntimeConsistencyMarker = 'consistent' | 'stale' | 'unknown';
+
 export interface RuntimeConsistencySnapshot {
   verdict: RuntimeConsistencyVerdict;
+  /** V26-FIX-09 — flat alias of {@link verdict} using the v2.6 evidence vocabulary. */
+  marker: RuntimeConsistencyMarker;
   summary: string;
   reasons: string[];
   cli: {
@@ -191,8 +208,12 @@ export async function collectRuntimeConsistencySnapshot(): Promise<RuntimeConsis
         ? 'Runtime instance does not match current workspace build.'
         : 'Runtime consistency cannot be fully verified (missing workspace/runtime markers).';
 
+  const marker: RuntimeConsistencyMarker =
+    verdict === 'consistent' ? 'consistent' : verdict === 'inconsistent' ? 'stale' : 'unknown';
+
   return {
     verdict,
+    marker,
     summary,
     reasons,
     cli: {

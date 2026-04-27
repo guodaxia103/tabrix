@@ -20,6 +20,8 @@
  */
 
 import {
+  COLD_START_TRANSIENT_REASONS,
+  DIRECT_API_COLD_START_BUDGET_MS_DEFAULT,
   DIRECT_API_HIGH_CONFIDENCE_THRESHOLD,
   classifyDirectApiIntent,
   tryDirectApiExecute,
@@ -556,5 +558,228 @@ describe('V26-FIX-04 tryDirectApiExecute — knowledge-driven path', () => {
     expect(result.endpointSource).toBe('seed_adapter');
     expect(result.adapterBypass).toBe(false);
     expect(result.knowledgeLookupRequired).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------
+// V26-FIX-09 — bounded retry / cold-start guard
+// ---------------------------------------------------------------------
+
+/**
+ * Build a `fetchFn` whose Nth call resolves to a given response (or
+ * rejects with a given error). Used to simulate the cold-start
+ * sequence "first call fails, second call succeeds".
+ */
+function sequencedFetch(
+  steps: ReadonlyArray<
+    { kind: 'reject'; error: Error } | { kind: 'resolve'; status: number; body: unknown }
+  >,
+): { fetchFn: jest.Mock; calls: () => number } {
+  let index = 0;
+  const fn = jest.fn().mockImplementation(async () => {
+    const step = steps[index] ?? steps[steps.length - 1]!;
+    index += 1;
+    if (step.kind === 'reject') {
+      throw step.error;
+    }
+    return {
+      status: step.status,
+      headers: { get: jest.fn().mockReturnValue('application/json') },
+      json: jest.fn().mockResolvedValue(step.body),
+    } as unknown;
+  });
+  return { fetchFn: fn, calls: () => index };
+}
+
+describe('V26-FIX-09 closed-enum surface', () => {
+  it('COLD_START_TRANSIENT_REASONS contains exactly network_timeout + network_error', () => {
+    expect(COLD_START_TRANSIENT_REASONS.size).toBe(2);
+    expect(COLD_START_TRANSIENT_REASONS.has('network_timeout')).toBe(true);
+    expect(COLD_START_TRANSIENT_REASONS.has('network_error')).toBe(true);
+    expect(COLD_START_TRANSIENT_REASONS.has('rate_limited')).toBe(false);
+    expect(COLD_START_TRANSIENT_REASONS.has('decode_error')).toBe(false);
+  });
+
+  it('default budget is 5000 ms', () => {
+    expect(DIRECT_API_COLD_START_BUDGET_MS_DEFAULT).toBe(5_000);
+  });
+});
+
+describe('V26-FIX-09 cold-start guard — legacy candidate path', () => {
+  const SUCCESS_BODY = {
+    total_count: 1,
+    items: [
+      {
+        full_name: 'tabrix/tabrix',
+        html_url: 'https://github.com/tabrix/tabrix',
+        stargazers_count: 1,
+        open_issues_count: 0,
+        description: 'desc',
+      },
+    ],
+  };
+
+  it('first attempt network_error then success → direct_api with apiRetryCount=1', async () => {
+    const { fetchFn, calls } = sequencedFetch([
+      { kind: 'reject', error: new Error('fetch failed') },
+      { kind: 'resolve', status: 200, body: SUCCESS_BODY },
+    ]);
+    const result = await tryDirectApiExecute(
+      inputWith({
+        fetchFn: fetchFn as unknown as DirectApiExecutorInput['fetchFn'],
+        nowMs: () => 1_000,
+      }),
+    );
+    expect(result.executionMode).toBe('direct_api');
+    expect(result.apiRetryCount).toBe(1);
+    expect(result.apiFinalReason).toBeNull();
+    expect(result.coldStartGuard).toBe('enabled');
+    expect(typeof result.apiFirstAttemptMs).toBe('number');
+    expect(calls()).toBe(2);
+  });
+
+  it('two consecutive network errors → fallback_required with apiRetryCount=1', async () => {
+    const { fetchFn, calls } = sequencedFetch([
+      { kind: 'reject', error: new Error('boom') },
+      { kind: 'reject', error: new Error('still boom') },
+    ]);
+    const result = await tryDirectApiExecute(
+      inputWith({
+        fetchFn: fetchFn as unknown as DirectApiExecutorInput['fetchFn'],
+        nowMs: () => 1_000,
+      }),
+    );
+    expect(result.executionMode).toBe('fallback_required');
+    expect(result.apiRetryCount).toBe(1);
+    expect(result.apiFinalReason).toBe('network_error');
+    expect(result.fallbackCause).toBe('network_error');
+    expect(result.fallbackEntryLayer).toBe('L0+L1');
+    expect(calls()).toBe(2);
+  });
+
+  it('non-transient failure (429 rate_limited) → no retry, apiRetryCount=0', async () => {
+    const { fetchFn, calls } = sequencedFetch([
+      { kind: 'resolve', status: 429, body: { message: 'too many' } },
+    ]);
+    const result = await tryDirectApiExecute(
+      inputWith({
+        fetchFn: fetchFn as unknown as DirectApiExecutorInput['fetchFn'],
+      }),
+    );
+    expect(result.executionMode).toBe('fallback_required');
+    expect(result.fallbackCause).toBe('rate_limited');
+    expect(result.apiRetryCount).toBe(0);
+    expect(result.apiFinalReason).toBe('rate_limited');
+    expect(calls()).toBe(1);
+  });
+
+  it("coldStartGuard='disabled' suppresses retry on transient failure", async () => {
+    const { fetchFn, calls } = sequencedFetch([
+      { kind: 'reject', error: new Error('cold start') },
+      { kind: 'resolve', status: 200, body: SUCCESS_BODY },
+    ]);
+    const result = await tryDirectApiExecute(
+      inputWith({
+        fetchFn: fetchFn as unknown as DirectApiExecutorInput['fetchFn'],
+        coldStartGuard: 'disabled',
+      }),
+    );
+    expect(result.executionMode).toBe('fallback_required');
+    expect(result.apiRetryCount).toBe(0);
+    expect(result.apiFinalReason).toBe('network_error');
+    expect(result.coldStartGuard).toBe('disabled');
+    expect(calls()).toBe(1);
+  });
+
+  it('first attempt exceeds coldStartBudgetMs → retry skipped', async () => {
+    const { fetchFn, calls } = sequencedFetch([
+      { kind: 'reject', error: new Error('slow') },
+      { kind: 'resolve', status: 200, body: SUCCESS_BODY },
+    ]);
+    let t = 0;
+    const result = await tryDirectApiExecute(
+      inputWith({
+        fetchFn: fetchFn as unknown as DirectApiExecutorInput['fetchFn'],
+        // Each call to nowMs advances 10s, so first attempt reports 10s
+        // elapsed which exceeds the 1s budget below.
+        nowMs: () => {
+          t += 10_000;
+          return t;
+        },
+        coldStartBudgetMs: 1_000,
+      }),
+    );
+    expect(result.executionMode).toBe('fallback_required');
+    expect(result.apiRetryCount).toBe(0);
+    expect(result.apiFinalReason).toBe('network_error');
+    expect(calls()).toBe(1);
+  });
+
+  it('short-circuit branches surface coldStartGuard + zero retry telemetry', async () => {
+    const result = await tryDirectApiExecute(
+      inputWith({
+        sourceRoute: 'something_else',
+        fetchFn: jest.fn() as unknown as DirectApiExecutorInput['fetchFn'],
+      }),
+    );
+    expect(result.executionMode).toBe('skipped_route_mismatch');
+    expect(result.apiFirstAttemptMs).toBeNull();
+    expect(result.apiRetryCount).toBe(0);
+    expect(result.apiFinalReason).toBeNull();
+    expect(result.coldStartGuard).toBe('enabled');
+  });
+});
+
+describe('V26-FIX-09 cold-start guard — knowledge-driven path', () => {
+  it('knowledge-driven first-attempt network_error then success → direct_api retry', async () => {
+    const { fetchFn, calls } = sequencedFetch([
+      { kind: 'reject', error: new Error('cold') },
+      {
+        kind: 'resolve',
+        status: 200,
+        body: {
+          total_count: 1,
+          items: [
+            {
+              full_name: 'tabrix/tabrix',
+              html_url: 'https://github.com/tabrix/tabrix',
+              stargazers_count: 7,
+              description: 'desc',
+            },
+          ],
+        },
+      },
+    ]);
+    const repo = makeRepo([
+      knowledgeRow({
+        endpointId: 'kn-github-search',
+        site: 'api.github.com',
+        family: 'github',
+        urlPattern: 'api.github.com/search/repositories',
+        semanticType: 'search',
+        confidence: 0.92,
+      }),
+    ]);
+    const dataNeed: DataNeed = {
+      intent: 'search github tabrix',
+      intentClass: 'read_only',
+      semanticTypeWanted: 'search',
+      urlHint: 'https://api.github.com/search/repositories?q=tabrix',
+      pageRole: null,
+      params: { query: 'tabrix' },
+    };
+    const result = await tryDirectApiExecute(
+      knowledgeDrivenInput({
+        dataNeed,
+        knowledgeRepo: repo,
+        fetchFn: fetchFn as unknown as DirectApiExecutorInput['fetchFn'],
+        nowMs: () => 1_000,
+      }),
+    );
+    expect(result.executionMode).toBe('direct_api');
+    expect(result.readerMode).toBe('knowledge_driven');
+    expect(result.apiRetryCount).toBe(1);
+    expect(result.apiFinalReason).toBeNull();
+    expect(calls()).toBe(2);
   });
 });
