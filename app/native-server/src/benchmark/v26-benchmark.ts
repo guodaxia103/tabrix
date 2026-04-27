@@ -202,6 +202,28 @@ export interface BenchmarkToolCallRecordV26 extends BenchmarkToolCallRecordV25 {
   tokensSavedEstimate?: number | null;
   /** Gate B evidence: whether this tool call wrote an operation memory log row. */
   operationLogWritten?: boolean | null;
+  /**
+   * V26-FIX-08 — execution mode marker the V26-FIX-01 direct-api
+   * executor wrote on this step. `'direct_api'` means the call took
+   * the knowledge-driven fast path (no chrome_navigate, no
+   * chrome_read_page DOM walk); `'via_read_page'` means the call
+   * fell through to the legacy DOM/markdown path. Optional +
+   * open-ended `string` so legacy v25/v26 NDJSON without the field
+   * parses cleanly; values outside the closed enum count toward
+   * neither numerator (direct_api) nor denominator-of-direct
+   * (so missing values never silently inflate the ratio).
+   */
+  executionMode?: 'direct_api' | 'via_read_page' | string | null;
+  /**
+   * V26-FIX-08 — network-observe mode marker the V26-FIX-02
+   * execution/learning split wrote on this step. `'foreground'`
+   * means the runtime did synchronously start/stop
+   * `chrome_network_capture`; `'background'`/`'disabled'` mean it
+   * did not. The transformer counts `'foreground'` only — that's
+   * the case the FIX-02 invariant cares about (we want it to be
+   * rare in execution-mode runs, common in learning-mode runs).
+   */
+  observeMode?: 'foreground' | 'background' | 'disabled' | string | null;
 }
 
 /**
@@ -222,6 +244,36 @@ export interface BenchmarkRunInputV26 extends BenchmarkRunInputV25WithBaseline {
   toolCalls: BenchmarkToolCallRecordV26[];
   /** `fixture` makes synthetic replay explicit; real MCP runners should set `real_mcp`. */
   evidenceKind?: BenchmarkEvidenceKindV26;
+  /**
+   * V26-FIX-08 — per-scenario latency budget map (scenarioId →
+   * budget ms). When a scenario's observed median exceeds the
+   * budget, the transformer emits `latencyGateStatus='warn'`; when
+   * it exceeds 1.25x the budget, it emits `'fail'`. Scenarios
+   * missing a budget (or with no observed median) get `'warn'`,
+   * never silent `'pass'` — the V26-FIX-08 explicit anti-silent
+   * rule.
+   */
+  latencyBudgetsMs?: Record<string, number>;
+  /**
+   * V26-FIX-08 — per-scenario competitor baseline map (scenarioId
+   * → baseline). Use `mode: 'resilience_win'` to mark scenarios
+   * where the win condition is "competitor blocked us, we got
+   * through" rather than wall-clock latency (e.g. npmjs Cloudflare
+   * challenge); the transformer reports `competitorDelta:
+   * 'resilience_win'` and does NOT score the scenario on speed.
+   */
+  competitorBaselines?: Record<string, BenchmarkCompetitorBaselineV26>;
+}
+
+/**
+ * V26-FIX-08 — competitor baseline metadata. `medianMs` is the
+ * competitor's measured median for the same scenario in ms;
+ * `mode='resilience_win'` short-circuits the speed comparison and
+ * emits `competitorDelta='resilience_win'` regardless of latency.
+ */
+export interface BenchmarkCompetitorBaselineV26 {
+  medianMs?: number | null;
+  mode?: 'speed' | 'resilience_win';
 }
 
 export type BenchmarkEvidenceKindV26 = 'real_mcp' | 'fixture' | 'unknown';
@@ -296,7 +348,60 @@ export type BenchmarkTransformerWarningCodeV26 =
   | 'missing_timestamps'
   | 'invalid_component'
   | 'invalid_chosen_source'
-  | 'invalid_endpoint_source';
+  | 'invalid_endpoint_source'
+  | 'invalid_execution_mode'
+  | 'invalid_observe_mode';
+
+/**
+ * V26-FIX-08 — closed enum of per-scenario latency-gate verdicts.
+ * `'pass'` is only emitted when a budget is set AND the observed
+ * median is at or below it; `'warn'` covers both "missing budget /
+ * missing data" (anti-silent rule) and "over budget but under 1.25x
+ * budget"; `'fail'` covers > 1.25x budget. Independent enum from
+ * {@link BenchmarkEvidenceStatusV26} so the per-scenario gate can be
+ * read without entangling the run-level status.
+ */
+export type BenchmarkLatencyGateStatusV26 = 'pass' | 'warn' | 'fail';
+
+/**
+ * V26-FIX-08 — closed enum of competitor-comparison verdicts.
+ * `'lead'` and `'behind'` are simple speed verdicts;
+ * `'resilience_win'` flags scenarios judged on resilience (e.g.
+ * npmjs Cloudflare challenge) and bypasses the speed comparison;
+ * `'blocked'` covers cases where comparison is impossible (no
+ * observed median, no competitor median, or zero/negative competitor
+ * median); `'not_compared'` means no competitor baseline was
+ * provided for the scenario.
+ */
+export type BenchmarkCompetitorDeltaV26 =
+  | 'lead'
+  | 'near'
+  | 'behind'
+  | 'blocked'
+  | 'resilience_win'
+  | 'not_compared';
+
+/**
+ * V26-FIX-08 — per-scenario latency report entry. One per
+ * scenarioId that appears in `perTaskDurationMs` OR in any of the
+ * input maps (`latencyBudgetsMs` / `competitorBaselines`); the
+ * transformer takes the union so consumers can see "we had a budget
+ * but no run for it" too. Sorted by `scenarioId` ascending.
+ */
+export interface BenchmarkScenarioLatencyV26 {
+  scenarioId: string;
+  /** Number of qualifying samples (records with finite, non-negative durationMs). */
+  count: number;
+  medianMs: number | null;
+  minMs: number | null;
+  maxMs: number | null;
+  /** Configured budget in ms; `null` when not provided in `latencyBudgetsMs`. */
+  budgetMs: number | null;
+  latencyGateStatus: BenchmarkLatencyGateStatusV26;
+  /** Competitor median in ms, mirrored from `competitorBaselines`; `null` when not provided. */
+  competitorMedianMs: number | null;
+  competitorDelta: BenchmarkCompetitorDeltaV26;
+}
 
 export interface BenchmarkTransformerWarningV26 {
   code: BenchmarkTransformerWarningCodeV26;
@@ -316,7 +421,9 @@ export interface BenchmarkEvidenceFindingV26 {
     | 'read_page_avoided_zero'
     | 'tokens_saved_zero'
     | 'tab_hygiene_missing'
-    | 'dispatcher_input_source_missing';
+    | 'dispatcher_input_source_missing'
+    | 'latency_gate_failed'
+    | 'latency_gate_warning';
   detail: string;
 }
 
@@ -366,6 +473,30 @@ export interface BenchmarkSummaryV26 {
   evidenceKind: BenchmarkEvidenceKindV26;
   evidenceStatus: BenchmarkEvidenceStatusV26;
   evidenceFindings: BenchmarkEvidenceFindingV26[];
+  /**
+   * V26-FIX-08 — per-scenario latency / competitor verdicts. Sorted
+   * by `scenarioId` ascending. Includes every scenarioId observed in
+   * `perTaskDurationMs` plus every scenarioId that appeared only in
+   * `latencyBudgetsMs` or `competitorBaselines` (so a "we had a
+   * budget but no run for it" condition is visible).
+   */
+  perScenarioLatency: BenchmarkScenarioLatencyV26[];
+  /**
+   * V26-FIX-08 — ratio of tool calls that took the
+   * `executionMode='direct_api'` fast path over the count of tool
+   * calls with any `executionMode` set. `null` when no record set
+   * `executionMode` (so legacy v25 NDJSON does not pollute the
+   * ratio). Records with an unrecognised `executionMode` value are
+   * NOT counted in the denominator.
+   */
+  directApiPathRatio: number | null;
+  /**
+   * V26-FIX-08 — count of tool calls that recorded
+   * `observeMode='foreground'`. The FIX-02 invariant says this
+   * should stay near zero in execution-mode runs; the transformer
+   * exposes the raw count so a release gate can enforce a ceiling.
+   */
+  foregroundObserveCount: number;
   /**
    * Total `waitedMs` summed across all records that recorded a finite
    * non-negative `waitedMs`. `null` when no qualifying samples.
@@ -427,6 +558,130 @@ function isEndpointSource(value: unknown): value is 'observed' | 'seed_adapter' 
     typeof value === 'string' &&
     ENDPOINT_SOURCE_ENUM.has(value as 'observed' | 'seed_adapter' | 'manual_seed')
   );
+}
+
+/**
+ * V26-FIX-08 — closed enum of execution-mode values the
+ * direct-api-executor writes. Open-ended `string` accepted at the
+ * record level for legacy NDJSON; values outside this set count
+ * neither as "direct_api hit" nor as "via_read_page hit" (so they
+ * never silently inflate the ratio numerator OR denominator).
+ */
+const EXECUTION_MODE_ENUM: ReadonlySet<'direct_api' | 'via_read_page'> = new Set([
+  'direct_api',
+  'via_read_page',
+]);
+
+function isExecutionMode(value: unknown): value is 'direct_api' | 'via_read_page' {
+  return (
+    typeof value === 'string' && EXECUTION_MODE_ENUM.has(value as 'direct_api' | 'via_read_page')
+  );
+}
+
+const OBSERVE_MODE_ENUM: ReadonlySet<'foreground' | 'background' | 'disabled'> = new Set([
+  'foreground',
+  'background',
+  'disabled',
+]);
+
+function isObserveMode(value: unknown): value is 'foreground' | 'background' | 'disabled' {
+  return (
+    typeof value === 'string' &&
+    OBSERVE_MODE_ENUM.has(value as 'foreground' | 'background' | 'disabled')
+  );
+}
+
+/**
+ * V26-FIX-08 — over-budget multiplier above which the gate flips
+ * from `'warn'` to `'fail'`. Conservative 1.25x so a small noise
+ * margin does not cause false ship-blocks; > 1.25x is "user-visibly
+ * slower" territory.
+ */
+const LATENCY_GATE_FAIL_MULTIPLIER = 1.25;
+
+/**
+ * V26-FIX-08 — competitor speed comparison thresholds. Anything
+ * within ±10% counts as `'near'`; faster than 0.9x counts as
+ * `'lead'`; slower than 1.1x counts as `'behind'`. Keeps the verdict
+ * stable against the run-to-run latency noise we routinely see in
+ * fixture-based comparisons.
+ */
+const COMPETITOR_LEAD_RATIO = 0.9;
+const COMPETITOR_BEHIND_RATIO = 1.1;
+
+function evaluateLatencyGate(
+  median: number | null,
+  budget: number | null,
+): BenchmarkLatencyGateStatusV26 {
+  if (median === null || budget === null) return 'warn';
+  if (!Number.isFinite(budget) || budget <= 0) return 'warn';
+  if (median > budget * LATENCY_GATE_FAIL_MULTIPLIER) return 'fail';
+  if (median > budget) return 'warn';
+  return 'pass';
+}
+
+function evaluateCompetitorDelta(
+  observedMedian: number | null,
+  competitor: BenchmarkCompetitorBaselineV26 | undefined,
+): { delta: BenchmarkCompetitorDeltaV26; competitorMedianMs: number | null } {
+  if (!competitor) return { delta: 'not_compared', competitorMedianMs: null };
+  if (competitor.mode === 'resilience_win') {
+    const competitorMedianMs = isFiniteNumber(competitor.medianMs) ? competitor.medianMs : null;
+    return { delta: 'resilience_win', competitorMedianMs };
+  }
+  const competitorMedianMs = isFiniteNumber(competitor.medianMs) ? competitor.medianMs : null;
+  if (observedMedian === null || competitorMedianMs === null || competitorMedianMs <= 0) {
+    return { delta: 'blocked', competitorMedianMs };
+  }
+  const ratio = observedMedian / competitorMedianMs;
+  if (ratio < COMPETITOR_LEAD_RATIO) return { delta: 'lead', competitorMedianMs };
+  if (ratio > COMPETITOR_BEHIND_RATIO) return { delta: 'behind', competitorMedianMs };
+  return { delta: 'near', competitorMedianMs };
+}
+
+function buildScenarioLatencyEntries(args: {
+  perTaskBuckets: Map<string, number[]>;
+  latencyBudgetsMs: Record<string, number> | undefined;
+  competitorBaselines: Record<string, BenchmarkCompetitorBaselineV26> | undefined;
+}): BenchmarkScenarioLatencyV26[] {
+  const scenarioIds = new Set<string>();
+  for (const id of args.perTaskBuckets.keys()) scenarioIds.add(id);
+  if (args.latencyBudgetsMs) {
+    for (const id of Object.keys(args.latencyBudgetsMs)) scenarioIds.add(id);
+  }
+  if (args.competitorBaselines) {
+    for (const id of Object.keys(args.competitorBaselines)) scenarioIds.add(id);
+  }
+
+  const sortedIds = [...scenarioIds].sort((a, b) => a.localeCompare(b));
+  const entries: BenchmarkScenarioLatencyV26[] = [];
+  for (const scenarioId of sortedIds) {
+    const samples = args.perTaskBuckets.get(scenarioId) ?? [];
+    const sorted = [...samples].sort((a, b) => a - b);
+    const count = sorted.length;
+    const medianMs = quantile(sorted, 0.5);
+    const minMs = count === 0 ? null : (sorted[0] ?? null);
+    const maxMs = count === 0 ? null : (sorted[count - 1] ?? null);
+    const rawBudget = args.latencyBudgetsMs?.[scenarioId];
+    const budgetMs = isFiniteNumber(rawBudget) && rawBudget > 0 ? rawBudget : null;
+    const latencyGateStatus = evaluateLatencyGate(medianMs, budgetMs);
+    const { delta, competitorMedianMs } = evaluateCompetitorDelta(
+      medianMs,
+      args.competitorBaselines?.[scenarioId],
+    );
+    entries.push({
+      scenarioId,
+      count,
+      medianMs,
+      minMs,
+      maxMs,
+      budgetMs,
+      latencyGateStatus,
+      competitorMedianMs,
+      competitorDelta: delta,
+    });
+  }
+  return entries;
 }
 
 function emptyComponentCounters(): BenchmarkComponentCountersV26 {
@@ -531,6 +786,7 @@ function buildEvidenceFindings(args: {
   readPageAvoidedCount: number;
   tokensSavedEstimateTotal: number;
   tabHygienePresent: boolean;
+  perScenarioLatency: BenchmarkScenarioLatencyV26[];
 }): BenchmarkEvidenceFindingV26[] {
   const findings: BenchmarkEvidenceFindingV26[] = [];
   if (args.apiAttemptCount === 0) {
@@ -567,6 +823,32 @@ function buildEvidenceFindings(args: {
       code: 'dispatcher_input_source_missing',
       detail:
         'No dispatcherInputSource values were present; source-distribution evidence is partial.',
+    });
+  }
+  // V26-FIX-08 — per-scenario latency gate. `'fail'` is a strict
+  // failure (release-blocking when a consumer routes evidenceStatus
+  // === 'fail' to a hard gate); `'warn'` is informational. We
+  // collapse multiple offending scenarios into a single finding with
+  // a comma-joined detail to keep evidenceFindings deterministic and
+  // bounded in length.
+  const failedScenarios = args.perScenarioLatency
+    .filter((entry) => entry.latencyGateStatus === 'fail')
+    .map((entry) => entry.scenarioId);
+  if (failedScenarios.length > 0) {
+    findings.push({
+      level: 'fail',
+      code: 'latency_gate_failed',
+      detail: `Latency gate failed for scenarios: ${failedScenarios.join(', ')}`,
+    });
+  }
+  const warnedScenarios = args.perScenarioLatency
+    .filter((entry) => entry.latencyGateStatus === 'warn')
+    .map((entry) => entry.scenarioId);
+  if (warnedScenarios.length > 0) {
+    findings.push({
+      level: 'warn',
+      code: 'latency_gate_warning',
+      detail: `Latency gate warning for scenarios: ${warnedScenarios.join(', ')}`,
     });
   }
   return findings;
@@ -711,6 +993,38 @@ function triageRecord(call: BenchmarkToolCallRecordV26): RecordTriage {
     });
   }
 
+  // V26-FIX-08 — execution-mode validation. Only warn when the
+  // runner emitted a value at all; undefined `executionMode` is
+  // normal for v25/v26 NDJSON without the FIX-01 telemetry.
+  if (
+    call.executionMode !== undefined &&
+    call.executionMode !== null &&
+    !isExecutionMode(call.executionMode)
+  ) {
+    warnings.push({
+      code: 'invalid_execution_mode',
+      seq: isFiniteNumber(call.seq) ? call.seq : undefined,
+      toolName: typeof call.toolName === 'string' ? call.toolName : undefined,
+      detail: `executionMode=${String(call.executionMode)}`,
+    });
+  }
+
+  // V26-FIX-08 — observe-mode validation. Mirrors the executionMode
+  // path; missing values are normal, only explicit-but-invalid
+  // values warn.
+  if (
+    call.observeMode !== undefined &&
+    call.observeMode !== null &&
+    !isObserveMode(call.observeMode)
+  ) {
+    warnings.push({
+      code: 'invalid_observe_mode',
+      seq: isFiniteNumber(call.seq) ? call.seq : undefined,
+      toolName: typeof call.toolName === 'string' ? call.toolName : undefined,
+      detail: `observeMode=${String(call.observeMode)}`,
+    });
+  }
+
   return {
     durationValid,
     duration: durationValid ? duration : 0,
@@ -754,6 +1068,9 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
   let readPageCount = 0;
   let operationLogEvidenceCount = 0;
   let operationLogWriteCount = 0;
+  let executionModeKnownCount = 0;
+  let directApiPathCount = 0;
+  let foregroundObserveCount = 0;
 
   for (const call of toolCalls) {
     const triage = triageRecord(call);
@@ -813,6 +1130,15 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
       if (call.operationLogWritten) operationLogWriteCount += 1;
     }
 
+    if (isExecutionMode(call.executionMode)) {
+      executionModeKnownCount += 1;
+      if (call.executionMode === 'direct_api') directApiPathCount += 1;
+    }
+
+    if (isObserveMode(call.observeMode) && call.observeMode === 'foreground') {
+      foregroundObserveCount += 1;
+    }
+
     if (typeof call.fallbackCause === 'string' && call.fallbackCause.length > 0) {
       increment(fallbackDistribution, call.fallbackCause);
     } else if (
@@ -860,12 +1186,20 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
     (input.buildSha === 'fixture' || input.runId.toLowerCase().includes('fixture')
       ? 'fixture'
       : 'unknown');
+  const perScenarioLatency = buildScenarioLatencyEntries({
+    perTaskBuckets,
+    latencyBudgetsMs: input.latencyBudgetsMs,
+    competitorBaselines: input.competitorBaselines,
+  });
+  const directApiPathRatio =
+    executionModeKnownCount === 0 ? null : directApiPathCount / executionModeKnownCount;
   const evidenceFindings = buildEvidenceFindings({
     apiAttemptCount,
     dispatcherInputSourceCount,
     readPageAvoidedCount,
     tokensSavedEstimateTotal,
     tabHygienePresent,
+    perScenarioLatency,
   });
   const evidenceStatus: BenchmarkEvidenceStatusV26 = evidenceFindings.some(
     (finding) => finding.level === 'fail',
@@ -902,6 +1236,9 @@ export function summariseBenchmarkRunV26(input: BenchmarkRunInputV26): Benchmark
     evidenceKind,
     evidenceStatus,
     evidenceFindings,
+    perScenarioLatency,
+    directApiPathRatio,
+    foregroundObserveCount,
     totalWaitedMs: waitedMsSamples > 0 ? waitedMsTotal : null,
     transformerWarnings,
   };

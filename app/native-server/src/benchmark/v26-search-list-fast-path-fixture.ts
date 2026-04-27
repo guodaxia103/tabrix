@@ -67,6 +67,14 @@ export function v26SearchListFastPathFixture(): BenchmarkRunInputV26 {
       { scenarioId: V26_GATE_A_NPMJS_SEARCH_SCENARIO_ID, completed: true },
     ],
     pairs: [],
+    // V26-FIX-08 — latency budgets for the Gate A search/list scenarios.
+    // Both scenarios run in 40-43 ms (api_rows fast path); 200 ms is a
+    // generous ceiling that keeps the fixture's `latencyGateStatus` at
+    // `'pass'` while still exercising the budget code path.
+    latencyBudgetsMs: {
+      [V26_GATE_A_GITHUB_SEARCH_SCENARIO_ID]: 200,
+      [V26_GATE_A_NPMJS_SEARCH_SCENARIO_ID]: 200,
+    },
     tabHygiene: {
       primaryTabId: 101,
       baselineTabIds: [101],

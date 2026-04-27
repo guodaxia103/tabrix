@@ -89,6 +89,12 @@ describe('summariseBenchmarkRunV26 — empty input', () => {
       manual_seed: 0,
       unknown: 0,
     });
+    // V26-FIX-08 — empty input produces empty per-scenario latency
+    // and a `null` direct-api ratio (so legacy v25 NDJSON does not
+    // pollute the ratio with a 0/0).
+    expect(summary.perScenarioLatency).toEqual([]);
+    expect(summary.directApiPathRatio).toBeNull();
+    expect(summary.foregroundObserveCount).toBe(0);
     // v25 surface is fully populated even when v26 input is empty.
     expect(summary.v25Summary.reportVersion).toBe(1);
     expect(summary.v25Summary.totalToolCalls).toBe(0);
@@ -639,8 +645,329 @@ describe('summariseBenchmarkRunV26 — layer evidence closeout metrics', () => {
       'tokens_saved_zero',
       'tab_hygiene_missing',
       'dispatcher_input_source_missing',
+      // V26-FIX-08 — observed scenario without a configured latency
+      // budget surfaces as `'warn'` (anti-silent rule). The
+      // dominant fail-level findings still drive evidenceStatus to
+      // `'fail'`, but the warning is preserved for visibility.
+      'latency_gate_warning',
     ]);
     expect(summary.readPageAvoidedCount).toBe(0);
     expect(summary.tokensSavedEstimateTotal).toBe(0);
+  });
+});
+
+describe('summariseBenchmarkRunV26 — V26-FIX-08 latency gate', () => {
+  it('emits pass when median is at or below the configured budget', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, scenarioId: 'T-FAST', durationMs: 100 }),
+          call({ seq: 1, scenarioId: 'T-FAST', durationMs: 200 }),
+          call({ seq: 2, scenarioId: 'T-FAST', durationMs: 300 }),
+        ],
+        latencyBudgetsMs: { 'T-FAST': 250 },
+      }),
+    );
+    const fast = summary.perScenarioLatency.find((entry) => entry.scenarioId === 'T-FAST');
+    expect(fast).toBeDefined();
+    expect(fast?.medianMs).toBe(200);
+    expect(fast?.minMs).toBe(100);
+    expect(fast?.maxMs).toBe(300);
+    expect(fast?.budgetMs).toBe(250);
+    expect(fast?.latencyGateStatus).toBe('pass');
+    expect(
+      summary.evidenceFindings.find((finding) => finding.code === 'latency_gate_failed'),
+    ).toBeUndefined();
+  });
+
+  it('emits warn when the median is over budget but under the 1.25x fail multiplier', () => {
+    // 300 ms / 250 ms budget = 1.20x → warn (over budget, under 1.25x).
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, scenarioId: 'T-EDGE', durationMs: 250 }),
+          call({ seq: 1, scenarioId: 'T-EDGE', durationMs: 300 }),
+          call({ seq: 2, scenarioId: 'T-EDGE', durationMs: 350 }),
+        ],
+        latencyBudgetsMs: { 'T-EDGE': 250 },
+      }),
+    );
+    const edge = summary.perScenarioLatency.find((entry) => entry.scenarioId === 'T-EDGE');
+    expect(edge?.medianMs).toBe(300);
+    expect(edge?.latencyGateStatus).toBe('warn');
+    const warning = summary.evidenceFindings.find(
+      (finding) => finding.code === 'latency_gate_warning',
+    );
+    expect(warning).toBeDefined();
+    expect(warning?.level).toBe('warn');
+    expect(warning?.detail).toContain('T-EDGE');
+  });
+
+  it('emits fail when the median exceeds 1.25x the budget and surfaces a fail-level finding', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, scenarioId: 'T-SLOW', durationMs: 800 }),
+          call({ seq: 1, scenarioId: 'T-SLOW', durationMs: 1200 }),
+          call({ seq: 2, scenarioId: 'T-SLOW', durationMs: 1600 }),
+        ],
+        latencyBudgetsMs: { 'T-SLOW': 500 },
+      }),
+    );
+    const slow = summary.perScenarioLatency.find((entry) => entry.scenarioId === 'T-SLOW');
+    expect(slow?.medianMs).toBe(1200);
+    expect(slow?.latencyGateStatus).toBe('fail');
+    const failing = summary.evidenceFindings.find(
+      (finding) => finding.code === 'latency_gate_failed',
+    );
+    expect(failing).toBeDefined();
+    expect(failing?.level).toBe('fail');
+    expect(failing?.detail).toContain('T-SLOW');
+    // V26-FIX-08 anti-silent rule: a failed scenario flips
+    // evidenceStatus to 'fail' so any consumer that already gates on
+    // evidenceStatus refuses to ship.
+    expect(summary.evidenceStatus).toBe('fail');
+  });
+
+  it('emits warn (never silent pass) when no budget is configured for an observed scenario', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, scenarioId: 'T-UNCONFIGURED', durationMs: 100 }),
+          call({ seq: 1, scenarioId: 'T-UNCONFIGURED', durationMs: 100 }),
+        ],
+      }),
+    );
+    const entry = summary.perScenarioLatency.find((item) => item.scenarioId === 'T-UNCONFIGURED');
+    expect(entry?.budgetMs).toBeNull();
+    expect(entry?.latencyGateStatus).toBe('warn');
+  });
+
+  it('emits warn (never silent pass) when a budgeted scenario has no observed median', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [],
+        latencyBudgetsMs: { 'T-NO-DATA': 500 },
+      }),
+    );
+    const entry = summary.perScenarioLatency.find((item) => item.scenarioId === 'T-NO-DATA');
+    expect(entry).toBeDefined();
+    expect(entry?.count).toBe(0);
+    expect(entry?.medianMs).toBeNull();
+    expect(entry?.latencyGateStatus).toBe('warn');
+  });
+
+  it('rejects non-finite or non-positive budgets and treats them as missing', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [call({ seq: 0, scenarioId: 'T-BAD-BUDGET', durationMs: 100 })],
+        latencyBudgetsMs: { 'T-BAD-BUDGET': 0 },
+      }),
+    );
+    const entry = summary.perScenarioLatency.find((item) => item.scenarioId === 'T-BAD-BUDGET');
+    expect(entry?.budgetMs).toBeNull();
+    expect(entry?.latencyGateStatus).toBe('warn');
+  });
+});
+
+describe('summariseBenchmarkRunV26 — V26-FIX-08 competitor delta', () => {
+  it('marks lead/near/behind based on the ±10% threshold around competitor median', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, scenarioId: 'T-LEAD', durationMs: 100 }),
+          call({ seq: 1, scenarioId: 'T-NEAR', durationMs: 100 }),
+          call({ seq: 2, scenarioId: 'T-BEHIND', durationMs: 100 }),
+        ],
+        competitorBaselines: {
+          'T-LEAD': { medianMs: 200 }, // 100 / 200 = 0.5 < 0.9 → lead
+          'T-NEAR': { medianMs: 100 }, // 100 / 100 = 1.0 → near
+          'T-BEHIND': { medianMs: 50 }, // 100 / 50 = 2.0 > 1.1 → behind
+        },
+      }),
+    );
+    const byId = (id: string) =>
+      summary.perScenarioLatency.find((entry) => entry.scenarioId === id);
+    expect(byId('T-LEAD')?.competitorDelta).toBe('lead');
+    expect(byId('T-LEAD')?.competitorMedianMs).toBe(200);
+    expect(byId('T-NEAR')?.competitorDelta).toBe('near');
+    expect(byId('T-BEHIND')?.competitorDelta).toBe('behind');
+  });
+
+  it('emits resilience_win for npmjs Cloudflare-style scenarios and skips speed comparison', () => {
+    // Even though Tabrix is "slower" by latency, the scenario is
+    // judged on resilience (we got through where the competitor was
+    // blocked), so the delta is `'resilience_win'` regardless of
+    // observed/competitor medians.
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, scenarioId: 'T-NPMJS-CLOUDFLARE', durationMs: 5000 }),
+          call({ seq: 1, scenarioId: 'T-NPMJS-CLOUDFLARE', durationMs: 6000 }),
+        ],
+        competitorBaselines: {
+          'T-NPMJS-CLOUDFLARE': { medianMs: 1000, mode: 'resilience_win' },
+        },
+      }),
+    );
+    const entry = summary.perScenarioLatency.find(
+      (item) => item.scenarioId === 'T-NPMJS-CLOUDFLARE',
+    );
+    expect(entry?.competitorDelta).toBe('resilience_win');
+    expect(entry?.competitorMedianMs).toBe(1000);
+  });
+
+  it('emits not_compared when no competitor baseline is provided', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [call({ seq: 0, scenarioId: 'T-SOLO', durationMs: 100 })],
+      }),
+    );
+    const entry = summary.perScenarioLatency.find((item) => item.scenarioId === 'T-SOLO');
+    expect(entry?.competitorDelta).toBe('not_compared');
+    expect(entry?.competitorMedianMs).toBeNull();
+  });
+
+  it('emits blocked when competitor baseline is configured but the comparison is impossible', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [],
+        competitorBaselines: {
+          'T-NO-OBSERVATION': { medianMs: 1000 },
+          'T-NEGATIVE-COMP': { medianMs: -1 },
+        },
+      }),
+    );
+    const noObs = summary.perScenarioLatency.find((item) => item.scenarioId === 'T-NO-OBSERVATION');
+    const neg = summary.perScenarioLatency.find((item) => item.scenarioId === 'T-NEGATIVE-COMP');
+    expect(noObs?.competitorDelta).toBe('blocked');
+    expect(neg?.competitorDelta).toBe('blocked');
+  });
+});
+
+describe('summariseBenchmarkRunV26 — V26-FIX-08 directApiPathRatio + foregroundObserveCount', () => {
+  it('computes directApiPathRatio over records that set executionMode and ignores legacy records', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, executionMode: 'direct_api' }),
+          call({ seq: 1, executionMode: 'direct_api' }),
+          call({ seq: 2, executionMode: 'via_read_page' }),
+          call({ seq: 3, executionMode: 'via_read_page' }),
+          // Legacy / unrecognised values are NOT counted in either
+          // numerator or denominator, so missing telemetry never
+          // silently inflates the ratio.
+          call({ seq: 4, executionMode: undefined }),
+          call({ seq: 5, executionMode: 'mystery_mode' }),
+        ],
+      }),
+    );
+    expect(summary.directApiPathRatio).toBeCloseTo(0.5);
+    const invalid = summary.transformerWarnings.filter(
+      (warning) => warning.code === 'invalid_execution_mode',
+    );
+    expect(invalid).toHaveLength(1);
+    expect(invalid[0].seq).toBe(5);
+  });
+
+  it('returns null directApiPathRatio when no record sets executionMode', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [call({ seq: 0 }), call({ seq: 1 })],
+      }),
+    );
+    expect(summary.directApiPathRatio).toBeNull();
+  });
+
+  it('counts foregroundObserveCount and warns on invalid observeMode values', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          call({ seq: 0, observeMode: 'foreground' }),
+          call({ seq: 1, observeMode: 'foreground' }),
+          call({ seq: 2, observeMode: 'background' }),
+          call({ seq: 3, observeMode: 'disabled' }),
+          call({ seq: 4, observeMode: undefined }),
+          call({ seq: 5, observeMode: 'mystery_mode' }),
+        ],
+      }),
+    );
+    expect(summary.foregroundObserveCount).toBe(2);
+    const invalid = summary.transformerWarnings.filter(
+      (warning) => warning.code === 'invalid_observe_mode',
+    );
+    expect(invalid).toHaveLength(1);
+    expect(invalid[0].seq).toBe(5);
+  });
+});
+
+describe('summariseBenchmarkRunV26 — V26-FIX-08 fixture coverage (pass / boundary / fail)', () => {
+  it('produces deterministic per-scenario verdicts across pass/boundary/fail in one run', () => {
+    const summary = summariseBenchmarkRunV26(
+      run({
+        toolCalls: [
+          // Pass scenario.
+          call({ seq: 0, scenarioId: 'T-A-PASS', durationMs: 100, executionMode: 'direct_api' }),
+          call({ seq: 1, scenarioId: 'T-A-PASS', durationMs: 200, executionMode: 'direct_api' }),
+          call({ seq: 2, scenarioId: 'T-A-PASS', durationMs: 300, executionMode: 'direct_api' }),
+          // Boundary scenario (over budget but under 1.25x).
+          call({
+            seq: 3,
+            scenarioId: 'T-B-BOUNDARY',
+            durationMs: 260,
+            executionMode: 'via_read_page',
+          }),
+          call({
+            seq: 4,
+            scenarioId: 'T-B-BOUNDARY',
+            durationMs: 280,
+            executionMode: 'via_read_page',
+          }),
+          call({
+            seq: 5,
+            scenarioId: 'T-B-BOUNDARY',
+            durationMs: 290,
+            executionMode: 'via_read_page',
+          }),
+          // Fail scenario.
+          call({ seq: 6, scenarioId: 'T-C-FAIL', durationMs: 1500, executionMode: 'direct_api' }),
+          call({ seq: 7, scenarioId: 'T-C-FAIL', durationMs: 1600, executionMode: 'direct_api' }),
+          call({ seq: 8, scenarioId: 'T-C-FAIL', durationMs: 1700, executionMode: 'direct_api' }),
+          // Resilience-win scenario (Cloudflare-style; latency irrelevant).
+          call({
+            seq: 9,
+            scenarioId: 'T-D-RESILIENCE',
+            durationMs: 5000,
+            executionMode: 'direct_api',
+          }),
+        ],
+        latencyBudgetsMs: {
+          'T-A-PASS': 250,
+          'T-B-BOUNDARY': 250,
+          'T-C-FAIL': 500,
+          'T-D-RESILIENCE': 500,
+        },
+        competitorBaselines: {
+          'T-A-PASS': { medianMs: 250 },
+          'T-B-BOUNDARY': { medianMs: 200 },
+          'T-C-FAIL': { medianMs: 600 },
+          'T-D-RESILIENCE': { medianMs: 1000, mode: 'resilience_win' },
+        },
+      }),
+    );
+    expect(summary.perScenarioLatency.map((entry) => entry.scenarioId)).toEqual([
+      'T-A-PASS',
+      'T-B-BOUNDARY',
+      'T-C-FAIL',
+      'T-D-RESILIENCE',
+    ]);
+    const byId = (id: string) =>
+      summary.perScenarioLatency.find((entry) => entry.scenarioId === id);
+    expect(byId('T-A-PASS')?.latencyGateStatus).toBe('pass');
+    expect(byId('T-B-BOUNDARY')?.latencyGateStatus).toBe('warn');
+    expect(byId('T-C-FAIL')?.latencyGateStatus).toBe('fail');
+    expect(byId('T-D-RESILIENCE')?.competitorDelta).toBe('resilience_win');
+    expect(summary.evidenceStatus).toBe('fail');
+    expect(summary.directApiPathRatio).toBeCloseTo(7 / 10);
   });
 });
