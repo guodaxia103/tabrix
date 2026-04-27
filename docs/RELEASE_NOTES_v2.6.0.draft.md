@@ -13,15 +13,20 @@ Release date: **TBD**.
 
 ## Summary (draft)
 
-v2.6 corrects the Tabrix execution mainline so the API direct path is
-**knowledge-driven**, not adapter-driven. The chooser observes
-network traffic generically, classifies endpoints into a Knowledge
-layer, and the on-demand reader is selected by the Knowledge lookup
-plus a Policy-aware data-source router. Hardcoded GitHub / npmjs
-adapters are kept only as seed adapters during the transition window;
-they no longer drive the mainline decision. The DOM `L0+L1`
-fallback path is preserved end-to-end as the safe-by-default
-recovery.
+v2.6 starts correcting the Tabrix execution mainline by introducing
+the foundations of a knowledge-driven API direct path: a generic
+network-observe classifier, an Endpoint Knowledge lookup, an
+on-demand reader selected by Knowledge + a Policy-aware data-source
+router, and an explicit `endpointSource` lineage
+(`observed` / `seed_adapter` / `manual_seed` / `unknown`).
+GitHub / npmjs hardcoded adapters remain part of the v2.6 transition
+and validation path — they are how v2.6 exercises the new contract
+end-to-end against a real site family — but their hits are now
+visible as `seed_adapter` evidence instead of being presented as
+generic observed endpoints. Broader observed-endpoint reuse across
+arbitrary site families is a v2.7 goal, not a v2.6 claim. The DOM
+`L0+L1` fallback path is preserved end-to-end as the safe-by-default
+recovery on every path.
 
 The release also formalises a **closed-vocabulary "verified empty"
 result** for API answers: when a knowledge-driven endpoint succeeds
