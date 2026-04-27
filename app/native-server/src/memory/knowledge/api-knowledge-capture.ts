@@ -35,11 +35,13 @@
  */
 
 import type {
+  EndpointSemanticType,
   KnowledgeApiRequestSummary,
   KnowledgeApiResponseShape,
   KnowledgeApiResponseSummary,
   UpsertKnowledgeApiEndpointInput,
 } from './knowledge-api-repository';
+import { classifyNetworkObserveEndpoint } from './network-observe-classifier';
 
 /**
  * Headers whose *values* would be a privacy / security regression to
@@ -191,7 +193,13 @@ export function deriveKnowledgeFromRequest(
 ): UpsertKnowledgeApiEndpointInput | null {
   if (!req?.url || typeof req.url !== 'string') return null;
   if (classifyCapturedRequestNoise(req) !== 'usable') return null;
-  const classification = classifyGitHubFamily(req.url, normalizeMethod(req.method));
+
+  const method = normalizeMethod(req.method);
+  // V26-FIX-03 — first try the family-aware GitHub classifier; if it
+  // doesn't apply, fall back to a generic host-and-path normalizer
+  // so non-platform URLs (HN, Wikipedia, …) can still seed Knowledge.
+  const githubClassification = classifyGitHubFamily(req.url, method);
+  const classification = githubClassification ?? classifyGenericFamily(req.url, method);
   if (!classification) return null;
 
   const mergedRequestHeaders = mergeHeaders(commonRequestHeaders, req.specificRequestHeaders);
@@ -210,6 +218,17 @@ export function deriveKnowledgeFromRequest(
     base64Encoded: req.base64Encoded === true,
   });
 
+  // V26-FIX-03 — generic semantic classifier. Family-agnostic; runs
+  // for GitHub rows too so the persisted `semantic_type` stays
+  // consistent across families.
+  const observed = classifyNetworkObserveEndpoint({
+    url: req.url,
+    method,
+    type: req.type,
+    mimeType: contentType ?? undefined,
+    queryKeys: requestSummary.queryKeys,
+  });
+
   return {
     site: classification.site,
     family: classification.family,
@@ -224,6 +243,59 @@ export function deriveKnowledgeFromRequest(
     sourceStepId: ctx.stepId,
     sourceHistoryRef: null,
     observedAt: ctx.observedAt,
+    semanticType: observed.semanticType as EndpointSemanticType,
+    queryParamsShape: observed.queryKeysSorted.join(','),
+    responseShapeSummary: summarizeResponseShape(responseSummary.shape),
+    usableForTask: observed.usableForTask,
+    noiseReason: observed.noiseReason,
+  };
+}
+
+/**
+ * V26-FIX-03 — short, deterministic stringification of the redacted
+ * response shape descriptor. Stays well under any reasonable column
+ * size and never includes raw values; only counts and key-counts.
+ */
+function summarizeResponseShape(shape: KnowledgeApiResponseShape): string {
+  switch (shape.kind) {
+    case 'object':
+      return `object:keys=${shape.topLevelKeys.length}`;
+    case 'array':
+      return `array:n=${shape.itemCount},keys=${shape.sampleItemKeys.length}`;
+    case 'scalar':
+      return `scalar:${shape.valueType}`;
+    default:
+      return 'unknown';
+  }
+}
+
+/**
+ * V26-FIX-03 — generic, non-GitHub URL→pattern collapser. Produces a
+ * deterministic `urlPattern` / `endpointSignature` for any host so
+ * dedup still works without a curated family adapter. Reuses the
+ * same identity-prefix and id/slug rules as `collapseUnknownPath`.
+ */
+function classifyGenericFamily(rawUrl: string, method: string): ClassifiedEndpoint | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase();
+  // Skip GitHub host — the family-aware classifier owns it. We never
+  // want two parallel rows for the same endpoint.
+  if (host === GITHUB_API_HOST) return null;
+  const path = parsed.pathname.length === 0 ? '/' : parsed.pathname;
+  const collapsed = collapseUnknownPath(path);
+  const urlPattern = `${host}${collapsed}`;
+  return {
+    site: host,
+    family: 'observed',
+    method,
+    urlPattern,
+    endpointSignature: `${method} ${urlPattern}`,
+    semanticTag: null,
   };
 }
 
@@ -284,11 +356,18 @@ function createEmptyFilteredCounts(): Record<CaptureKnowledgeNoiseClass, number>
 
 interface ClassifiedEndpoint {
   site: string;
-  family: 'github';
+  /**
+   * V26-FIX-03 — was `'github'` literal pre-FIX-03. Widened to a
+   * string so the generic, non-platform branch can write `'observed'`
+   * (or any future family adapter the chooser learns) without a
+   * second classifier interface.
+   */
+  family: string;
   method: string;
   urlPattern: string;
   endpointSignature: string;
-  semanticTag: string;
+  /** Nullable for the generic branch, where no curated tag exists. */
+  semanticTag: string | null;
 }
 
 const GITHUB_API_HOST = 'api.github.com';

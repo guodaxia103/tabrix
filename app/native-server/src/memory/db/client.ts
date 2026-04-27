@@ -240,6 +240,29 @@ function ensureExperienceReplayWritebackColumns(db: SqliteDatabase): void {
  * `knowledge_endpoint_family` is **telemetry-only** per V25-02
  * binding; it MUST NOT drive any v2.5 routing.
  */
+/**
+ * V26-FIX-03 additive migration for legacy DBs that pre-date the
+ * generic-classifier columns on `knowledge_api_endpoints`. Each
+ * ALTER is guarded by a `hasColumn` probe so a virgin DB (where
+ * the columns are already present from `KNOWLEDGE_CREATE_TABLES_SQL`)
+ * is a no-op. Same partial-failure recovery contract as
+ * `ensureChooseContextDecisionLayerColumns`.
+ */
+function ensureKnowledgeApiEndpointsClassifierColumns(db: SqliteDatabase): void {
+  const additions: Array<[string, string]> = [
+    ['semantic_type', 'TEXT'],
+    ['query_params_shape', 'TEXT'],
+    ['response_shape_summary', 'TEXT'],
+    ['usable_for_task', 'INTEGER'],
+    ['noise_reason', 'TEXT'],
+  ];
+  for (const [name, type] of additions) {
+    if (!hasColumn(db, 'knowledge_api_endpoints', name)) {
+      db.exec(`ALTER TABLE knowledge_api_endpoints ADD COLUMN ${name} ${type}`);
+    }
+  }
+}
+
 function ensureChooseContextDecisionLayerColumns(db: SqliteDatabase): void {
   const additions: Array<[string, string]> = [
     ['chosen_layer', 'TEXT'],
@@ -300,6 +323,12 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   // capability state so writes from a freshly-enabled capability do
   // not race a missing table; gating happens at the writer.
   db.exec(KNOWLEDGE_CREATE_TABLES_SQL);
+  // V26-FIX-03: legacy-DB additive migration for the generic
+  // network-observe classifier columns. Runs after the CREATE so
+  // virgin DBs see the columns from the CREATE statement and the
+  // helper is a pure no-op; legacy DBs from before V26-FIX-03 pick
+  // up the columns via the guarded ALTERs.
+  ensureKnowledgeApiEndpointsClassifierColumns(db);
   // V23-04 / B-018 v1.5: Telemetry tables for the chooser. Same idempotent
   // CREATE IF NOT EXISTS pattern; old DBs from before V23-04 pick up the
   // tables on next open without a migration. Writers respect the same

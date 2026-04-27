@@ -318,6 +318,27 @@ CREATE TABLE IF NOT EXISTS knowledge_api_endpoints (
   sample_count           INTEGER NOT NULL DEFAULT 1,
   first_seen_at          TEXT NOT NULL,
   last_seen_at           TEXT NOT NULL,
+  -- V26-FIX-03 generic classifier outputs persisted alongside the
+  -- pre-FIX-03 GitHub-derived semantic_tag. NULLABLE so legacy
+  -- DBs and pre-FIX-03 callers stay valid; the classifier writer
+  -- always populates them on new upserts.
+  --   semantic_type: closed enum (search/list/detail/pagination/
+  --     filter/mutation/asset/analytics/auth/private/telemetry/unknown).
+  --   query_params_shape: deterministic CSV of sorted query *keys*
+  --     (no values), e.g. order,q,sort.
+  --   response_shape_summary: deterministic short string derived from
+  --     the response shape descriptor, e.g. object:keys=3 /
+  --     array:n=12,keys=4. Plain string, never raw body.
+  --   usable_for_task: 0/1 -- classifier verdict on whether this row
+  --     can plausibly serve a future on-demand reader call. Same
+  --     value as the runtime usableForTask derivation but persisted
+  --     so the chooser can score without re-running the classifier.
+  --   noise_reason: structured reason, populated when usable_for_task=0.
+  semantic_type            TEXT,
+  query_params_shape       TEXT,
+  response_shape_summary   TEXT,
+  usable_for_task          INTEGER,
+  noise_reason             TEXT,
   UNIQUE (site, endpoint_signature)
 );
 

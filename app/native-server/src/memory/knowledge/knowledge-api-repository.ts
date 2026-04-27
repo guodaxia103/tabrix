@@ -69,14 +69,42 @@ export interface KnowledgeApiEndpoint {
   sampleCount: number;
   firstSeenAt: string;
   lastSeenAt: string;
+  /**
+   * V26-FIX-03 — generic classifier output, persisted alongside the
+   * pre-FIX-03 `semanticTag`. `null` for rows written before the
+   * migration; populated for every row written through
+   * `api-knowledge-capture.ts` from FIX-03 forward.
+   */
+  semanticTypePersisted: EndpointSemanticType | null;
+  queryParamsShape: string | null;
+  responseShapeSummary: string | null;
+  usableForTaskPersisted: boolean | null;
+  noiseReason: string | null;
 }
 
+/**
+ * V26-FIX-03 — the closed-enum semantic type produced by the generic
+ * network-observe classifier (`network-observe-classifier.ts`).
+ *
+ * Pre-FIX-03 we had a 7-value enum derived from `semantic_tag`
+ * heuristics. FIX-03 widened it to 12 values that the classifier
+ * persists to the `semantic_type` column. The pre-FIX-03 value
+ * `'noise'` is kept here as an *accepted-on-read* synonym so legacy
+ * scoring rows still load; new writes never use it (the classifier
+ * picks the more specific bucket instead).
+ */
 export type EndpointSemanticType =
   | 'search'
   | 'list'
   | 'detail'
   | 'pagination'
   | 'filter'
+  | 'mutation'
+  | 'asset'
+  | 'analytics'
+  | 'auth'
+  | 'private'
+  | 'telemetry'
   | 'noise'
   | 'unknown';
 
@@ -101,6 +129,16 @@ export interface UpsertKnowledgeApiEndpointInput {
   sourceStepId?: string | null;
   sourceHistoryRef?: string | null;
   observedAt: string;
+  /**
+   * V26-FIX-03 — generic classifier outputs. Optional for backward
+   * compatibility (e.g. fixture builders in tests); the production
+   * writer in `api-knowledge-capture.ts` always supplies them.
+   */
+  semanticType?: EndpointSemanticType | null;
+  queryParamsShape?: string | null;
+  responseShapeSummary?: string | null;
+  usableForTask?: boolean | null;
+  noiseReason?: string | null;
 }
 
 interface KnowledgeApiEndpointRow {
@@ -120,6 +158,32 @@ interface KnowledgeApiEndpointRow {
   sample_count: number;
   first_seen_at: string;
   last_seen_at: string;
+  semantic_type: string | null;
+  query_params_shape: string | null;
+  response_shape_summary: string | null;
+  usable_for_task: number | null;
+  noise_reason: string | null;
+}
+
+const PERSISTED_SEMANTIC_TYPE_VALUES: ReadonlySet<string> = new Set<EndpointSemanticType>([
+  'search',
+  'list',
+  'detail',
+  'pagination',
+  'filter',
+  'mutation',
+  'asset',
+  'analytics',
+  'auth',
+  'private',
+  'telemetry',
+  'noise',
+  'unknown',
+]);
+
+function coercePersistedSemanticType(value: string | null): EndpointSemanticType | null {
+  if (value === null) return null;
+  return PERSISTED_SEMANTIC_TYPE_VALUES.has(value) ? (value as EndpointSemanticType) : null;
 }
 
 function rowToEndpoint(row: KnowledgeApiEndpointRow): KnowledgeApiEndpoint {
@@ -140,6 +204,11 @@ function rowToEndpoint(row: KnowledgeApiEndpointRow): KnowledgeApiEndpoint {
     sampleCount: row.sample_count,
     firstSeenAt: row.first_seen_at,
     lastSeenAt: row.last_seen_at,
+    semanticTypePersisted: coercePersistedSemanticType(row.semantic_type),
+    queryParamsShape: row.query_params_shape,
+    responseShapeSummary: row.response_shape_summary,
+    usableForTaskPersisted: row.usable_for_task === null ? null : row.usable_for_task === 1,
+    noiseReason: row.noise_reason,
   };
 }
 
@@ -161,6 +230,16 @@ export class KnowledgeApiRepository {
     const sourceSessionId = input.sourceSessionId ?? null;
     const sourceStepId = input.sourceStepId ?? null;
     const sourceHistoryRef = input.sourceHistoryRef ?? null;
+    const semanticType = input.semanticType ?? null;
+    const queryParamsShape = input.queryParamsShape ?? null;
+    const responseShapeSummary = input.responseShapeSummary ?? null;
+    const usableForTask =
+      input.usableForTask === undefined || input.usableForTask === null
+        ? null
+        : input.usableForTask
+          ? 1
+          : 0;
+    const noiseReason = input.noiseReason ?? null;
 
     const tx = this.db.transaction(() => {
       const existing = this.db
@@ -179,7 +258,12 @@ export class KnowledgeApiRepository {
                  request_summary_blob = ?,
                  response_summary_blob = ?,
                  sample_count = sample_count + 1,
-                 last_seen_at = ?
+                 last_seen_at = ?,
+                 semantic_type = ?,
+                 query_params_shape = ?,
+                 response_shape_summary = ?,
+                 usable_for_task = ?,
+                 noise_reason = ?
              WHERE endpoint_id = ?`,
           )
           .run(
@@ -191,6 +275,11 @@ export class KnowledgeApiRepository {
             requestBlob,
             responseBlob,
             input.observedAt,
+            semanticType,
+            queryParamsShape,
+            responseShapeSummary,
+            usableForTask,
+            noiseReason,
             existing.endpoint_id,
           );
         return existing.endpoint_id;
@@ -203,8 +292,10 @@ export class KnowledgeApiRepository {
              endpoint_id, site, family, method, url_pattern, endpoint_signature,
              semantic_tag, status_class, request_summary_blob, response_summary_blob,
              source_session_id, source_step_id, source_history_ref,
-             sample_count, first_seen_at, last_seen_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+             sample_count, first_seen_at, last_seen_at,
+             semantic_type, query_params_shape, response_shape_summary,
+             usable_for_task, noise_reason
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           endpointId,
@@ -222,6 +313,11 @@ export class KnowledgeApiRepository {
           sourceHistoryRef,
           input.observedAt,
           input.observedAt,
+          semanticType,
+          queryParamsShape,
+          responseShapeSummary,
+          usableForTask,
+          noiseReason,
         );
       return endpointId;
     });
@@ -283,6 +379,10 @@ export function scoreEndpointKnowledge(endpoint: KnowledgeApiEndpoint): ScoredKn
 }
 
 function classifyEndpointSemanticType(endpoint: KnowledgeApiEndpoint): EndpointSemanticType {
+  // V26-FIX-03 — prefer the persisted classifier output when present.
+  // This is the canonical path for new rows; legacy rows (pre-FIX-03)
+  // fall through to the original `semantic_tag`-derived heuristic.
+  if (endpoint.semanticTypePersisted) return endpoint.semanticTypePersisted;
   const tag = (endpoint.semanticTag || '').toLowerCase();
   if (tag.includes('search')) return 'search';
   if (tag.includes('list') || tag.endsWith('_runs') || tag.endsWith('_workflows')) return 'list';
@@ -309,7 +409,23 @@ function deriveEndpointFallbackReason(
   endpoint: KnowledgeApiEndpoint,
   semanticType: EndpointSemanticType,
 ): string | null {
-  if (semanticType === 'noise') return 'noise_endpoint';
+  // V26-FIX-03 — when the classifier already wrote a noise_reason on
+  // the row, that is the authoritative answer; we don't try to
+  // re-derive a different one.
+  if (endpoint.usableForTaskPersisted === false && endpoint.noiseReason) {
+    return endpoint.noiseReason;
+  }
+  if (
+    semanticType === 'noise' ||
+    semanticType === 'asset' ||
+    semanticType === 'analytics' ||
+    semanticType === 'auth' ||
+    semanticType === 'private' ||
+    semanticType === 'telemetry'
+  ) {
+    return 'noise_endpoint';
+  }
+  if (semanticType === 'mutation') return 'non_read_method';
   if (endpoint.method !== 'GET' && endpoint.method !== 'HEAD') return 'non_read_method';
   if (endpoint.statusClass && endpoint.statusClass !== '2xx' && endpoint.statusClass !== '3xx') {
     return `status_${endpoint.statusClass}`;

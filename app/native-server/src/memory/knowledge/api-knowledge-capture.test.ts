@@ -454,6 +454,73 @@ describe('deriveKnowledgeFromBundle', () => {
     expect(out).toHaveLength(KNOWLEDGE_CAPTURE_PER_BATCH_LIMIT);
   });
 
+  it('V26-FIX-03 — derives generic family rows for non-GitHub usable JSON GETs', () => {
+    const out = deriveKnowledgeFromBundle(
+      {
+        requests: [
+          // Hacker News API — no curated family adapter exists. Pre-FIX-03
+          // this row would be silently dropped; FIX-03 must persist it
+          // under family='observed' with classifier-derived semantic_type.
+          {
+            url: 'https://hacker-news.firebaseio.com/v0/item/12345.json',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            mimeType: 'application/json',
+            statusCode: 200,
+          },
+          // Generic JSON pagination endpoint on an arbitrary host.
+          {
+            url: 'https://api.example.test/v1/articles?page=2&per_page=20',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            mimeType: 'application/json',
+            statusCode: 200,
+          },
+        ],
+      },
+      CTX,
+    );
+    expect(out).toHaveLength(2);
+    const [hn, generic] = out;
+    expect(hn.family).toBe('observed');
+    expect(hn.site).toBe('hacker-news.firebaseio.com');
+    expect(hn.semanticType).toBe('detail');
+    expect(hn.usableForTask).toBe(true);
+    expect(hn.noiseReason).toBeNull();
+    expect(generic.family).toBe('observed');
+    expect(generic.site).toBe('api.example.test');
+    expect(generic.semanticType).toBe('pagination');
+    expect(generic.usableForTask).toBe(true);
+    expect(generic.queryParamsShape).toBe('page,per_page');
+    expect(typeof generic.responseShapeSummary).toBe('string');
+  });
+
+  it('V26-FIX-03 — also writes classifier fields for GitHub family rows', () => {
+    const out = deriveKnowledgeFromBundle(
+      {
+        requests: [
+          {
+            url: 'https://api.github.com/search/repositories?q=tabrix&sort=stars',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            mimeType: 'application/json',
+            statusCode: 200,
+          },
+        ],
+      },
+      CTX,
+    );
+    expect(out).toHaveLength(1);
+    const [row] = out;
+    expect(row.family).toBe('github');
+    expect(row.semanticTag).toBe('github.search_repositories');
+    // FIX-03: persisted classifier output is present alongside the
+    // GitHub semantic_tag and matches the closed enum.
+    expect(row.semanticType).toBe('search');
+    expect(row.usableForTask).toBe(true);
+    expect(row.queryParamsShape).toBe('q,sort');
+  });
+
   it('returns endpoint candidate diagnostics without raw query values', () => {
     const analysis = analyzeKnowledgeCaptureBundle(
       {
