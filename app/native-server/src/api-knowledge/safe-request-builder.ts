@@ -95,7 +95,7 @@ function buildSeedAdapterRequest(
   dataNeed: DataNeed,
 ): SafeRequestPlan | null {
   const params = dataNeed.params ?? {};
-  const limit = clampLimit(numericParam(params.limit));
+  const limit = clampLimit(numericParam(params.limit), defaultLimitForSeedFamily(family));
 
   switch (family) {
     case 'github_search_repositories': {
@@ -315,8 +315,18 @@ function numericParam(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function clampLimit(value: number | null): number {
-  if (value === null) return DEFAULT_LIMIT;
+function defaultLimitForSeedFamily(
+  family:
+    | 'github_search_repositories'
+    | 'github_issues_list'
+    | 'github_workflow_runs_list'
+    | 'npmjs_search_packages',
+): number {
+  return family === 'github_workflow_runs_list' ? 3 : DEFAULT_LIMIT;
+}
+
+function clampLimit(value: number | null, defaultLimit = DEFAULT_LIMIT): number {
+  if (value === null) return defaultLimit;
   return Math.max(1, Math.min(MAX_LIMIT, Math.floor(value)));
 }
 

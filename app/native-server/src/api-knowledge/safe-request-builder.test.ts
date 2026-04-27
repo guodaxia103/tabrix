@@ -187,6 +187,24 @@ describe('V26-FIX-04 buildSafeRequest — seed_adapter branch', () => {
     expect(plan!.requestShapeUsed).toEqual(['per_page']);
   });
 
+  it('defaults github_workflow_runs_list to three rows for fast actions detail reads', () => {
+    const m = match({
+      site: 'api.github.com',
+      urlPattern: 'api.github.com/repos/:owner/:repo/actions/runs',
+      family: 'github',
+      semanticType: 'list',
+    });
+    const plan = buildSafeRequest(m, {
+      ...baseDataNeed,
+      semanticTypeWanted: 'list',
+      params: { owner: 'guodaxia103', repo: 'tabrix' },
+    });
+    expect(plan).not.toBeNull();
+    expect(plan!.url).toBe(
+      'https://api.github.com/repos/guodaxia103/tabrix/actions/runs?per_page=3',
+    );
+  });
+
   it('builds an npmjs_search_packages URL', () => {
     const m = match({
       site: 'registry.npmjs.org',
