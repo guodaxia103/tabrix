@@ -271,6 +271,39 @@ describe('native-tool-handlers · tabrix_choose_context (B-018 v1)', () => {
     expect(disabledBody.strategy).toBe('read_page_required');
     expect(listBySite).not.toHaveBeenCalled();
   });
+
+  it('disables chooser-inline direct API when private acceptance fault injection is present', async () => {
+    const handler = getChooseHandler();
+    const fetchSpy = jest
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('direct API must not run on acceptance fault chooser calls'));
+
+    try {
+      const result = await handler(
+        {
+          intent: '搜索 GitHub 上 AI助手 相关热门项目，列出前10个',
+          url: 'https://github.com/search?q=AI%20assistant&type=repositories',
+          pageRole: 'search_results',
+          __tabrixAcceptanceApiFault: 'network_timeout',
+        },
+        makeDeps({
+          experience: {
+            suggestActionPaths: jest.fn().mockReturnValue([]),
+          } as unknown as ExperienceQueryService,
+          knowledgeApi: null,
+          capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'api_knowledge' },
+        }),
+      );
+
+      expect(result.isError).toBe(false);
+      const body = callTextPayload(result);
+      expect(body.sourceRoute).toBe('knowledge_supported_read');
+      expect(body.directApiExecution).toBeUndefined();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

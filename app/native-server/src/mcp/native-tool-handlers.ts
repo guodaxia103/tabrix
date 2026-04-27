@@ -50,6 +50,14 @@ import {
 } from './experience-replay';
 import { experienceScoreStepNativeHandler } from './experience-score-step';
 
+type AcceptanceApiFaultV26 = 'network_timeout' | 'semantic_mismatch';
+
+function readAcceptanceApiFault(args: unknown): AcceptanceApiFaultV26 | null {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
+  const value = (args as { __tabrixAcceptanceApiFault?: unknown }).__tabrixAcceptanceApiFault;
+  return value === 'network_timeout' || value === 'semantic_mismatch' ? value : null;
+}
+
 export interface NativeToolHandlerDeps {
   sessionManager: Pick<
     SessionManager,
@@ -189,6 +197,11 @@ const handleTabrixChooseContext: NativeToolHandler = async (args, deps) => {
     capabilityEnv: deps.capabilityEnv ?? {},
     telemetry: deps.sessionManager.chooseContextTelemetry,
     pageContext,
+    // Private acceptance fault injection is exercised on the
+    // read-side shim. Disable chooser-inline API execution so fallback
+    // scenarios do not emit ignored api_rows evidence before the
+    // product under test reaches chrome_read_page.
+    directApiEnabled: readAcceptanceApiFault(args) ? false : undefined,
   });
   // V26-03 (B-026): close the skip-read execution loop. When the
   // wrapper provided a `TaskSessionContext` AND the chooser produced
