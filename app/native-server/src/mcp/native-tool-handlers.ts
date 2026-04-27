@@ -324,6 +324,15 @@ function persistChooseContextDecision(
             rowCount: result.directApiExecution.rowCount ?? result.directApiExecution.rows.length,
             compact: true,
             rawBodyStored: false,
+            // V26-PGB-01 — pipe the empty-result envelope through the
+            // cached snapshot so a follow-up `chrome_read_page` does
+            // not re-derive the verdict from `rowCount === 0`. The
+            // chooser-side path already filled these fields when the
+            // executor reached a reader on the `direct_api` branch;
+            // null-coalesce the optionals to keep the shape closed.
+            emptyResult: result.directApiExecution.emptyResult ?? false,
+            emptyReason: result.directApiExecution.emptyReason ?? null,
+            emptyMessage: result.directApiExecution.emptyMessage ?? null,
             telemetry: result.directApiExecution.apiTelemetry,
           }
         : null,

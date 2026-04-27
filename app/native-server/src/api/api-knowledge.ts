@@ -88,6 +88,18 @@ export interface ApiKnowledgeCandidate {
 
 export type ApiKnowledgeCompactRow = Record<string, string | number | boolean | null>;
 
+/**
+ * V26-PGB-01 — closed-enum reason for an API read that succeeded but
+ * returned zero rows. Today the only producer is "the upstream API
+ * answered 200 with an empty list", which we name explicitly so a
+ * downstream consumer (operation log / Gate B / AI assistant prompt)
+ * can render a deterministic "verified empty" message rather than
+ * silently treat `rowCount === 0` as "the API failed". Adding new
+ * values requires extending the V26-PGB evidence contract in
+ * lockstep, so the union is intentionally narrow.
+ */
+export type ApiKnowledgeEmptyReason = 'no_matching_records';
+
 export interface ApiKnowledgeReadOk {
   status: 'ok';
   kind: 'api_rows';
@@ -97,6 +109,27 @@ export interface ApiKnowledgeReadOk {
   rowCount: number;
   compact: true;
   rawBodyStored: false;
+  /**
+   * V26-PGB-01 — `true` iff the upstream API answered ok AND returned
+   * zero rows. Always present (false on the non-empty happy path) so
+   * downstream consumers can grep one stable boolean rather than
+   * re-deriving it from `rowCount === 0`.
+   */
+  emptyResult: boolean;
+  /**
+   * V26-PGB-01 — closed-enum reason for the empty result; `null` on
+   * the non-empty happy path. Today only one producer exists
+   * (`no_matching_records`); the field is left open for future
+   * empty-but-not-failure cases (e.g. "filtered out by row cap").
+   */
+  emptyReason: ApiKnowledgeEmptyReason | null;
+  /**
+   * V26-PGB-01 — human-readable message for the empty result, or
+   * `null` on the non-empty happy path. Surfaces verbatim into the
+   * `chrome_read_page` `kind:'api_rows'` envelope so an AI assistant
+   * can quote it back to the user without re-rendering boilerplate.
+   */
+  emptyMessage: string | null;
   telemetry: ApiKnowledgeTelemetry;
 }
 
@@ -367,6 +400,7 @@ export async function readApiKnowledgeRows(
       });
     }
     const rows = compactRows(endpointFamily, body, request.limit);
+    const emptyResult = rows.length === 0;
     return {
       status: 'ok',
       kind: 'api_rows',
@@ -376,6 +410,16 @@ export async function readApiKnowledgeRows(
       rowCount: rows.length,
       compact: true,
       rawBodyStored: false,
+      // V26-PGB-01 — when the upstream API answered ok but returned
+      // zero rows, mark the result explicitly as "verified empty"
+      // rather than silently surface a 0-row list. This is NOT a
+      // fallback condition — the API call succeeded — so we keep
+      // `status: 'ok'` and let the caller decide how to render it.
+      emptyResult,
+      emptyReason: emptyResult ? 'no_matching_records' : null,
+      emptyMessage: emptyResult
+        ? `API call succeeded but returned no records for the requested ${request.dataPurpose} query.`
+        : null,
       telemetry: {
         endpointFamily,
         method,

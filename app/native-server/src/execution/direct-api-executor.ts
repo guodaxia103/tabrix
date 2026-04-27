@@ -327,6 +327,24 @@ export interface DirectApiExecutionRows {
   compact: true;
   rawBodyStored: false;
   dataPurpose: string;
+  /**
+   * V26-PGB-01 — `true` iff the upstream reader returned ok but with
+   * an empty row list. Mirrors {@link ApiKnowledgeReadOk.emptyResult}
+   * so a downstream consumer can grep one stable boolean rather than
+   * re-deriving it from `rowCount === 0`.
+   */
+  emptyResult: boolean;
+  /**
+   * V26-PGB-01 — closed-enum reason for the empty result; `null`
+   * whenever `emptyResult === false`.
+   */
+  emptyReason: 'no_matching_records' | null;
+  /**
+   * V26-PGB-01 — human-readable message for the empty result, or
+   * `null` whenever `emptyResult === false`. Surfaces verbatim into
+   * the chrome_read_page `kind:'api_rows'` envelope.
+   */
+  emptyMessage: string | null;
 }
 
 export interface DirectApiExecutionResult extends DirectApiExecutionTelemetry {
@@ -477,6 +495,9 @@ export async function tryDirectApiExecute(
         compact: true,
         rawBodyStored: false,
         dataPurpose: reader.dataPurpose,
+        emptyResult: reader.emptyResult,
+        emptyReason: reader.emptyReason,
+        emptyMessage: reader.emptyMessage,
       },
     };
   }
@@ -599,6 +620,9 @@ async function tryKnowledgeDrivenPath(
         compact: true,
         rawBodyStored: false,
         dataPurpose: plan.dataPurpose,
+        emptyResult: reader.emptyResult,
+        emptyReason: reader.emptyReason,
+        emptyMessage: reader.emptyMessage,
       },
     };
   }

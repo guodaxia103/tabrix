@@ -1233,6 +1233,14 @@ export async function runTabrixChooseContextWithDirectApi(
       fallbackEntryLayer: exec.fallbackEntryLayer,
       rows: exec.rows?.rows ?? null,
       rowCount: exec.rows?.rowCount ?? null,
+      // V26-PGB-01 — surface the closed empty-result envelope so the
+      // shim and the operation log can distinguish a "verified empty"
+      // API answer from a 0-row miss without re-deriving it from
+      // rowCount===0. Stays `null` on every non-`direct_api` branch
+      // (no reader was reached).
+      emptyResult: exec.rows?.emptyResult ?? null,
+      emptyReason: exec.rows?.emptyReason ?? null,
+      emptyMessage: exec.rows?.emptyMessage ?? null,
       apiTelemetry: exec.apiTelemetry,
       // V26-FIX-04 — `readerMode / knowledgeEndpointId / endpointPattern /
       // endpointSemanticType / requestShapeUsed / semanticValidation`

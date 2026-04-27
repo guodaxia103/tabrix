@@ -134,6 +134,7 @@ async function readGenericEndpoint(
     }
 
     const rows = compactGenericRows(body, input.limit ?? GENERIC_ROW_LIMIT);
+    const emptyResult = rows.length === 0;
     return {
       status: 'ok',
       kind: 'api_rows',
@@ -152,6 +153,17 @@ async function readGenericEndpoint(
       rowCount: rows.length,
       compact: true,
       rawBodyStored: false,
+      // V26-PGB-01 — same closed semantics as the V25 seed-family
+      // path: 200 + empty list is "verified empty", not a fallback.
+      // Generic observed endpoints take the same envelope so the
+      // downstream consumer (chrome_read_page shim, operation log,
+      // Gate B transformer) does not need to special-case the
+      // observed branch.
+      emptyResult,
+      emptyReason: emptyResult ? 'no_matching_records' : null,
+      emptyMessage: emptyResult
+        ? `Observed API endpoint succeeded but returned no records for the requested ${dataPurpose} query.`
+        : null,
       telemetry: {
         method: 'GET',
         reason: 'api_rows',

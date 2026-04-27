@@ -91,6 +91,16 @@ function estimateApiRowsTokenSavings(args: {
   rows: unknown[];
   rowCount: number;
   recordedFullReadTokenEstimate: number;
+  /**
+   * V26-PGB-01 — `true` iff the upstream reader returned ok with an
+   * empty row list. When set, we short-circuit to the conservative
+   * `'unavailable_empty_api_rows'` bucket regardless of any recorded
+   * full-read estimate. The pre-PGB-01 path could fall through to
+   * `'full_read_estimate_minus_api_rows'` when the chooser had a
+   * higher full-read estimate, which over-claimed token savings on
+   * verified-empty answers (a regression PGB-01 explicitly bans).
+   */
+  emptyResult?: boolean;
 }): {
   tokenEstimateChosen: number;
   tokenEstimateFullRead: number;
@@ -106,6 +116,18 @@ function estimateApiRowsTokenSavings(args: {
     rowCount: args.rowCount,
     compact: true,
   });
+  // V26-PGB-01 — verified-empty results MUST NOT inflate the
+  // tokens-saved estimate off a hypothetical full-read estimate.
+  // Short-circuit to the conservative bucket so Gate B / release
+  // notes never claim savings for "the API answered with no rows".
+  if (args.emptyResult || args.rowCount === 0) {
+    return {
+      tokenEstimateChosen,
+      tokenEstimateFullRead: Math.max(0, Math.floor(args.recordedFullReadTokenEstimate)),
+      tokensSavedEstimate: 0,
+      tokensSavedEstimateSource: 'unavailable_empty_api_rows',
+    };
+  }
   if (args.recordedFullReadTokenEstimate > tokenEstimateChosen) {
     const tokenEstimateFullRead = Math.floor(args.recordedFullReadTokenEstimate);
     return {
@@ -115,21 +137,13 @@ function estimateApiRowsTokenSavings(args: {
       tokensSavedEstimateSource: 'full_read_estimate_minus_api_rows',
     };
   }
-  if (args.rowCount > 0) {
-    const rowsOnlyEstimate = estimateJsonTokens(args.rows);
-    const tokenEstimateFullRead = tokenEstimateChosen + rowsOnlyEstimate;
-    return {
-      tokenEstimateChosen,
-      tokenEstimateFullRead,
-      tokensSavedEstimate: rowsOnlyEstimate,
-      tokensSavedEstimateSource: 'api_rows_payload_floor',
-    };
-  }
+  const rowsOnlyEstimate = estimateJsonTokens(args.rows);
+  const tokenEstimateFullRead = tokenEstimateChosen + rowsOnlyEstimate;
   return {
     tokenEstimateChosen,
-    tokenEstimateFullRead: Math.max(0, Math.floor(args.recordedFullReadTokenEstimate)),
-    tokensSavedEstimate: 0,
-    tokensSavedEstimateSource: 'unavailable_empty_api_rows',
+    tokenEstimateFullRead,
+    tokensSavedEstimate: rowsOnlyEstimate,
+    tokensSavedEstimateSource: 'api_rows_payload_floor',
   };
 }
 
@@ -1817,6 +1831,13 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                   rowCount: cachedDirect.rowCount,
                   compact: cachedDirect.compact,
                   rawBodyStored: cachedDirect.rawBodyStored,
+                  // V26-PGB-01 — surface the cached empty-result
+                  // envelope so the shim consumes the same closed
+                  // shape regardless of whether the chooser executed
+                  // inline or the shim issued the read here.
+                  emptyResult: cachedDirect.emptyResult,
+                  emptyReason: cachedDirect.emptyReason,
+                  emptyMessage: cachedDirect.emptyMessage,
                   telemetry: cachedDirect.telemetry,
                 } as Awaited<ReturnType<typeof readApiKnowledgeEndpointPlan>>)
               : await readApiKnowledgeEndpointPlan({
@@ -1831,6 +1852,11 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                 rows: apiResult.rows,
                 rowCount: apiResult.rowCount,
                 recordedFullReadTokenEstimate: recordedDecision.fullReadTokenEstimate,
+                // V26-PGB-01 — when the API returned a verified-empty
+                // result we MUST NOT inflate `tokensSavedEstimate`
+                // off a hypothetical full-read estimate; pin it to
+                // the conservative `unavailable_empty_api_rows` bucket.
+                emptyResult: apiResult.emptyResult ?? false,
               });
               taskContext.noteSkipRead({
                 source: skipPlan.sourceKind,
@@ -1876,6 +1902,15 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                 rowCount: apiResult.rowCount,
                 compact: apiResult.compact,
                 rawBodyStored: apiResult.rawBodyStored,
+                // V26-PGB-01 — explicit "verified empty" envelope.
+                // `emptyResult:true` MUST NOT trigger DOM fallback;
+                // it is a successful API outcome with zero rows.
+                // Defaults preserve the v2.5 wire shape for any
+                // pre-PGB-01 caller that has not threaded the
+                // closed-enum yet.
+                emptyResult: apiResult.emptyResult ?? false,
+                emptyReason: apiResult.emptyReason ?? null,
+                emptyMessage: apiResult.emptyMessage ?? null,
                 apiTelemetry: apiResult.telemetry,
                 diagnostic: skipPlan.diagnostic,
                 taskTotals: totals,
@@ -1895,6 +1930,15 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                   fallbackUsed: 'none',
                   readCount: totals.readPageAvoidedCount,
                   tokensSaved: tokenSavings.tokensSavedEstimate,
+                  // V26-PGB-01 — record verified-empty evidence on
+                  // the operation log so a post-mortem can answer
+                  // "did the API really come back empty here?"
+                  // without grepping the raw envelope. `success`
+                  // stays `true` (the API call succeeded); only the
+                  // `emptyResult` evidence flips.
+                  metadata: {
+                    emptyResult: apiResult.emptyResult ? 'true' : 'false',
+                  },
                 },
               });
               sessionManager.finishSession(session.sessionId, {

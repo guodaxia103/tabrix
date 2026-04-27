@@ -64,6 +64,17 @@ export interface OperationLogMetadata {
   observeReason: string | NotApplicable;
   fallbackPlan: string | NotApplicable;
   apiTelemetry: string | NotApplicable;
+  /**
+   * V26-PGB-01 — closed-vocab marker that the API call answered ok
+   * but with zero rows. Callers MUST pass the literal string
+   * `'true'` or `'false'`; `'not_applicable'` is the default for
+   * steps that did not reach a reader (DOM-only reads, replay
+   * steps, …). The runtime type is `string | NotApplicable` so that
+   * {@link buildOperationLogMetadata} (which trims partial values
+   * uniformly) stays type-correct; the closed vocabulary is
+   * enforced by the writers, not the storage type.
+   */
+  emptyResult: string | NotApplicable;
 }
 
 const METADATA_KEYS = [
@@ -77,6 +88,7 @@ const METADATA_KEYS = [
   'observeReason',
   'fallbackPlan',
   'apiTelemetry',
+  'emptyResult',
 ] as const satisfies ReadonlyArray<keyof OperationLogMetadata>;
 
 /**
@@ -114,6 +126,7 @@ export function makeOperationLogMetadataDefaults(): OperationLogMetadata {
     observeReason: NOT_APPLICABLE,
     fallbackPlan: NOT_APPLICABLE,
     apiTelemetry: NOT_APPLICABLE,
+    emptyResult: NOT_APPLICABLE,
   };
 }
 

@@ -191,6 +191,17 @@ export interface ChooseContextDecisionSnapshot {
     compact: true;
     /** Always `false` — direct-api-executor never persists raw bodies. */
     rawBodyStored: false;
+    /**
+     * V26-PGB-01 — `true` iff the upstream reader returned ok with an
+     * empty row list. Threaded verbatim from the executor so the
+     * chrome_read_page shim can mark the cached envelope as
+     * "verified empty" without re-issuing the network fetch.
+     */
+    emptyResult: boolean;
+    /** V26-PGB-01 — closed-enum reason; `null` on the non-empty path. */
+    emptyReason: 'no_matching_records' | null;
+    /** V26-PGB-01 — human-readable message; `null` on the non-empty path. */
+    emptyMessage: string | null;
     /** Underlying API telemetry forwarded from the reader. */
     telemetry: {
       endpointFamily?: string;

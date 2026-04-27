@@ -535,6 +535,27 @@ export interface TabrixDirectApiExecution {
   rows: TabrixDirectApiCompactRow[] | null;
   /** Row count; null when no fetch was attempted. */
   rowCount: number | null;
+  /**
+   * V26-PGB-01 — `true` iff the API call succeeded but returned zero
+   * rows; `false` on the non-empty happy path. `null` when the
+   * executor never reached a reader (no API attempt). Optional so a
+   * pre-PGB-01 caller stays bit-identical; PGB-01-aware consumers can
+   * distinguish "verified empty" from "API failed" without
+   * re-deriving from `rowCount`.
+   */
+  emptyResult?: boolean | null;
+  /**
+   * V26-PGB-01 — closed-enum reason for the empty result; `null` on
+   * the non-empty happy path. Omitted when the executor never reached
+   * a reader.
+   */
+  emptyReason?: 'no_matching_records' | null;
+  /**
+   * V26-PGB-01 — human-readable message for the empty result; `null`
+   * on the non-empty happy path. Omitted when the executor never
+   * reached a reader.
+   */
+  emptyMessage?: string | null;
   /** Optional API telemetry forwarded from the underlying reader. */
   apiTelemetry?: TabrixDirectApiTelemetry | null;
 }

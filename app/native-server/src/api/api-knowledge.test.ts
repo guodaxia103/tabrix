@@ -549,4 +549,97 @@ describe('V26-07 API Knowledge substrate', () => {
     });
     expect(JSON.stringify(result)).not.toContain('SHOULD_NOT_LEAK');
   });
+
+  // ---------------------------------------------------------------------
+  // V26-PGB-01 — verified-empty API result envelope.
+  //
+  // Covers the closed semantics added by the post-Gate-B fix: when the
+  // upstream API answers ok but with zero rows, the reader returns
+  // `status:'ok' + emptyResult:true + emptyReason:'no_matching_records'`
+  // rather than silently surfacing `rowCount:0`. Verifies that:
+  //   - The non-empty happy path keeps `emptyResult:false` (no
+  //     accidental flip).
+  //   - The semantic-mismatch / network-timeout / 403 fallback paths
+  //     are NOT swallowed by the empty-result logic — they continue
+  //     to return `status:'fallback_required'` so the DOM fallback
+  //     branch fires as before.
+  // ---------------------------------------------------------------------
+  describe('V26-PGB-01 emptyResult semantics', () => {
+    it('marks GitHub issues search ok-with-empty-list as a verified empty result', async () => {
+      const result = await readApiKnowledgeRows({
+        endpointFamily: 'github_issues_list',
+        method: 'GET',
+        params: { owner: 'octocat', repo: 'hello-world' },
+        fetchFn: jsonFetch(200, { total_count: 0, items: [] }),
+      });
+
+      expect(result).toMatchObject({
+        status: 'ok',
+        kind: 'api_rows',
+        endpointFamily: 'github_issues_list',
+        rowCount: 0,
+        emptyResult: true,
+        emptyReason: 'no_matching_records',
+      });
+      expect((result as { emptyMessage?: string }).emptyMessage).toMatch(/no records/i);
+    });
+
+    it('marks the non-empty happy path with emptyResult=false and no empty message', async () => {
+      const result = await readApiKnowledgeRows({
+        endpointFamily: 'github_search_repositories',
+        method: 'GET',
+        params: { query: 'tabrix' },
+        fetchFn: jsonFetch(200, {
+          items: [
+            {
+              name: 'tabrix',
+              full_name: 'guodaxia103/tabrix',
+              stargazers_count: 1,
+              html_url: 'https://github.com/guodaxia103/tabrix',
+            },
+          ],
+        }),
+      });
+
+      expect(result).toMatchObject({
+        status: 'ok',
+        emptyResult: false,
+        emptyReason: null,
+        emptyMessage: null,
+      });
+    });
+
+    it('does not swallow semantic-mismatch into the empty-result branch', async () => {
+      const fetchFn = jest.fn();
+      const result = await readApiKnowledgeEndpointPlan({
+        endpointFamily: 'github_search_repositories',
+        dataPurpose: 'issue_list',
+        method: 'GET',
+        params: { query: 'tabrix' },
+        fetchFn,
+      });
+
+      expect(fetchFn).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        status: 'fallback_required',
+        reason: 'semantic_mismatch',
+      });
+      expect((result as { emptyResult?: unknown }).emptyResult).toBeUndefined();
+    });
+
+    it('does not swallow 403 into the empty-result branch', async () => {
+      const result = await readApiKnowledgeRows({
+        endpointFamily: 'github_search_repositories',
+        method: 'GET',
+        params: { query: 'tabrix' },
+        fetchFn: jsonFetch(403, { message: 'forbidden' }),
+      });
+
+      expect(result).toMatchObject({
+        status: 'fallback_required',
+        reason: 'http_forbidden',
+      });
+      expect((result as { emptyResult?: unknown }).emptyResult).toBeUndefined();
+    });
+  });
 });
