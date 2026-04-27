@@ -1,5 +1,6 @@
 import {
   classifyApiKnowledgeMetadata,
+  clearApiKnowledgeCompactResultCacheForTests,
   readApiKnowledgeEndpointPlan,
   readApiKnowledgeRows,
   readApiKnowledgeRowsForIntent,
@@ -16,7 +17,9 @@ function jsonFetch(status: number, body: unknown): ApiKnowledgeFetch {
 }
 
 afterEach(() => {
+  jest.restoreAllMocks();
   jest.useRealTimers();
+  clearApiKnowledgeCompactResultCacheForTests();
 });
 
 describe('V26-07 API Knowledge substrate', () => {
@@ -627,6 +630,87 @@ describe('V26-07 API Knowledge substrate', () => {
     expect(requestedUrl).toContain('per_page=1');
     expect(result.status).toBe('ok');
     expect(result.rowCount).toBe(1);
+  });
+
+  it('deduplicates identical read-only API calls in a short-lived compact-result cache', async () => {
+    let now = 10_000;
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 200,
+      headers: { get: jest.fn().mockReturnValue('application/json') },
+      json: jest.fn().mockResolvedValue({
+        workflow_runs: [
+          {
+            name: 'CI',
+            status: 'completed',
+            conclusion: 'success',
+            head_branch: 'main',
+            event: 'push',
+            html_url: 'https://github.com/guodaxia103/tabrix/actions/runs/1',
+            raw_secret_field: 'SHOULD_NOT_LEAK',
+          },
+        ],
+      }),
+    } as never);
+
+    const first = await readApiKnowledgeRows({
+      endpointFamily: 'github_workflow_runs_list',
+      method: 'GET',
+      params: { owner: 'guodaxia103', repo: 'tabrix' },
+      limit: 1,
+      nowMs: () => now,
+    });
+    now += 50;
+    const second = await readApiKnowledgeRows({
+      endpointFamily: 'github_workflow_runs_list',
+      method: 'GET',
+      params: { owner: 'guodaxia103', repo: 'tabrix' },
+      limit: 1,
+      nowMs: () => now,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(first).toMatchObject({ status: 'ok', rowCount: 1, telemetry: { cacheHit: false } });
+    expect(second).toMatchObject({
+      status: 'ok',
+      rowCount: 1,
+      telemetry: { cacheHit: true, waitedMs: 0 },
+    });
+    expect(JSON.stringify(second)).not.toContain('SHOULD_NOT_LEAK');
+  });
+
+  it('does not share compact-result cache entries across different requested limits', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 200,
+      headers: { get: jest.fn().mockReturnValue('application/json') },
+      json: jest.fn().mockResolvedValue({
+        workflow_runs: Array.from({ length: 2 }, (_, index) => ({
+          name: `CI ${index + 1}`,
+          status: 'completed',
+          conclusion: 'success',
+          head_branch: 'main',
+          event: 'push',
+          html_url: `https://github.com/guodaxia103/tabrix/actions/runs/${index + 1}`,
+        })),
+      }),
+    } as never);
+
+    await readApiKnowledgeRows({
+      endpointFamily: 'github_workflow_runs_list',
+      method: 'GET',
+      params: { owner: 'guodaxia103', repo: 'tabrix' },
+      limit: 1,
+      nowMs: () => 1_000,
+    });
+    const second = await readApiKnowledgeRows({
+      endpointFamily: 'github_workflow_runs_list',
+      method: 'GET',
+      params: { owner: 'guodaxia103', repo: 'tabrix' },
+      limit: 2,
+      nowMs: () => 1_050,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(second).toMatchObject({ status: 'ok', rowCount: 2, telemetry: { cacheHit: false } });
   });
 
   // ---------------------------------------------------------------------

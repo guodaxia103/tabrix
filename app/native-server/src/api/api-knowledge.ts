@@ -151,6 +151,14 @@ export interface ApiKnowledgeTelemetry {
   waitedMs: number;
   readAllowed: boolean;
   fallbackEntryLayer: 'L0+L1' | 'none';
+  /**
+   * V26 release closeout — true only when a read-only public GET is
+   * served from the short-lived in-process compact-result cache. This
+   * is not persisted Knowledge/Experience data; it only avoids
+   * repeating identical public API calls within a short runtime window.
+   */
+  cacheHit?: boolean;
+  cacheTtlMs?: number;
 }
 
 interface FetchHeadersLike {
@@ -193,6 +201,19 @@ export interface ApiKnowledgeIntentReadInput {
 
 const READ_METHODS = new Set(['GET', 'HEAD']);
 const API_KNOWLEDGE_READ_TIMEOUT_MS = 2500;
+const API_KNOWLEDGE_COMPACT_RESULT_CACHE_TTL_MS = 30_000;
+const API_KNOWLEDGE_COMPACT_RESULT_CACHE_MAX = 64;
+
+interface ApiKnowledgeCompactResultCacheEntry {
+  expiresAtMs: number;
+  result: ApiKnowledgeReadOk;
+}
+
+const apiKnowledgeCompactResultCache = new Map<string, ApiKnowledgeCompactResultCacheEntry>();
+
+export function clearApiKnowledgeCompactResultCacheForTests(): void {
+  apiKnowledgeCompactResultCache.clear();
+}
 
 export function classifyApiKnowledgeMetadata(
   input: ApiKnowledgeMetadataInput,
@@ -349,6 +370,22 @@ export async function readApiKnowledgeRows(
       endpointFamily,
     });
   }
+  const cacheKey = input.fetchFn ? null : apiKnowledgeReadCacheKey(method, request.url);
+  if (cacheKey) {
+    const cached = readApiKnowledgeCompactResultCache(cacheKey, input.nowMs?.() ?? Date.now());
+    if (cached) {
+      return {
+        ...cached,
+        rows: cloneCompactRows(cached.rows),
+        telemetry: {
+          ...cached.telemetry,
+          waitedMs: elapsed(),
+          cacheHit: true,
+          cacheTtlMs: API_KNOWLEDGE_COMPACT_RESULT_CACHE_TTL_MS,
+        },
+      };
+    }
+  }
   try {
     const fetchFn = input.fetchFn ?? resolveFetch();
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
@@ -421,12 +458,12 @@ export async function readApiKnowledgeRows(
     }
     const rows = compactRows(endpointFamily, body, request.limit);
     const emptyResult = rows.length === 0;
-    return {
+    const result: ApiKnowledgeReadOk = {
       status: 'ok',
       kind: 'api_rows',
       endpointFamily,
       dataPurpose: request.dataPurpose,
-      rows,
+      rows: cloneCompactRows(rows),
       rowCount: rows.length,
       compact: true,
       rawBodyStored: false,
@@ -448,8 +485,13 @@ export async function readApiKnowledgeRows(
         waitedMs: elapsed(),
         readAllowed: true,
         fallbackEntryLayer: 'none',
+        cacheHit: false,
       },
     };
+    if (cacheKey) {
+      writeApiKnowledgeCompactResultCache(cacheKey, result, input.nowMs?.() ?? Date.now());
+    }
+    return result;
   } catch {
     return fallback({
       reason: 'network_error',
@@ -556,6 +598,51 @@ function classifySeedEndpoint(parsed: URL, method: ApiKnowledgeMetadata['method'
     };
   }
   return null;
+}
+
+function apiKnowledgeReadCacheKey(method: string, url: string): string {
+  return `${method.toUpperCase()} ${url}`;
+}
+
+function readApiKnowledgeCompactResultCache(key: string, nowMs: number): ApiKnowledgeReadOk | null {
+  const entry = apiKnowledgeCompactResultCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAtMs <= nowMs) {
+    apiKnowledgeCompactResultCache.delete(key);
+    return null;
+  }
+  // Refresh insertion order so the Map behaves like a small LRU.
+  apiKnowledgeCompactResultCache.delete(key);
+  apiKnowledgeCompactResultCache.set(key, entry);
+  return cloneApiKnowledgeReadOk(entry.result);
+}
+
+function writeApiKnowledgeCompactResultCache(
+  key: string,
+  result: ApiKnowledgeReadOk,
+  nowMs: number,
+): void {
+  apiKnowledgeCompactResultCache.set(key, {
+    expiresAtMs: nowMs + API_KNOWLEDGE_COMPACT_RESULT_CACHE_TTL_MS,
+    result: cloneApiKnowledgeReadOk(result),
+  });
+  while (apiKnowledgeCompactResultCache.size > API_KNOWLEDGE_COMPACT_RESULT_CACHE_MAX) {
+    const oldestKey = apiKnowledgeCompactResultCache.keys().next().value;
+    if (typeof oldestKey !== 'string') break;
+    apiKnowledgeCompactResultCache.delete(oldestKey);
+  }
+}
+
+function cloneApiKnowledgeReadOk(result: ApiKnowledgeReadOk): ApiKnowledgeReadOk {
+  return {
+    ...result,
+    rows: cloneCompactRows(result.rows),
+    telemetry: { ...result.telemetry },
+  };
+}
+
+function cloneCompactRows(rows: ApiKnowledgeCompactRow[]): ApiKnowledgeCompactRow[] {
+  return rows.map((row) => ({ ...row }));
 }
 
 function normalizeEndpointFamily(value: string): ApiEndpointFamily | null {
