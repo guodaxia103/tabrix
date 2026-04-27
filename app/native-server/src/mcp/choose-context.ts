@@ -41,6 +41,8 @@ import {
   type TabrixChooseContextRecordOutcomeResult,
   type TabrixChooseContextResult,
   type TabrixContextSiteFamily,
+  type TabrixObserveMode,
+  type TabrixObserveReason,
 } from '@tabrix/shared';
 import { isCapabilityEnabled } from '../policy/capabilities';
 import type { CapabilityEnv } from '../policy/capabilities';
@@ -606,6 +608,21 @@ export interface RunTabrixChooseContextDeps {
    */
   pageContext?: PageContextProvider | null;
   /**
+   * V26-FIX-02 — opt-in flag the upstream caller MAY set (typically
+   * derived from `process.env.TABRIX_LEARNING_MODE`) to mark this run
+   * as a "learning pass". When `true` the chooser emits
+   * `observeMode='foreground'` / `observeReason='learning_requested'`
+   * regardless of the Knowledge state, so the upstream loop drives
+   * `chrome_network_capture_start/stop` foreground and the resulting
+   * traffic seeds Knowledge. When `undefined` / `false`, normal
+   * execution-task semantics apply (Knowledge state alone decides).
+   *
+   * Closed boolean on purpose: a multi-valued enum here would
+   * double-spend with `TabrixObserveReason`. Adding more learning
+   * sub-modes is a v2 design call.
+   */
+  learningModeRequested?: boolean;
+  /**
    * Test seam for deterministic ids / clocks. Defaults to
    * `randomUUID` and `() => new Date().toISOString()`.
    */
@@ -784,6 +801,42 @@ export function runTabrixChooseContext(
   const knowledgeEndpointFamily =
     siteFamily === 'github' && knowledgeCatalog ? 'github.api.github.com' : null;
 
+  // V26-FIX-02 — observe-mode advisory. Derived from the same Knowledge
+  // signals the layer dispatcher already saw, so the chooser surface
+  // stays a single source of truth. Order matters:
+  //   1. `learning_requested` ALWAYS wins. The operator explicitly
+  //      asked for a learning pass; we honour that even when Knowledge
+  //      would have answered, because the point of the run is to grow
+  //      the catalog.
+  //   2. High-confidence Knowledge candidate (`apiCandidate`) →
+  //      `disabled` / `not_needed`. The capture round-trip would be
+  //      pure waste.
+  //   3. Knowledge has rows but no usable candidate
+  //      (`knowledgeCatalog && !apiCandidate`) → `background` /
+  //      `confidence_low`. Passive listeners may still observe, but
+  //      the upstream loop must not drive a foreground round-trip.
+  //   4. No Knowledge for this site (`!knowledgeCatalog`) →
+  //      `foreground` / `knowledge_missing`. Foreground capture is
+  //      the only way to seed the catalog for a new site.
+  //
+  // The advisory is closed-enum and additive on the wire; pre-FIX-02
+  // callers that ignore the field stay bit-identical.
+  let observeMode: TabrixObserveMode;
+  let observeReason: TabrixObserveReason;
+  if (deps.learningModeRequested === true) {
+    observeMode = 'foreground';
+    observeReason = 'learning_requested';
+  } else if (apiCandidate) {
+    observeMode = 'disabled';
+    observeReason = 'not_needed';
+  } else if (knowledgeCatalog) {
+    observeMode = 'background';
+    observeReason = 'confidence_low';
+  } else {
+    observeMode = 'foreground';
+    observeReason = 'knowledge_missing';
+  }
+
   // V23-04 / B-018 v1.5 — telemetry write-back. We attempt to record
   // the decision ONLY when telemetry is wired and we have a usable
   // result to record. Failures here MUST NOT poison the chooser
@@ -870,6 +923,11 @@ export function runTabrixChooseContext(
     tokenEstimateFullRead: layerDispatch.fullReadTokenEstimate,
     tokensSavedEstimate,
     readPageAvoided: layerDispatch.sourceRoute === 'experience_replay_skip_read',
+    // V26-FIX-02 — observe-mode advisory (closed enum). Always present
+    // on `status: 'ok'` so post-mortems can tally
+    // `foregroundNetworkCaptureCount` deterministically.
+    observeMode,
+    observeReason,
     chosenSource: routerDecision.chosenSource,
     dataSource: routerDecision.dataSource,
     routerConfidence: routerDecision.confidence,

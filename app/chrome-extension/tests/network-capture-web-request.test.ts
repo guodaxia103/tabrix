@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   classifyNetworkCaptureEndpoint,
+  evaluateNetworkCaptureObserveModeGate,
+  isNetworkCaptureObserveMode,
   redactNetworkCaptureUrlForMetadata,
   sanitizeNetworkCaptureHeaders,
 } from '@/entrypoints/background/tools/browser/network-capture-web-request';
@@ -58,5 +60,46 @@ describe('network capture webRequest metadata helpers', () => {
         mimeType: 'text/css',
       }),
     ).toBe('asset');
+  });
+});
+
+describe('V26-FIX-02 — network capture observe-mode gate', () => {
+  it('null override → proceed (legacy v2.5 behaviour)', () => {
+    expect(evaluateNetworkCaptureObserveModeGate(null)).toEqual({
+      action: 'proceed',
+      reason: 'no_override',
+    });
+  });
+
+  it('foreground override → proceed', () => {
+    expect(evaluateNetworkCaptureObserveModeGate('foreground')).toEqual({
+      action: 'proceed',
+      reason: 'foreground_requested',
+    });
+  });
+
+  it('background override → skip (passive listeners only)', () => {
+    expect(evaluateNetworkCaptureObserveModeGate('background')).toEqual({
+      action: 'skip',
+      reason: 'background_passive',
+    });
+  });
+
+  it('disabled override → skip (chooser advisory)', () => {
+    expect(evaluateNetworkCaptureObserveModeGate('disabled')).toEqual({
+      action: 'skip',
+      reason: 'disabled_advisory',
+    });
+  });
+
+  it('isNetworkCaptureObserveMode is closed-enum', () => {
+    expect(isNetworkCaptureObserveMode('foreground')).toBe(true);
+    expect(isNetworkCaptureObserveMode('background')).toBe(true);
+    expect(isNetworkCaptureObserveMode('disabled')).toBe(true);
+    expect(isNetworkCaptureObserveMode('')).toBe(false);
+    expect(isNetworkCaptureObserveMode('FOREGROUND')).toBe(false);
+    expect(isNetworkCaptureObserveMode(null)).toBe(false);
+    expect(isNetworkCaptureObserveMode(undefined)).toBe(false);
+    expect(isNetworkCaptureObserveMode(42)).toBe(false);
   });
 });

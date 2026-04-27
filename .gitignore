@@ -72,3 +72,4 @@ releases/chrome-extension/latest/*.zip
 
 # Local codex-cli prompt scratch (not part of repo contract)
 .codex-prompts/
+.commit-msg-tmp.txt

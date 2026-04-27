@@ -54,6 +54,67 @@ const SENSITIVE_HEADER_NAMES = new Set([
   'x-api-key',
 ]);
 
+/**
+ * V26-FIX-02 — closed-enum mode the chooser advisory drives. The
+ * extension-side capture tool consumes a runtime override so a
+ * mis-routed `chrome_network_capture_start` from a stale upstream
+ * caller cannot bypass the advisory and force a foreground capture.
+ *
+ * Defaults to `'foreground'` (legacy v2.5 behaviour) so callers that
+ * never set the override stay bit-identical.
+ */
+export type NetworkCaptureObserveMode = 'foreground' | 'background' | 'disabled';
+
+const NETWORK_CAPTURE_OBSERVE_MODES: ReadonlySet<NetworkCaptureObserveMode> =
+  new Set<NetworkCaptureObserveMode>(['foreground', 'background', 'disabled']);
+
+/**
+ * V26-FIX-02 — pure decision: should `chrome_network_capture_start`
+ * actually install webRequest listeners for this call?
+ *
+ *   - `'proceed'` — legacy v2.5 behaviour (foreground capture).
+ *   - `'skip'`    — short-circuit: do NOT install listeners. Returned
+ *                   when the chooser said `disabled`. The caller MAY
+ *                   still respond `success: true` with a structured
+ *                   payload so MCP clients see a clean "not needed"
+ *                   result (one tool call ↔ one tool result).
+ *
+ * `'background'` is treated as `'skip'` for the foreground-driving
+ * caller: passive listeners installed elsewhere in the extension may
+ * still observe traffic, but the foreground round-trip itself is
+ * suppressed.
+ */
+export function evaluateNetworkCaptureObserveModeGate(mode: NetworkCaptureObserveMode | null): {
+  action: 'proceed' | 'skip';
+  reason: 'no_override' | 'foreground_requested' | 'background_passive' | 'disabled_advisory';
+} {
+  if (mode === null) return { action: 'proceed', reason: 'no_override' };
+  if (mode === 'foreground') return { action: 'proceed', reason: 'foreground_requested' };
+  if (mode === 'background') return { action: 'skip', reason: 'background_passive' };
+  return { action: 'skip', reason: 'disabled_advisory' };
+}
+
+export function isNetworkCaptureObserveMode(value: unknown): value is NetworkCaptureObserveMode {
+  return typeof value === 'string' && NETWORK_CAPTURE_OBSERVE_MODES.has(value as never);
+}
+
+/**
+ * V26-FIX-02 — process-wide override that the upstream MCP loop sets
+ * after consuming a chooser advisory. The default `null` preserves
+ * legacy `foreground` behaviour. Setter is intentionally minimal: a
+ * full per-tab map is overkill for v2.6 (the chooser writes one
+ * advisory per task, and tasks don't span multiple tabs in v2.6).
+ */
+let networkCaptureObserveModeOverride: NetworkCaptureObserveMode | null = null;
+
+export function setNetworkCaptureObserveModeOverride(mode: NetworkCaptureObserveMode | null): void {
+  networkCaptureObserveModeOverride = mode;
+}
+
+export function getNetworkCaptureObserveModeOverride(): NetworkCaptureObserveMode | null {
+  return networkCaptureObserveModeOverride;
+}
+
 export type EndpointNoiseClass =
   | 'asset'
   | 'analytics'
@@ -949,6 +1010,34 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
 
     console.log(`NetworkCaptureStartTool: Executing with args:`, args);
 
+    // V26-FIX-02 — observe-mode gate (defense in depth). The chooser
+    // advisory primarily flows through the native-server side, but a
+    // stale upstream caller could still issue `chrome_network_capture_start`
+    // when the advisory said `disabled`/`background`. The gate
+    // short-circuits with a structured success payload so MCP
+    // clients see a clean tool result instead of a webRequest listener
+    // install round-trip.
+    const observeModeOverride = getNetworkCaptureObserveModeOverride();
+    const gate = evaluateNetworkCaptureObserveModeGate(observeModeOverride);
+    if (gate.action === 'skip') {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              skipped: true,
+              observeMode: observeModeOverride,
+              skipReason: gate.reason,
+              message:
+                'Network capture suppressed by chooser advisory (V26-FIX-02). No listeners installed.',
+            }),
+          },
+        ],
+        isError: false,
+      };
+    }
+
     try {
       // Get current tab or create new tab
       let tabToOperateOn: chrome.tabs.Tab;
@@ -1035,6 +1124,32 @@ class NetworkCaptureStopTool extends BaseBrowserToolExecutor {
 
   async execute(args?: NetworkCaptureStopToolParams): Promise<ToolResult> {
     console.log(`NetworkCaptureStopTool: Executing`);
+
+    // V26-FIX-02 — observe-mode gate. When the start tool was
+    // suppressed by the chooser advisory, the matching stop call has
+    // nothing to stop; emit a structured no-op rather than the legacy
+    // "no captures" error so MCP clients see the suppression as
+    // expected behaviour.
+    const observeModeOverride = getNetworkCaptureObserveModeOverride();
+    const gate = evaluateNetworkCaptureObserveModeGate(observeModeOverride);
+    if (gate.action === 'skip') {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              skipped: true,
+              observeMode: observeModeOverride,
+              skipReason: gate.reason,
+              message:
+                'Network capture stop suppressed by chooser advisory (V26-FIX-02). Nothing to stop.',
+            }),
+          },
+        ],
+        isError: false,
+      };
+    }
 
     try {
       const startTool = NetworkCaptureStartTool.instance;

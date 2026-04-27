@@ -369,6 +369,30 @@ export interface TabrixChooseContextResult {
    */
   readPageAvoided?: boolean;
   /**
+   * V26-FIX-02 — closed-enum advisory the chooser writes to tell the
+   * upstream MCP loop how (and whether) to drive
+   * `chrome_network_capture_start/stop` for this task. Defaults to
+   * `'disabled'`/`'not_needed'` for a normal execution task with
+   * Knowledge support; only `'foreground'` truly requires the caller
+   * to drive the foreground capture round-trip. Absent when the
+   * chooser short-circuits on `status: 'invalid_input'`.
+   *
+   * Hard rules:
+   *   - Closed enum values; no synonyms (the post-mortem groups
+   *     `foregroundNetworkCaptureCount` by these tokens).
+   *   - The chooser does NOT itself invoke the capture tool. It only
+   *     emits the advisory; the upstream caller (or the bridge
+   *     dispatcher) decides whether to honour it.
+   */
+  observeMode?: TabrixObserveMode;
+  /**
+   * V26-FIX-02 — closed-enum reason the chooser picked the
+   * {@link observeMode} value above. Same evidence-field discipline
+   * as {@link layerDispatchReason} / {@link directApiExecution}: one
+   * deterministic token per branch so post-mortems stay groupable.
+   */
+  observeReason?: TabrixObserveReason;
+  /**
    * V26-FIX-01 — optional inline API execution envelope. Present only
    * when (a) the chooser routed to `'knowledge_supported_read'`, (b)
    * a high-confidence read-only endpoint candidate was resolved, and
@@ -395,6 +419,53 @@ export interface TabrixChooseContextResult {
    */
   directApiExecution?: TabrixDirectApiExecution;
 }
+
+/**
+ * V26-FIX-02 — closed-enum advisory for whether the upstream caller
+ * should drive a foreground `chrome_network_capture_start/stop`
+ * round-trip for this task.
+ *
+ *   - `'foreground'` — the chooser EXPLICITLY asked for foreground
+ *     capture. Today this fires only on `learning_requested` (env
+ *     opt-in) or `knowledge_missing` (no Knowledge for the site
+ *     family). The upstream caller is expected to drive
+ *     `chrome_network_capture_start/stop` synchronously.
+ *   - `'background'` — the chooser did NOT need the capture for
+ *     this read, but a passive background subsystem (network
+ *     capture listener) MAY still observe traffic for
+ *     post-hoc Knowledge upserts. The upstream caller MUST NOT
+ *     drive a foreground round-trip.
+ *   - `'disabled'` — the chooser asserts the capture round-trip is
+ *     wasted work for this task (e.g. high-confidence Knowledge
+ *     hit). The upstream caller MUST NOT drive
+ *     `chrome_network_capture_start/stop`; defense-in-depth gates
+ *     in the extension may hard-skip the call if it leaks through.
+ */
+export type TabrixObserveMode = 'foreground' | 'background' | 'disabled';
+
+/**
+ * V26-FIX-02 — closed-enum reason the chooser chose its
+ * {@link TabrixObserveMode}. Tokens are deterministic so post-mortem
+ * aggregations stay groupable.
+ *
+ *   - `'learning_requested'`     — env / capability opt-in
+ *     (`TABRIX_LEARNING_MODE` truthy) flagged this run as a learning
+ *     pass; foreground observe is required to seed Knowledge.
+ *   - `'knowledge_missing'`      — no Knowledge catalog entry exists
+ *     for the resolved site family; foreground observe is the only
+ *     way to enrich the catalog.
+ *   - `'confidence_low'`         — Knowledge exists but the
+ *     candidate did not clear the confidence gate; passive
+ *     background observe is acceptable.
+ *   - `'not_needed'`             — Knowledge has a high-confidence
+ *     candidate; the capture round-trip is redundant work and is
+ *     `disabled`.
+ */
+export type TabrixObserveReason =
+  | 'learning_requested'
+  | 'knowledge_missing'
+  | 'confidence_low'
+  | 'not_needed';
 
 /**
  * V26-FIX-01 — closed-enum executor state surfaced on
