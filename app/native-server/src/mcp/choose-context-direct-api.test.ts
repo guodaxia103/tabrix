@@ -55,6 +55,10 @@ const GITHUB_SEARCH_BODY = {
 };
 
 const GITHUB_SEARCH_INTENT = '搜索 GitHub 上 AI助手 相关热门项目，列出前10个';
+const GITHUB_EMPTY_ISSUES_BODY = {
+  total_count: 0,
+  items: [],
+};
 
 describe('runTabrixChooseContextWithDirectApi', () => {
   it('non-knowledge_supported_read route is bit-identical to the synchronous chooser', async () => {
@@ -123,6 +127,39 @@ describe('runTabrixChooseContextWithDirectApi', () => {
     expect(wrapped.directApiExecution?.fallbackCause).toBeNull();
     expect(wrapped.directApiExecution?.fallbackEntryLayer).toBeNull();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('GitHub repo-qualified issue search URL returns direct_api emptyResult instead of DOM fallback', async () => {
+    const fetchSpy = jsonFetch(200, GITHUB_EMPTY_ISSUES_BODY);
+    const wrapped = await runTabrixChooseContextWithDirectApi(
+      {
+        intent: '读取 tabrix 仓库 issues 中匹配 __tabrix_pgb_02_no_match__ 的列表，预期返回空',
+        url: 'https://github.com/search?q=repo%3Aguodaxia103%2Ftabrix+__tabrix_pgb_02_no_match__&type=issues',
+        pageRole: 'issues_list',
+      },
+      {
+        experience: emptyExperience(),
+        knowledgeApi: null,
+        capabilityEnv: { TABRIX_POLICY_CAPABILITIES: 'api_knowledge' },
+        directApiFetchFn: fetchSpy,
+      },
+    );
+
+    expect(wrapped.status).toBe('ok');
+    expect(wrapped.sourceRoute).toBe('knowledge_supported_read');
+    expect(wrapped.chosenLayer).toBe('L0');
+    expect(wrapped.directApiExecution?.executionMode).toBe('direct_api');
+    expect(wrapped.directApiExecution?.endpointFamily).toBe('github_issues_list');
+    expect(wrapped.directApiExecution?.rowCount).toBe(0);
+    expect(wrapped.directApiExecution?.emptyResult).toBe(true);
+    expect(wrapped.directApiExecution?.emptyReason).toBe('no_matching_records');
+    expect(wrapped.directApiExecution?.browserNavigationSkipped).toBe(true);
+    expect(wrapped.directApiExecution?.readPageAvoided).toBe(true);
+
+    const url = new URL((fetchSpy as jest.Mock).mock.calls[0][0]);
+    expect(url.searchParams.get('q')).toBe(
+      'repo:guodaxia103/tabrix is:issue state:open __tabrix_pgb_02_no_match__',
+    );
   });
 
   it('reader failure collapses to fallback_required with L0+L1 entry layer', async () => {

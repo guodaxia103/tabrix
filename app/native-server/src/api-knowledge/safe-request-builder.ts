@@ -129,8 +129,12 @@ function buildSeedAdapterRequest(
       const repo = stringParam(params.repo);
       if (!owner || !repo) return null;
       const state = stringParam(params.state) || 'open';
+      const query = stringParam(params.query);
       const url = new URL('https://api.github.com/search/issues');
-      url.searchParams.set('q', `repo:${owner}/${repo} is:issue state:${state}`);
+      url.searchParams.set(
+        'q',
+        [`repo:${owner}/${repo}`, 'is:issue', `state:${state}`, query].filter(Boolean).join(' '),
+      );
       url.searchParams.set('sort', 'created');
       url.searchParams.set('order', 'desc');
       url.searchParams.set('per_page', String(limit));
@@ -138,7 +142,13 @@ function buildSeedAdapterRequest(
         url: url.toString(),
         method: 'GET',
         dataPurpose: 'issue_list',
-        requestShapeUsed: sortedDistinctKeys(['q', 'sort', 'order', 'per_page']),
+        requestShapeUsed: sortedDistinctKeys([
+          'q',
+          ...(query ? ['query'] : []),
+          'sort',
+          'order',
+          'per_page',
+        ]),
         builderHint: 'seed_adapter',
       };
     }

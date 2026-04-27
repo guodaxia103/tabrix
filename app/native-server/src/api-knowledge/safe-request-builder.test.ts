@@ -131,6 +131,30 @@ describe('V26-FIX-04 buildSafeRequest — seed_adapter branch', () => {
     expect(plan!.requestShapeUsed).toEqual(['order', 'per_page', 'q', 'sort']);
   });
 
+  it('keeps additional issue search terms in the search/issues query', () => {
+    const m = match({
+      site: 'api.github.com',
+      urlPattern: 'api.github.com/repos/:owner/:repo/issues',
+      family: 'github',
+      semanticType: 'list',
+    });
+    const plan = buildSafeRequest(m, {
+      ...baseDataNeed,
+      semanticTypeWanted: 'list',
+      params: {
+        owner: 'guodaxia103',
+        repo: 'tabrix',
+        query: '__tabrix_pgb_02_no_match__',
+      },
+    });
+    expect(plan).not.toBeNull();
+    const url = new URL(plan!.url);
+    expect(url.searchParams.get('q')).toBe(
+      'repo:guodaxia103/tabrix is:issue state:open __tabrix_pgb_02_no_match__',
+    );
+    expect(plan!.requestShapeUsed).toEqual(['order', 'per_page', 'q', 'query', 'sort']);
+  });
+
   it('refuses github_issues_list when owner/repo missing', () => {
     const m = match({
       site: 'api.github.com',

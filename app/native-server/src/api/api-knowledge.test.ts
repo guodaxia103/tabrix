@@ -354,6 +354,23 @@ describe('V26-07 API Knowledge substrate', () => {
 
     expect(
       resolveApiKnowledgeCandidate({
+        intent: '读取 tabrix 仓库 issues 中匹配 __tabrix_pgb_02_no_match__ 的列表',
+        url: 'https://github.com/search?q=repo%3Aguodaxia103%2Ftabrix+__tabrix_pgb_02_no_match__&type=issues',
+        pageRole: 'issues_list',
+      }),
+    ).toMatchObject({
+      endpointFamily: 'github_issues_list',
+      dataPurpose: 'issue_list',
+      params: {
+        owner: 'guodaxia103',
+        repo: 'tabrix',
+        state: 'open',
+        query: '__tabrix_pgb_02_no_match__',
+      },
+    });
+
+    expect(
+      resolveApiKnowledgeCandidate({
         intent: 'search npm package zod',
         url: 'https://www.npmjs.com/search?q=zod',
       }),
@@ -464,6 +481,34 @@ describe('V26-07 API Knowledge substrate', () => {
     expect(url.searchParams.get('sort')).toBe('created');
     expect(url.searchParams.get('order')).toBe('desc');
     expect(url.searchParams.get('per_page')).toBe('10');
+  });
+
+  it('preserves GitHub issue search qualifiers for verified empty result queries', async () => {
+    const fetchFn = jsonFetch(200, { items: [] });
+    const result = await readApiKnowledgeRows({
+      endpointFamily: 'github_issues_list',
+      method: 'GET',
+      params: {
+        owner: 'guodaxia103',
+        repo: 'tabrix',
+        state: 'open',
+        query: '__tabrix_pgb_02_no_match__',
+      },
+      fetchFn,
+    });
+
+    const url = new URL((fetchFn as jest.Mock).mock.calls[0][0]);
+    expect(url.searchParams.get('q')).toBe(
+      'repo:guodaxia103/tabrix is:issue state:open __tabrix_pgb_02_no_match__',
+    );
+    expect(result).toMatchObject({
+      status: 'ok',
+      kind: 'api_rows',
+      endpointFamily: 'github_issues_list',
+      rowCount: 0,
+      emptyResult: true,
+      emptyReason: 'no_matching_records',
+    });
   });
 
   it('compacts GitHub issue search results from the items envelope', async () => {

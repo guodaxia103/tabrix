@@ -232,7 +232,27 @@ export function resolveApiKnowledgeCandidate(input: {
 
   if (host === 'github.com' || host.endsWith('.github.com')) {
     const repo = parsed ? parseGithubRepo(parsed) : null;
-    const wantsIssues = pageRole.includes('issues') || /\bissues?\b/.test(intent);
+    const issueSearch = parsed ? parseGithubIssueSearch(parsed) : null;
+    const wantsIssues =
+      pageRole.includes('issues') ||
+      /\bissues?\b/.test(intent) ||
+      issueSearch !== null ||
+      parsed?.searchParams.get('type')?.toLowerCase() === 'issues';
+    if (issueSearch && wantsIssues) {
+      const params: Record<string, string> = {
+        owner: issueSearch.owner,
+        repo: issueSearch.repo,
+        state: issueSearch.state ?? 'open',
+      };
+      if (issueSearch.query) params.query = issueSearch.query;
+      return {
+        endpointFamily: 'github_issues_list',
+        dataPurpose: 'issue_list',
+        confidence: 0.86,
+        method: 'GET',
+        params,
+      };
+    }
     if (repo && wantsIssues) {
       return {
         endpointFamily: 'github_issues_list',
@@ -605,8 +625,12 @@ function buildPublicRequest(
       const repo = cleanParam(params.repo);
       if (!owner || !repo) return null;
       const state = cleanParam(params.state) || 'open';
+      const query = cleanParam(params.query);
       const url = new URL('https://api.github.com/search/issues');
-      url.searchParams.set('q', `repo:${owner}/${repo} is:issue state:${state}`);
+      url.searchParams.set(
+        'q',
+        [`repo:${owner}/${repo}`, 'is:issue', `state:${state}`, query].filter(Boolean).join(' '),
+      );
       url.searchParams.set('sort', 'created');
       url.searchParams.set('order', 'desc');
       url.searchParams.set('per_page', String(boundedLimit));
@@ -830,9 +854,36 @@ function extractSearchQuery(intent: string): string {
 function parseGithubRepo(parsed: URL): { owner: string; repo: string } | null {
   const parts = parsed.pathname.split('/').filter(Boolean);
   if (parts.length < 2) return null;
+  if (parts[0] === 'search') return null;
   const [owner, repo] = parts;
   if (!owner || !repo) return null;
   return { owner, repo };
+}
+
+function parseGithubIssueSearch(
+  parsed: URL,
+): { owner: string; repo: string; state: string | null; query: string | null } | null {
+  if (parsed.pathname !== '/search') return null;
+  const type = parsed.searchParams.get('type')?.toLowerCase();
+  const q = parsed.searchParams.get('q') ?? '';
+  if (type !== 'issues' && !/\bis:issue\b/i.test(q)) return null;
+
+  const repoMatch = q.match(/\brepo:([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/i);
+  if (!repoMatch) return null;
+  const stateMatch = q.match(/\bstate:(open|closed|all)\b/i);
+  const query = q
+    .replace(repoMatch[0], ' ')
+    .replace(/\bis:issue\b/gi, ' ')
+    .replace(/\btype:issue\b/gi, ' ')
+    .replace(/\bstate:(open|closed|all)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return {
+    owner: repoMatch[1],
+    repo: repoMatch[2],
+    state: stateMatch ? stateMatch[1].toLowerCase() : null,
+    query: query || null,
+  };
 }
 
 function cleanParam(value: unknown): string {
