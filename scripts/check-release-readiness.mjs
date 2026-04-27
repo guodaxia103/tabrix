@@ -37,6 +37,11 @@ const {
   loadAndEvaluateBenchmarkReportV25,
   requireBaselineComparisonTableV25,
 } = require('./lib/v25-benchmark-gate.cjs');
+const {
+  benchmarkGateAppliesV26,
+  loadAndEvaluateBenchmarkReportV26,
+  requireReleaseNotesSummaryV26,
+} = require('./lib/v26-benchmark-gate.cjs');
 
 const ROOT = process.cwd();
 
@@ -216,7 +221,59 @@ const BENCHMARK_REPORT_MAX_AGE_DAYS = 7;
 // report just by passing `--allow-missing-notes`. The soft warning at
 // the bottom of this block is already self-guarded on `selectedNotesFile`
 // existing, so it stays harmless under `--allow-missing-notes`.
-if (benchmarkGateAppliesV25(nativePkg.version)) {
+if (benchmarkGateAppliesV26(nativePkg.version)) {
+  const benchmarkDir = getReleaseEvidenceDir('v26');
+  if (!fs.existsSync(benchmarkDir)) {
+    errors.push(
+      `v2.6.0+ release gate: missing benchmark directory ${path.relative(ROOT, benchmarkDir)}. ` +
+        `Run the maintainer-private Gate B real-browser acceptance first; raw evidence stays under TABRIX_RELEASE_EVIDENCE_DIR or .claude/private-docs/benchmarks.`,
+    );
+  } else {
+    const reports = fs
+      .readdirSync(benchmarkDir)
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => {
+        const fullPath = path.join(benchmarkDir, name);
+        const stat = fs.statSync(fullPath);
+        return { name, fullPath, mtimeMs: stat.mtimeMs };
+      })
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+    if (reports.length === 0) {
+      errors.push(
+        `v2.6.0+ release gate: no benchmark reports under ${path.relative(ROOT, benchmarkDir)}. ` +
+          `Copy the transformed Gate B report into the private release-evidence directory first.`,
+      );
+    } else {
+      const newest = reports[0];
+      const ageDays = (Date.now() - newest.mtimeMs) / (1000 * 60 * 60 * 24);
+      if (ageDays > BENCHMARK_REPORT_MAX_AGE_DAYS) {
+        errors.push(
+          `v2.6.0+ release gate: newest benchmark report ${newest.name} is ${ageDays.toFixed(1)} days old (max ${BENCHMARK_REPORT_MAX_AGE_DAYS}). ` +
+            `Re-run maintainer-private Gate B real-browser acceptance.`,
+        );
+      }
+
+      const gateResult = loadAndEvaluateBenchmarkReportV26(newest.fullPath);
+      for (const reason of gateResult.hardReasons || []) {
+        errors.push(
+          `v2.6.0+ release gate: benchmark report ${newest.name} failed gate — ${reason}`,
+        );
+      }
+
+      if (selectedNotesFile && fileExists(selectedNotesFile)) {
+        const notesResult = requireReleaseNotesSummaryV26(path.join(ROOT, selectedNotesFile));
+        for (const reason of notesResult.reasons || []) {
+          errors.push(`v2.6.0+ release gate: ${reason}`);
+        }
+      } else {
+        errors.push(
+          `v2.6.0+ release gate: cannot verify release notes summary because no notes file is available.`,
+        );
+      }
+    }
+  }
+} else if (benchmarkGateAppliesV25(nativePkg.version)) {
   // V25-05: v2.5.0+ release gate. Same shape as the v2.4 branch —
   // presence + recency + hard content gate via the canonical CJS
   // module and baseline-comparison table embed in the notes. Raw
