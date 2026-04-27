@@ -557,7 +557,179 @@ export interface ActionOutcomeSnapshot {
 }
 
 // ---------------------------------------------------------------------------
-// V27-04..05 — placeholders (declared here so downstream batch tasks can
+// V27-04 — Readiness + Complexity profilers (Batch A)
+// ---------------------------------------------------------------------------
+
+/**
+ * Closed-enum readiness state the V27-04 readiness profiler emits. The
+ * states are deliberately orthogonal to complexity — the profiler asks
+ * "is the page in a state where a list-shaped read would be wasted?",
+ * not "what kind of page is this?".
+ *
+ * Ordering reflects increasing readiness: `error` and `empty` are
+ * terminal-style states the runtime should treat as "do not bother
+ * reading"; `route_stable` is the strongest "yes, ready" signal.
+ *
+ * Always includes `'unknown'` per V27-00 invariant.
+ */
+export type ReadinessState =
+  | 'error'
+  | 'empty'
+  | 'document_complete'
+  | 'key_region_ready'
+  | 'network_key_done'
+  | 'route_stable'
+  | 'unknown';
+
+export const READINESS_STATES = [
+  'error',
+  'empty',
+  'document_complete',
+  'key_region_ready',
+  'network_key_done',
+  'route_stable',
+  'unknown',
+] as const satisfies ReadonlyArray<ReadinessState>;
+
+/**
+ * V27-04 — output of the readiness profiler. Lives inside the runtime;
+ * the operation-log writer copies `state` into the existing
+ * `readinessState` metadata key (already declared by V27-00).
+ */
+export interface ReadinessProfile {
+  /** Closed-enum readiness state (always includes `'unknown'`). */
+  state: ReadinessState;
+  /** Confidence in the verdict, clamped to `[0, 1]`. */
+  confidence: number;
+  /** Closed-enum readiness signals the verdict was derived from. The
+   *  list is order-stable and deduplicated; consumers MUST NOT rely on
+   *  the order of signals carrying the same observation timestamp. */
+  contributingSignals: ReadinessState[];
+  /** Producer wallclock (ms). Same as the input snapshot's
+   *  `producedAtMs` for determinism. */
+  producedAtMs: number;
+}
+
+/**
+ * Closed-enum complexity classification. The V27-04 complexity
+ * profiler categorises a page by its dominant "shape", not by site
+ * brand. Ordering goes from cheapest read to most expensive, which is
+ * helpful for tests and for the layer-budget composer.
+ *
+ * Always includes `'unknown'` per V27-00 invariant.
+ */
+export type ComplexityKind =
+  | 'simple'
+  | 'list_or_search'
+  | 'detail'
+  | 'document'
+  | 'transactional'
+  | 'media'
+  | 'complex_app'
+  | 'unknown';
+
+export const COMPLEXITY_KINDS = [
+  'simple',
+  'list_or_search',
+  'detail',
+  'document',
+  'transactional',
+  'media',
+  'complex_app',
+  'unknown',
+] as const satisfies ReadonlyArray<ComplexityKind>;
+
+/**
+ * V27-04 — output of the complexity profiler. Like the readiness arm,
+ * this snapshot is orthogonal: complexity does NOT consume readiness
+ * signals, and readiness does NOT consume complexity. They compose only
+ * inside `RecommendedLayerBudget`.
+ */
+export interface ComplexityProfile {
+  /** Closed-enum complexity kind. Always includes `'unknown'`. */
+  kind: ComplexityKind;
+  /** Confidence in the verdict, clamped to `[0, 1]`. */
+  confidence: number;
+  /** Producer wallclock (ms). */
+  producedAtMs: number;
+}
+
+/**
+ * Closed-enum recommendation for which Tabrix layer (L0/L1/L2) the
+ * Router/Policy should consult next. The recommendation is advisory —
+ * the Router consumes it together with privacy/risk policy, the active
+ * task intent, and the latency budget before committing.
+ *
+ * Always includes `'unknown'` per V27-00 invariant.
+ */
+export type RecommendedLayer = 'L0' | 'L1' | 'L2' | 'unknown';
+
+export const RECOMMENDED_LAYERS = [
+  'L0',
+  'L1',
+  'L2',
+  'unknown',
+] as const satisfies ReadonlyArray<RecommendedLayer>;
+
+/**
+ * Closed-enum reason the layer-budget composer picked the recommended
+ * layer. Mostly mirrors `ComplexityKind` but adds dedicated states for
+ * "readiness was negative" and "we have no data".
+ */
+export type RecommendedLayerReason =
+  | 'simple_shell'
+  | 'list_or_search'
+  | 'detail'
+  | 'document'
+  | 'transactional'
+  | 'media'
+  | 'complex_app'
+  | 'not_ready'
+  | 'unknown';
+
+export const RECOMMENDED_LAYER_REASONS = [
+  'simple_shell',
+  'list_or_search',
+  'detail',
+  'document',
+  'transactional',
+  'media',
+  'complex_app',
+  'not_ready',
+  'unknown',
+] as const satisfies ReadonlyArray<RecommendedLayerReason>;
+
+/**
+ * V27-04 — composed advisory output. Pairs the readiness profile with
+ * the complexity profile and the resulting `RecommendedLayer`. The
+ * Router/Policy is the only consumer; this batch declares the type but
+ * does not yet wire it onto the production decision path.
+ *
+ * The three boolean hints (`needsApi`, `needsMarkdown`, `needsL2`) are
+ * NOT independent flags — the composer MUST set them consistently with
+ * `recommendedLayer` so a downstream consumer can pick whichever
+ * representation is most convenient.
+ */
+export interface RecommendedLayerBudget {
+  recommendedLayer: RecommendedLayer;
+  reason: RecommendedLayerReason;
+  /** Closed-enum sub-flags echoing `recommendedLayer`. */
+  needsApi: boolean;
+  needsMarkdown: boolean;
+  needsL2: boolean;
+  /** The readiness/complexity arms that produced the recommendation. */
+  readiness: ReadinessProfile;
+  complexity: ComplexityProfile;
+  /** Confidence in the recommendation, clamped to `[0, 1]`. The
+   *  composer takes the lower of the two arm confidences so callers
+   *  can reason about it as a min-bound. */
+  confidence: number;
+  /** Producer wallclock (ms). */
+  producedAtMs: number;
+}
+
+// ---------------------------------------------------------------------------
+// V27-05 — placeholders (declared here so downstream batch tasks can
 // extend them without re-opening this file's enum allowlist). The
 // concrete fields land in their respective batch task.
 // ---------------------------------------------------------------------------
