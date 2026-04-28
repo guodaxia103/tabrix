@@ -60,6 +60,14 @@ function row(overrides: Partial<ScoredFixtureRow>): ScoredFixtureRow {
     responseShapeSummary: null,
     usableForTaskPersisted: true,
     noiseReason: null,
+    endpointSource:
+      overrides.family === 'github' || overrides.family === 'npmjs' ? 'seed_adapter' : 'observed',
+    correlationConfidence: null,
+    correlatedRegionId: null,
+    confidenceReason: null,
+    retirementCandidate: false,
+    sourceLineage: null,
+    schemaVersion: 2,
     semanticType: 'list',
     confidence: 0.8,
     usableForTask: true,
@@ -69,10 +77,15 @@ function row(overrides: Partial<ScoredFixtureRow>): ScoredFixtureRow {
 }
 
 function match(overrides: Partial<ScoredFixtureRow>): EndpointMatch {
+  const endpoint = row(overrides);
   return {
-    endpoint: row(overrides),
+    endpoint,
     semanticValidation: 'pass',
     score: 0.8,
+    endpointSource: endpoint.endpointSource,
+    correlationConfidence: endpoint.correlationConfidence,
+    retiredPeer: null,
+    chosenReason: 'best_available',
   };
 }
 

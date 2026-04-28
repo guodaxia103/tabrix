@@ -18,7 +18,9 @@
  */
 
 import type {
+  CorrelationConfidenceLevel,
   EndpointSemanticType,
+  EndpointSource,
   KnowledgeApiEndpoint,
 } from '../memory/knowledge/knowledge-api-repository';
 
@@ -74,6 +76,22 @@ export interface EndpointKnowledgeReader {
  * Result of `lookupEndpointFamily`. Carries enough context for both
  * the request builder (urlPattern, queryKeys, family) and the evidence
  * contract (semanticValidation, score).
+ *
+ * V27-08 additive surface:
+ *   - `endpointSource` — closed enum lineage (`observed` |
+ *     `seed_adapter` | `manual_seed` | `unknown`). The executor and
+ *     telemetry layer surface this so a downstream report can tell
+ *     "we hit an observed endpoint" from "we fell back to the V25
+ *     seed_adapter".
+ *   - `correlationConfidence` — closed enum from V27-07. Single-
+ *     session results are capped at `'low_confidence'`.
+ *   - `retiredPeer` — when the lookup deferred to an `observed` row
+ *     instead of a same-site `seed_adapter` peer that *would* have
+ *     matched, this carries the lineage of the de-prioritised
+ *     `seed_adapter`. NEVER deletes the seed row; just makes the
+ *     decision visible to a future Gate B / observability report.
+ *   - `chosenReason` — short closed-enum reason describing the
+ *     ranking decision. See `EndpointLookupChosenReason` below.
  */
 export interface EndpointMatch {
   endpoint: KnowledgeApiEndpoint & {
@@ -84,7 +102,44 @@ export interface EndpointMatch {
   semanticValidation: 'pass' | 'fail';
   /** Final confidence score (after the optional semantic-validation penalty). */
   score: number;
+  endpointSource: EndpointSource;
+  correlationConfidence: CorrelationConfidenceLevel | null;
+  retiredPeer: {
+    endpointSource: EndpointSource;
+    endpointSignature: string;
+    confidence: number;
+    sampleCount: number;
+  } | null;
+  chosenReason: EndpointLookupChosenReason;
 }
+
+/**
+ * V27-08 — closed-enum reason for why the lookup picked one row
+ * over another. The values are stable; consumers (telemetry,
+ * report dashboards, retirement counters) treat them as a closed
+ * set.
+ *
+ *   - `'observed_high_confidence'` — observed row matched all
+ *     thresholds (confidence floor + sample_count ≥ 2 + same
+ *     semanticType) and won outright.
+ *   - `'observed_preferred_over_seed_adapter'` — observed row
+ *     met the retirement criteria and de-prioritised a
+ *     same-site seed_adapter peer that also matched.
+ *   - `'seed_adapter_fallback'` — no qualifying observed row was
+ *     available (or it failed retirement criteria); the
+ *     seed_adapter row was the best remaining option.
+ *   - `'observed_only_match'` — only observed rows were available
+ *     for the site; no seed_adapter peer existed.
+ *   - `'best_available'` — fallback for rows whose source is
+ *     `'manual_seed'` / `'unknown'` (e.g. a legacy row with no
+ *     family hint).
+ */
+export type EndpointLookupChosenReason =
+  | 'observed_high_confidence'
+  | 'observed_preferred_over_seed_adapter'
+  | 'seed_adapter_fallback'
+  | 'observed_only_match'
+  | 'best_available';
 
 /**
  * Outcome of `buildSafeRequest`. `builderHint='seed_adapter'` means we

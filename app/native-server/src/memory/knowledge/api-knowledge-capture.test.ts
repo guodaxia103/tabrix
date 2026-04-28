@@ -521,6 +521,62 @@ describe('deriveKnowledgeFromBundle', () => {
     expect(row.queryParamsShape).toBe('q,sort');
   });
 
+  // V27-08 — capture writer must populate `endpointSource` and a
+  // closed-enum `sourceLineage` breadcrumb so a downstream report
+  // can tell observed vs seed_adapter without re-deriving from
+  // `family`.
+  it('V27-08 — writes endpointSource=seed_adapter for github family rows', () => {
+    const out = deriveKnowledgeFromBundle(
+      {
+        requests: [
+          {
+            url: 'https://api.github.com/search/repositories?q=tabrix',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            mimeType: 'application/json',
+            statusCode: 200,
+          },
+        ],
+      },
+      CTX,
+    );
+    const [row] = out;
+    expect(row.endpointSource).toBe('seed_adapter');
+    expect(row.sourceLineage).toEqual({
+      semanticSource: 'capture',
+      observationCount: 1,
+      correlationReason: 'seed_adapter_default',
+    });
+    // Capture path NEVER produces correlation evidence.
+    expect(row.correlationConfidence).toBeNull();
+    expect(row.correlatedRegionId).toBeNull();
+  });
+
+  it('V27-08 — writes endpointSource=observed for non-github family rows', () => {
+    const out = deriveKnowledgeFromBundle(
+      {
+        requests: [
+          {
+            url: 'https://en.wikipedia.org/w/rest.php/v1/search/page?q=einstein',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            mimeType: 'application/json',
+            statusCode: 200,
+          },
+        ],
+      },
+      CTX,
+    );
+    const [row] = out;
+    expect(row.endpointSource).toBe('observed');
+    expect(row.sourceLineage).toEqual({
+      semanticSource: 'capture',
+      observationCount: 1,
+      correlationReason: 'metadata_only',
+    });
+    expect(row.correlationConfidence).toBeNull();
+  });
+
   it('returns endpoint candidate diagnostics without raw query values', () => {
     const analysis = analyzeKnowledgeCaptureBundle(
       {

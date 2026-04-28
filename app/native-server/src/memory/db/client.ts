@@ -263,6 +263,36 @@ function ensureKnowledgeApiEndpointsClassifierColumns(db: SqliteDatabase): void 
   }
 }
 
+/**
+ * V27-08 additive migration for legacy DBs that pre-date Endpoint
+ * Knowledge v2 lineage columns on `knowledge_api_endpoints`. Each
+ * ALTER is guarded by a `hasColumn` probe so a virgin DB (where the
+ * columns are already present from `KNOWLEDGE_CREATE_TABLES_SQL`) is
+ * a no-op. Same partial-failure recovery contract as
+ * `ensureKnowledgeApiEndpointsClassifierColumns`.
+ *
+ * Schema-cite (V27-08): the columns added here mirror the inline
+ * docstring inside `KNOWLEDGE_CREATE_TABLES_SQL` 1:1. If the
+ * docstring drifts the migration must be updated in the same commit
+ * or v2.7 reads will trip on a missing column.
+ */
+function ensureKnowledgeApiEndpointsLineageColumns(db: SqliteDatabase): void {
+  const additions: Array<[string, string]> = [
+    ['endpoint_source', 'TEXT'],
+    ['correlation_confidence', 'TEXT'],
+    ['correlated_region_id', 'TEXT'],
+    ['confidence_reason', 'TEXT'],
+    ['retirement_candidate', 'INTEGER'],
+    ['source_lineage_blob', 'TEXT'],
+    ['schema_version', 'INTEGER'],
+  ];
+  for (const [name, type] of additions) {
+    if (!hasColumn(db, 'knowledge_api_endpoints', name)) {
+      db.exec(`ALTER TABLE knowledge_api_endpoints ADD COLUMN ${name} ${type}`);
+    }
+  }
+}
+
 function ensureChooseContextDecisionLayerColumns(db: SqliteDatabase): void {
   const additions: Array<[string, string]> = [
     ['chosen_layer', 'TEXT'],
@@ -329,6 +359,12 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   // helper is a pure no-op; legacy DBs from before V26-FIX-03 pick
   // up the columns via the guarded ALTERs.
   ensureKnowledgeApiEndpointsClassifierColumns(db);
+  // V27-08: legacy-DB additive migration for Endpoint Knowledge v2
+  // lineage columns (endpoint_source / correlation_confidence /
+  // correlated_region_id / confidence_reason / retirement_candidate /
+  // source_lineage_blob / schema_version). Same idempotent guarded-
+  // ALTER contract as the V26-FIX-03 helper above.
+  ensureKnowledgeApiEndpointsLineageColumns(db);
   // V23-04 / B-018 v1.5: Telemetry tables for the chooser. Same idempotent
   // CREATE IF NOT EXISTS pattern; old DBs from before V23-04 pick up the
   // tables on next open without a migration. Writers respect the same

@@ -339,6 +339,48 @@ CREATE TABLE IF NOT EXISTS knowledge_api_endpoints (
   response_shape_summary   TEXT,
   usable_for_task          INTEGER,
   noise_reason             TEXT,
+  -- V27-08 additive lineage columns. NULLABLE so legacy DBs (pre-V27)
+  -- and pre-V27-08 callers stay valid; the V27-08 writer sets them on
+  -- new upserts. The migration helper
+  -- ensureKnowledgeApiEndpointsLineageColumns() in client.ts stays in
+  -- lockstep with this list 1:1.
+  --
+  --   endpoint_source: closed enum
+  --     observed | seed_adapter | manual_seed | unknown
+  --     NULL is treated as 'unknown' on read; rowToEndpoint() derives
+  --     a back-compat value from the family column so legacy rows
+  --     written with family='github' surface as seed_adapter and rows
+  --     written with family='observed' surface as observed.
+  --
+  --   correlation_confidence: closed enum
+  --     unknown_candidate | low_confidence | high_confidence
+  --     V27-07 single-session correlator never writes high_confidence;
+  --     V27-08 multi-session escalation is the only writer that may.
+  --
+  --   correlated_region_id: brand-neutral region tag (e.g. main_list)
+  --     when V27-07 attributed the endpoint to a single DOM region.
+  --
+  --   confidence_reason: closed-enum-ish reason populated when the
+  --     V27-08 lookup downgrades / promotes a row.
+  --
+  --   retirement_candidate: 0/1. Set to 1 when an observed peer
+  --     stably outperforms a seed_adapter peer for the same site +
+  --     semantic type. The seed_adapter row is NEVER deleted.
+  --
+  --   source_lineage_blob: deterministic JSON. Carries the closed-enum
+  --     lineage breadcrumb (e.g. semantic source: capture | classifier |
+  --     correlator). NULL when the writer has no lineage to record.
+  --
+  --   schema_version: 1 = legacy (pre-V27-08). 2 = V27-08-aware row.
+  --     Reader collapses NULL to 1 so legacy rows still report a
+  --     concrete number.
+  endpoint_source          TEXT,
+  correlation_confidence   TEXT,
+  correlated_region_id     TEXT,
+  confidence_reason        TEXT,
+  retirement_candidate     INTEGER,
+  source_lineage_blob      TEXT,
+  schema_version           INTEGER,
   UNIQUE (site, endpoint_signature)
 );
 

@@ -239,6 +239,20 @@ export function deriveKnowledgeFromRequest(
     queryKeys: requestSummary.queryKeys,
   });
 
+  // V27-08 — derive `endpointSource` from the V26-FIX-03 family
+  // hint. `family='observed'` (any non-GitHub host) -> 'observed';
+  // `family='github'` -> 'seed_adapter' (the GitHub family adapter
+  // is the V25 hardcoded adapter we are gradually retiring); any
+  // other / future family -> 'unknown'. The repository performs
+  // the same back-derivation on read for legacy NULL rows, so this
+  // path stays in lockstep with `deriveEndpointSource()`.
+  const endpointSource =
+    classification.family === 'observed'
+      ? 'observed'
+      : classification.family === 'github' || classification.family === 'npmjs'
+        ? 'seed_adapter'
+        : 'unknown';
+
   return {
     site: classification.site,
     family: classification.family,
@@ -258,6 +272,23 @@ export function deriveKnowledgeFromRequest(
     responseShapeSummary: summarizeResponseShape(responseSummary.shape),
     usableForTask: observed.usableForTask,
     noiseReason: observed.noiseReason,
+    // V27-08 — additive lineage. Single-session capture never
+    // produces correlation evidence, so `correlationConfidence` and
+    // `correlatedRegionId` stay null here. The V27-07 correlator
+    // path is the only writer that bumps them. The lineage breadcrumb
+    // explicitly records that this row came from `api-knowledge-capture`
+    // (semanticSource='capture').
+    endpointSource,
+    correlationConfidence: null,
+    correlatedRegionId: null,
+    confidenceReason: null,
+    retirementCandidate: null,
+    sourceLineage: {
+      semanticSource: 'capture',
+      observationCount: 1,
+      correlationReason:
+        endpointSource === 'seed_adapter' ? 'seed_adapter_default' : 'metadata_only',
+    },
   };
 }
 

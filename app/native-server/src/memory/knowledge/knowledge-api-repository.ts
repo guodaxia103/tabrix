@@ -80,6 +80,73 @@ export interface KnowledgeApiEndpoint {
   responseShapeSummary: string | null;
   usableForTaskPersisted: boolean | null;
   noiseReason: string | null;
+  /**
+   * V27-08 — Endpoint Knowledge v2 lineage. Always populated on read:
+   *  - `endpointSource` — closed enum, derived from the persisted
+   *    column when present; otherwise back-derived from `family`
+   *    (`'observed'` ↔ observed; `'github' | 'npmjs'` ↔ seed_adapter;
+   *    everything else ↔ `'unknown'`).
+   *  - `correlationConfidence` — closed enum from V27-07. Single-
+   *    session writes are capped at `'low_confidence'`.
+   *  - `schemaVersion` — `1` for legacy rows, `2` for V27-08-aware
+   *    rows. Reader collapses `null` → `1`.
+   */
+  endpointSource: EndpointSource;
+  correlationConfidence: CorrelationConfidenceLevel | null;
+  correlatedRegionId: string | null;
+  confidenceReason: string | null;
+  retirementCandidate: boolean;
+  sourceLineage: EndpointSourceLineage | null;
+  schemaVersion: 1 | 2;
+}
+
+/**
+ * V27-08 — closed enum for "where did this row originate". The four
+ * legal values are aligned with the brief and with
+ * `safe-request-builder.ts`:
+ *   - `observed` — captured via `chrome_network_capture` and a
+ *     V27-06 endpoint candidate classifier verdict.
+ *   - `seed_adapter` — backed by a V25/V26 hardcoded GitHub/npmjs
+ *     seed entry under `app/native-server/src/api/api-knowledge.ts`.
+ *   - `manual_seed` — operator-curated row (currently unused; kept
+ *     for forward-compat so a future maintainer-private seed import
+ *     does not need a schema bump).
+ *   - `unknown` — pre-V27-08 row with no derivable hint.
+ */
+export type EndpointSource = 'observed' | 'seed_adapter' | 'manual_seed' | 'unknown';
+
+/**
+ * V27-08 — closed enum for the correlation confidence carried over
+ * from `dom-endpoint-correlator.ts`. The single-session correlator
+ * NEVER writes `'high_confidence'` — that bucket is reserved for
+ * V27-08 multi-session escalation (out of scope for this task).
+ */
+export type CorrelationConfidenceLevel = 'unknown_candidate' | 'low_confidence' | 'high_confidence';
+
+/**
+ * V27-08 — small structured lineage breadcrumb persisted alongside a
+ * row. Closed-enum fields only; never raw values, never user input.
+ *
+ * `semanticSource` records the producer of the semantic verdict:
+ *   - `'capture'` — derived from `api-knowledge-capture.ts` (V26-FIX-03 path).
+ *   - `'classifier_v2'` — derived from V27-06 endpoint candidate classifier.
+ *   - `'correlator_v2'` — derived from V27-07 DOM-endpoint correlator.
+ *   - `'seed_adapter'` — copied from the V25 seed table.
+ *   - `'unknown'` — fallback.
+ */
+export interface EndpointSourceLineage {
+  semanticSource: 'capture' | 'classifier_v2' | 'correlator_v2' | 'seed_adapter' | 'unknown';
+  observationCount: number;
+  /**
+   * Closed-enum reason describing why the writer set
+   * `correlationConfidence`. NULL when no correlator was involved.
+   */
+  correlationReason:
+    | 'metadata_only'
+    | 'click_partial_update'
+    | 'multi_session_stable'
+    | 'seed_adapter_default'
+    | null;
 }
 
 /**
@@ -139,6 +206,27 @@ export interface UpsertKnowledgeApiEndpointInput {
   responseShapeSummary?: string | null;
   usableForTask?: boolean | null;
   noiseReason?: string | null;
+  /**
+   * V27-08 — additive lineage inputs. All optional for back-compat;
+   * the V27-08 writer in `api-knowledge-capture.ts` populates them
+   * for new rows. Setting `endpointSource` (or any other v2 field)
+   * implicitly bumps the persisted `schemaVersion` to `2`.
+   *
+   * Rules:
+   *  - `correlationConfidence === 'high_confidence'` is REJECTED at
+   *    the writer for single-session inputs; callers that need
+   *    multi-session escalation must do so via a dedicated path
+   *    (out of scope for V27-08). Repository accepts the value but
+   *    callers in this PR never produce it.
+   *  - `sourceLineage` is JSON-serialised via `JSON.stringify`; no
+   *    raw values or user-supplied strings are allowed in it.
+   */
+  endpointSource?: EndpointSource | null;
+  correlationConfidence?: CorrelationConfidenceLevel | null;
+  correlatedRegionId?: string | null;
+  confidenceReason?: string | null;
+  retirementCandidate?: boolean | null;
+  sourceLineage?: EndpointSourceLineage | null;
 }
 
 interface KnowledgeApiEndpointRow {
@@ -163,6 +251,13 @@ interface KnowledgeApiEndpointRow {
   response_shape_summary: string | null;
   usable_for_task: number | null;
   noise_reason: string | null;
+  endpoint_source: string | null;
+  correlation_confidence: string | null;
+  correlated_region_id: string | null;
+  confidence_reason: string | null;
+  retirement_candidate: number | null;
+  source_lineage_blob: string | null;
+  schema_version: number | null;
 }
 
 const PERSISTED_SEMANTIC_TYPE_VALUES: ReadonlySet<string> = new Set<EndpointSemanticType>([
@@ -186,7 +281,87 @@ function coercePersistedSemanticType(value: string | null): EndpointSemanticType
   return PERSISTED_SEMANTIC_TYPE_VALUES.has(value) ? (value as EndpointSemanticType) : null;
 }
 
+const ENDPOINT_SOURCE_VALUES: ReadonlySet<string> = new Set<EndpointSource>([
+  'observed',
+  'seed_adapter',
+  'manual_seed',
+  'unknown',
+]);
+
+const CORRELATION_CONFIDENCE_VALUES: ReadonlySet<string> = new Set<CorrelationConfidenceLevel>([
+  'unknown_candidate',
+  'low_confidence',
+  'high_confidence',
+]);
+
+/**
+ * V27-08 — derive `endpointSource` for a row.
+ *
+ * Order of authority:
+ *   1. Persisted `endpoint_source` column (V27-08-aware writers).
+ *   2. Back-compat heuristic on `family`: pre-V27-08 rows captured by
+ *      `api-knowledge-capture.ts` use `family='observed'` for
+ *      browser-observed endpoints and `family='github' | 'npmjs'` for
+ *      seed-adapter rows.
+ *   3. `'unknown'` otherwise. The reader never invents `manual_seed`
+ *      from heuristics.
+ */
+function deriveEndpointSource(row: KnowledgeApiEndpointRow): EndpointSource {
+  const persisted = row.endpoint_source;
+  if (persisted && ENDPOINT_SOURCE_VALUES.has(persisted)) {
+    return persisted as EndpointSource;
+  }
+  const family = (row.family || '').toLowerCase();
+  if (family === 'observed') return 'observed';
+  if (family === 'github' || family === 'npmjs') return 'seed_adapter';
+  return 'unknown';
+}
+
+function coerceCorrelationConfidence(value: string | null): CorrelationConfidenceLevel | null {
+  if (value === null) return null;
+  return CORRELATION_CONFIDENCE_VALUES.has(value) ? (value as CorrelationConfidenceLevel) : null;
+}
+
+function parseSourceLineageBlob(value: string | null): EndpointSourceLineage | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<EndpointSourceLineage> | null;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const semanticSource = parsed.semanticSource;
+    if (
+      semanticSource !== 'capture' &&
+      semanticSource !== 'classifier_v2' &&
+      semanticSource !== 'correlator_v2' &&
+      semanticSource !== 'seed_adapter' &&
+      semanticSource !== 'unknown'
+    ) {
+      return null;
+    }
+    const observationCount =
+      typeof parsed.observationCount === 'number' && Number.isFinite(parsed.observationCount)
+        ? Math.max(0, Math.floor(parsed.observationCount))
+        : 0;
+    const correlationReason = parsed.correlationReason;
+    const correlationReasonOk =
+      correlationReason === null ||
+      correlationReason === undefined ||
+      correlationReason === 'metadata_only' ||
+      correlationReason === 'click_partial_update' ||
+      correlationReason === 'multi_session_stable' ||
+      correlationReason === 'seed_adapter_default';
+    if (!correlationReasonOk) return null;
+    return {
+      semanticSource,
+      observationCount,
+      correlationReason: correlationReason ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function rowToEndpoint(row: KnowledgeApiEndpointRow): KnowledgeApiEndpoint {
+  const schemaVersion: 1 | 2 = row.schema_version === 2 ? 2 : 1;
   return {
     endpointId: row.endpoint_id,
     site: row.site,
@@ -209,6 +384,13 @@ function rowToEndpoint(row: KnowledgeApiEndpointRow): KnowledgeApiEndpoint {
     responseShapeSummary: row.response_shape_summary,
     usableForTaskPersisted: row.usable_for_task === null ? null : row.usable_for_task === 1,
     noiseReason: row.noise_reason,
+    endpointSource: deriveEndpointSource(row),
+    correlationConfidence: coerceCorrelationConfidence(row.correlation_confidence),
+    correlatedRegionId: row.correlated_region_id,
+    confidenceReason: row.confidence_reason,
+    retirementCandidate: row.retirement_candidate === 1,
+    sourceLineage: parseSourceLineageBlob(row.source_lineage_blob),
+    schemaVersion,
   };
 }
 
@@ -241,12 +423,71 @@ export class KnowledgeApiRepository {
           : 0;
     const noiseReason = input.noiseReason ?? null;
 
+    // V27-08 lineage inputs. Coerce to NULL when absent so the SQL
+    // bindings stay aligned with the (idempotent CREATE) column list.
+    // Setting any of these implicitly bumps `schema_version` to `2`
+    // so a downstream consumer can tell V27-08 rows from legacy ones
+    // by inspecting a single field.
+    const endpointSource = input.endpointSource ?? null;
+    if (endpointSource && !ENDPOINT_SOURCE_VALUES.has(endpointSource)) {
+      throw new Error(
+        `[knowledge-api-repository] invalid endpointSource '${endpointSource}'. Expected closed enum.`,
+      );
+    }
+    const correlationConfidence = input.correlationConfidence ?? null;
+    if (correlationConfidence && !CORRELATION_CONFIDENCE_VALUES.has(correlationConfidence)) {
+      throw new Error(
+        `[knowledge-api-repository] invalid correlationConfidence '${correlationConfidence}'. Expected closed enum.`,
+      );
+    }
+    const correlatedRegionId = input.correlatedRegionId ?? null;
+    const confidenceReason = input.confidenceReason ?? null;
+    const retirementCandidate =
+      input.retirementCandidate === undefined || input.retirementCandidate === null
+        ? null
+        : input.retirementCandidate
+          ? 1
+          : 0;
+    const sourceLineageBlob = input.sourceLineage ? JSON.stringify(input.sourceLineage) : null;
+    const isV2Write =
+      endpointSource !== null ||
+      correlationConfidence !== null ||
+      correlatedRegionId !== null ||
+      confidenceReason !== null ||
+      retirementCandidate !== null ||
+      sourceLineageBlob !== null;
+    const schemaVersion = isV2Write ? 2 : null;
+
     const tx = this.db.transaction(() => {
       const existing = this.db
         .prepare(`SELECT * FROM knowledge_api_endpoints WHERE site = ? AND endpoint_signature = ?`)
         .get(input.site, input.endpointSignature) as KnowledgeApiEndpointRow | undefined;
 
       if (existing) {
+        // V27-08 — for re-observations we keep the prior lineage when
+        // the new write does not supply one (so a V26-FIX-03 capture
+        // of an existing V27-08 row does not silently downgrade
+        // `endpoint_source` back to NULL). When the new write does
+        // supply a value, it wins (a fresh classifier_v2 / correlator
+        // verdict is more authoritative than a stale lineage).
+        const nextEndpointSource = endpointSource ?? existing.endpoint_source;
+        const nextCorrelationConfidence = correlationConfidence ?? existing.correlation_confidence;
+        const nextCorrelatedRegionId = correlatedRegionId ?? existing.correlated_region_id;
+        const nextConfidenceReason = confidenceReason ?? existing.confidence_reason;
+        const nextRetirementCandidate = retirementCandidate ?? existing.retirement_candidate;
+        const nextSourceLineageBlob = sourceLineageBlob ?? existing.source_lineage_blob;
+        const nextSchemaVersion =
+          schemaVersion ??
+          existing.schema_version ??
+          (nextEndpointSource ||
+          nextCorrelationConfidence ||
+          nextCorrelatedRegionId ||
+          nextConfidenceReason ||
+          nextRetirementCandidate !== null ||
+          nextSourceLineageBlob
+            ? 2
+            : null);
+
         this.db
           .prepare(
             `UPDATE knowledge_api_endpoints
@@ -263,7 +504,14 @@ export class KnowledgeApiRepository {
                  query_params_shape = ?,
                  response_shape_summary = ?,
                  usable_for_task = ?,
-                 noise_reason = ?
+                 noise_reason = ?,
+                 endpoint_source = ?,
+                 correlation_confidence = ?,
+                 correlated_region_id = ?,
+                 confidence_reason = ?,
+                 retirement_candidate = ?,
+                 source_lineage_blob = ?,
+                 schema_version = ?
              WHERE endpoint_id = ?`,
           )
           .run(
@@ -280,6 +528,13 @@ export class KnowledgeApiRepository {
             responseShapeSummary,
             usableForTask,
             noiseReason,
+            nextEndpointSource,
+            nextCorrelationConfidence,
+            nextCorrelatedRegionId,
+            nextConfidenceReason,
+            nextRetirementCandidate,
+            nextSourceLineageBlob,
+            nextSchemaVersion,
             existing.endpoint_id,
           );
         return existing.endpoint_id;
@@ -294,8 +549,11 @@ export class KnowledgeApiRepository {
              source_session_id, source_step_id, source_history_ref,
              sample_count, first_seen_at, last_seen_at,
              semantic_type, query_params_shape, response_shape_summary,
-             usable_for_task, noise_reason
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
+             usable_for_task, noise_reason,
+             endpoint_source, correlation_confidence, correlated_region_id,
+             confidence_reason, retirement_candidate, source_lineage_blob,
+             schema_version
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           endpointId,
@@ -318,6 +576,13 @@ export class KnowledgeApiRepository {
           responseShapeSummary,
           usableForTask,
           noiseReason,
+          endpointSource,
+          correlationConfidence,
+          correlatedRegionId,
+          confidenceReason,
+          retirementCandidate,
+          sourceLineageBlob,
+          schemaVersion,
         );
       return endpointId;
     });

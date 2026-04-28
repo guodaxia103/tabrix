@@ -213,4 +213,249 @@ describe('KnowledgeApiRepository (B-017)', () => {
     expect(candidate.confidence).toBeGreaterThan(0.7);
     db.close();
   });
+
+  // ---------------------------------------------------------------
+  // V27-08 Endpoint Knowledge v2 lineage tests.
+  //
+  // What these defend (regression hardening):
+  //  - Additive lineage columns persist round-trip through SQLite.
+  //  - Legacy rows (rows written with no V27-08 fields) still
+  //    deserialise: `endpointSource` is back-derived from `family`,
+  //    and `schemaVersion` collapses NULL → 1.
+  //  - Re-observing a V27-08-aware row from a V26-FIX-03 capture path
+  //    (which does set `endpointSource` for `family='observed'`) does
+  //    not silently downgrade lineage to NULL.
+  //  - The repository validates the closed enum so a typo in a future
+  //    writer cannot poison the table.
+  //  - Persisted lineage never includes raw user values — only the
+  //    closed-enum breadcrumb defined by `EndpointSourceLineage`.
+  // ---------------------------------------------------------------
+  describe('V27-08 Endpoint Knowledge v2 lineage', () => {
+    it('back-derives endpointSource from family for legacy rows (no v2 fields supplied)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      // Pre-V27-08 input: no `endpointSource`, no `sourceLineage`.
+      const githubRow = repo.upsert(makeInput({ family: 'github' }));
+      const observedRow = repo.upsert(
+        makeInput({
+          family: 'observed',
+          site: 'en.wikipedia.org',
+          urlPattern: 'en.wikipedia.org/w/rest.php/v1/search/page',
+          endpointSignature: 'GET en.wikipedia.org/w/rest.php/v1/search/page',
+        }),
+      );
+      const npmRow = repo.upsert(
+        makeInput({
+          family: 'npmjs',
+          site: 'registry.npmjs.org',
+          urlPattern: 'registry.npmjs.org/-/v1/search',
+          endpointSignature: 'GET registry.npmjs.org/-/v1/search',
+        }),
+      );
+      const otherRow = repo.upsert(
+        makeInput({
+          family: 'unknown_future_family',
+          site: 'unknown.example.com',
+          urlPattern: 'unknown.example.com/x',
+          endpointSignature: 'GET unknown.example.com/x',
+        }),
+      );
+
+      expect(githubRow.endpointSource).toBe('seed_adapter');
+      expect(observedRow.endpointSource).toBe('observed');
+      expect(npmRow.endpointSource).toBe('seed_adapter');
+      expect(otherRow.endpointSource).toBe('unknown');
+
+      // Legacy rows (no v2 input fields) report schemaVersion=1.
+      expect(githubRow.schemaVersion).toBe(1);
+      expect(githubRow.sourceLineage).toBeNull();
+      expect(githubRow.correlationConfidence).toBeNull();
+      expect(githubRow.correlatedRegionId).toBeNull();
+      expect(githubRow.confidenceReason).toBeNull();
+      expect(githubRow.retirementCandidate).toBe(false);
+      db.close();
+    });
+
+    it('persists v2 lineage round-trip and bumps schemaVersion to 2', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      const row = repo.upsert(
+        makeInput({
+          family: 'observed',
+          endpointSource: 'observed',
+          correlationConfidence: 'low_confidence',
+          correlatedRegionId: 'main_list',
+          confidenceReason: 'click_partial_update_low_confidence',
+          retirementCandidate: false,
+          sourceLineage: {
+            semanticSource: 'correlator_v2',
+            observationCount: 3,
+            correlationReason: 'click_partial_update',
+          },
+        }),
+      );
+
+      expect(row.schemaVersion).toBe(2);
+      expect(row.endpointSource).toBe('observed');
+      expect(row.correlationConfidence).toBe('low_confidence');
+      expect(row.correlatedRegionId).toBe('main_list');
+      expect(row.confidenceReason).toBe('click_partial_update_low_confidence');
+      expect(row.retirementCandidate).toBe(false);
+      expect(row.sourceLineage).toEqual({
+        semanticSource: 'correlator_v2',
+        observationCount: 3,
+        correlationReason: 'click_partial_update',
+      });
+
+      // Re-read via findBySignature to confirm SQLite round-trip.
+      const fetched = repo.findBySignature(row.site, row.endpointSignature);
+      expect(fetched).not.toBeNull();
+      expect(fetched!.endpointSource).toBe('observed');
+      expect(fetched!.sourceLineage).toEqual({
+        semanticSource: 'correlator_v2',
+        observationCount: 3,
+        correlationReason: 'click_partial_update',
+      });
+      db.close();
+    });
+
+    it('preserves prior v2 lineage on re-observation when the new write omits it', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      // First write: v2-aware (e.g. correlator path).
+      const first = repo.upsert(
+        makeInput({
+          family: 'observed',
+          endpointSource: 'observed',
+          correlationConfidence: 'low_confidence',
+          correlatedRegionId: 'main_list',
+          sourceLineage: {
+            semanticSource: 'correlator_v2',
+            observationCount: 1,
+            correlationReason: 'click_partial_update',
+          },
+          observedAt: '2026-04-22T10:00:00.000Z',
+        }),
+      );
+      // Second write: legacy (no v2 fields supplied, e.g. an older
+      // capture path or a fixture). Sample count must increment but
+      // the prior lineage must NOT be reset to NULL.
+      const second = repo.upsert(
+        makeInput({
+          family: 'observed',
+          observedAt: '2026-04-22T11:00:00.000Z',
+        }),
+      );
+
+      expect(second.endpointId).toBe(first.endpointId);
+      expect(second.sampleCount).toBe(2);
+      expect(second.endpointSource).toBe('observed');
+      expect(second.correlationConfidence).toBe('low_confidence');
+      expect(second.correlatedRegionId).toBe('main_list');
+      expect(second.sourceLineage).toEqual({
+        semanticSource: 'correlator_v2',
+        observationCount: 1,
+        correlationReason: 'click_partial_update',
+      });
+      expect(second.schemaVersion).toBe(2);
+      db.close();
+    });
+
+    it('lets a fresh classifier verdict overwrite a stale lineage breadcrumb', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      repo.upsert(
+        makeInput({
+          family: 'observed',
+          endpointSource: 'observed',
+          sourceLineage: {
+            semanticSource: 'capture',
+            observationCount: 1,
+            correlationReason: 'metadata_only',
+          },
+          observedAt: '2026-04-22T10:00:00.000Z',
+        }),
+      );
+      const updated = repo.upsert(
+        makeInput({
+          family: 'observed',
+          endpointSource: 'observed',
+          correlationConfidence: 'low_confidence',
+          correlatedRegionId: 'main_list',
+          sourceLineage: {
+            semanticSource: 'correlator_v2',
+            observationCount: 2,
+            correlationReason: 'click_partial_update',
+          },
+          observedAt: '2026-04-22T11:00:00.000Z',
+        }),
+      );
+
+      expect(updated.sampleCount).toBe(2);
+      expect(updated.sourceLineage).toEqual({
+        semanticSource: 'correlator_v2',
+        observationCount: 2,
+        correlationReason: 'click_partial_update',
+      });
+      expect(updated.correlationConfidence).toBe('low_confidence');
+      db.close();
+    });
+
+    it('rejects an invalid endpointSource at the writer (closed-enum guard)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      expect(() =>
+        repo.upsert(
+          makeInput({
+            // Cast through unknown so a future schema change does not silently
+            // collapse this assertion. The writer must throw on the literal.
+            endpointSource: 'totally_made_up' as unknown as 'observed',
+          }),
+        ),
+      ).toThrow(/invalid endpointSource/);
+      db.close();
+    });
+
+    it('rejects an invalid correlationConfidence at the writer (closed-enum guard)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      expect(() =>
+        repo.upsert(
+          makeInput({
+            correlationConfidence: 'super_high' as unknown as 'low_confidence',
+          }),
+        ),
+      ).toThrow(/invalid correlationConfidence/);
+      db.close();
+    });
+
+    it('persisted lineage payload contains only closed-enum fields (no raw values)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      repo.upsert(
+        makeInput({
+          family: 'observed',
+          endpointSource: 'observed',
+          sourceLineage: {
+            semanticSource: 'classifier_v2',
+            observationCount: 1,
+            correlationReason: null,
+          },
+        }),
+      );
+      // Re-read raw DB row to confirm we never serialise anything else
+      // into source_lineage_blob (e.g. raw query params, response body).
+      const rawRow = db
+        .prepare(`SELECT source_lineage_blob FROM knowledge_api_endpoints LIMIT 1`)
+        .get() as { source_lineage_blob: string };
+      const parsed = JSON.parse(rawRow.source_lineage_blob);
+      expect(Object.keys(parsed).sort()).toEqual(
+        ['correlationReason', 'observationCount', 'semanticSource'].sort(),
+      );
+      expect(parsed.semanticSource).toBe('classifier_v2');
+      // No URL, query string, header value, etc. should be in the blob.
+      expect(rawRow.source_lineage_blob).not.toMatch(/Authorization|Cookie|Bearer|@/);
+      db.close();
+    });
+  });
 });

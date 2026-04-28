@@ -273,6 +273,15 @@ function knowledgeRow(overrides: Partial<ScoredFixtureRow>): ScoredFixtureRow {
     responseShapeSummary: null,
     usableForTaskPersisted: true,
     noiseReason: null,
+    endpointSource:
+      overrides.endpointSource ??
+      (overrides.family === 'github' || overrides.family === 'npmjs' ? 'seed_adapter' : 'observed'),
+    correlationConfidence: overrides.correlationConfidence ?? null,
+    correlatedRegionId: overrides.correlatedRegionId ?? null,
+    confidenceReason: overrides.confidenceReason ?? null,
+    retirementCandidate: overrides.retirementCandidate ?? false,
+    sourceLineage: overrides.sourceLineage ?? null,
+    schemaVersion: overrides.schemaVersion ?? 2,
     semanticType: 'search',
     confidence: 0.8,
     usableForTask: true,
