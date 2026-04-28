@@ -70,7 +70,7 @@ Read the public MKEP code map in this file and the relevant implementation modul
 
 ### MKEP Policy-layer tasks (risk-tier gating / capability opt-in)
 
-Public touchpoints: `app/native-server/src/policy/**`, `packages/shared/src/tools.ts` (`TOOL_RISK_TIERS` + `requiresExplicitOptIn`). Detailed Policy phase plans are maintainer-private and must not be reintroduced under `docs/`.
+Public touchpoints: `app/native-server/src/policy/**`, `packages/shared/src/tools/**` (`TOOL_RISK_TIERS` + `requiresExplicitOptIn`). Detailed Policy phase plans are maintainer-private and must not be reintroduced under `docs/`.
 
 ### Release, security, and third-party reuse tasks
 
@@ -105,13 +105,13 @@ Use this map when you need to locate where a layer lives. If a task does not fit
 | **Memory**     | `app/native-server/src/memory/**` (SQLite, SessionManager, post-processor) | Sidepanel Memory tab (placeholder, Stage 3e target)                 | –                                                                   |
 | **Knowledge**  | –                                                                  | `app/chrome-extension/entrypoints/background/knowledge/**` (seeds, registry, lookup) | –                                                                   |
 | **Experience** | _not yet scaffolded — will live under `src/memory/experience/`_    | Sidepanel Experience tab (placeholder, Stage 3b target)             | –                                                                   |
-| **Policy**     | `app/native-server/src/policy/**`                                  | Sidepanel Policy surface (future)                                   | `packages/shared/src/tools.ts` (`TOOL_RISK_TIERS`, `requiresExplicitOptIn`) |
+| **Policy**     | `app/native-server/src/policy/**`                                  | Sidepanel Policy surface (future)                                   | `packages/shared/src/tools/**` (`TOOL_RISK_TIERS`, `requiresExplicitOptIn`) |
 
 Cross-cutting helpers:
 
 - `app/native-server/src/shared/data-dirs.ts` — `~/.chrome-mcp-agent/` resolver used by Memory.
 - `app/chrome-extension/entrypoints/background/keepalive/` — MV3 SW keepalive (Offscreen Document + Port heartbeat). Do not reopen the old RR-V3 path.
-- `packages/shared/src/` public API boundary: `constants`, `types`, `tools`, `labels`, `bridge-ws`, `read-page-contract`. **Any new cross-process type goes here, and nowhere else.**
+- `packages/shared/src/` public API boundary: `constants`, `types`, `tools/**` (contract entrypoint at `tools.ts`, modules under `tools/`), `labels`, `bridge-ws`, `read-page-contract`. **Any new cross-process type goes here, and nowhere else.**
 
 ## Removed Surfaces — Must Not Be Reintroduced
 
@@ -155,7 +155,7 @@ When running fast-lane, an AI assistant **may** do:
 When running fast-lane, an AI assistant **must not** do any of the following — stop and return control to the owner-lane:
 
 1. Choose between two architectural approaches. If two designs are on the table, stop.
-2. Change a public contract: MCP tool schema (`packages/shared/src/tools.ts`), `read_page` HVO contract (`read-page-contract.ts`), HTTP route shape, or a cross-process message type.
+2. Change a public contract: MCP tool schema (`packages/shared/src/tools/**`), `read_page` HVO contract (`read-page-contract.ts`), HTTP route shape, or a cross-process message type.
 3. Add a new `TOOL_NAMES` entry, a new risk tier, or a new `requiresExplicitOptIn` flag — these are Policy-layer decisions.
 4. Change the Memory / Knowledge / Experience SQLite schema.
 5. Touch CI (`.github/workflows/**`) or commitlint rules.

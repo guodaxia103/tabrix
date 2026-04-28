@@ -106,7 +106,7 @@ The shared contract between the native server and the extension.
 
 Primary files:
 
-- `tools.ts`: MCP tool schemas and one of the first places to touch when adding a new tool
+- `tools.ts` / `tools/*`: MCP tool contract (entrypoint `tools.ts` re-exports from modules under `tools/` — names, schemas, policy, capability gates)
 - `types.ts` and `constants.ts`: shared cross-process contracts
 - `labels.ts`: shared copy / label catalog
 - `bridge-ws.ts`: the extension-to-native bridge wire protocol
@@ -187,7 +187,7 @@ Use this path when debugging:
 
 Recommended reading order:
 
-1. `packages/shared/src/tools.ts`
+1. `packages/shared/src/tools.ts` (contract entrypoint) → `packages/shared/src/tools/` (modules)
 2. `app/chrome-extension/entrypoints/background/tools/index.ts`
 3. the matching file in `app/chrome-extension/entrypoints/background/tools/browser/*.ts`
 4. `app/native-server/src/mcp/register-tools.ts`
@@ -229,7 +229,7 @@ Start with:
 Start with:
 
 - `app/native-server/src/policy/*`
-- `packages/shared/src/tools.ts` (`TOOL_RISK_TIERS` + `requiresExplicitOptIn`)
+- `packages/shared/src/tools.ts` / `tools/` (`TOOL_RISK_TIERS` + `requiresExplicitOptIn`)
 
 ### Change auth, remote access, or server status
 
@@ -247,7 +247,7 @@ To ramp up quickly, read in this order:
 1. `README.md`
 2. `docs/ARCHITECTURE.md`
 3. this document
-4. `packages/shared/src/tools.ts`
+4. `packages/shared/src/tools.ts` (entrypoint) → `packages/shared/src/tools/` (modules)
 5. `app/native-server/src/mcp/register-tools.ts`
 6. `app/chrome-extension/entrypoints/background/index.ts`
 7. the concrete module you plan to change
