@@ -89,6 +89,7 @@ export interface CapturedNetworkRequest {
   type?: string;
   status?: number | string;
   statusCode?: number;
+  requestTime?: number;
   mimeType?: string;
   requestBody?: string | null;
   responseBody?: string | null;
@@ -96,6 +97,7 @@ export interface CapturedNetworkRequest {
   specificRequestHeaders?: Record<string, string>;
   specificResponseHeaders?: Record<string, string>;
   errorText?: string;
+  safeResponseSummary?: CapturedSafeResponseSummary;
 }
 
 export interface CapturedNetworkBundle {
@@ -103,6 +105,37 @@ export interface CapturedNetworkBundle {
   commonRequestHeaders?: Record<string, string>;
   commonResponseHeaders?: Record<string, string>;
   tabUrl?: string;
+  responseSummaryLifecycle?: CapturedResponseSummaryLifecycle;
+}
+
+export interface CapturedSafeResponseSummary {
+  responseSummarySource?: 'browser_context_summary' | string;
+  bridgePath?: 'main_world_to_content_to_native' | string;
+  capturedAfterArm?: boolean;
+  rawBodyPersisted?: false;
+  privacyCheck?: 'passed' | 'failed' | string;
+  rejectedReason?: string | null;
+  status?: number | null;
+  contentType?: string | null;
+  rows?: readonly Record<string, string | number | boolean | null>[];
+  rowCount?: number;
+  emptyResult?: boolean;
+  fieldShapeSummaryAvailable?: boolean;
+  fieldNames?: readonly string[];
+  taskQueryValueMatched?: boolean | null;
+  samplerArmedAt?: number | null;
+  capturedAt?: number | null;
+}
+
+export interface CapturedResponseSummaryLifecycle {
+  samplerArmedAt?: number | null;
+  samplerDisarmedAt?: number | null;
+  samplerDisarmReason?: string | null;
+  responseSummarySource?: string | null;
+  responseSummaryRejectedReason?: string | null;
+  capturedAfterArm?: boolean | null;
+  bridgePath?: string | null;
+  rawBodyPersisted?: false;
 }
 
 export interface CaptureKnowledgeContext {
@@ -222,11 +255,13 @@ export function deriveKnowledgeFromRequest(
   });
 
   const contentType = pickHeader(mergedResponseHeaders, 'content-type') || req.mimeType || null;
-  const responseSummary = buildResponseSummary({
-    contentType,
-    body: req.responseBody ?? null,
-    base64Encoded: req.base64Encoded === true,
-  });
+  const responseSummary =
+    buildResponseSummaryFromSafeSummary(req.safeResponseSummary, contentType) ??
+    buildResponseSummary({
+      contentType,
+      body: req.responseBody ?? null,
+      base64Encoded: req.base64Encoded === true,
+    });
 
   // V26-FIX-03 — generic semantic classifier. Family-agnostic; runs
   // for GitHub rows too so the persisted `semantic_type` stays
@@ -657,6 +692,50 @@ function buildResponseSummary(input: {
   };
 }
 
+function buildResponseSummaryFromSafeSummary(
+  summary: CapturedSafeResponseSummary | undefined,
+  fallbackContentType: string | null,
+): KnowledgeApiResponseSummary | null {
+  if (!summary || summary.responseSummarySource !== 'browser_context_summary') return null;
+  if (summary.privacyCheck === 'failed') return null;
+  const contentType =
+    (summary.contentType || fallbackContentType || null)?.split(';')[0]?.trim() || null;
+  const fieldNames = Array.from(
+    new Set(
+      (summary.fieldNames ?? [])
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .map((item) => item.trim()),
+    ),
+  ).sort();
+  if (summary.emptyResult === true) {
+    return {
+      contentType,
+      sizeBytes: null,
+      shape: {
+        kind: 'array',
+        itemCount: 0,
+        sampleItemKeys: fieldNames,
+      },
+    };
+  }
+  const rowCount =
+    typeof summary.rowCount === 'number' && Number.isFinite(summary.rowCount)
+      ? Math.max(0, Math.floor(summary.rowCount))
+      : Array.isArray(summary.rows)
+        ? summary.rows.length
+        : 0;
+  if (fieldNames.length === 0 && rowCount === 0) return null;
+  return {
+    contentType,
+    sizeBytes: null,
+    shape: {
+      kind: 'array',
+      itemCount: rowCount,
+      sampleItemKeys: fieldNames.slice(0, RESPONSE_ARRAY_SAMPLE_KEY_LIMIT),
+    },
+  };
+}
+
 function computeResponseShape(input: {
   contentType: string | null;
   body: string | null;
@@ -835,6 +914,40 @@ export function summarizeEndpointShapeFromCapturedRequest(
   const contentTypeRaw = pickHeader(mergedResponseHeaders, 'content-type') || req.mimeType || null;
   const contentType = contentTypeRaw ? contentTypeRaw.split(';')[0].trim() : null;
   const contentTypeBucket = classifyContentTypeBucketFromString(contentType);
+  const safeSummary = req.safeResponseSummary;
+  if (
+    safeSummary?.responseSummarySource === 'browser_context_summary' &&
+    safeSummary.privacyCheck !== 'failed' &&
+    safeSummary.capturedAfterArm === true
+  ) {
+    const fieldNames = Array.from(
+      new Set(
+        (safeSummary.fieldNames ?? []).filter(
+          (item): item is string => typeof item === 'string' && item.trim().length > 0,
+        ),
+      ),
+    ).sort();
+    const fieldTypes: Record<string, EndpointShapeFieldType> = {};
+    const firstRow = Array.isArray(safeSummary.rows) ? safeSummary.rows[0] : null;
+    for (const key of fieldNames) {
+      fieldTypes[key] = fieldTypeOf(firstRow ? firstRow[key] : null);
+    }
+    return {
+      kind: 'array',
+      topLevelKeys: [],
+      rowCount:
+        typeof safeSummary.rowCount === 'number' && Number.isFinite(safeSummary.rowCount)
+          ? Math.max(0, Math.floor(safeSummary.rowCount))
+          : Array.isArray(safeSummary.rows)
+            ? safeSummary.rows.length
+            : null,
+      sampleItemKeys: fieldNames,
+      fieldTypes,
+      sizeClass: 'unknown',
+      contentTypeBucket,
+      available: safeSummary.fieldShapeSummaryAvailable === true || fieldNames.length > 0,
+    };
+  }
 
   const body = typeof req.responseBody === 'string' ? req.responseBody : null;
   // Size measurement is independent of availability: an explicit

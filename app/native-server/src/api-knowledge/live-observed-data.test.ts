@@ -82,7 +82,104 @@ describe('live-observed-data selector', () => {
     expect(out.rejected[0]).toMatchObject({
       endpointSource: 'observed',
       fallbackUsed: true,
-      fallbackCause: 'metadata_only_capture',
+      fallbackCause: 'response_summary_unavailable',
+    });
+  });
+
+  it('browser-context safe response summary produces current-task rows without responseBody', () => {
+    const requestUrl = 'https://api.neutral-social.example.test/v1/search/items?keyword=&page=';
+    const out = run({
+      bundle: {
+        requests: [
+          {
+            url: requestUrl,
+            method: 'GET',
+            type: 'xmlhttprequest',
+            requestTime: 2000,
+            statusCode: 200,
+            mimeType: 'application/json',
+            specificResponseHeaders: { 'Content-Type': 'application/json; charset=utf-8' },
+            safeResponseSummary: {
+              responseSummarySource: 'browser_context_summary',
+              bridgePath: 'main_world_to_content_to_native',
+              capturedAfterArm: true,
+              rawBodyPersisted: false,
+              privacyCheck: 'passed',
+              rejectedReason: null,
+              rows: [
+                { title: 'compact result one', likeCount: 3 },
+                { title: 'compact result two', likeCount: 5 },
+              ],
+              rowCount: 2,
+              emptyResult: false,
+              fieldShapeSummaryAvailable: true,
+              fieldNames: ['likeCount', 'title'],
+              taskQueryValueMatched: true,
+              samplerArmedAt: 1000,
+              capturedAt: 2100,
+            },
+          },
+        ],
+      },
+      selectorContext: {
+        currentPageUrl: 'https://neutral-social.example.test/search?keyword=desk&page=1',
+      },
+    });
+    const blob = JSON.stringify(out);
+
+    expect(out.rejected).toHaveLength(0);
+    expect(out.selected[0]).toMatchObject({
+      endpointSource: 'observed',
+      selectedDataSource: 'api_rows',
+      rowCount: 2,
+      liveObservedEndpointId: null,
+      responseSummarySource: 'browser_context_summary',
+      rawBodyPersisted: false,
+      capturedAfterArm: true,
+      bridgePath: 'main_world_to_content_to_native',
+      pageRegion: 'task_query_network',
+    });
+    expect(blob).not.toContain('responseBody');
+    expect(blob).not.toContain('desk');
+  });
+
+  it('safe response summary before arm is rejected', () => {
+    const out = run({
+      bundle: {
+        requests: [
+          {
+            url: 'https://api.neutral-social.example.test/v1/search/items?keyword=',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            requestTime: 900,
+            statusCode: 200,
+            mimeType: 'application/json',
+            safeResponseSummary: {
+              responseSummarySource: 'browser_context_summary',
+              bridgePath: 'main_world_to_content_to_native',
+              capturedAfterArm: true,
+              rawBodyPersisted: false,
+              privacyCheck: 'passed',
+              rejectedReason: null,
+              rows: [{ title: 'late' }],
+              rowCount: 1,
+              emptyResult: false,
+              fieldShapeSummaryAvailable: true,
+              fieldNames: ['title'],
+              taskQueryValueMatched: true,
+              samplerArmedAt: 1000,
+              capturedAt: 1100,
+            },
+          },
+        ],
+      },
+    });
+
+    expect(out.selected).toHaveLength(0);
+    expect(out.rejected[0]).toMatchObject({
+      fallbackCause: 'response_before_sampler_arm',
+      responseSummarySource: 'browser_context_summary',
+      fallbackUsed: true,
     });
   });
 

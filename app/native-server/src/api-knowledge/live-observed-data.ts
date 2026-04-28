@@ -37,6 +37,9 @@ const READ_SHAPED_TYPES: ReadonlySet<EndpointCandidateSemanticType> = new Set([
   'filter',
   'detail',
 ]);
+const SAFE_SUMMARY_STRING_VALUE_CAP = 240;
+const SENSITIVE_FIELD_RE =
+  /(authorization|cookie|password|passwd|token|secret|session|csrf|xsrf|api[_-]?key)/i;
 
 export type LiveObservedSelectedDataSource = 'api_rows' | 'api_detail';
 
@@ -52,6 +55,11 @@ export interface LiveObservedApiEvidence {
   fallbackCause: string | null;
   fallbackUsed: boolean;
   knowledgeUpserted: boolean;
+  responseSummarySource: 'browser_context_summary' | 'debugger_body_probe' | 'not_available';
+  rawBodyPersisted: false;
+  capturedAfterArm: boolean | null;
+  bridgePath: 'main_world_to_content_to_native' | 'not_available';
+  responseSummaryRejectedReason: string | null;
 }
 
 export interface LiveObservedApiData extends LiveObservedApiEvidence {
@@ -115,6 +123,7 @@ export function deriveLiveObservedApiDataFromBundle(
     const baseEvidence = buildEvidence({
       upsert,
       candidate,
+      req,
       upsertState,
       pageRegion: relevance.pageRegion,
       correlationScore: relevance.correlationScore,
@@ -166,6 +175,7 @@ export function deriveLiveObservedApiDataFromBundle(
 function buildEvidence(input: {
   upsert: UpsertKnowledgeApiEndpointInput;
   candidate: EndpointCandidate;
+  req: CapturedNetworkRequest;
   upsertState:
     | {
         endpointId: string | null;
@@ -180,6 +190,7 @@ function buildEvidence(input: {
   fallbackCause: string | null;
   fallbackUsed: boolean;
 }): LiveObservedApiEvidence {
+  const summary = input.req.safeResponseSummary;
   return {
     endpointSource: 'observed',
     liveObservedEndpointId: input.upsertState?.endpointId ?? null,
@@ -192,6 +203,23 @@ function buildEvidence(input: {
     fallbackCause: input.fallbackCause,
     fallbackUsed: input.fallbackUsed,
     knowledgeUpserted: input.upsertState?.knowledgeUpserted === true,
+    responseSummarySource:
+      summary?.responseSummarySource === 'browser_context_summary'
+        ? 'browser_context_summary'
+        : typeof input.req.responseBody === 'string'
+          ? 'debugger_body_probe'
+          : 'not_available',
+    rawBodyPersisted: false,
+    capturedAfterArm:
+      typeof summary?.capturedAfterArm === 'boolean' ? summary.capturedAfterArm : null,
+    bridgePath:
+      summary?.bridgePath === 'main_world_to_content_to_native'
+        ? 'main_world_to_content_to_native'
+        : 'not_available',
+    responseSummaryRejectedReason:
+      typeof summary?.rejectedReason === 'string' && summary.rejectedReason.length > 0
+        ? summary.rejectedReason
+        : null,
   };
 }
 
@@ -221,12 +249,52 @@ function buildLiveRows(
     return { ok: false, cause: 'endpoint_error' };
   }
 
+  const summary = req.safeResponseSummary;
+  if (summary?.responseSummarySource === 'browser_context_summary') {
+    if (summary.rawBodyPersisted !== false) {
+      return { ok: false, cause: 'raw_body_persistence_risk' };
+    }
+    if (summary.capturedAfterArm !== true) {
+      return { ok: false, cause: 'response_summary_before_arm' };
+    }
+    if (
+      typeof req.requestTime === 'number' &&
+      typeof summary.samplerArmedAt === 'number' &&
+      req.requestTime < summary.samplerArmedAt
+    ) {
+      return { ok: false, cause: 'response_before_sampler_arm' };
+    }
+    if (summary.privacyCheck === 'failed') {
+      return { ok: false, cause: summary.rejectedReason ?? 'privacy_check_failed' };
+    }
+    if (candidate.confidence < LIVE_OBSERVED_CONFIDENCE_FLOOR) {
+      return { ok: false, cause: 'low_confidence' };
+    }
+    if (summary.fieldShapeSummaryAvailable !== true && summary.emptyResult !== true) {
+      return { ok: false, cause: 'field_shape_unavailable' };
+    }
+    if (summary.emptyResult === true) {
+      return { ok: true, selectedDataSource: 'api_rows', rows: [] };
+    }
+    const rows = Array.isArray(summary.rows)
+      ? compactSafeSummaryRows(summary.rows, LIVE_OBSERVED_ROW_LIMIT)
+      : [];
+    if (rows.length === 0) {
+      return { ok: false, cause: summary.rejectedReason ?? 'compact_rows_unavailable' };
+    }
+    return {
+      ok: true,
+      selectedDataSource: candidate.semanticType === 'detail' ? 'api_detail' : 'api_rows',
+      rows,
+    };
+  }
+
   const body = typeof req.responseBody === 'string' ? req.responseBody : null;
   if (!body || req.base64Encoded === true) {
     return {
       ok: false,
       cause: candidate.responseBodyUnavailable
-        ? 'metadata_only_capture'
+        ? 'response_summary_unavailable'
         : 'response_body_unavailable',
     };
   }
@@ -266,6 +334,34 @@ function buildLiveRows(
     selectedDataSource: candidate.semanticType === 'detail' ? 'api_detail' : 'api_rows',
     rows,
   };
+}
+
+function compactSafeSummaryRows(
+  rows: readonly Record<string, unknown>[],
+  limit: number,
+): ApiKnowledgeCompactRow[] {
+  const out: ApiKnowledgeCompactRow[] = [];
+  for (const raw of rows.slice(0, limit)) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const row: ApiKnowledgeCompactRow = {};
+    for (const key of Object.keys(raw)) {
+      if (SENSITIVE_FIELD_RE.test(key)) continue;
+      const value = raw[key];
+      if (
+        value === null ||
+        typeof value === 'number' ||
+        typeof value === 'boolean' ||
+        typeof value === 'string'
+      ) {
+        row[key] =
+          typeof value === 'string' && value.length > SAFE_SUMMARY_STRING_VALUE_CAP
+            ? value.slice(0, SAFE_SUMMARY_STRING_VALUE_CAP)
+            : value;
+      }
+    }
+    if (Object.keys(row).length > 0) out.push(row);
+  }
+  return out;
 }
 
 function buildRelevanceEvidence(args: {
@@ -309,6 +405,26 @@ function buildRelevanceEvidence(args: {
       fallbackCause: '',
       pageRegion: domRegionId,
       correlationScore: Math.max(args.candidate.confidence, LIVE_OBSERVED_DOM_CORRELATION_FLOOR),
+    };
+  }
+
+  if (args.req.safeResponseSummary?.taskQueryValueMatched === true) {
+    return {
+      relevant: true,
+      fallbackCause: '',
+      pageRegion: 'task_query_network',
+      correlationScore: Math.max(
+        args.candidate.confidence,
+        LIVE_OBSERVED_TASK_QUERY_RELEVANCE_FLOOR,
+      ),
+    };
+  }
+  if (args.req.safeResponseSummary?.taskQueryValueMatched === false) {
+    return {
+      relevant: false,
+      fallbackCause: 'task_query_value_unproven',
+      pageRegion: 'current_page_network',
+      correlationScore: args.candidate.confidence,
     };
   }
 

@@ -119,6 +119,12 @@ export interface OperationLogMetadata {
    * produced this step. Reserved for V27-15.
    */
   decisionRuleId: string | NotApplicable;
+  /** V27-10R2 — source of same-task response summary evidence. */
+  responseSummarySource: string | NotApplicable;
+  /** V27-10R2 — whether the summary came from a request after sampler arm ack. */
+  capturedAfterArm: string | NotApplicable;
+  /** V27-10R2 — closed bridge path for the browser-context sampler. */
+  bridgePath: string | NotApplicable;
 }
 
 export const METADATA_KEYS = [
@@ -147,6 +153,9 @@ export const METADATA_KEYS = [
   'factSnapshotId',
   'observerOverhead',
   'decisionRuleId',
+  'responseSummarySource',
+  'capturedAfterArm',
+  'bridgePath',
 ] as const satisfies ReadonlyArray<keyof OperationLogMetadata>;
 
 /**
@@ -195,6 +204,9 @@ export function makeOperationLogMetadataDefaults(): OperationLogMetadata {
     factSnapshotId: NOT_APPLICABLE,
     observerOverhead: NOT_APPLICABLE,
     decisionRuleId: NOT_APPLICABLE,
+    responseSummarySource: NOT_APPLICABLE,
+    capturedAfterArm: NOT_APPLICABLE,
+    bridgePath: NOT_APPLICABLE,
   };
 }
 

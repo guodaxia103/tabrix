@@ -2,6 +2,11 @@ import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
 import { TOOL_NAMES } from '@tabrix/shared';
 import { LIMITS, NETWORK_FILTERS } from '@/common/constants';
+import {
+  responseSummarySampler,
+  type BrowserContextSafeResponseSummary,
+  type ResponseSummarySamplerArmResult,
+} from './response-summary-sampler';
 
 // Static resource file extensions
 const STATIC_RESOURCE_EXTENSIONS = [
@@ -222,6 +227,7 @@ interface NetworkRequestInfo {
   specificRequestHeaders?: Record<string, string>;
   specificResponseHeaders?: Record<string, string>;
   mimeType?: string; // Response MIME type
+  safeResponseSummary?: BrowserContextSafeResponseSummary;
 }
 
 interface CaptureInfo {
@@ -235,6 +241,7 @@ interface CaptureInfo {
   inactivityTimeout: number;
   includeStatic: boolean;
   limitReached?: boolean; // Whether request count limit is reached
+  responseSummarySampler?: ResponseSummarySamplerArmResult;
 }
 
 /**
@@ -755,6 +762,26 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
     return 'large';
   }
 
+  private attachSafeResponseSummaries(
+    requests: NetworkRequestInfo[],
+    summaries: BrowserContextSafeResponseSummary[],
+  ): void {
+    const byKey = new Map<string, BrowserContextSafeResponseSummary[]>();
+    for (const summary of summaries) {
+      const key = `${summary.method} ${summary.url}`;
+      const bucket = byKey.get(key) ?? [];
+      bucket.push(summary);
+      byKey.set(key, bucket);
+    }
+    for (const req of requests) {
+      const redactedUrl = redactNetworkCaptureUrlForMetadata(req.url);
+      const key = `${String(req.method || 'GET').toUpperCase()} ${redactedUrl}`;
+      const bucket = byKey.get(key);
+      if (!bucket || bucket.length === 0) continue;
+      req.safeResponseSummary = bucket.shift();
+    }
+  }
+
   /**
    * Start network request capture for specified tab
    * @param tabId Tab ID
@@ -767,7 +794,7 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
       inactivityTimeout: number;
       includeStatic: boolean;
     },
-  ): Promise<void> {
+  ): Promise<ResponseSummarySamplerArmResult> {
     const { maxCaptureTime, inactivityTimeout, includeStatic } = options;
 
     // If already capturing, stop first
@@ -785,7 +812,7 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
       // Initialize capture data
       this.captureData.set(tabId, {
         tabId: tabId,
-        tabUrl: tab.url || '',
+        tabUrl: tab.url ? redactNetworkCaptureUrlForMetadata(tab.url) : '',
         tabTitle: tab.title || '',
         startTime: Date.now(),
         requests: {},
@@ -801,11 +828,32 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
       // Set up listeners
       this.setupListeners();
 
+      const captureInfo = this.captureData.get(tabId);
+      if (!captureInfo) {
+        throw new Error('capture_info_missing_after_listener_setup');
+      }
+      const samplerArm = await responseSummarySampler.armForTab(tabId, {
+        ttlMs: maxCaptureTime > 0 ? maxCaptureTime : undefined,
+      });
+      captureInfo.responseSummarySampler = samplerArm;
+      if (!samplerArm.ok) {
+        this.cleanupCapture(tabId);
+        throw new Error(
+          JSON.stringify({
+            success: false,
+            fallbackCause: samplerArm.fallbackCause ?? 'sampler_arm_failed',
+            responseSummarySource: 'not_available',
+            bridgePath: samplerArm.bridgePath,
+            rawBodyPersisted: false,
+          }),
+        );
+      }
+
       // Update last activity time
       this.updateLastActivityTime(tabId);
 
       console.log(
-        `NetworkCaptureV2: Started capture for tab ${tabId} (${tab.url}). Max requests: ${NetworkCaptureStartTool.MAX_REQUESTS_PER_CAPTURE}, Max time: ${maxCaptureTime}ms, Inactivity: ${inactivityTimeout}ms.`,
+        `NetworkCaptureV2: Started capture for tab ${tabId} (${tab.url}). Max requests: ${NetworkCaptureStartTool.MAX_REQUESTS_PER_CAPTURE}, Max time: ${maxCaptureTime}ms, Inactivity: ${inactivityTimeout}ms. Response sampler armed: ${samplerArm.samplerId}.`,
       );
 
       // Set maximum capture time
@@ -820,12 +868,14 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
           }, maxCaptureTime),
         );
       }
+      return samplerArm;
     } catch (error: any) {
       console.error(`NetworkCaptureV2: Error starting capture for tab ${tabId}:`, error);
 
       // Clean up resources
       if (this.captureData.has(tabId)) {
         this.cleanupCapture(tabId);
+        this.removeListeners();
       }
 
       throw error;
@@ -851,6 +901,8 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
 
       // Extract common request and response headers
       const requestsArray = Object.values(captureInfo.requests);
+      const samplerFlush = await responseSummarySampler.disarmForTab(tabId, 'capture_stop');
+      this.attachSafeResponseSummaries(requestsArray, samplerFlush.summaries);
       const commonRequestHeaders = this.analyzeCommonHeaders(requestsArray, 'requestHeaders');
       const commonResponseHeaders = this.analyzeCommonHeaders(requestsArray, 'responseHeaders');
 
@@ -917,6 +969,14 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
         requestLimitReached: captureInfo.limitReached || false,
         tabUrl: captureInfo.tabUrl,
         tabTitle: captureInfo.tabTitle,
+        responseSummarySampler: captureInfo.responseSummarySampler ?? {
+          ok: false,
+          samplerId: '',
+          samplerArmedAt: null,
+          fallbackCause: 'sampler_not_armed',
+          bridgePath: 'not_available',
+        },
+        responseSummaryLifecycle: samplerFlush.lifecycle,
       };
 
       // Clean up resources
@@ -1068,16 +1128,29 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
       }
 
       // Use startCaptureForTab method to start capture
+      let samplerArm: ResponseSummarySamplerArmResult;
       try {
-        await this.startCaptureForTab(tabToOperateOn.id, {
+        samplerArm = await this.startCaptureForTab(tabToOperateOn.id, {
           maxCaptureTime,
           inactivityTimeout,
           includeStatic,
         });
       } catch (error: any) {
-        return createErrorResponse(
-          `Failed to start capture for tab ${tabToOperateOn.id}: ${error.message || String(error)}`,
-        );
+        const rawMessage = error.message || String(error);
+        let fallbackPayload: unknown = null;
+        try {
+          fallbackPayload = JSON.parse(rawMessage);
+        } catch {
+          fallbackPayload = {
+            success: false,
+            fallbackCause: 'sampler_arm_failed',
+            responseSummarySource: 'not_available',
+            bridgePath: 'not_available',
+            rawBodyPersisted: false,
+            message: rawMessage,
+          };
+        }
+        return createErrorResponse(JSON.stringify(fallbackPayload));
       }
 
       return {
@@ -1088,11 +1161,15 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
               success: true,
               message: 'Network capture V2 started successfully, waiting for stop command.',
               tabId: tabToOperateOn.id,
-              url: tabToOperateOn.url,
+              url: tabToOperateOn.url ? redactNetworkCaptureUrlForMetadata(tabToOperateOn.url) : '',
               maxCaptureTime,
               inactivityTimeout,
               includeStatic,
               maxRequests: NetworkCaptureStartTool.MAX_REQUESTS_PER_CAPTURE,
+              responseSummarySampler: samplerArm,
+              responseSummarySource: 'browser_context_summary',
+              bridgePath: samplerArm.bridgePath,
+              rawBodyPersisted: false,
             }),
           },
         ],
@@ -1240,6 +1317,8 @@ class NetworkCaptureStopTool extends BaseBrowserToolExecutor {
               commonRequestHeaders: stopResult.data?.commonRequestHeaders || {},
               commonResponseHeaders: stopResult.data?.commonResponseHeaders || {},
               requests: stopResult.data?.requests || [],
+              responseSummarySampler: stopResult.data?.responseSummarySampler,
+              responseSummaryLifecycle: stopResult.data?.responseSummaryLifecycle,
               captureStartTime: stopResult.data?.captureStartTime,
               captureEndTime: stopResult.data?.captureEndTime,
               totalDurationMs: stopResult.data?.totalDurationMs,

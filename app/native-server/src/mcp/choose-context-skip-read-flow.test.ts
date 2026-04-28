@@ -229,20 +229,44 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       );
     const captureBundle = {
       tabUrl: 'https://neutral-social.example.test/search',
+      responseSummaryLifecycle: {
+        samplerArmedAt: 1000,
+        samplerDisarmedAt: 2000,
+        samplerDisarmReason: 'capture_stop',
+        responseSummarySource: 'browser_context_summary',
+        responseSummaryRejectedReason: null,
+        capturedAfterArm: true,
+        bridgePath: 'main_world_to_content_to_native',
+        rawBodyPersisted: false,
+      },
       requests: [
         {
-          url: 'https://api.neutral-social.example.test/v1/search/items?keyword=desk&page=1',
+          url: 'https://api.neutral-social.example.test/v1/search/items?keyword=&page=',
           method: 'GET',
           type: 'xmlhttprequest',
+          requestTime: 1200,
           statusCode: 200,
           mimeType: 'application/json',
           specificResponseHeaders: { 'Content-Type': 'application/json; charset=utf-8' },
-          responseBody: JSON.stringify({
-            items: [
+          safeResponseSummary: {
+            responseSummarySource: 'browser_context_summary',
+            bridgePath: 'main_world_to_content_to_native',
+            capturedAfterArm: true,
+            rawBodyPersisted: false,
+            privacyCheck: 'passed',
+            rejectedReason: null,
+            rows: [
               { title: 'compact result one', likeCount: 3, nested: { dropped: true } },
               { title: 'compact result two', likeCount: 5 },
             ],
-          }),
+            rowCount: 2,
+            emptyResult: false,
+            fieldShapeSummaryAvailable: true,
+            fieldNames: ['likeCount', 'title'],
+            taskQueryValueMatched: true,
+            samplerArmedAt: 1000,
+            capturedAt: 1250,
+          },
         },
       ],
     };
@@ -264,6 +288,10 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       pageRegion: 'task_query_network',
       privacyCheck: 'passed',
       knowledgeUpserted: true,
+      responseSummarySource: 'browser_context_summary',
+      rawBodyPersisted: false,
+      capturedAfterArm: true,
+      bridgePath: 'main_world_to_content_to_native',
     });
     expect(
       sessionManager.knowledgeApi!.listBySite('api.neutral-social.example.test')[0],
@@ -272,6 +300,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     });
 
     bridgeSpy.mockClear();
+    const completeSpy = jest.spyOn(sessionManager, 'completeStep');
     const readResult = await handleToolCall('chrome_read_page', {
       requestedLayer: 'L0+L1',
       tabId: 31,
@@ -293,12 +322,38 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       fallbackUsed: 'none',
       operationLogSuccess: true,
       knowledgeUpserted: true,
+      sameTaskLiveObservedUseCount: 1,
+      nonSeedObservedEndpointUsedCount: 1,
+      responseSummarySource: 'browser_context_summary',
+      rawBodyPersisted: false,
+      capturedAfterArm: true,
+      bridgePath: 'main_world_to_content_to_native',
     });
     expect(payload.liveObservedEndpointId).toEqual(expect.any(String));
     expect(payload.correlationScore).toEqual(expect.any(Number));
     expect(payload.pageRegion).not.toBe('current_page_network');
     expect(payload).not.toHaveProperty('rawBody');
+    expect(payload).not.toHaveProperty('responseBody');
+    expect(JSON.stringify(payload)).not.toContain('keyword=desk');
     expect(JSON.stringify(payload)).not.toContain('dropped');
+    const operationLog = takeLatestReadPageOperationLog(completeSpy);
+    expect(operationLog).toMatchObject({
+      selectedDataSource: 'api_rows',
+      decisionReason: 'live_observed_current_task_api_data',
+      success: true,
+      tabHygiene: {
+        liveObservedDataUsed: true,
+        responseSummarySource: 'browser_context_summary',
+        rawBodyPersisted: false,
+        capturedAfterArm: true,
+        bridgePath: 'main_world_to_content_to_native',
+      },
+      metadata: {
+        responseSummarySource: 'browser_context_summary',
+        capturedAfterArm: 'true',
+        bridgePath: 'main_world_to_content_to_native',
+      },
+    });
     assertNoCallToolInvocation(bridgeSpy);
   });
 
@@ -378,7 +433,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(ctx?.peekLiveObservedApiData()).toBeNull();
     expect(ctx?.peekLiveObservedApiEvidence()[0]).toMatchObject({
       endpointSource: 'observed',
-      fallbackCause: 'metadata_only_capture',
+      fallbackCause: 'response_summary_unavailable',
       fallbackUsed: true,
     });
 
@@ -396,7 +451,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     const operationLog = takeLatestReadPageOperationLog(completeSpy);
     expect(operationLog).toMatchObject({
       selectedDataSource: 'dom_json',
-      decisionReason: 'metadata_only_capture',
+      decisionReason: 'response_summary_unavailable',
     });
     expect(operationLog).not.toMatchObject({
       resultKind: 'api_rows',

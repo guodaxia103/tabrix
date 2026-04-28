@@ -1816,6 +1816,13 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           operationLogSuccess: true,
           knowledgeUpserted: liveObserved.knowledgeUpserted,
           semanticType: liveObserved.semanticType,
+          sameTaskLiveObservedUseCount: 1,
+          nonSeedObservedEndpointUsedCount: liveObserved.endpointSource === 'observed' ? 1 : 0,
+          responseSummarySource: liveObserved.responseSummarySource,
+          rawBodyPersisted: liveObserved.rawBodyPersisted,
+          capturedAfterArm: liveObserved.capturedAfterArm,
+          bridgePath: liveObserved.bridgePath,
+          responseSummaryRejectedReason: liveObserved.responseSummaryRejectedReason,
         };
         const apiPayload = {
           kind: liveObserved.selectedDataSource,
@@ -1864,6 +1871,8 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
             fallbackEntryLayer: 'none',
           },
           liveObservedDataUsed: true,
+          sameTaskLiveObservedUseCount: 1,
+          nonSeedObservedEndpointUsedCount: 1,
           liveObservedEndpointId: liveObserved.liveObservedEndpointId,
           fieldShapeSummaryAvailable: liveObserved.fieldShapeSummaryAvailable,
           pageRegion: liveObserved.pageRegion,
@@ -1871,6 +1880,10 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           privacyCheck: liveObserved.privacyCheck,
           operationLogSuccess: true,
           knowledgeUpserted: liveObserved.knowledgeUpserted,
+          responseSummarySource: liveObserved.responseSummarySource,
+          rawBodyPersisted: liveObserved.rawBodyPersisted,
+          capturedAfterArm: liveObserved.capturedAfterArm,
+          bridgePath: liveObserved.bridgePath,
           diagnostic: 'skip: current task already observed safe compact API rows',
           taskTotals: totals,
         };
@@ -1895,6 +1908,14 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               emptyResult: liveObserved.emptyResult ? 'true' : 'false',
               apiTelemetry: 'live_observed_api_rows',
               confidence: liveObserved.correlationScore.toFixed(2),
+              responseSummarySource: liveObserved.responseSummarySource,
+              capturedAfterArm:
+                liveObserved.capturedAfterArm === null
+                  ? 'unknown'
+                  : liveObserved.capturedAfterArm
+                    ? 'true'
+                    : 'false',
+              bridgePath: liveObserved.bridgePath,
             },
           },
         });
