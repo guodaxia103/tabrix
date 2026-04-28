@@ -485,12 +485,76 @@ export interface EndpointCandidateClassifierInput {
 }
 
 /**
+ * Closeout — SoT V3 evidence-contract closed enum for the kinds of
+ * evidence the V27-06 classifier consulted to reach a verdict.
+ *
+ * Adding a new kind is a v2.7 schema-cite event. The value
+ * `'metadata_only'` is the *fallback bucket*: a candidate whose
+ * verdict was reached without seeing a response body emits a list
+ * containing only `'metadata_only'`.
+ *
+ * Each kind maps 1:1 to an input the classifier examined:
+ *   - `'path'`         — URL path tokens (e.g. detail-tail / search /
+ *                         collection / favicon / source-map sniffs).
+ *   - `'query'`        — query parameter *names* (search / pagination /
+ *                         filter key sniffs).
+ *   - `'content_type'` — Content-Type header bucket (json / html /
+ *                         binary / etc.) drove the verdict.
+ *   - `'status'`       — HTTP status class drove the verdict (4xx/5xx
+ *                         elevation to `error`).
+ *   - `'shape'`        — response shape summary contributed (e.g.
+ *                         empty-shape detection or JSON read-shape
+ *                         confirmation).
+ *   - `'timing'`       — wall-clock timing was consulted. Reserved for
+ *                         V27-07 correlator handoff; V27-06 itself
+ *                         does not emit this value today.
+ *   - `'metadata_only'` — fallback when no response body was available
+ *                         and only URL/method/status/mime were used.
+ */
+export type EndpointCandidateEvidenceKind =
+  | 'path'
+  | 'query'
+  | 'content_type'
+  | 'status'
+  | 'shape'
+  | 'timing'
+  | 'metadata_only';
+
+export const ENDPOINT_CANDIDATE_EVIDENCE_KINDS = [
+  'path',
+  'query',
+  'content_type',
+  'status',
+  'shape',
+  'timing',
+  'metadata_only',
+] as const satisfies ReadonlyArray<EndpointCandidateEvidenceKind>;
+
+/**
  * V27-06 — output of the v2 candidate classifier. The
  * `evidenceLevel` field lets V27-07 / V27-08 reason about whether the
  * candidate was shape-evidenced (response body was available and
  * summarised) or only metadata-evidenced (URL + method + status + mime
  * only). V27-08 uses this to refuse high confidence on metadata-only
  * candidates.
+ *
+ * Closeout — SoT V3 evidence-contract additions:
+ *
+ *   - `evidenceKinds`           — closed-enum list of evidence kinds
+ *                                  the verdict cited. Always at least
+ *                                  `['metadata_only']`; never empty.
+ *   - `shapeSummaryAvailable`   — `true` when the producer supplied a
+ *                                  response shape summary AND that
+ *                                  summary itself reported `available`.
+ *                                  Mirrors `shape?.available === true`.
+ *                                  `false` ≠ failure — a `metadata_only`
+ *                                  candidate is still a valid output.
+ *   - `responseBodyUnavailable` — `true` when the producer could NOT
+ *                                  see the response body (no shape,
+ *                                  or shape with `available=false`).
+ *                                  This is the SoT V3 spelling of the
+ *                                  privacy/CORS-opaque case; consumers
+ *                                  must still emit a candidate.
  */
 export interface EndpointCandidate {
   semanticType: EndpointCandidateSemanticType;
@@ -514,6 +578,59 @@ export interface EndpointCandidate {
   /** Underlying v1 row-classifier verdict. Carried so V27-08 lineage
    *  can still cite the existing `EndpointSemanticType` column. */
   rowClassification: NetworkObserveClassification;
+  // -------------------------------------------------------------------
+  // Closeout — SoT V3 evidence-contract fields. See `EndpointCandidateEvidenceKind`.
+  // -------------------------------------------------------------------
+  evidenceKinds: readonly EndpointCandidateEvidenceKind[];
+  shapeSummaryAvailable: boolean;
+  responseBodyUnavailable: boolean;
+}
+
+/**
+ * Closeout — SoT V3 diagnostics aggregator. Producers (V27-06b /
+ * V27-06c capture-side, downstream report writers) call this with the
+ * full batch of candidates emitted for one observation window to
+ * surface the `endpointCandidateCount` evidence field. Pure: counts
+ * everything in the batch, including `noise` / `error` /
+ * `unknown_candidate` candidates, because the SoT V3 contract treats
+ * "we considered N requests and walked away from M" as evidence in
+ * its own right.
+ */
+export interface EndpointCandidateBatchDiagnostics {
+  endpointCandidateCount: number;
+  semanticTypeCounts: Readonly<Record<EndpointCandidateSemanticType, number>>;
+  shapeSummaryAvailableCount: number;
+  responseBodyUnavailableCount: number;
+}
+
+export function summarizeEndpointCandidates(
+  candidates: readonly EndpointCandidate[],
+): EndpointCandidateBatchDiagnostics {
+  const semanticTypeCounts: Record<EndpointCandidateSemanticType, number> = {
+    search: 0,
+    list: 0,
+    detail: 0,
+    pagination: 0,
+    filter: 0,
+    document: 0,
+    empty: 0,
+    error: 0,
+    noise: 0,
+    unknown_candidate: 0,
+  };
+  let shapeSummaryAvailableCount = 0;
+  let responseBodyUnavailableCount = 0;
+  for (const c of candidates) {
+    semanticTypeCounts[c.semanticType] += 1;
+    if (c.shapeSummaryAvailable) shapeSummaryAvailableCount += 1;
+    if (c.responseBodyUnavailable) responseBodyUnavailableCount += 1;
+  }
+  return {
+    endpointCandidateCount: candidates.length,
+    semanticTypeCounts,
+    shapeSummaryAvailableCount,
+    responseBodyUnavailableCount,
+  };
 }
 
 /**
@@ -600,8 +717,31 @@ export function classifyEndpointCandidate(
   });
   const queryKeysSorted = v1.queryKeysSorted;
   const shape = input.shape ?? null;
-  const evidenceLevel: EndpointCandidate['evidenceLevel'] =
-    shape && shape.available ? 'shape_evidenced' : 'metadata_only';
+  const shapeSummaryAvailable = !!(shape && shape.available);
+  const responseBodyUnavailable = !shapeSummaryAvailable;
+  const evidenceLevel: EndpointCandidate['evidenceLevel'] = shapeSummaryAvailable
+    ? 'shape_evidenced'
+    : 'metadata_only';
+  // Closeout — short-hand for the SoT V3 evidence-kind list builder.
+  // We always include `metadata_only` when no shape is available so
+  // the evidence-kind list is never empty.
+  const ek = (
+    extra: readonly EndpointCandidateEvidenceKind[],
+  ): readonly EndpointCandidateEvidenceKind[] => {
+    const out = new Set<EndpointCandidateEvidenceKind>(extra);
+    if (!shapeSummaryAvailable) out.add('metadata_only');
+    return Array.from(out);
+  };
+  const evidenceContract = (
+    extra: readonly EndpointCandidateEvidenceKind[],
+  ): Pick<
+    EndpointCandidate,
+    'evidenceKinds' | 'shapeSummaryAvailable' | 'responseBodyUnavailable'
+  > => ({
+    evidenceKinds: ek(extra),
+    shapeSummaryAvailable,
+    responseBodyUnavailable,
+  });
 
   // 1. Invalid URL — v1 already returned `unknown` / `invalid_url`.
   if (v1.semanticType === 'unknown' && v1.noiseReason === 'invalid_url') {
@@ -613,6 +753,7 @@ export function classifyEndpointCandidate(
       shape,
       queryKeysSorted,
       rowClassification: v1,
+      ...evidenceContract([]),
     };
   }
 
@@ -633,6 +774,7 @@ export function classifyEndpointCandidate(
       shape,
       queryKeysSorted,
       rowClassification: v1,
+      ...evidenceContract(['path']),
     };
   }
   if (SOURCE_MAP_PATH_RE.test(path)) {
@@ -644,6 +786,7 @@ export function classifyEndpointCandidate(
       shape,
       queryKeysSorted,
       rowClassification: v1,
+      ...evidenceContract(['path']),
     };
   }
 
@@ -664,6 +807,7 @@ export function classifyEndpointCandidate(
       shape,
       queryKeysSorted,
       rowClassification: v1,
+      ...evidenceContract(['path']),
     };
   }
 
@@ -679,6 +823,7 @@ export function classifyEndpointCandidate(
       shape,
       queryKeysSorted,
       rowClassification: v1,
+      ...evidenceContract(['status']),
     };
   }
 
@@ -700,6 +845,7 @@ export function classifyEndpointCandidate(
         shape,
         queryKeysSorted,
         rowClassification: v1,
+        ...evidenceContract(['content_type']),
       };
     }
   }
@@ -713,6 +859,7 @@ export function classifyEndpointCandidate(
       shape,
       queryKeysSorted,
       rowClassification: v1,
+      ...evidenceContract(['content_type']),
     };
   }
 
@@ -738,6 +885,7 @@ export function classifyEndpointCandidate(
         shape,
         queryKeysSorted,
         rowClassification: v1,
+        ...evidenceContract(['shape']),
       };
     }
   }
@@ -746,6 +894,15 @@ export function classifyEndpointCandidate(
   if (v1.usableForTask) {
     const baseConfidence =
       evidenceLevel === 'shape_evidenced' && shape && !isEmptyShape(shape) ? 0.8 : 0.65;
+    // Closeout — derive the evidence-kinds list from the v1 signals
+    // that actually fired. Path + query are always cited (v1's
+    // bucketing logic runs them on every read-shaped verdict);
+    // content_type is added when a mime hint pinned the verdict;
+    // shape is added when shape evidence elevated the confidence.
+    const v1EvidenceKinds: EndpointCandidateEvidenceKind[] = ['path'];
+    if (queryKeysSorted.length > 0) v1EvidenceKinds.push('query');
+    if (input.mimeType) v1EvidenceKinds.push('content_type');
+    if (shapeSummaryAvailable && shape && !isEmptyShape(shape)) v1EvidenceKinds.push('shape');
     return {
       semanticType: v1ToV2Semantic(v1.semanticType),
       noiseReason: null,
@@ -754,12 +911,22 @@ export function classifyEndpointCandidate(
       shape,
       queryKeysSorted,
       rowClassification: v1,
+      ...evidenceContract(v1EvidenceKinds),
     };
   }
 
   // 8. Default — v1 walked away with `unknown`. We surface it as
   //    `unknown_candidate` with v1's reason so V27-07 / V27-08 can
   //    still cite the underlying signal.
+  // Closeout — even an `unknown_candidate` cites the inputs we
+  // examined: path is always inspected; query was inspected when at
+  // least one query key was present; content_type was inspected when
+  // a mime hint was supplied. The evidenceKinds list is never empty
+  // because `metadata_only` is always added when no shape was
+  // available (see `ek` helper above).
+  const fallbackEvidenceKinds: EndpointCandidateEvidenceKind[] = ['path'];
+  if (queryKeysSorted.length > 0) fallbackEvidenceKinds.push('query');
+  if (input.mimeType) fallbackEvidenceKinds.push('content_type');
   return {
     semanticType: 'unknown_candidate',
     noiseReason: v1.noiseReason ?? 'no_signal',
@@ -768,6 +935,7 @@ export function classifyEndpointCandidate(
     shape,
     queryKeysSorted,
     rowClassification: v1,
+    ...evidenceContract(fallbackEvidenceKinds),
   };
 }
 

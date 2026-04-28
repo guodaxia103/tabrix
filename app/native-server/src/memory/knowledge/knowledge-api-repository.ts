@@ -98,6 +98,32 @@ export interface KnowledgeApiEndpoint {
   retirementCandidate: boolean;
   sourceLineage: EndpointSourceLineage | null;
   schemaVersion: 1 | 2;
+  /**
+   * Closeout — explicit V27-08 evidence-contract field. Closed-enum
+   * reason for the most recent failure observed against this row
+   * (timeout / status_4xx / status_5xx / semantic_mismatch /
+   * shape_drift / empty_response / unknown). `null` when no failure
+   * evidence is on file. The reader never invents a value here —
+   * absence is meaningful (e.g. legacy rows pre-closeout).
+   */
+  lastFailureReason: EndpointLastFailureReason | null;
+  /**
+   * Closeout — derived from `endpointSource` + `retirementCandidate`.
+   * The SoT V3 evidence contract requires a stand-alone field for
+   * the seed-adapter retirement state so consumers do not have to
+   * compose two columns to answer "is this seed adapter still
+   * authoritative?". Derivation rules:
+   *
+   *   - `endpointSource='deprecated_seed'` → `'deprecated'`
+   *   - `endpointSource='seed_adapter'` + `retirementCandidate=true` → `'retirement_candidate'`
+   *   - `endpointSource='seed_adapter'` + `retirementCandidate=false` → `'active'`
+   *   - all other endpointSource values → `'not_applicable'`
+   *
+   * Never persisted as its own column — the writer cannot drift
+   * relative to the two source columns because the reader recomputes
+   * the value on every load.
+   */
+  seedAdapterRetirementState: SeedAdapterRetirementState;
 }
 
 /**
@@ -112,8 +138,100 @@ export interface KnowledgeApiEndpoint {
  *     for forward-compat so a future maintainer-private seed import
  *     does not need a schema bump).
  *   - `unknown` — pre-V27-08 row with no derivable hint.
+ *   - `deprecated_seed` — closeout: a seed_adapter row that has
+ *     been explicitly retired by the V27-08 retirement-state writer
+ *     because a same-site observed peer has stably outperformed it.
+ *     The row is NEVER deleted; the value lets the lookup ranker
+ *     drop it below all live sources without losing the lineage.
  */
-export type EndpointSource = 'observed' | 'seed_adapter' | 'manual_seed' | 'unknown';
+export type EndpointSource =
+  | 'observed'
+  | 'seed_adapter'
+  | 'manual_seed'
+  | 'unknown'
+  | 'deprecated_seed';
+
+/**
+ * Closeout — derived view of where a row sits on the seed-adapter
+ * retirement state machine. See `KnowledgeApiEndpoint.seedAdapterRetirementState`.
+ *
+ *   - `'not_applicable'`     — endpointSource is not a seed-flavoured row.
+ *   - `'active'`             — `seed_adapter` row that has not (yet) been flagged.
+ *   - `'retirement_candidate'` — `seed_adapter` row flagged by the lookup as
+ *                                 about-to-be-retired (an observed peer
+ *                                 met the retirement criteria for this
+ *                                 site/semantic_type).
+ *   - `'deprecated'`         — `deprecated_seed` row; observed peer wins.
+ */
+export type SeedAdapterRetirementState =
+  | 'not_applicable'
+  | 'active'
+  | 'retirement_candidate'
+  | 'deprecated';
+
+/**
+ * Closeout — closed-enum failure reason carried in the V27-08
+ * evidence contract. The repository persists exactly the values the
+ * writer supplies; the reader never invents one. Adding a new value
+ * here is a v2.7 schema-cite event.
+ */
+export type EndpointLastFailureReason =
+  | 'timeout'
+  | 'status_4xx'
+  | 'status_5xx'
+  | 'semantic_mismatch'
+  | 'shape_drift'
+  | 'empty_response'
+  | 'rate_limited'
+  | 'unknown';
+
+/**
+ * Closeout — closed-enum migration mode emitted by `upsertWithEvidence`
+ * so V27-08 evidence consumers can tell whether an upsert was a
+ * legacy no-op, an additive upgrade of a pre-V27-08 row, or a virgin
+ * V27-08-aware write.
+ *
+ *   - `'legacy_no_op'`     — input did not carry any V27-08 lineage
+ *                             field; the row stays at schemaVersion=1.
+ *                             (Existing v2.6 callers that have not been
+ *                             migrated to V27-08 take this path.)
+ *   - `'additive_upgrade'` — existing schemaVersion=1 row gained
+ *                             V27-08 fields on this upsert; row now
+ *                             reports schemaVersion=2.
+ *   - `'virgin_v2_write'`  — brand-new row written with schemaVersion=2
+ *                             from the first upsert.
+ *   - `'v2_refresh'`       — existing schemaVersion=2 row was re-observed;
+ *                             lineage merged, no migration occurred.
+ *   - `'unknown'`          — fallback. Should never happen in
+ *                             production; reserved so a future
+ *                             unanticipated path does not throw.
+ */
+export type EndpointMigrationMode =
+  | 'legacy_no_op'
+  | 'additive_upgrade'
+  | 'virgin_v2_write'
+  | 'v2_refresh'
+  | 'unknown';
+
+/**
+ * Closeout — V27-08 evidence object returned alongside the upserted
+ * row by `upsertWithEvidence`. Carries the SoT V3 evidence contract
+ * fields (`confidenceBefore`, `confidenceAfter`, `migrationMode`)
+ * the row alone cannot express. The legacy `upsert(input)` path
+ * still returns just the row for backward compatibility.
+ */
+export interface UpsertEndpointEvidence {
+  confidenceBefore: number | null;
+  confidenceAfter: number;
+  /** True when the upsert produced a strictly different confidence value. */
+  confidenceChanged: boolean;
+  migrationMode: EndpointMigrationMode;
+  endpointSource: EndpointSource;
+  seedAdapterRetirementState: SeedAdapterRetirementState;
+  schemaVersion: 1 | 2;
+  lastFailureReason: EndpointLastFailureReason | null;
+  usableForTask: boolean;
+}
 
 /**
  * V27-08 — closed enum for the correlation confidence carried over
@@ -227,6 +345,13 @@ export interface UpsertKnowledgeApiEndpointInput {
   confidenceReason?: string | null;
   retirementCandidate?: boolean | null;
   sourceLineage?: EndpointSourceLineage | null;
+  /**
+   * Closeout — closed-enum failure reason for the most recent upsert.
+   * Optional so v2.6 callers (no failure evidence on hand) keep working.
+   * The repository persists the value verbatim; rejecting unknown values
+   * is the closed-enum validator's job (see `LAST_FAILURE_REASON_VALUES`).
+   */
+  lastFailureReason?: EndpointLastFailureReason | null;
 }
 
 interface KnowledgeApiEndpointRow {
@@ -258,6 +383,7 @@ interface KnowledgeApiEndpointRow {
   retirement_candidate: number | null;
   source_lineage_blob: string | null;
   schema_version: number | null;
+  last_failure_reason: string | null;
 }
 
 const PERSISTED_SEMANTIC_TYPE_VALUES: ReadonlySet<string> = new Set<EndpointSemanticType>([
@@ -286,7 +412,41 @@ const ENDPOINT_SOURCE_VALUES: ReadonlySet<string> = new Set<EndpointSource>([
   'seed_adapter',
   'manual_seed',
   'unknown',
+  'deprecated_seed',
 ]);
+
+const LAST_FAILURE_REASON_VALUES: ReadonlySet<string> = new Set<EndpointLastFailureReason>([
+  'timeout',
+  'status_4xx',
+  'status_5xx',
+  'semantic_mismatch',
+  'shape_drift',
+  'empty_response',
+  'rate_limited',
+  'unknown',
+]);
+
+function coerceLastFailureReason(value: string | null): EndpointLastFailureReason | null {
+  if (value === null) return null;
+  return LAST_FAILURE_REASON_VALUES.has(value) ? (value as EndpointLastFailureReason) : null;
+}
+
+/**
+ * Closeout — derive the V27-08 evidence-contract value from the two
+ * persisted columns. Pure: no IO, no row mutation. The reader is the
+ * single source of truth for `seedAdapterRetirementState` so the
+ * writer cannot drift relative to it.
+ */
+function deriveSeedAdapterRetirementState(
+  endpointSource: EndpointSource,
+  retirementCandidate: boolean,
+): SeedAdapterRetirementState {
+  if (endpointSource === 'deprecated_seed') return 'deprecated';
+  if (endpointSource === 'seed_adapter') {
+    return retirementCandidate ? 'retirement_candidate' : 'active';
+  }
+  return 'not_applicable';
+}
 
 const CORRELATION_CONFIDENCE_VALUES: ReadonlySet<string> = new Set<CorrelationConfidenceLevel>([
   'unknown_candidate',
@@ -311,6 +471,10 @@ function deriveEndpointSource(row: KnowledgeApiEndpointRow): EndpointSource {
   if (persisted && ENDPOINT_SOURCE_VALUES.has(persisted)) {
     return persisted as EndpointSource;
   }
+  // Closeout — legacy back-compat. We never invent `deprecated_seed`
+  // from the family column because retirement is a writer-only state
+  // transition; legacy rows that pre-date V27-08 fall back to
+  // `seed_adapter` (active) so the lookup still considers them.
   const family = (row.family || '').toLowerCase();
   if (family === 'observed') return 'observed';
   if (family === 'github' || family === 'npmjs') return 'seed_adapter';
@@ -362,6 +526,8 @@ function parseSourceLineageBlob(value: string | null): EndpointSourceLineage | n
 
 function rowToEndpoint(row: KnowledgeApiEndpointRow): KnowledgeApiEndpoint {
   const schemaVersion: 1 | 2 = row.schema_version === 2 ? 2 : 1;
+  const endpointSource = deriveEndpointSource(row);
+  const retirementCandidate = row.retirement_candidate === 1;
   return {
     endpointId: row.endpoint_id,
     site: row.site,
@@ -384,13 +550,18 @@ function rowToEndpoint(row: KnowledgeApiEndpointRow): KnowledgeApiEndpoint {
     responseShapeSummary: row.response_shape_summary,
     usableForTaskPersisted: row.usable_for_task === null ? null : row.usable_for_task === 1,
     noiseReason: row.noise_reason,
-    endpointSource: deriveEndpointSource(row),
+    endpointSource,
     correlationConfidence: coerceCorrelationConfidence(row.correlation_confidence),
     correlatedRegionId: row.correlated_region_id,
     confidenceReason: row.confidence_reason,
-    retirementCandidate: row.retirement_candidate === 1,
+    retirementCandidate,
     sourceLineage: parseSourceLineageBlob(row.source_lineage_blob),
     schemaVersion,
+    lastFailureReason: coerceLastFailureReason(row.last_failure_reason),
+    seedAdapterRetirementState: deriveSeedAdapterRetirementState(
+      endpointSource,
+      retirementCandidate,
+    ),
   };
 }
 
@@ -403,8 +574,40 @@ export class KnowledgeApiRepository {
    * Concurrency: better-sqlite3 is synchronous; the SELECT + INSERT/UPDATE
    * pair is wrapped in an immediate transaction so concurrent post-processor
    * invocations (within a single Node process) cannot tear an upsert.
+   *
+   * Closeout note: this is the legacy entry point. New V27-08 callers
+   * that need access to `confidenceBefore` / `confidenceAfter` /
+   * `migrationMode` should use `upsertWithEvidence` instead. This
+   * method is implemented as a thin wrapper that drops the evidence
+   * object so existing call sites stay binary-compatible.
    */
   upsert(input: UpsertKnowledgeApiEndpointInput): KnowledgeApiEndpoint {
+    return this.upsertWithEvidence(input).endpoint;
+  }
+
+  /**
+   * Closeout — V27-08 evidence-aware variant of `upsert`. Returns the
+   * resulting row alongside an `UpsertEndpointEvidence` object that
+   * carries the SoT V3 evidence-contract fields the row alone cannot
+   * express:
+   *
+   *   - `confidenceBefore` / `confidenceAfter` — the row's
+   *     `scoreEndpointKnowledge` confidence before and after this
+   *     upsert. `null` for a brand-new row.
+   *   - `migrationMode` — closed-enum classification of the
+   *     write (legacy_no_op / additive_upgrade / virgin_v2_write /
+   *     v2_refresh).
+   *   - `seedAdapterRetirementState` — derived from the resulting row.
+   *   - `lastFailureReason` — closed-enum reason persisted on this
+   *     write (or carried over from the existing row).
+   *
+   * The evidence object is deterministic and contains no raw values;
+   * it is safe for downstream telemetry/report consumers.
+   */
+  upsertWithEvidence(input: UpsertKnowledgeApiEndpointInput): {
+    endpoint: KnowledgeApiEndpoint;
+    evidence: UpsertEndpointEvidence;
+  } {
     const requestBlob = JSON.stringify(input.requestSummary);
     const responseBlob = JSON.stringify(input.responseSummary);
     const semanticTag = input.semanticTag ?? null;
@@ -449,19 +652,28 @@ export class KnowledgeApiRepository {
           ? 1
           : 0;
     const sourceLineageBlob = input.sourceLineage ? JSON.stringify(input.sourceLineage) : null;
+    const lastFailureReason = input.lastFailureReason ?? null;
+    if (lastFailureReason && !LAST_FAILURE_REASON_VALUES.has(lastFailureReason)) {
+      throw new Error(
+        `[knowledge-api-repository] invalid lastFailureReason '${lastFailureReason}'. Expected closed enum.`,
+      );
+    }
     const isV2Write =
       endpointSource !== null ||
       correlationConfidence !== null ||
       correlatedRegionId !== null ||
       confidenceReason !== null ||
       retirementCandidate !== null ||
-      sourceLineageBlob !== null;
+      sourceLineageBlob !== null ||
+      lastFailureReason !== null;
     const schemaVersion = isV2Write ? 2 : null;
 
+    let previousRow: KnowledgeApiEndpointRow | undefined;
     const tx = this.db.transaction(() => {
       const existing = this.db
         .prepare(`SELECT * FROM knowledge_api_endpoints WHERE site = ? AND endpoint_signature = ?`)
         .get(input.site, input.endpointSignature) as KnowledgeApiEndpointRow | undefined;
+      previousRow = existing;
 
       if (existing) {
         // V27-08 — for re-observations we keep the prior lineage when
@@ -476,6 +688,7 @@ export class KnowledgeApiRepository {
         const nextConfidenceReason = confidenceReason ?? existing.confidence_reason;
         const nextRetirementCandidate = retirementCandidate ?? existing.retirement_candidate;
         const nextSourceLineageBlob = sourceLineageBlob ?? existing.source_lineage_blob;
+        const nextLastFailureReason = lastFailureReason ?? existing.last_failure_reason;
         const nextSchemaVersion =
           schemaVersion ??
           existing.schema_version ??
@@ -484,7 +697,8 @@ export class KnowledgeApiRepository {
           nextCorrelatedRegionId ||
           nextConfidenceReason ||
           nextRetirementCandidate !== null ||
-          nextSourceLineageBlob
+          nextSourceLineageBlob ||
+          nextLastFailureReason
             ? 2
             : null);
 
@@ -511,7 +725,8 @@ export class KnowledgeApiRepository {
                  confidence_reason = ?,
                  retirement_candidate = ?,
                  source_lineage_blob = ?,
-                 schema_version = ?
+                 schema_version = ?,
+                 last_failure_reason = ?
              WHERE endpoint_id = ?`,
           )
           .run(
@@ -535,6 +750,7 @@ export class KnowledgeApiRepository {
             nextRetirementCandidate,
             nextSourceLineageBlob,
             nextSchemaVersion,
+            nextLastFailureReason,
             existing.endpoint_id,
           );
         return existing.endpoint_id;
@@ -552,8 +768,8 @@ export class KnowledgeApiRepository {
              usable_for_task, noise_reason,
              endpoint_source, correlation_confidence, correlated_region_id,
              confidence_reason, retirement_candidate, source_lineage_blob,
-             schema_version
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             schema_version, last_failure_reason
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           endpointId,
@@ -583,6 +799,7 @@ export class KnowledgeApiRepository {
           retirementCandidate,
           sourceLineageBlob,
           schemaVersion,
+          lastFailureReason,
         );
       return endpointId;
     });
@@ -591,7 +808,45 @@ export class KnowledgeApiRepository {
     const row = this.db
       .prepare(`SELECT * FROM knowledge_api_endpoints WHERE endpoint_id = ?`)
       .get(endpointId) as KnowledgeApiEndpointRow;
-    return rowToEndpoint(row);
+    const endpoint = rowToEndpoint(row);
+
+    // Closeout — derive the V27-08 SoT V3 evidence-contract fields.
+    // `confidenceBefore` is the score the row would have had right
+    // before this upsert (null for a brand-new row); `confidenceAfter`
+    // is the score of the just-written row. Both are computed via
+    // `scoreEndpointKnowledge` so the lookup ranker and the evidence
+    // contract agree on the number.
+    const confidenceBefore = previousRow
+      ? scoreEndpointKnowledge(rowToEndpoint(previousRow)).confidence
+      : null;
+    const confidenceAfter = scoreEndpointKnowledge(endpoint).confidence;
+    const confidenceChanged = confidenceBefore === null || confidenceBefore !== confidenceAfter;
+
+    let migrationMode: EndpointMigrationMode;
+    if (!previousRow) {
+      migrationMode = isV2Write ? 'virgin_v2_write' : 'legacy_no_op';
+    } else {
+      const wasV2 = previousRow.schema_version === 2;
+      const isNowV2 = endpoint.schemaVersion === 2;
+      if (!wasV2 && isNowV2) migrationMode = 'additive_upgrade';
+      else if (wasV2 && isNowV2) migrationMode = 'v2_refresh';
+      else if (!wasV2 && !isNowV2) migrationMode = 'legacy_no_op';
+      else migrationMode = 'unknown';
+    }
+
+    const evidence: UpsertEndpointEvidence = {
+      confidenceBefore,
+      confidenceAfter,
+      confidenceChanged,
+      migrationMode,
+      endpointSource: endpoint.endpointSource,
+      seedAdapterRetirementState: endpoint.seedAdapterRetirementState,
+      schemaVersion: endpoint.schemaVersion,
+      lastFailureReason: endpoint.lastFailureReason,
+      usableForTask: scoreEndpointKnowledge(endpoint).usableForTask,
+    };
+
+    return { endpoint, evidence };
   }
 
   findBySignature(site: string, endpointSignature: string): KnowledgeApiEndpoint | null {

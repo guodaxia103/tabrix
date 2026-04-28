@@ -165,6 +165,38 @@ export interface DomChangeSummary {
  * V27-07 — output candidate. Field names follow the brief's recommended
  * shape; V27-08 lineage reads `correlationSource` + `correlationConfidence`
  * to decide whether a row may be promoted out of `unknown_candidate`.
+ *
+ * Closeout (SoT V3 evidence contract) — the SoT V3 evidence contract
+ * lists seven *outward-facing* names that downstream report / telemetry
+ * consumers must see:
+ *
+ *   - `correlationScore`        — numeric `[0, 1]` confidence number
+ *                                  derived from the closed-enum verdict
+ *                                  PLUS the false-correlation guard.
+ *   - `pageRegion`              — region tag the endpoint correlates
+ *                                  with (alias of `correlatedRegionId`).
+ *   - `inferredSemanticType`    — the semantic type V27-06 inferred for
+ *                                  the endpoint (alias of `semanticType`).
+ *   - `evidenceKinds`           — closed-enum list of evidence kinds
+ *                                  the verdict cited (alias of
+ *                                  `correlationSignals`).
+ *   - `sampleCount`             — how many same-session correlation
+ *                                  samples this candidate represents.
+ *                                  Single-session correlator always
+ *                                  emits `1`; V27-08 multi-session
+ *                                  escalation increments downstream.
+ *   - `falseCorrelationGuard`   — numeric `[0, 1]` guard against false
+ *                                  attribution (alias of
+ *                                  `falsePositiveRisk`).
+ *   - `correlationMode`         — closed-enum source of the verdict
+ *                                  (alias of `correlationSource`).
+ *
+ * The legacy field names are kept on the same object so existing
+ * tests / callers keep compiling while V27-08 / V27-09+ consumers can
+ * read the SoT-V3 names directly. There is exactly one source of
+ * truth per evidence axis — the SoT-V3 names are aliased from the
+ * legacy ones at write-time, never re-derived, so writer/reader can
+ * never drift.
  */
 export interface DomEndpointCorrelationCandidate {
   actionId: string;
@@ -180,6 +212,27 @@ export interface DomEndpointCorrelationCandidate {
   correlationSource: CorrelationSource;
   /** Clamped `[0, 1]` false-positive risk. Higher = less trustworthy. */
   falsePositiveRisk: number;
+  // -------------------------------------------------------------------
+  // Closeout — SoT V3 evidence-contract aliases. Same data, named
+  // exactly as the SoT spec requires.
+  // -------------------------------------------------------------------
+  /** Numeric `[0, 1]` correlation score. `low_confidence` →
+   *  `1 - falsePositiveRisk` clamped; `unknown_candidate` → `0`. */
+  correlationScore: number;
+  /** Alias of `correlatedRegionId`. */
+  pageRegion: string | null;
+  /** Alias of `semanticType` — the semantic type V27-06 inferred for
+   *  the endpoint. Renamed in the contract to make it obvious this
+   *  is the V27-06 verdict, NOT a V27-07 re-inference. */
+  inferredSemanticType: EndpointCandidateSemanticType;
+  /** Alias of `correlationSignals`. */
+  evidenceKinds: readonly CorrelationSignalTag[];
+  /** Single-session correlator always emits `1`. */
+  sampleCount: number;
+  /** Alias of `falsePositiveRisk`. */
+  falseCorrelationGuard: number;
+  /** Alias of `correlationSource`. */
+  correlationMode: CorrelationSource;
 }
 
 /**
@@ -351,6 +404,17 @@ function buildCandidate(
     falsePositiveRisk: number;
   },
 ): DomEndpointCorrelationCandidate {
+  const falsePositiveRisk = clamp01(parts.falsePositiveRisk);
+  // Closeout — derive the SoT V3 numeric score from the closed-enum
+  // confidence + the false-positive guard. `unknown_candidate` always
+  // returns `0` (we have no opinion); `low_confidence` returns a
+  // bounded `[0, 1]` number that drops as the guard rises. We never
+  // emit `1.0` — that bucket is reserved for V27-08 multi-session
+  // escalation (see invariant #1 in this module's header comment).
+  const correlationScore =
+    parts.correlationConfidence === 'unknown_candidate'
+      ? 0
+      : clamp01(0.6 - falsePositiveRisk * 0.4);
   return {
     actionId: action.actionId,
     endpointId: obs.endpointId,
@@ -360,7 +424,17 @@ function buildCandidate(
     correlationSignals: parts.signals,
     correlationConfidence: parts.correlationConfidence,
     correlationSource: parts.correlationSource,
-    falsePositiveRisk: clamp01(parts.falsePositiveRisk),
+    falsePositiveRisk,
+    // Closeout — SoT V3 evidence-contract aliases. Computed once,
+    // consumed-as-aliases everywhere else, so writer drift is
+    // structurally impossible.
+    correlationScore,
+    pageRegion: parts.correlatedRegionId,
+    inferredSemanticType: obs.semanticType,
+    evidenceKinds: parts.signals,
+    sampleCount: 1,
+    falseCorrelationGuard: falsePositiveRisk,
+    correlationMode: parts.correlationSource,
   };
 }
 

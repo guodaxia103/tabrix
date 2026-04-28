@@ -429,6 +429,196 @@ describe('KnowledgeApiRepository (B-017)', () => {
       db.close();
     });
 
+    // ---------------------------------------------------------------
+    // Closeout — Batch B Review Closeout, SoT V3 evidence-contract
+    // alignment. Coverage matrix:
+    //   - `deprecated_seed` is now an accepted endpointSource value.
+    //   - `lastFailureReason` round-trips and is closed-enum guarded.
+    //   - `seedAdapterRetirementState` is derived correctly for the
+    //     four legal states.
+    //   - `upsertWithEvidence` returns the SoT V3 evidence-contract
+    //     fields the row alone cannot express
+    //     (`confidenceBefore`/`confidenceAfter`/`migrationMode`).
+    //   - Pre-closeout DB (no `last_failure_reason` column) does not
+    //     migration-crash.
+    // ---------------------------------------------------------------
+    it('accepts deprecated_seed as a valid endpointSource (closeout)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      const row = repo.upsert(
+        makeInput({
+          family: 'github',
+          endpointSource: 'deprecated_seed',
+        }),
+      );
+      expect(row.endpointSource).toBe('deprecated_seed');
+      expect(row.seedAdapterRetirementState).toBe('deprecated');
+      db.close();
+    });
+
+    it('derives seedAdapterRetirementState from endpointSource + retirementCandidate (closeout)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      const active = repo.upsert(
+        makeInput({
+          family: 'github',
+          endpointSource: 'seed_adapter',
+          retirementCandidate: false,
+          urlPattern: 'api.github.com/active',
+          endpointSignature: 'GET api.github.com/active',
+        }),
+      );
+      const flagged = repo.upsert(
+        makeInput({
+          family: 'github',
+          endpointSource: 'seed_adapter',
+          retirementCandidate: true,
+          urlPattern: 'api.github.com/flagged',
+          endpointSignature: 'GET api.github.com/flagged',
+        }),
+      );
+      const observed = repo.upsert(
+        makeInput({
+          family: 'observed',
+          endpointSource: 'observed',
+          urlPattern: 'api.github.com/observed',
+          endpointSignature: 'GET api.github.com/observed',
+        }),
+      );
+      const deprecated = repo.upsert(
+        makeInput({
+          family: 'github',
+          endpointSource: 'deprecated_seed',
+          urlPattern: 'api.github.com/deprecated',
+          endpointSignature: 'GET api.github.com/deprecated',
+        }),
+      );
+
+      expect(active.seedAdapterRetirementState).toBe('active');
+      expect(flagged.seedAdapterRetirementState).toBe('retirement_candidate');
+      expect(observed.seedAdapterRetirementState).toBe('not_applicable');
+      expect(deprecated.seedAdapterRetirementState).toBe('deprecated');
+      db.close();
+    });
+
+    it('round-trips lastFailureReason through SQLite (closeout)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      const row = repo.upsert(
+        makeInput({
+          family: 'observed',
+          endpointSource: 'observed',
+          lastFailureReason: 'shape_drift',
+        }),
+      );
+      expect(row.lastFailureReason).toBe('shape_drift');
+      expect(row.schemaVersion).toBe(2);
+      const fetched = repo.findBySignature(row.site, row.endpointSignature);
+      expect(fetched!.lastFailureReason).toBe('shape_drift');
+      db.close();
+    });
+
+    it('rejects an invalid lastFailureReason at the writer (closeout closed-enum guard)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      expect(() =>
+        repo.upsert(
+          makeInput({
+            family: 'observed',
+            lastFailureReason: 'not_a_known_reason' as unknown as 'timeout',
+          }),
+        ),
+      ).toThrow(/invalid lastFailureReason/);
+      db.close();
+    });
+
+    it('lastFailureReason is null on legacy rows (no failure evidence on file)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      const row = repo.upsert(makeInput({ family: 'github' }));
+      expect(row.lastFailureReason).toBeNull();
+      db.close();
+    });
+
+    it('upsertWithEvidence reports virgin_v2_write for a brand-new V27-08 row (closeout)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      const { endpoint, evidence } = repo.upsertWithEvidence(
+        makeInput({
+          family: 'observed',
+          endpointSource: 'observed',
+        }),
+      );
+      expect(evidence.migrationMode).toBe('virgin_v2_write');
+      expect(evidence.confidenceBefore).toBeNull();
+      expect(evidence.confidenceAfter).toBeGreaterThan(0);
+      expect(evidence.confidenceChanged).toBe(true);
+      expect(evidence.endpointSource).toBe('observed');
+      expect(evidence.seedAdapterRetirementState).toBe('not_applicable');
+      expect(evidence.schemaVersion).toBe(2);
+      expect(evidence.lastFailureReason).toBeNull();
+      expect(evidence.usableForTask).toBe(true);
+      expect(endpoint.endpointSource).toBe('observed');
+    });
+
+    it('upsertWithEvidence reports legacy_no_op for a brand-new pre-V27-08 row (closeout)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      const { evidence } = repo.upsertWithEvidence(makeInput({ family: 'github' }));
+      expect(evidence.migrationMode).toBe('legacy_no_op');
+      expect(evidence.schemaVersion).toBe(1);
+      expect(evidence.endpointSource).toBe('seed_adapter');
+      expect(evidence.confidenceBefore).toBeNull();
+      expect(evidence.confidenceAfter).toBeGreaterThan(0);
+    });
+
+    it('upsertWithEvidence reports additive_upgrade when a legacy row gains v2 fields (closeout)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      repo.upsert(
+        makeInput({
+          family: 'observed',
+          observedAt: '2026-04-22T10:00:00.000Z',
+        }),
+      );
+      const { evidence } = repo.upsertWithEvidence(
+        makeInput({
+          family: 'observed',
+          endpointSource: 'observed',
+          correlationConfidence: 'low_confidence',
+          observedAt: '2026-04-22T11:00:00.000Z',
+        }),
+      );
+      expect(evidence.migrationMode).toBe('additive_upgrade');
+      expect(evidence.schemaVersion).toBe(2);
+      expect(evidence.confidenceBefore).toBeGreaterThan(0);
+      expect(evidence.confidenceAfter).toBeGreaterThan(0);
+    });
+
+    it('upsertWithEvidence reports v2_refresh when a v2 row is re-observed (closeout)', () => {
+      const { db } = openMemoryDb({ dbPath: ':memory:' });
+      const repo = new KnowledgeApiRepository(db);
+      repo.upsert(
+        makeInput({
+          family: 'observed',
+          endpointSource: 'observed',
+          correlationConfidence: 'low_confidence',
+          observedAt: '2026-04-22T10:00:00.000Z',
+        }),
+      );
+      const { evidence } = repo.upsertWithEvidence(
+        makeInput({
+          family: 'observed',
+          endpointSource: 'observed',
+          observedAt: '2026-04-22T11:00:00.000Z',
+        }),
+      );
+      expect(evidence.migrationMode).toBe('v2_refresh');
+      expect(evidence.schemaVersion).toBe(2);
+      expect(evidence.confidenceBefore).toBeGreaterThan(0);
+      expect(evidence.confidenceAfter).toBeGreaterThan(0);
+    });
+
     it('persisted lineage payload contains only closed-enum fields (no raw values)', () => {
       const { db } = openMemoryDb({ dbPath: ':memory:' });
       const repo = new KnowledgeApiRepository(db);

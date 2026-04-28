@@ -13,7 +13,11 @@
  * the row-level `kind` of the same body.
  */
 
-import { classifyEndpointCandidate, type EndpointShapeSummary } from './network-observe-classifier';
+import {
+  classifyEndpointCandidate,
+  summarizeEndpointCandidates,
+  type EndpointShapeSummary,
+} from './network-observe-classifier';
 import {
   deriveEndpointCandidateFromRequest,
   deriveEndpointCandidatesFromBundle,
@@ -488,5 +492,151 @@ describe('deriveEndpointCandidatesFromBundle — bundle path', () => {
     expect(c!.semanticType).toBe('search');
     expect(c!.evidenceLevel).toBe('shape_evidenced');
     expect(c!.shape?.rowCount).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------
+// Closeout — Batch B Review Closeout, SoT V3 evidence-contract
+// alignment for V27-06 (Conflict D). Pin three new output axes
+// the brief explicitly listed under "Evidence contract":
+//   - `evidenceKinds`           — closed-enum list, never empty,
+//                                  always cites the inputs the
+//                                  classifier looked at.
+//   - `shapeSummaryAvailable`   — true ↔ shape was provided AND
+//                                  shape.available was true.
+//   - `responseBodyUnavailable` — exactly the inverse, AND must be
+//                                  true whenever responseBody was
+//                                  not visible to the producer.
+//   - `endpointCandidateCount`  — surfaced through the diagnostics
+//                                  aggregator.
+// ---------------------------------------------------------------
+describe('classifyEndpointCandidate — V27-06 evidence contract (closeout — Conflict D)', () => {
+  it('emits responseBodyUnavailable=true and metadata_only evidence when no shape was provided', () => {
+    const c = classifyEndpointCandidate({
+      url: 'https://api.example.test/v1/items?q=tabrix',
+      method: 'GET',
+      mimeType: 'application/json',
+      status: 200,
+    });
+    expect(c.shapeSummaryAvailable).toBe(false);
+    expect(c.responseBodyUnavailable).toBe(true);
+    expect(c.evidenceKinds).toContain('metadata_only');
+    expect(c.evidenceKinds).toContain('path');
+    expect(c.evidenceKinds).toContain('query');
+  });
+
+  it('still emits a candidate when responseBody is unavailable (no failure)', () => {
+    const c = classifyEndpointCandidate({
+      url: 'https://api.example.test/v1/items?q=tabrix',
+      method: 'GET',
+      mimeType: 'application/json',
+      status: 200,
+      shape: null,
+    });
+    expect(c.semanticType).toBe('search');
+    expect(c.responseBodyUnavailable).toBe(true);
+  });
+
+  it('emits shapeSummaryAvailable=true and shape evidence when shape was supplied and visible', () => {
+    const c = classifyEndpointCandidate({
+      url: 'https://api.example.test/v1/items?q=tabrix',
+      method: 'GET',
+      mimeType: 'application/json',
+      status: 200,
+      shape: shape({
+        kind: 'object',
+        topLevelKeys: ['items'],
+        rowCount: 3,
+        fieldTypes: { items: 'array' },
+        contentTypeBucket: 'json',
+      }),
+    });
+    expect(c.shapeSummaryAvailable).toBe(true);
+    expect(c.responseBodyUnavailable).toBe(false);
+    expect(c.evidenceKinds).toContain('shape');
+  });
+
+  it('treats shape.available=false as responseBodyUnavailable (CORS-opaque case)', () => {
+    const c = classifyEndpointCandidate({
+      url: 'https://api.example.test/v1/items?q=tabrix',
+      method: 'GET',
+      mimeType: 'application/json',
+      status: 200,
+      shape: shape({ available: false }),
+    });
+    expect(c.shapeSummaryAvailable).toBe(false);
+    expect(c.responseBodyUnavailable).toBe(true);
+    expect(c.evidenceKinds).toContain('metadata_only');
+  });
+
+  it('cites status as evidence for 4xx/5xx error verdicts', () => {
+    const c = classifyEndpointCandidate({
+      url: 'https://api.example.test/v1/items',
+      method: 'GET',
+      mimeType: 'application/json',
+      status: 503,
+    });
+    expect(c.semanticType).toBe('error');
+    expect(c.evidenceKinds).toContain('status');
+  });
+
+  it('cites content_type as evidence for document responses', () => {
+    const c = classifyEndpointCandidate({
+      url: 'https://www.example.test/page',
+      method: 'GET',
+      mimeType: 'text/html',
+      status: 200,
+    });
+    expect(c.semanticType).toBe('document');
+    expect(c.evidenceKinds).toContain('content_type');
+  });
+
+  it('evidenceKinds is never empty (closed-enum invariant)', () => {
+    const samples = [
+      classifyEndpointCandidate({ url: 'not-a-url', method: 'GET' }),
+      classifyEndpointCandidate({
+        url: 'https://example.test/favicon.ico',
+        method: 'GET',
+        mimeType: 'image/x-icon',
+      }),
+      classifyEndpointCandidate({
+        url: 'https://api.example.test/v1/no-signal',
+        method: 'GET',
+        mimeType: 'application/json',
+        status: 200,
+      }),
+    ];
+    for (const c of samples) {
+      expect(c.evidenceKinds.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('summarizeEndpointCandidates surfaces endpointCandidateCount and per-type counts', () => {
+    const candidates = [
+      classifyEndpointCandidate({
+        url: 'https://api.example.test/v1/items?q=tabrix',
+        method: 'GET',
+        mimeType: 'application/json',
+      }),
+      classifyEndpointCandidate({
+        url: 'https://example.test/favicon.ico',
+        method: 'GET',
+        mimeType: 'image/x-icon',
+      }),
+      classifyEndpointCandidate({
+        url: 'https://api.example.test/v1/things',
+        method: 'GET',
+        mimeType: 'application/json',
+        status: 500,
+      }),
+    ];
+    const d = summarizeEndpointCandidates(candidates);
+    expect(d.endpointCandidateCount).toBe(3);
+    expect(d.semanticTypeCounts.search).toBe(1);
+    expect(d.semanticTypeCounts.noise).toBeGreaterThanOrEqual(1);
+    expect(d.semanticTypeCounts.error).toBe(1);
+    // None of the inputs supplied a shape.
+    expect(d.shapeSummaryAvailableCount).toBe(0);
+    expect(d.responseBodyUnavailableCount).toBe(3);
   });
 });

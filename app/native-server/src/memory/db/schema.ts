@@ -346,11 +346,14 @@ CREATE TABLE IF NOT EXISTS knowledge_api_endpoints (
   -- lockstep with this list 1:1.
   --
   --   endpoint_source: closed enum
-  --     observed | seed_adapter | manual_seed | unknown
+  --     observed | seed_adapter | manual_seed | unknown | deprecated_seed
   --     NULL is treated as 'unknown' on read; rowToEndpoint() derives
   --     a back-compat value from the family column so legacy rows
   --     written with family='github' surface as seed_adapter and rows
-  --     written with family='observed' surface as observed.
+  --     written with family='observed' surface as observed. The
+  --     'deprecated_seed' value is the V27-08 retirement-state writer's
+  --     explicit way to express "this seed_adapter row has been
+  --     superseded by an observed peer"; the seed row is NEVER deleted.
   --
   --   correlation_confidence: closed enum
   --     unknown_candidate | low_confidence | high_confidence
@@ -374,6 +377,13 @@ CREATE TABLE IF NOT EXISTS knowledge_api_endpoints (
   --   schema_version: 1 = legacy (pre-V27-08). 2 = V27-08-aware row.
   --     Reader collapses NULL to 1 so legacy rows still report a
   --     concrete number.
+  --
+  --   last_failure_reason: closed-enum-ish reason recorded by the
+  --     V27-08 writer when the most recent upsert evidence carried
+  --     a failure signal (timeout, 4xx/5xx status, semantic
+  --     mismatch, shape drift, empty response, etc.). NULL when the
+  --     writer has no failure evidence to record. The reader never
+  --     invents a value here; absence is meaningful.
   endpoint_source          TEXT,
   correlation_confidence   TEXT,
   correlated_region_id     TEXT,
@@ -381,6 +391,7 @@ CREATE TABLE IF NOT EXISTS knowledge_api_endpoints (
   retirement_candidate     INTEGER,
   source_lineage_blob      TEXT,
   schema_version           INTEGER,
+  last_failure_reason      TEXT,
   UNIQUE (site, endpoint_signature)
 );
 

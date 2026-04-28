@@ -214,4 +214,48 @@ describe('correlateDomEndpoints — V27-07', () => {
       expect(c.falsePositiveRisk).toBeLessThanOrEqual(1);
     }
   });
+
+  // ---------------------------------------------------------------
+  // Closeout — Batch B Review Closeout, SoT V3 evidence-contract
+  // alignment for V27-07 (Conflict B). The brief renames six output
+  // axes (correlationScore / pageRegion / inferredSemanticType /
+  // evidenceKinds / sampleCount / falseCorrelationGuard /
+  // correlationMode). The legacy field names stay so existing
+  // call sites compile, but every emitted candidate must now ALSO
+  // carry the SoT V3 spelling. These tests pin the alias contract
+  // so a future refactor cannot drop one side.
+  // ---------------------------------------------------------------
+  it('emits SoT V3 evidence-contract aliases on every candidate (closeout — Conflict B)', () => {
+    const out = correlateDomEndpoints({
+      observations: [obs({ semanticType: 'list', observedAtMs: 1000 })],
+      action: ACTION,
+      domChange: { changedRegionTags: ['main_list'], totalRegionsObserved: 5 },
+    });
+    expect(out).toHaveLength(1);
+    const c = out[0];
+    // Aliases ↔ legacy names, byte-for-byte equal.
+    expect(c.pageRegion).toBe(c.correlatedRegionId);
+    expect(c.inferredSemanticType).toBe(c.semanticType);
+    expect(c.evidenceKinds).toBe(c.correlationSignals);
+    expect(c.falseCorrelationGuard).toBe(c.falsePositiveRisk);
+    expect(c.correlationMode).toBe(c.correlationSource);
+    // sampleCount=1 for single-session correlation.
+    expect(c.sampleCount).toBe(1);
+    // correlationScore is in [0, 1] and never reaches 1.0 (single
+    // session ceiling). For low_confidence with low FP risk, expect
+    // a positive number.
+    expect(c.correlationScore).toBeGreaterThan(0);
+    expect(c.correlationScore).toBeLessThan(1);
+  });
+
+  it('correlationScore is 0 for unknown_candidate verdicts (closeout)', () => {
+    const out = correlateDomEndpoints({
+      observations: [obs({ observedAtMs: 1000 })],
+      action: { ...ACTION, actionKind: 'fill' },
+      domChange: { changedRegionTags: ['main_list'], totalRegionsObserved: 5 },
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].correlationConfidence).toBe('unknown_candidate');
+    expect(out[0].correlationScore).toBe(0);
+  });
 });
