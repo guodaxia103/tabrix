@@ -16,7 +16,7 @@ Related docs:
 
 ## 1. Repository Overview
 
-Tabrix is a `pnpm` monorepo built around four core pieces: a Chrome extension, a local native server, a shared protocol package, and a WASM acceleration package.
+Tabrix is a `pnpm` monorepo built around three core pieces: a Chrome extension, a local native server, and a shared protocol package.
 
 ```text
 tabrix/
@@ -32,9 +32,9 @@ tabrix/
 └─ releases/               # Release notes and release assets guidance
 ```
 
-> `packages/wasm-simd/` and `app/chrome-extension/workers/` (the ONNX /
-> WASM bundle) were removed together with the local semantic engine.
-> They are not part of the current tree.
+> The former local semantic-engine acceleration bundle and extension workers
+> were removed during the MKEP pruning pass. They are not part of the current
+> tree.
 
 ## 2. Workspace Responsibilities
 

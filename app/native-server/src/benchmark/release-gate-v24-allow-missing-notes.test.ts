@@ -68,7 +68,6 @@ function scaffoldFixture(root: string, version: string): void {
   });
   writeJson('app/chrome-extension/package.json', { name: '@tabrix/extension', version });
   writeJson('packages/shared/package.json', { name: '@tabrix/shared', version });
-  writeJson('packages/wasm-simd/package.json', { name: '@tabrix/wasm-simd', version });
 
   // CHANGELOG.md without the canonical baseline comparison header.
   // `--allow-missing-notes` selects this as the notes fallback —

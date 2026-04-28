@@ -20,7 +20,6 @@ We welcome contributions in many forms:
 - **Node.js 20+** and **pnpm or npm** (latest version)
 - **Chrome/Chromium** browser for testing
 - **Git** for version control
-- **Rust** (for WASM development, optional)
 - **TypeScript** knowledge
 
 ### Development Setup
@@ -56,14 +55,13 @@ tabrix/
 ├── app/
 │   ├── chrome-extension/     # Chrome extension (WXT + Vue 3)
 │   │   ├── entrypoints/      # Background scripts, popup, content scripts
-│   │   ├── utils/            # AI models, vector database, utilities
-│   │   └── workers/          # Web Workers for AI processing
+│   │   ├── inject-scripts/   # Page-context interaction helpers
+│   │   └── utils/            # Browser-side utilities
 │   └── native-server/        # Native messaging server (Fastify + TypeScript)
 │       ├── src/mcp/          # MCP protocol implementation
 │       └── src/server/       # HTTP server and native messaging
 ├── packages/
-│   ├── shared/               # Shared types and utilities
-│   └── wasm-simd/           # SIMD-optimized WebAssembly math functions
+│   └── shared/               # Shared types, tool schemas, and contracts
 └── docs/                    # Documentation
 ```
 
@@ -181,22 +179,6 @@ For feature requests, please provide:
 - **Additional context**: Screenshots, examples, etc.
 
 ## 🔧 Development Tips
-
-### Using WASM SIMD
-
-If you're contributing to the WASM SIMD package:
-
-```bash
-cd packages/wasm-simd
-# Install Rust and wasm-pack if not already installed
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo install wasm-pack
-
-# Build WASM package
-pnpm build
-
-# The built files will be copied to app/chrome-extension/workers/
-```
 
 ### Debugging Chrome Extension
 

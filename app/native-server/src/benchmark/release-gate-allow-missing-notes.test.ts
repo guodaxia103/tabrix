@@ -70,7 +70,6 @@ function scaffoldFixture(root: string, version: string): void {
   });
   writeJson('app/chrome-extension/package.json', { name: '@tabrix/extension', version });
   writeJson('packages/shared/package.json', { name: '@tabrix/shared', version });
-  writeJson('packages/wasm-simd/package.json', { name: '@tabrix/wasm-simd', version });
 
   // No RELEASE_NOTES_v2.3.0.md on purpose — that is the trigger for
   // `--allow-missing-notes` fallback, and pre-fix it ALSO short-circuited

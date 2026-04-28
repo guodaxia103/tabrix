@@ -130,7 +130,6 @@ const rootPkg = readJson('package.json');
 const nativePkg = readJson(path.join('app', 'native-server', 'package.json'));
 const extensionPkg = readJson(path.join('app', 'chrome-extension', 'package.json'));
 const sharedPkg = readJson(path.join('packages', 'shared', 'package.json'));
-const wasmSimdPkg = readJson(path.join('packages', 'wasm-simd', 'package.json'));
 
 const errors = [];
 const warnings = [];
@@ -169,12 +168,6 @@ if (extensionPkg.version !== nativePkg.version) {
 if (sharedPkg.version !== nativePkg.version) {
   errors.push(
     `Version mismatch: shared=${sharedPkg.version}, native=${nativePkg.version}. Keep core packages aligned.`,
-  );
-}
-
-if (wasmSimdPkg.version !== nativePkg.version) {
-  errors.push(
-    `Version mismatch: wasm-simd=${wasmSimdPkg.version}, native=${nativePkg.version}. Keep workspace packages aligned.`,
   );
 }
 
