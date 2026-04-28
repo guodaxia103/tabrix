@@ -143,6 +143,60 @@ describe('live-observed-data selector', () => {
     expect(blob).not.toContain('desk');
   });
 
+  it('rejects browser-context summary rows that still contain sensitive fields', () => {
+    const requestUrl = 'https://api.neutral-social.example.test/v1/search/items?keyword=';
+    const out = run({
+      bundle: {
+        requests: [
+          {
+            url: requestUrl,
+            method: 'GET',
+            type: 'xmlhttprequest',
+            requestTime: 2000,
+            statusCode: 200,
+            mimeType: 'application/json',
+            specificResponseHeaders: { 'Content-Type': 'application/json; charset=utf-8' },
+            safeResponseSummary: {
+              responseSummarySource: 'browser_context_summary',
+              bridgePath: 'main_world_to_content_to_native',
+              capturedAfterArm: true,
+              rawBodyPersisted: false,
+              privacyCheck: 'passed',
+              rejectedReason: null,
+              rows: [
+                {
+                  title: 'compact result one',
+                  token: '0123456789abcdef0123456789abcdef',
+                },
+              ],
+              rowCount: 1,
+              emptyResult: false,
+              fieldShapeSummaryAvailable: true,
+              fieldNames: ['title', 'token'],
+              taskQueryValueMatched: true,
+              samplerArmedAt: 1000,
+              capturedAt: 2100,
+            },
+          },
+        ],
+      },
+      selectorContext: {
+        currentPageUrl: 'https://neutral-social.example.test/search?keyword=desk&page=1',
+      },
+    });
+    const blob = JSON.stringify(out);
+
+    expect(out.selected).toHaveLength(0);
+    expect(out.rejected[0]).toMatchObject({
+      endpointSource: 'observed',
+      fallbackUsed: true,
+      fallbackCause: 'sensitive_row_content',
+      privacyCheck: 'failed',
+      responseSummarySource: 'browser_context_summary',
+    });
+    expect(blob).not.toContain('0123456789abcdef0123456789abcdef');
+  });
+
   it('safe response summary before arm is rejected', () => {
     const out = run({
       bundle: {
@@ -237,6 +291,47 @@ describe('live-observed-data selector', () => {
     });
     expect(out.selected[0].pageRegion).not.toBe('current_page_network');
     expect(JSON.stringify(out.selected[0])).not.toContain('responseBody');
+  });
+
+  it('rejects debugger response-body rows with sensitive value shapes before output', () => {
+    const requestUrl =
+      'https://api.neutral-social.example.test/v1/search/items?keyword=desk&page=1';
+    const out = run({
+      bundle: {
+        requests: [
+          {
+            url: requestUrl,
+            method: 'GET',
+            type: 'xmlhttprequest',
+            statusCode: 200,
+            mimeType: 'application/json',
+            specificResponseHeaders: { 'Content-Type': 'application/json; charset=utf-8' },
+            responseBody: JSON.stringify({
+              items: [
+                {
+                  title: 'feed1',
+                  ownerEmail: 'person@example.test',
+                },
+              ],
+            }),
+          },
+        ],
+      },
+      selectorContext: {
+        currentPageUrl: 'https://neutral-social.example.test/search?keyword=desk&page=1',
+        expectedTaskQueryKeys: ['keyword', 'page'],
+      },
+    });
+    const blob = JSON.stringify(out);
+
+    expect(out.selected).toHaveLength(0);
+    expect(out.rejected[0]).toMatchObject({
+      endpointSource: 'observed',
+      fallbackUsed: true,
+      fallbackCause: 'sensitive_row_content',
+      privacyCheck: 'failed',
+    });
+    expect(blob).not.toContain('person@example.test');
   });
 
   it('low confidence DOM correlation is rejected', () => {

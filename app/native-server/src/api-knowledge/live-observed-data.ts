@@ -23,6 +23,7 @@ import type {
   CorrelationConfidenceLevel,
   UpsertKnowledgeApiEndpointInput,
 } from '../memory/knowledge/knowledge-api-repository';
+import { findSensitivePaths } from '../runtime/privacy-gate';
 import { compactGenericRows } from './knowledge-driven-reader';
 
 const LIVE_OBSERVED_ROW_LIMIT = 10;
@@ -136,6 +137,7 @@ export function deriveLiveObservedApiDataFromBundle(
     if (!rowsResult.ok) {
       rejected.push({
         ...baseEvidence,
+        privacyCheck: privacyCheckForRowsFailure(rowsResult.cause),
         fallbackCause: rowsResult.cause,
         fallbackUsed: true,
       });
@@ -276,6 +278,10 @@ function buildLiveRows(
     if (summary.emptyResult === true) {
       return { ok: true, selectedDataSource: 'api_rows', rows: [] };
     }
+    const safeSummaryPrivacy = findLiveRowsPrivacyLeak(summary.rows ?? []);
+    if (safeSummaryPrivacy !== null) {
+      return { ok: false, cause: safeSummaryPrivacy };
+    }
     const rows = Array.isArray(summary.rows)
       ? compactSafeSummaryRows(summary.rows, LIVE_OBSERVED_ROW_LIMIT)
       : [];
@@ -310,6 +316,10 @@ function buildLiveRows(
     parsed = JSON.parse(body);
   } catch {
     return { ok: false, cause: 'compact_rows_unavailable' };
+  }
+  const parsedPrivacy = findLiveRowsPrivacyLeak(parsed);
+  if (parsedPrivacy !== null) {
+    return { ok: false, cause: parsedPrivacy };
   }
 
   if (candidate.semanticType === 'empty') {
@@ -362,6 +372,19 @@ function compactSafeSummaryRows(
     if (Object.keys(row).length > 0) out.push(row);
   }
   return out;
+}
+
+function findLiveRowsPrivacyLeak(value: unknown): string | null {
+  const leaks = findSensitivePaths(value);
+  if (leaks.length === 0) return null;
+  const hasSensitiveValue = leaks.some((leak) => leak.reason === 'sensitive_value_shape');
+  return hasSensitiveValue ? 'sensitive_row_content' : 'privacy_check_failed';
+}
+
+function privacyCheckForRowsFailure(cause: string): 'passed' | 'failed' {
+  return /privacy|sensitive|secret|token|cookie|authorization|pii/i.test(cause)
+    ? 'failed'
+    : 'passed';
 }
 
 function buildRelevanceEvidence(args: {
