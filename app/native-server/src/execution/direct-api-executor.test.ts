@@ -466,6 +466,70 @@ describe('V26-FIX-04 tryDirectApiExecute — knowledge-driven path', () => {
     expect(result.knowledgeLookupRequired).toBe(true);
   });
 
+  it('stable observed endpoint retires seed_adapter and is surfaced as observed reuse', async () => {
+    const fetchFn = jsonFetch(200, {
+      items: [
+        {
+          title: 'Observed result',
+          score: 9,
+        },
+      ],
+    });
+    const repo = makeRepo([
+      knowledgeRow({
+        endpointId: 'seed-github-search',
+        site: 'api.github.com',
+        family: 'github',
+        endpointSource: 'seed_adapter',
+        urlPattern: 'api.github.com/search/repositories',
+        endpointSignature: 'GET api.github.com/search/repositories',
+        semanticType: 'search',
+        confidence: 0.9,
+        sampleCount: 1,
+      }),
+      knowledgeRow({
+        endpointId: 'observed-github-search',
+        site: 'api.github.com',
+        family: 'observed',
+        endpointSource: 'observed',
+        urlPattern: 'api.github.com/search/code',
+        endpointSignature: 'GET api.github.com/search/code',
+        semanticType: 'search',
+        confidence: 0.82,
+        sampleCount: 2,
+        requestSummary: {
+          headerKeys: [],
+          queryKeys: ['q', 'per_page'],
+          bodyKeys: [],
+          hasAuth: false,
+          hasCookie: false,
+        },
+      }),
+    ]);
+    const dataNeed: DataNeed = {
+      intent: 'search github code',
+      intentClass: 'read_only',
+      semanticTypeWanted: 'search',
+      urlHint: 'https://api.github.com/search/repositories?q=tabrix',
+      pageRole: null,
+      params: { query: 'tabrix', limit: 2 },
+    };
+
+    const result = await tryDirectApiExecute(
+      knowledgeDrivenInput({ dataNeed, knowledgeRepo: repo, fetchFn }),
+    );
+
+    expect(result.executionMode).toBe('direct_api');
+    expect(result.readerMode).toBe('knowledge_driven');
+    expect(result.knowledgeEndpointId).toBe('observed-github-search');
+    expect(result.endpointPattern).toBe('api.github.com/search/code');
+    expect(result.endpointSource).toBe('observed');
+    expect(result.lookupChosenReason).toBe('observed_preferred_over_seed_adapter');
+    expect(result.retiredEndpointSource).toBe('seed_adapter');
+    expect(result.requestShapeUsed).toEqual(['per_page', 'q']);
+    expect(result.rows!.dataPurpose).toBe('observed_search');
+  });
+
   it('lookup miss → falls through to legacy candidate path', async () => {
     const fetchFn = jsonFetch(200, { total_count: 0, items: [] });
     const repo = makeRepo([

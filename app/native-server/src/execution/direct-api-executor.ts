@@ -51,7 +51,16 @@ import {
 } from '../api-knowledge/endpoint-lookup';
 import { buildSafeRequest } from '../api-knowledge/safe-request-builder';
 import { readKnowledgeDrivenEndpoint } from '../api-knowledge/knowledge-driven-reader';
-import type { DataNeed, EndpointKnowledgeReader, ReaderMode } from '../api-knowledge/types';
+import type {
+  DataNeed,
+  EndpointKnowledgeReader,
+  EndpointLookupChosenReason,
+  ReaderMode,
+} from '../api-knowledge/types';
+import type {
+  CorrelationConfidenceLevel,
+  EndpointSource,
+} from '../memory/knowledge/knowledge-api-repository';
 import { mapDataSourceToLayerContract, type LayerContractEnvelope } from './layer-contract';
 
 /**
@@ -121,6 +130,7 @@ export const DIRECT_API_HIGH_CONFIDENCE_THRESHOLD = 0.7;
  * `'disabled'` for deterministic single-attempt semantics.
  */
 export type DirectApiColdStartGuard = 'enabled' | 'disabled';
+type DirectApiEndpointSource = 'observed' | 'seed_adapter' | 'manual_seed';
 
 /**
  * V26-FIX-09 default total budget across the first attempt + the
@@ -261,7 +271,13 @@ export interface DirectApiExecutionTelemetry {
    *   - `null`           — every short-circuit branch (no fetch was
    *                        ever attempted).
    */
-  endpointSource: 'observed' | 'seed_adapter' | 'manual_seed' | null;
+  endpointSource: DirectApiEndpointSource | null;
+  /** V27-12 — lookup ranking reason for knowledge-driven rows; null outside lookup-first path. */
+  lookupChosenReason: EndpointLookupChosenReason | null;
+  /** V27-12 — capped DOM/API correlation confidence from the selected Knowledge row. */
+  correlationConfidence: CorrelationConfidenceLevel | null;
+  /** V27-12 — lineage of a de-prioritised peer, usually the retired seed_adapter row. */
+  retiredEndpointSource: DirectApiEndpointSource | null;
   /**
    * V26-FIX-05 — invariant marker. After FIX-04 + FIX-05 the executor
    * always tries `lookupEndpointFamily` first when given a Knowledge
@@ -482,6 +498,9 @@ export async function tryDirectApiExecute(
       // path as `seed_adapter` so the FIX-08 transformer can split the
       // mix of `observed` vs `seed_adapter` reads in Gate B reports.
       endpointSource: 'seed_adapter',
+      lookupChosenReason: null,
+      correlationConfidence: null,
+      retiredEndpointSource: null,
       adapterBypass: false,
       knowledgeLookupRequired: true,
       layerContract: API_ROWS_LAYER_CONTRACT,
@@ -519,6 +538,9 @@ export async function tryDirectApiExecute(
     requestShapeUsed: null,
     semanticValidation: null,
     endpointSource: 'seed_adapter',
+    lookupChosenReason: null,
+    correlationConfidence: null,
+    retiredEndpointSource: null,
     adapterBypass: false,
     knowledgeLookupRequired: true,
     layerContract: API_ROWS_LAYER_CONTRACT,
@@ -575,16 +597,6 @@ async function tryKnowledgeDrivenPath(
   );
   const reader = guarded.result;
 
-  // V26-FIX-05 — the knowledge-driven path itself routes between two
-  // sources: a `seed_adapter` builder hint means we matched a known
-  // GitHub/npmjs URL pattern and reused the V25 seed builder; a
-  // `generic` builder hint means the row was observed via FIX-03's
-  // `chrome_network_capture` classifier and the safe-builder built
-  // the URL from scratch. Map the closed enum onto the FIX-05
-  // `endpointSource` lineage marker so transformers / operation logs
-  // can distinguish the two without re-deriving the join.
-  const endpointSource: 'observed' | 'seed_adapter' =
-    plan.builderHint === 'seed_adapter' ? 'seed_adapter' : 'observed';
   const baseTelemetry = {
     readerMode: 'knowledge_driven' as const,
     knowledgeEndpointId: match.endpoint.endpointId,
@@ -593,7 +605,10 @@ async function tryKnowledgeDrivenPath(
     requestShapeUsed: plan.requestShapeUsed,
     semanticValidation: match.semanticValidation,
     candidateConfidence: match.score,
-    endpointSource,
+    endpointSource: normalizeDirectApiEndpointSource(match.endpointSource),
+    lookupChosenReason: match.chosenReason,
+    correlationConfidence: match.correlationConfidence,
+    retiredEndpointSource: normalizeDirectApiEndpointSource(match.retiredPeer?.endpointSource),
     adapterBypass: false as const,
     knowledgeLookupRequired: true as const,
     layerContract: API_ROWS_LAYER_CONTRACT,
@@ -668,6 +683,9 @@ function short(input: ShortCircuitInput): DirectApiExecutionResult {
     layerContract: API_ROWS_LAYER_CONTRACT,
     semanticValidation: null,
     endpointSource: null,
+    lookupChosenReason: null,
+    correlationConfidence: null,
+    retiredEndpointSource: null,
     adapterBypass: false,
     knowledgeLookupRequired: true,
     apiFirstAttemptMs: null,
@@ -676,6 +694,22 @@ function short(input: ShortCircuitInput): DirectApiExecutionResult {
     coldStartGuard: input.coldStartGuard,
     rows: null,
   };
+}
+
+function normalizeDirectApiEndpointSource(
+  source: EndpointSource | null | undefined,
+): DirectApiEndpointSource | null {
+  switch (source) {
+    case 'observed':
+    case 'seed_adapter':
+    case 'manual_seed':
+      return source;
+    case 'deprecated_seed':
+      return 'seed_adapter';
+    case 'unknown':
+    default:
+      return null;
+  }
 }
 
 /**
