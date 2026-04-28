@@ -28,6 +28,13 @@ import { getDefaultContextManager, type ContextManager } from './v27-context-man
 import { getDefaultLifecycleStateMachine, type LifecycleStateMachine } from './v27-lifecycle';
 import { getDefaultFactCollector, type FactCollector } from './v27-fact-collector';
 import { classifyActionOutcome } from './v27-action-outcome';
+import {
+  recordV27ObservationActionOutcome,
+  recordV27ObservationFactSnapshot,
+  recordV27ObservationLifecycle,
+  recordV27ObservationTabEvent,
+  recordV27ObservationUnknown,
+} from './v27-observation-diagnostics';
 
 interface IngestDeps {
   lifecycle: LifecycleStateMachine;
@@ -57,6 +64,7 @@ export function ingestBridgeObservation(
 ): void {
   const payload = message?.payload;
   if (!payload || typeof payload !== 'object' || typeof payload.kind !== 'string') {
+    recordV27ObservationUnknown(null);
     return;
   }
 
@@ -64,48 +72,105 @@ export function ingestBridgeObservation(
     case 'lifecycle_event': {
       try {
         const data = payload.data;
-        if (!data || typeof data !== 'object') return;
+        if (!data || typeof data !== 'object') {
+          recordV27ObservationUnknown(payload.kind);
+          return;
+        }
+        const tabId = typeof data.tabId === 'number' ? data.tabId : null;
+        const before = tabId !== null ? deps.contextManager.getContext(tabId) : null;
         const snap = deps.lifecycle.ingest(data);
         // The context manager owns the version bump policy; it accepts
         // a `tabId: null` snapshot and returns an "ambient" tombstone.
-        deps.contextManager.applyLifecycleSnapshot(snap);
+        const after = deps.contextManager.applyLifecycleSnapshot(snap);
+        recordV27ObservationLifecycle({
+          observedAt: snap.producedAtMs,
+          contextVersionBumped:
+            after.version > 0 &&
+            (!before ||
+              after.contextId !== before.contextId ||
+              after.version > before.version ||
+              after.lastInvalidationReason !== before.lastInvalidationReason),
+          lastContextInvalidationReason: after.version > 0 ? after.lastInvalidationReason : null,
+        });
       } catch {
         // Producer schema drift in one branch must not poison the
         // websocket. Best-effort.
+        recordV27ObservationUnknown(payload.kind);
       }
       return;
     }
     case 'fact_snapshot': {
       try {
         const data = payload.data;
-        if (!data || typeof data !== 'object') return;
-        deps.factCollector.ingestFactObservation(data);
+        if (!data || typeof data !== 'object') {
+          recordV27ObservationUnknown(payload.kind);
+          return;
+        }
+        const snap = deps.factCollector.ingestFactObservation(data);
+        recordV27ObservationFactSnapshot({
+          observedAt: snap.producedAtMs,
+          factSnapshotId: snap.factSnapshotId,
+          fresh: true,
+        });
       } catch {
         // Best-effort — fact_snapshot is an observation feed, not a
         // command. Drop on shape error.
+        recordV27ObservationUnknown(payload.kind);
       }
       return;
     }
     case 'action_outcome': {
       try {
         const data = payload.data;
-        if (!data || typeof data !== 'object') return;
-        const snapshot = classifyActionOutcome(data);
-        if (typeof data.tabId === 'number') {
-          deps.contextManager.applyActionOutcome(snapshot, data.tabId);
+        if (!data || typeof data !== 'object') {
+          recordV27ObservationUnknown(payload.kind);
+          return;
         }
+        const tabId = typeof data.tabId === 'number' ? data.tabId : null;
+        const before = tabId !== null ? deps.contextManager.getContext(tabId) : null;
+        const snapshot = classifyActionOutcome(data);
+        const after =
+          tabId !== null ? deps.contextManager.applyActionOutcome(snapshot, tabId) : null;
+        recordV27ObservationActionOutcome({
+          observedAt: snapshot.producedAtMs,
+          outcome: snapshot.outcome,
+          contextVersionBumped:
+            !!after &&
+            (!before ||
+              after.contextId !== before.contextId ||
+              after.version > before.version ||
+              after.lastInvalidationReason !== before.lastInvalidationReason),
+          lastContextInvalidationReason: after?.lastInvalidationReason ?? null,
+        });
       } catch {
         // Best-effort.
+        recordV27ObservationUnknown(payload.kind);
       }
       return;
     }
     case 'tab_event': {
       try {
         const data = payload.data;
-        if (!data || typeof data !== 'object') return;
-        deps.contextManager.applyTabEvent(data);
+        if (!data || typeof data !== 'object') {
+          recordV27ObservationUnknown(payload.kind);
+          return;
+        }
+        const tabId = typeof data.tabId === 'number' ? data.tabId : null;
+        const before = tabId !== null ? deps.contextManager.getContext(tabId) : null;
+        const after = deps.contextManager.applyTabEvent(data);
+        recordV27ObservationTabEvent({
+          observedAt: data.observedAtMs,
+          contextVersionBumped:
+            !!after &&
+            (!before ||
+              after.contextId !== before.contextId ||
+              after.version > before.version ||
+              after.lastInvalidationReason !== before.lastInvalidationReason),
+          lastContextInvalidationReason: after?.lastInvalidationReason ?? null,
+        });
       } catch {
         // Best-effort.
+        recordV27ObservationUnknown(payload.kind);
       }
       return;
     }
@@ -114,6 +179,7 @@ export function ingestBridgeObservation(
       // Forward-compat: unknown observation kinds are intentionally
       // dropped without error so a v2.7+ extension paired with this
       // native server does not crash ingestion.
+      recordV27ObservationUnknown(payload.kind);
       return;
   }
 }

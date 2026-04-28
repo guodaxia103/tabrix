@@ -57,6 +57,25 @@ interface StatusPayload {
         lastSweepAt?: number | null;
       };
     };
+    v27Observation?: {
+      observationDiagnosticSource?: string;
+      observationIngestedCount?: number;
+      lifecycleEventIngestedCount?: number;
+      factSnapshotFreshCount?: number;
+      actionOutcomeClassifiedCount?: number;
+      tabEventIngestedCount?: number;
+      contextVersionBumpCount?: number;
+      unknownObservationDroppedCount?: number;
+      malformedObservationDroppedCount?: number;
+      lastObservedAt?: number | null;
+      lastObservationKind?: string | null;
+      lastFactSnapshotId?: string | null;
+      lastActionOutcome?: string | null;
+      lastContextInvalidationReason?: string | null;
+      factSnapshotCount?: number;
+      trackedContextCount?: number;
+      sensitivePersistedCount?: number;
+    };
   };
 }
 
@@ -301,6 +320,29 @@ function renderPretty(payload: EnrichedStatusPayload): string {
       for (const reason of consistency.reasons) {
         lines.push(`  Reason: ${reason}`);
       }
+    }
+  }
+
+  if (data.v27Observation) {
+    const diag = data.v27Observation;
+    lines.push('');
+    lines.push('V27 Observation');
+    lines.push(`  Source: ${diag.observationDiagnosticSource || 'unknown'}`);
+    lines.push(`  Ingested: ${normalizeCount(diag.observationIngestedCount)}`);
+    lines.push(
+      `  By kind: lifecycle=${normalizeCount(diag.lifecycleEventIngestedCount)}, fact=${normalizeCount(diag.factSnapshotFreshCount)}, action=${normalizeCount(diag.actionOutcomeClassifiedCount)}, tab=${normalizeCount(diag.tabEventIngestedCount)}`,
+    );
+    lines.push(`  Context bumps: ${normalizeCount(diag.contextVersionBumpCount)}`);
+    lines.push(`  Live facts: ${normalizeCount(diag.factSnapshotCount)}`);
+    lines.push(`  Tracked contexts: ${normalizeCount(diag.trackedContextCount)}`);
+    if (typeof diag.lastObservedAt === 'number') {
+      lines.push(`  Last observed: ${new Date(diag.lastObservedAt).toLocaleString()}`);
+    }
+    if (diag.lastObservationKind) {
+      lines.push(`  Last kind: ${diag.lastObservationKind}`);
+    }
+    if (diag.lastContextInvalidationReason) {
+      lines.push(`  Last invalidation: ${diag.lastContextInvalidationReason}`);
     }
   }
 

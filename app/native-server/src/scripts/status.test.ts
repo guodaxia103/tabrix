@@ -59,6 +59,21 @@ describe('status script', () => {
           total: 1,
           streamableHttp: 1,
         },
+        v27Observation: {
+          observationDiagnosticSource: 'runtime_ingest',
+          observationIngestedCount: 4,
+          lifecycleEventIngestedCount: 1,
+          factSnapshotFreshCount: 1,
+          actionOutcomeClassifiedCount: 1,
+          tabEventIngestedCount: 1,
+          contextVersionBumpCount: 2,
+          factSnapshotCount: 1,
+          trackedContextCount: 1,
+          lastObservedAt: 1710000002000,
+          lastObservationKind: 'tab_event',
+          lastContextInvalidationReason: 'route_change',
+          sensitivePersistedCount: 0,
+        },
       },
     };
 
@@ -77,6 +92,10 @@ describe('status script', () => {
     expect(output).toContain('Bridge state: ready');
     expect(output).toContain('Bridge summary: 桥接可用');
     expect(output).toContain('Command channel: websocket (conn-1)');
+    expect(output).toContain('V27 Observation');
+    expect(output).toContain('Source: runtime_ingest');
+    expect(output).toContain('Ingested: 4');
+    expect(output).toContain('Last invalidation: route_change');
     expect(output).not.toContain('undefined');
   });
 

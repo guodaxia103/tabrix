@@ -42,6 +42,12 @@ import {
 import { registerMemoryRoutes } from './memory-routes';
 import { registerExecutionRoutes } from './execution-routes';
 import { getCapabilityDiagnostics, type CapabilitySourceKind } from '../policy/capabilities';
+import { getDefaultContextManager } from '../runtime/v27-context-manager';
+import { getDefaultFactCollector } from '../runtime/v27-fact-collector';
+import {
+  getV27ObservationDiagnosticsSnapshot,
+  type V27ObservationDiagnosticsSnapshot,
+} from '../runtime/v27-observation-diagnostics';
 
 // Compatibility guard:
 // @hono/node-server may call socket.destroySoon() while draining incoming requests.
@@ -146,6 +152,7 @@ interface ServerStatusSnapshot {
     enabled: string[];
     unknown: string[];
   };
+  v27Observation: V27ObservationDiagnosticsSnapshot;
 }
 
 export type { ConnectedClient };
@@ -923,6 +930,10 @@ export class Server {
     this.bridgeState.setNativeHostAttached(this.nativeHost !== null);
     const bridge = this.bridgeState.getSnapshot();
     const capabilities = getCapabilityDiagnostics();
+    const v27Observation = getV27ObservationDiagnosticsSnapshot({
+      factSnapshotCount: getDefaultFactCollector().size(),
+      trackedContextCount: getDefaultContextManager().size(),
+    });
 
     return {
       isRunning: this.isRunning,
@@ -961,6 +972,7 @@ export class Server {
         persistenceMode: sessionManager.getPersistenceStatus().mode,
       },
       capabilities,
+      v27Observation,
     };
   }
 

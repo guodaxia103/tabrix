@@ -121,6 +121,16 @@ describe('服务器测试', () => {
       enabled: expect.any(Array),
       unknown: expect.any(Array),
     });
+    expect(response.body.data.v27Observation).toMatchObject({
+      observationDiagnosticSource: expect.any(String),
+      observationIngestedCount: expect.any(Number),
+      lifecycleEventIngestedCount: expect.any(Number),
+      factSnapshotFreshCount: expect.any(Number),
+      actionOutcomeClassifiedCount: expect.any(Number),
+      tabEventIngestedCount: expect.any(Number),
+      contextVersionBumpCount: expect.any(Number),
+      sensitivePersistedCount: 0,
+    });
     expect(Array.isArray(response.body.data.transports.sessionIds)).toBe(true);
     expect(Array.isArray(response.body.data.transports.clients)).toBe(true);
     expect(Array.isArray(response.body.data.transports.sessions)).toBe(true);
