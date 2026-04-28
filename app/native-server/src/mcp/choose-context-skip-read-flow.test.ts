@@ -465,6 +465,76 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(callToolInvocations).toHaveLength(1);
   });
 
+  it('V27-10R same query key with different value falls back without leaking raw query values', async () => {
+    process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
+    markBridgeReady();
+    const completeSpy = jest.spyOn(sessionManager, 'completeStep');
+    sessionManager
+      .getOrCreateExternalTaskContext('mcp:auto:tab:38')
+      .noteUrlChange(
+        'https://neutral-social.example.test/search?keyword=desk&page=1',
+        'search_list',
+      );
+    mockBridgeRoundTrip(
+      JSON.stringify({
+        tabUrl: 'https://neutral-social.example.test/search',
+        requests: [
+          {
+            url: 'https://api.neutral-social.example.test/v1/search/items?keyword=chair&page=1',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            statusCode: 200,
+            mimeType: 'application/json',
+            specificResponseHeaders: { 'Content-Type': 'application/json; charset=utf-8' },
+            responseBody: JSON.stringify({
+              items: [{ title: 'result one' }, { title: 'result two' }],
+            }),
+          },
+        ],
+      }),
+    );
+
+    await handleToolCall(TOOL_NAMES.BROWSER.NETWORK_CAPTURE, { action: 'stop', tabId: 38 });
+    const ctx = sessionManager.peekExternalTaskContext('mcp:auto:tab:38');
+    expect(ctx?.peekLiveObservedApiData()).toBeNull();
+    expect(ctx?.peekLiveObservedApiEvidence()[0]).toMatchObject({
+      endpointSource: 'observed',
+      fallbackCause: 'task_query_value_unproven',
+      fallbackUsed: true,
+      pageRegion: 'current_page_network',
+    });
+
+    const bridgeSpy = mockBridgeRoundTrip(
+      JSON.stringify({ kind: 'page', pageContent: 'query-mismatch-fallback-dom' }),
+    );
+    bridgeSpy.mockClear();
+    const readResult = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 38,
+    });
+    const payload = JSON.parse(String(readResult.content[0].text)) as Record<string, unknown>;
+    const operationLog = takeLatestReadPageOperationLog(completeSpy);
+    const publicBlob = JSON.stringify({ payload, operationLog });
+
+    expect(payload).toMatchObject({ kind: 'page', pageContent: 'query-mismatch-fallback-dom' });
+    expect(payload).not.toHaveProperty('kind', 'api_rows');
+    expect(operationLog).toMatchObject({
+      selectedDataSource: 'dom_json',
+      decisionReason: 'task_query_value_unproven',
+    });
+    expect(operationLog).not.toMatchObject({
+      resultKind: 'api_rows',
+      success: true,
+    });
+    expect(publicBlob).not.toContain('desk');
+    expect(publicBlob).not.toContain('chair');
+    const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
+      const messageType = call[1];
+      return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
+    });
+    expect(callToolInvocations).toHaveLength(1);
+  });
+
   it('V27-10R unsafe observed endpoint is omitted from AI api_rows and kept as fallback evidence', async () => {
     process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
     markBridgeReady();

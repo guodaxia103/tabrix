@@ -28,7 +28,7 @@ import { compactGenericRows } from './knowledge-driven-reader';
 const LIVE_OBSERVED_ROW_LIMIT = 10;
 const LIVE_OBSERVED_CONFIDENCE_FLOOR = 0.7;
 const LIVE_OBSERVED_TASK_QUERY_RELEVANCE_FLOOR = 0.72;
-const LIVE_OBSERVED_DOM_CORRELATION_FLOOR = 0.8;
+const LIVE_OBSERVED_DOM_CORRELATION_FLOOR = 0.9;
 
 const READ_SHAPED_TYPES: ReadonlySet<EndpointCandidateSemanticType> = new Set([
   'search',
@@ -294,24 +294,26 @@ function buildRelevanceEvidence(args: {
 } {
   const domRegionId = sanitizeRegion(args.upsertState?.correlatedRegionId ?? null);
   const correlationConfidence = args.upsertState?.correlationConfidence ?? null;
-  const domRegionCorrelated =
-    domRegionId !== null &&
-    domRegionId !== 'current_page_network' &&
-    correlationConfidence !== null &&
-    correlationConfidence !== 'unknown_candidate';
-  if (domRegionCorrelated) {
-    const domCorrelationFloor =
-      correlationConfidence === 'high_confidence' ? 0.9 : LIVE_OBSERVED_DOM_CORRELATION_FLOOR;
+  const hasConcreteDomRegion = domRegionId !== null && domRegionId !== 'current_page_network';
+  if (hasConcreteDomRegion && correlationConfidence === 'low_confidence') {
+    return {
+      relevant: false,
+      fallbackCause: 'low_correlation_confidence',
+      pageRegion: domRegionId,
+      correlationScore: args.candidate.confidence,
+    };
+  }
+  if (hasConcreteDomRegion && correlationConfidence === 'high_confidence') {
     return {
       relevant: true,
       fallbackCause: '',
       pageRegion: domRegionId,
-      correlationScore: Math.max(args.candidate.confidence, domCorrelationFloor),
+      correlationScore: Math.max(args.candidate.confidence, LIVE_OBSERVED_DOM_CORRELATION_FLOOR),
     };
   }
 
-  const taskQueryRelevant = hasTaskQueryRelevance(args.req, args.selectorContext);
-  if (taskQueryRelevant) {
+  const taskQueryRelevance = evaluateTaskQueryRelevance(args.req, args.selectorContext);
+  if (taskQueryRelevance.status === 'matched') {
     return {
       relevant: true,
       fallbackCause: '',
@@ -325,9 +327,12 @@ function buildRelevanceEvidence(args: {
 
   return {
     relevant: false,
-    fallbackCause: args.selectorContext?.currentPageUrl
-      ? 'relevance_unproven'
-      : 'dom_region_correlation_missing',
+    fallbackCause:
+      taskQueryRelevance.status === 'value_unproven'
+        ? 'task_query_value_unproven'
+        : args.selectorContext?.currentPageUrl
+          ? 'relevance_unproven'
+          : 'dom_region_correlation_missing',
     pageRegion: 'current_page_network',
     correlationScore: args.candidate.confidence,
   };
@@ -339,7 +344,12 @@ function sanitizeRegion(value: string | null): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function hasTaskQueryRelevance(
+type TaskQueryRelevance =
+  | { status: 'matched' }
+  | { status: 'value_unproven' }
+  | { status: 'missing' };
+
+function evaluateTaskQueryRelevance(
   req: CapturedNetworkRequest,
   selectorContext:
     | {
@@ -348,20 +358,31 @@ function hasTaskQueryRelevance(
         expectedTaskQueryKeys?: readonly string[];
       }
     | undefined,
-): boolean {
+): TaskQueryRelevance {
   const currentUrl = parseUrl(selectorContext?.currentPageUrl ?? null);
   const requestUrl = parseUrl(req.url);
-  if (!currentUrl || !requestUrl) return false;
-  if (!hostLooksRelated(currentUrl.hostname, requestUrl.hostname)) return false;
+  if (!currentUrl || !requestUrl) return { status: 'missing' };
+  if (!hostLooksRelated(currentUrl.hostname, requestUrl.hostname)) return { status: 'missing' };
 
-  const requestQueryKeys = extractQueryKeys(requestUrl);
-  const currentPageQueryKeys = extractQueryKeys(currentUrl);
-  const expectedTaskQueryKeys = normalizeKeys(selectorContext?.expectedTaskQueryKeys ?? []);
+  const requestSearchValues = extractComparableSearchValues(requestUrl);
+  const currentSearchValues = extractComparableSearchValues(currentUrl);
+  if (requestSearchValues.length > 0 && currentSearchValues.length > 0) {
+    return intersects(requestSearchValues, currentSearchValues)
+      ? { status: 'matched' }
+      : { status: 'value_unproven' };
+  }
 
-  const requestRelevant = filterRelevantKeys(requestQueryKeys);
-  if (requestRelevant.length === 0) return false;
-  if (intersects(requestRelevant, filterRelevantKeys(currentPageQueryKeys))) return true;
-  if (intersects(requestRelevant, filterRelevantKeys(expectedTaskQueryKeys))) return true;
+  const requestRelevant = filterRelevantKeys(extractQueryKeys(requestUrl));
+  const currentRelevant = filterRelevantKeys(extractQueryKeys(currentUrl));
+  const expectedTaskQueryKeys = filterRelevantKeys(
+    normalizeKeys(selectorContext?.expectedTaskQueryKeys ?? []),
+  );
+  if (
+    requestRelevant.length > 0 &&
+    (currentRelevant.length > 0 || expectedTaskQueryKeys.length > 0)
+  ) {
+    return { status: 'value_unproven' };
+  }
 
   const pagePathLooksLikeSearch = /(?:^|\/)(search|query|discover)(?:\/|$)/i.test(
     currentUrl.pathname,
@@ -369,7 +390,9 @@ function hasTaskQueryRelevance(
   const requestPathLooksLikeSearch = /(?:^|\/)(search|query|list)(?:\/|$)/i.test(
     requestUrl.pathname,
   );
-  return pagePathLooksLikeSearch && requestPathLooksLikeSearch;
+  return pagePathLooksLikeSearch && requestPathLooksLikeSearch
+    ? { status: 'value_unproven' }
+    : { status: 'missing' };
 }
 
 function parseUrl(value: string | null | undefined): URL | null {
@@ -393,6 +416,21 @@ function normalizeKeys(values: readonly string[]): string[] {
   return Array.from(
     new Set(values.map((item) => item.trim().toLowerCase()).filter((item) => item.length > 0)),
   ).sort();
+}
+
+function extractComparableSearchValues(url: URL): string[] {
+  const SEARCH_VALUE_KEYS = new Set(['q', 'query', 'search', 'keyword', 'keywords', 'term']);
+  const values: string[] = [];
+  for (const [key, value] of url.searchParams.entries()) {
+    if (!SEARCH_VALUE_KEYS.has(key.toLowerCase())) continue;
+    const normalized = normalizeQueryValue(value);
+    if (normalized.length > 0) values.push(normalized);
+  }
+  return Array.from(new Set(values)).sort();
+}
+
+function normalizeQueryValue(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 function hostLooksRelated(currentHost: string, requestHost: string): boolean {
