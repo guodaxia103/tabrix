@@ -230,7 +230,12 @@ export const chromeNetworkCapturePostProcessor: ToolPostProcessor = (ctx) => {
     });
     const upsertedBySignature = new Map<
       string,
-      { endpointId: string | null; knowledgeUpserted: boolean }
+      {
+        endpointId: string | null;
+        knowledgeUpserted: boolean;
+        correlationConfidence: 'unknown_candidate' | 'low_confidence' | 'high_confidence' | null;
+        correlatedRegionId: string | null;
+      }
     >();
     for (const input of analysis.upserts) {
       try {
@@ -238,6 +243,8 @@ export const chromeNetworkCapturePostProcessor: ToolPostProcessor = (ctx) => {
         upsertedBySignature.set(input.endpointSignature, {
           endpointId: endpoint.endpointId,
           knowledgeUpserted: true,
+          correlationConfidence: endpoint.correlationConfidence,
+          correlatedRegionId: endpoint.correlatedRegionId,
         });
       } catch (innerError) {
         const message = innerError instanceof Error ? innerError.message : String(innerError);
@@ -248,10 +255,13 @@ export const chromeNetworkCapturePostProcessor: ToolPostProcessor = (ctx) => {
         upsertedBySignature.set(input.endpointSignature, {
           endpointId: null,
           knowledgeUpserted: false,
+          correlationConfidence: null,
+          correlatedRegionId: null,
         });
       }
     }
     if (ctx.taskContext) {
+      const decision = ctx.taskContext.peekChooseContextDecision();
       const live = deriveLiveObservedApiDataFromBundle({
         bundle,
         ctx: {
@@ -260,6 +270,13 @@ export const chromeNetworkCapturePostProcessor: ToolPostProcessor = (ctx) => {
           observedAt,
         },
         upsertedBySignature,
+        selectorContext: {
+          currentPageUrl: ctx.taskContext.currentUrl,
+          pageRole: ctx.taskContext.pageRole,
+          expectedTaskQueryKeys: decision?.apiCapability?.params
+            ? Object.keys(decision.apiCapability.params)
+            : [],
+        },
       });
       ctx.taskContext.noteLiveObservedApiData(live.selected, live.rejected);
     }

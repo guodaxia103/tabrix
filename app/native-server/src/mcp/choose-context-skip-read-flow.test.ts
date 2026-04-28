@@ -136,6 +136,18 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     });
   }
 
+  function takeLatestReadPageOperationLog(completeSpy: jest.SpyInstance): Record<string, unknown> {
+    const operationLogs = completeSpy.mock.calls
+      .map((call) => call[2] as { operationLog?: unknown } | undefined)
+      .map((update) => update?.operationLog)
+      .filter((operationLog) => operationLog && typeof operationLog === 'object');
+    const latest = operationLogs[operationLogs.length - 1];
+    if (!latest || typeof latest !== 'object') {
+      throw new Error('expected chrome_read_page operationLog to exist');
+    }
+    return latest as Record<string, unknown>;
+  }
+
   beforeEach(() => {
     previousCapabilities = process.env[CAPABILITIES_ENV_KEY];
     configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tabrix-skip-read-capabilities-'));
@@ -209,6 +221,12 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
   it('V27-10R current-task observed search/list capture returns compact api_rows without seed adapter', async () => {
     process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
     markBridgeReady();
+    sessionManager
+      .getOrCreateExternalTaskContext('mcp:auto:tab:31')
+      .noteUrlChange(
+        'https://neutral-social.example.test/search?keyword=desk&page=1',
+        'search_list',
+      );
     const captureBundle = {
       tabUrl: 'https://neutral-social.example.test/search',
       requests: [
@@ -243,7 +261,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       rowCount: 2,
       emptyResult: false,
       fieldShapeSummaryAvailable: true,
-      pageRegion: 'current_page_network',
+      pageRegion: 'task_query_network',
       privacyCheck: 'passed',
       knowledgeUpserted: true,
     });
@@ -269,7 +287,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
       rowCount: 2,
       emptyResult: false,
       fieldShapeSummaryAvailable: true,
-      pageRegion: 'current_page_network',
+      pageRegion: 'task_query_network',
       privacyCheck: 'passed',
       fallbackCause: null,
       fallbackUsed: 'none',
@@ -278,6 +296,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     });
     expect(payload.liveObservedEndpointId).toEqual(expect.any(String));
     expect(payload.correlationScore).toEqual(expect.any(Number));
+    expect(payload.pageRegion).not.toBe('current_page_network');
     expect(payload).not.toHaveProperty('rawBody');
     expect(JSON.stringify(payload)).not.toContain('dropped');
     assertNoCallToolInvocation(bridgeSpy);
@@ -286,6 +305,12 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
   it('V27-10R observed verified empty is a successful empty api_rows state', async () => {
     process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
     markBridgeReady();
+    sessionManager
+      .getOrCreateExternalTaskContext('mcp:auto:tab:32')
+      .noteUrlChange(
+        'https://neutral-social.example.test/search?keyword=no-match&page=1',
+        'search_list',
+      );
     const bridgeSpy = mockBridgeRoundTrip(
       JSON.stringify({
         tabUrl: 'https://neutral-social.example.test/search',
@@ -323,9 +348,16 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     assertNoCallToolInvocation(bridgeSpy);
   });
 
-  it('V27-10R unproven observed empty records candidate evidence but falls back to read_page', async () => {
+  it('V27-10R metadata-only default capture does not produce live observed api_rows', async () => {
     process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
     markBridgeReady();
+    const completeSpy = jest.spyOn(sessionManager, 'completeStep');
+    sessionManager
+      .getOrCreateExternalTaskContext('mcp:auto:tab:33')
+      .noteUrlChange(
+        'https://neutral-social.example.test/search?keyword=opaque&page=1',
+        'search_list',
+      );
     mockBridgeRoundTrip(
       JSON.stringify({
         tabUrl: 'https://neutral-social.example.test/search',
@@ -346,7 +378,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(ctx?.peekLiveObservedApiData()).toBeNull();
     expect(ctx?.peekLiveObservedApiEvidence()[0]).toMatchObject({
       endpointSource: 'observed',
-      fallbackCause: 'field_shape_unavailable',
+      fallbackCause: 'metadata_only_capture',
       fallbackUsed: true,
     });
 
@@ -361,6 +393,71 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     const payload = JSON.parse(String(readResult.content[0].text)) as Record<string, unknown>;
     expect(payload).toMatchObject({ kind: 'page', pageContent: 'fallback-dom' });
     expect(payload).not.toHaveProperty('liveObservedDataUsed', true);
+    const operationLog = takeLatestReadPageOperationLog(completeSpy);
+    expect(operationLog).toMatchObject({
+      selectedDataSource: 'dom_json',
+      decisionReason: 'metadata_only_capture',
+    });
+    expect(operationLog).not.toMatchObject({
+      resultKind: 'api_rows',
+      success: true,
+    });
+    const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
+      const messageType = call[1];
+      return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
+    });
+    expect(callToolInvocations).toHaveLength(1);
+  });
+
+  it('V27-10R uncorrelated response body candidate is rejected from AI-facing api_rows', async () => {
+    process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
+    markBridgeReady();
+    const completeSpy = jest.spyOn(sessionManager, 'completeStep');
+    mockBridgeRoundTrip(
+      JSON.stringify({
+        tabUrl: 'https://neutral-social.example.test/feed',
+        requests: [
+          {
+            url: 'https://api.neutral-social.example.test/v1/search/items?keyword=desk&page=1',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            statusCode: 200,
+            mimeType: 'application/json',
+            specificResponseHeaders: { 'Content-Type': 'application/json; charset=utf-8' },
+            responseBody: JSON.stringify({
+              items: [{ title: 'feed1' }, { title: 'feed2' }],
+            }),
+          },
+        ],
+      }),
+    );
+
+    await handleToolCall(TOOL_NAMES.BROWSER.NETWORK_CAPTURE, { action: 'stop', tabId: 37 });
+    const ctx = sessionManager.peekExternalTaskContext('mcp:auto:tab:37');
+    expect(ctx?.peekLiveObservedApiData()).toBeNull();
+    expect(ctx?.peekLiveObservedApiEvidence()[0]).toMatchObject({
+      endpointSource: 'observed',
+      fallbackCause: 'dom_region_correlation_missing',
+      fallbackUsed: true,
+      pageRegion: 'current_page_network',
+    });
+
+    const bridgeSpy = mockBridgeRoundTrip(
+      JSON.stringify({ kind: 'page', pageContent: 'uncorrelated-fallback-dom' }),
+    );
+    bridgeSpy.mockClear();
+    const readResult = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 37,
+    });
+    const payload = JSON.parse(String(readResult.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({ kind: 'page', pageContent: 'uncorrelated-fallback-dom' });
+    expect(payload).not.toHaveProperty('kind', 'api_rows');
+    const operationLog = takeLatestReadPageOperationLog(completeSpy);
+    expect(operationLog).toMatchObject({
+      selectedDataSource: 'dom_json',
+      decisionReason: 'dom_region_correlation_missing',
+    });
     const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
       const messageType = call[1];
       return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
@@ -371,6 +468,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
   it('V27-10R unsafe observed endpoint is omitted from AI api_rows and kept as fallback evidence', async () => {
     process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
     markBridgeReady();
+    const completeSpy = jest.spyOn(sessionManager, 'completeStep');
     mockBridgeRoundTrip(
       JSON.stringify({
         tabUrl: 'https://neutral-social.example.test/search',
@@ -409,6 +507,11 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     const payload = JSON.parse(String(readResult.content[0].text)) as Record<string, unknown>;
     expect(payload).toMatchObject({ kind: 'page', pageContent: 'unsafe-fallback' });
     expect(payload).not.toHaveProperty('kind', 'api_rows');
+    const operationLog = takeLatestReadPageOperationLog(completeSpy);
+    expect(operationLog).toMatchObject({
+      selectedDataSource: 'dom_json',
+      decisionReason: 'status_5xx',
+    });
     const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
       const messageType = call[1];
       return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
