@@ -12,6 +12,7 @@ import {
 } from './operation-log-metadata';
 import type { OperationMemoryLog } from './operation-memory-log-repository';
 import {
+  buildOperationLogReviewReport,
   renderOperationChainSummary,
   summariseOperationChain,
   type OperationLogReplayReader,
@@ -313,6 +314,61 @@ describe('renderOperationChainSummary — V26-PGB-05', () => {
     expect(text).toContain('api_empty');
     expect(text).toContain('api_knowledge_candidate_available');
     expect(text).not.toContain('secret=should-not-leak');
+  });
+});
+
+describe('buildOperationLogReviewReport — V27-14', () => {
+  it('builds a read-only timeline, slow-step list, fallback tree, and gate summary', () => {
+    const logs = [
+      makeLog({
+        stepId: 'fast-api',
+        selectedDataSource: 'api_rows',
+        sourceRoute: 'knowledge_supported_read',
+        decisionReason: 'endpoint_knowledge_high_confidence',
+        resultKind: 'api_rows',
+        durationMs: 120,
+        metadata: makeMetadata({
+          emptyResult: 'false',
+          executionMode: 'direct_api',
+          endpointSource: 'observed',
+          privacyCheck: 'passed',
+          relevanceCheck: 'passed',
+        }),
+      }),
+      makeLog({
+        stepId: 'slow-fallback',
+        selectedDataSource: 'dom_json',
+        sourceRoute: 'knowledge_supported_read',
+        decisionReason: 'task_query_value_unproven',
+        resultKind: 'read_page_fallback',
+        durationMs: 2_500,
+        fallbackUsed: 'task_query_value_unproven',
+        metadata: makeMetadata({
+          fallbackPlan: 'task_query_value_unproven',
+          privacyCheck: 'passed',
+          relevanceCheck: 'failed',
+        }),
+      }),
+    ];
+    const summary = summariseOperationChain(makeReader(logs), 'session-1');
+    const report = buildOperationLogReviewReport(summary, { slowStepThresholdMs: 1_000 });
+
+    expect(report.sessionId).toBe('session-1');
+    expect(report.timeline.map((step) => step.stepId)).toEqual(['fast-api', 'slow-fallback']);
+    expect(report.slowSteps.map((step) => step.stepId)).toEqual(['slow-fallback']);
+    expect(report.fallbackTree).toEqual([
+      { cause: 'task_query_value_unproven', count: 1, stepIds: ['slow-fallback'] },
+    ]);
+    expect(report.dataSourceDistribution).toEqual({ api_rows: 1, dom_json: 1 });
+    expect(report.privacyRelevanceSummary).toEqual({
+      privacyPassed: 2,
+      privacyFailed: 0,
+      relevancePassed: 1,
+      relevanceFailed: 1,
+      unknown: 0,
+    });
+    expect(report.routeOutcomeDistribution.api_success).toBe(1);
+    expect(report.routeOutcomeDistribution.api_fallback).toBe(1);
   });
 });
 

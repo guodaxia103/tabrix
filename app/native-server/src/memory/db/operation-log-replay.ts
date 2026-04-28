@@ -139,6 +139,27 @@ export interface OperationLogReplaySummary {
   steps: OperationLogReplayStep[];
 }
 
+export interface OperationLogReviewReport {
+  sessionId: string;
+  timeline: OperationLogReplayStep[];
+  slowSteps: OperationLogReplayStep[];
+  fallbackTree: Array<{ cause: string; count: number; stepIds: string[] }>;
+  dataSourceDistribution: Record<string, number>;
+  privacyRelevanceSummary: {
+    privacyPassed: number;
+    privacyFailed: number;
+    relevancePassed: number;
+    relevanceFailed: number;
+    unknown: number;
+  };
+  routeOutcomeDistribution: Record<OperationLogReplayRouteOutcome, number>;
+  coverage: OperationLogReplaySummary['coverage'];
+}
+
+export interface OperationLogReviewReportOptions {
+  slowStepThresholdMs?: number;
+}
+
 /**
  * Minimal structural reader contract. Any object that exposes
  * `listBySession` (the {@link OperationMemoryLogRepository} signature)
@@ -333,4 +354,66 @@ export function renderOperationChainSummary(summary: OperationLogReplaySummary):
     );
   }
   return lines.join('\n');
+}
+
+/**
+ * Build a read-only review report from an already materialised replay
+ * summary. The helper does not read or write the repository; callers
+ * decide where to render the report. Every field is derived from
+ * closed-vocabulary replay evidence.
+ */
+export function buildOperationLogReviewReport(
+  summary: OperationLogReplaySummary,
+  options: OperationLogReviewReportOptions = {},
+): OperationLogReviewReport {
+  const slowStepThresholdMs = Math.max(0, options.slowStepThresholdMs ?? 1_000);
+  const fallbackByCause = new Map<string, { cause: string; count: number; stepIds: string[] }>();
+  const dataSourceDistribution: Record<string, number> = {};
+  const privacyRelevanceSummary = {
+    privacyPassed: 0,
+    privacyFailed: 0,
+    relevancePassed: 0,
+    relevanceFailed: 0,
+    unknown: 0,
+  };
+
+  for (const step of summary.steps) {
+    const source = step.selectedDataSource ?? 'not_applicable';
+    dataSourceDistribution[source] = (dataSourceDistribution[source] ?? 0) + 1;
+    if (step.fallbackCause) {
+      const current = fallbackByCause.get(step.fallbackCause) ?? {
+        cause: step.fallbackCause,
+        count: 0,
+        stepIds: [],
+      };
+      current.count += 1;
+      current.stepIds.push(step.stepId);
+      fallbackByCause.set(step.fallbackCause, current);
+    }
+
+    if (step.evidence.privacyCheck === 'passed') privacyRelevanceSummary.privacyPassed += 1;
+    else if (step.evidence.privacyCheck === 'failed') privacyRelevanceSummary.privacyFailed += 1;
+    else privacyRelevanceSummary.unknown += 1;
+
+    if (step.evidence.relevanceCheck === 'passed') privacyRelevanceSummary.relevancePassed += 1;
+    else if (step.evidence.relevanceCheck === 'failed')
+      privacyRelevanceSummary.relevanceFailed += 1;
+    else if (step.evidence.privacyCheck !== null) privacyRelevanceSummary.unknown += 1;
+  }
+
+  return {
+    sessionId: summary.sessionId,
+    timeline: summary.steps.slice(),
+    slowSteps: summary.steps.filter(
+      (step) => typeof step.durationMs === 'number' && step.durationMs >= slowStepThresholdMs,
+    ),
+    fallbackTree: Array.from(fallbackByCause.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.cause.localeCompare(b.cause);
+    }),
+    dataSourceDistribution,
+    privacyRelevanceSummary,
+    routeOutcomeDistribution: { ...summary.routeOutcomeDistribution },
+    coverage: { ...summary.coverage },
+  };
 }
