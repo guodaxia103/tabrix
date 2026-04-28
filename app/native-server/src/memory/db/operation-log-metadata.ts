@@ -125,6 +125,30 @@ export interface OperationLogMetadata {
   capturedAfterArm: string | NotApplicable;
   /** V27-10R2 — closed bridge path for the browser-context sampler. */
   bridgePath: string | NotApplicable;
+  /** V27-13 — direct execution mode that produced the step. */
+  executionMode: string | NotApplicable;
+  /** V27-13 — reader path used by the step (`knowledge_driven`, legacy candidate, etc.). */
+  readerMode: string | NotApplicable;
+  /** V27-13 — endpoint lineage selected by lookup / live observed reuse. */
+  endpointSource: string | NotApplicable;
+  /** V27-13 — lookup ranking reason for the selected endpoint. */
+  lookupChosenReason: string | NotApplicable;
+  /** V27-13 — capped DOM/API correlation confidence. */
+  correlationConfidence: string | NotApplicable;
+  /** V27-13 — lineage of the peer de-prioritised by observed reuse. */
+  retiredEndpointSource: string | NotApplicable;
+  /** V27-13 — semantic validation outcome for the selected endpoint. */
+  semanticValidation: string | NotApplicable;
+  /** V27-13 — layer-contract reason attached to the selected data source. */
+  layerContractReason: string | NotApplicable;
+  /** V27-13 — clamped fallback entry layer, or `none` on success. */
+  fallbackEntryLayer: string | NotApplicable;
+  /** V27-13 — post-retry API reason, or `none` on success. */
+  apiFinalReason: string | NotApplicable;
+  /** V27-13 — privacy gate result before AI output / persistence. */
+  privacyCheck: string | NotApplicable;
+  /** V27-13 — task relevance gate result before AI output. */
+  relevanceCheck: string | NotApplicable;
 }
 
 export const METADATA_KEYS = [
@@ -156,6 +180,18 @@ export const METADATA_KEYS = [
   'responseSummarySource',
   'capturedAfterArm',
   'bridgePath',
+  'executionMode',
+  'readerMode',
+  'endpointSource',
+  'lookupChosenReason',
+  'correlationConfidence',
+  'retiredEndpointSource',
+  'semanticValidation',
+  'layerContractReason',
+  'fallbackEntryLayer',
+  'apiFinalReason',
+  'privacyCheck',
+  'relevanceCheck',
 ] as const satisfies ReadonlyArray<keyof OperationLogMetadata>;
 
 /**
@@ -207,6 +243,18 @@ export function makeOperationLogMetadataDefaults(): OperationLogMetadata {
     responseSummarySource: NOT_APPLICABLE,
     capturedAfterArm: NOT_APPLICABLE,
     bridgePath: NOT_APPLICABLE,
+    executionMode: NOT_APPLICABLE,
+    readerMode: NOT_APPLICABLE,
+    endpointSource: NOT_APPLICABLE,
+    lookupChosenReason: NOT_APPLICABLE,
+    correlationConfidence: NOT_APPLICABLE,
+    retiredEndpointSource: NOT_APPLICABLE,
+    semanticValidation: NOT_APPLICABLE,
+    layerContractReason: NOT_APPLICABLE,
+    fallbackEntryLayer: NOT_APPLICABLE,
+    apiFinalReason: NOT_APPLICABLE,
+    privacyCheck: NOT_APPLICABLE,
+    relevanceCheck: NOT_APPLICABLE,
   };
 }
 

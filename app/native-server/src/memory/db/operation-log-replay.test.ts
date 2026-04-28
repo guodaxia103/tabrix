@@ -84,6 +84,7 @@ describe('summariseOperationChain — V26-PGB-05', () => {
     });
     expect(summary.routeOutcomeDistribution.api_success).toBe(1);
     expect(summary.routeOutcomeDistribution.api_empty).toBe(0);
+    expect(summary.coverage.explainedSteps).toBe(1);
   });
 
   it('classifies an api_rows empty step as api_empty and surfaces the marker', () => {
@@ -213,6 +214,83 @@ describe('summariseOperationChain — V26-PGB-05', () => {
     const summary = summariseOperationChain(reader, 'session-1');
     expect(summary.steps[0].routeOutcome).toBe('tool_call');
     expect(summary.routeOutcomeDistribution.tool_call).toBe(1);
+    expect(summary.steps[0].coverage).toBe('legacy_default');
+    expect(summary.coverage.legacyDefaultSteps).toBe(1);
+  });
+
+  it('surfaces V27-13 explainability evidence and coverage', () => {
+    const reader = makeReader([
+      makeLog({
+        stepId: 'step-v27',
+        selectedDataSource: 'api_rows',
+        sourceRoute: 'knowledge_supported_read',
+        decisionReason: 'endpoint_knowledge_high_confidence',
+        resultKind: 'api_rows',
+        metadata: makeMetadata({
+          emptyResult: 'false',
+          executionMode: 'direct_api',
+          readerMode: 'knowledge_driven',
+          endpointSource: 'observed',
+          lookupChosenReason: 'observed_preferred_over_seed_adapter',
+          correlationConfidence: 'low_confidence',
+          retiredEndpointSource: 'seed_adapter',
+          semanticValidation: 'pass',
+          layerContractReason: 'api_rows_are_list_fields_not_locator_authority',
+          fallbackEntryLayer: 'none',
+          apiFinalReason: 'none',
+          privacyCheck: 'passed',
+          relevanceCheck: 'passed',
+        }),
+      }),
+    ]);
+    const summary = summariseOperationChain(reader, 'session-1');
+    expect(summary.steps[0]).toMatchObject({
+      routeOutcome: 'api_success',
+      coverage: 'explained',
+      evidence: {
+        executionMode: 'direct_api',
+        readerMode: 'knowledge_driven',
+        endpointSource: 'observed',
+        lookupChosenReason: 'observed_preferred_over_seed_adapter',
+        retiredEndpointSource: 'seed_adapter',
+        privacyCheck: 'passed',
+        relevanceCheck: 'passed',
+      },
+    });
+    expect(summary.coverage).toMatchObject({
+      explainedSteps: 1,
+      partialSteps: 0,
+      legacyDefaultSteps: 0,
+      failureSteps: 0,
+    });
+  });
+
+  it('keeps failed API rows classified as api_failure instead of success', () => {
+    const reader = makeReader([
+      makeLog({
+        stepId: 'step-failed-api',
+        selectedDataSource: 'api_rows',
+        sourceRoute: 'knowledge_supported_read',
+        decisionReason: 'api_call_failed_semantic_mismatch',
+        resultKind: 'api_rows',
+        success: false,
+        metadata: makeMetadata({
+          emptyResult: NOT_APPLICABLE,
+          executionMode: 'fallback_required',
+          endpointSource: 'observed',
+          apiFinalReason: 'semantic_mismatch',
+          fallbackEntryLayer: 'L0+L1',
+        }),
+      }),
+    ]);
+    const summary = summariseOperationChain(reader, 'session-1');
+    expect(summary.steps[0]).toMatchObject({
+      routeOutcome: 'api_failure',
+      success: false,
+      coverage: 'explained',
+    });
+    expect(summary.routeOutcomeDistribution.api_failure).toBe(1);
+    expect(summary.coverage.failureSteps).toBe(1);
   });
 });
 
@@ -280,6 +358,21 @@ describe('summariseOperationChain — V27-00 v2.6 NDJSON replay invariant', () =
       'factSnapshotId',
       'observerOverhead',
       'decisionRuleId',
+      'responseSummarySource',
+      'capturedAfterArm',
+      'bridgePath',
+      'executionMode',
+      'readerMode',
+      'endpointSource',
+      'lookupChosenReason',
+      'correlationConfidence',
+      'retiredEndpointSource',
+      'semanticValidation',
+      'layerContractReason',
+      'fallbackEntryLayer',
+      'apiFinalReason',
+      'privacyCheck',
+      'relevanceCheck',
     ];
     for (const key of v27SentinelKeys) {
       expect(v26OnlyMetadata[key]).toBe(NOT_APPLICABLE);

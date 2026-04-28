@@ -63,11 +63,29 @@ import { NOT_APPLICABLE, type OperationLogMetadata } from './operation-log-metad
 export type OperationLogReplayRouteOutcome =
   | 'api_success'
   | 'api_empty'
+  | 'api_failure'
   | 'api_fallback'
   | 'read_page_skipped'
   | 'read_page_warning'
   | 'read_page'
   | 'tool_call';
+
+export type OperationLogReplayCoverage = 'explained' | 'partial' | 'legacy_default';
+
+export interface OperationLogReplayEvidence {
+  executionMode: string | null;
+  readerMode: string | null;
+  endpointSource: string | null;
+  lookupChosenReason: string | null;
+  correlationConfidence: string | null;
+  retiredEndpointSource: string | null;
+  semanticValidation: string | null;
+  layerContractReason: string | null;
+  fallbackEntryLayer: string | null;
+  apiFinalReason: string | null;
+  privacyCheck: string | null;
+  relevanceCheck: string | null;
+}
 
 /**
  * Closed-shape per-step replay record. Every field is the
@@ -100,6 +118,8 @@ export interface OperationLogReplayStep {
   durationMs: number | null;
   success: boolean;
   routeOutcome: OperationLogReplayRouteOutcome;
+  evidence: OperationLogReplayEvidence;
+  coverage: OperationLogReplayCoverage;
 }
 
 /** Closed structural summary of one operation chain. */
@@ -110,6 +130,12 @@ export interface OperationLogReplaySummary {
   totalDurationMs: number;
   /** Closed-vocab counts so a replay UI can show stats at a glance. */
   routeOutcomeDistribution: Record<OperationLogReplayRouteOutcome, number>;
+  coverage: {
+    explainedSteps: number;
+    partialSteps: number;
+    legacyDefaultSteps: number;
+    failureSteps: number;
+  };
   steps: OperationLogReplayStep[];
 }
 
@@ -128,6 +154,9 @@ function classifyRoute(log: OperationMemoryLog): OperationLogReplayRouteOutcome 
   const dataSource = log.selectedDataSource ?? null;
   const resultKind = log.resultKind ?? null;
   const emptyResult = pickEmptyResult(log.metadata);
+  if (!log.success && (dataSource === 'api_rows' || resultKind === 'api_rows')) {
+    return 'api_failure';
+  }
   if (dataSource === 'api_rows') {
     return emptyResult === 'true' ? 'api_empty' : 'api_success';
   }
@@ -155,6 +184,50 @@ function pickFallbackCause(log: OperationMemoryLog): string | null {
   return null;
 }
 
+function pickMetadataValue(value: string): string | null {
+  return value && value !== NOT_APPLICABLE ? value : null;
+}
+
+function buildEvidence(metadata: OperationLogMetadata): OperationLogReplayEvidence {
+  return {
+    executionMode: pickMetadataValue(metadata.executionMode),
+    readerMode: pickMetadataValue(metadata.readerMode),
+    endpointSource: pickMetadataValue(metadata.endpointSource),
+    lookupChosenReason: pickMetadataValue(metadata.lookupChosenReason),
+    correlationConfidence: pickMetadataValue(metadata.correlationConfidence),
+    retiredEndpointSource: pickMetadataValue(metadata.retiredEndpointSource),
+    semanticValidation: pickMetadataValue(metadata.semanticValidation),
+    layerContractReason: pickMetadataValue(metadata.layerContractReason),
+    fallbackEntryLayer: pickMetadataValue(metadata.fallbackEntryLayer),
+    apiFinalReason: pickMetadataValue(metadata.apiFinalReason),
+    privacyCheck: pickMetadataValue(metadata.privacyCheck),
+    relevanceCheck: pickMetadataValue(metadata.relevanceCheck),
+  };
+}
+
+function classifyCoverage(
+  log: OperationMemoryLog,
+  evidence: OperationLogReplayEvidence,
+  fallbackCause: string | null,
+): OperationLogReplayCoverage {
+  const evidenceValues = Object.values(evidence).filter((value) => value !== null);
+  if (
+    evidenceValues.length === 0 &&
+    !log.sourceRoute &&
+    !log.decisionReason &&
+    !log.resultKind &&
+    !fallbackCause
+  ) {
+    return 'legacy_default';
+  }
+  const hasDecision = Boolean(log.sourceRoute || log.decisionReason || evidence.executionMode);
+  const hasSource = Boolean(
+    log.selectedDataSource || evidence.endpointSource || evidence.readerMode,
+  );
+  const hasFailureReason = log.success || Boolean(fallbackCause || evidence.apiFinalReason);
+  return hasDecision && hasSource && hasFailureReason ? 'explained' : 'partial';
+}
+
 /**
  * Build a closed-shape replay summary for a single session. Returns
  * an empty summary (`stepCount=0`, every distribution bucket at 0)
@@ -167,31 +240,48 @@ export function summariseOperationChain(
   sessionId: string,
 ): OperationLogReplaySummary {
   const logs = reader.listBySession(sessionId);
-  const steps: OperationLogReplayStep[] = logs.map((log, index) => ({
-    ordinal: index + 1,
-    stepId: log.stepId,
-    toolName: log.toolName,
-    selectedDataSource: log.selectedDataSource ?? null,
-    sourceRoute: log.sourceRoute ?? null,
-    decisionReason: log.decisionReason ?? null,
-    fallbackCause: pickFallbackCause(log),
-    emptyResult: pickEmptyResult(log.metadata),
-    durationMs: log.durationMs ?? null,
-    success: log.success,
-    routeOutcome: classifyRoute(log),
-  }));
+  const steps: OperationLogReplayStep[] = logs.map((log, index) => {
+    const evidence = buildEvidence(log.metadata);
+    const fallbackCause = pickFallbackCause(log);
+    return {
+      ordinal: index + 1,
+      stepId: log.stepId,
+      toolName: log.toolName,
+      selectedDataSource: log.selectedDataSource ?? null,
+      sourceRoute: log.sourceRoute ?? null,
+      decisionReason: log.decisionReason ?? null,
+      fallbackCause,
+      emptyResult: pickEmptyResult(log.metadata),
+      durationMs: log.durationMs ?? null,
+      success: log.success,
+      routeOutcome: classifyRoute(log),
+      evidence,
+      coverage: classifyCoverage(log, evidence, fallbackCause),
+    };
+  });
   const routeOutcomeDistribution: Record<OperationLogReplayRouteOutcome, number> = {
     api_success: 0,
     api_empty: 0,
+    api_failure: 0,
     api_fallback: 0,
     read_page_skipped: 0,
     read_page_warning: 0,
     read_page: 0,
     tool_call: 0,
   };
+  const coverage = {
+    explainedSteps: 0,
+    partialSteps: 0,
+    legacyDefaultSteps: 0,
+    failureSteps: 0,
+  };
   let totalDurationMs = 0;
   for (const step of steps) {
     routeOutcomeDistribution[step.routeOutcome] += 1;
+    if (step.coverage === 'explained') coverage.explainedSteps += 1;
+    if (step.coverage === 'partial') coverage.partialSteps += 1;
+    if (step.coverage === 'legacy_default') coverage.legacyDefaultSteps += 1;
+    if (!step.success) coverage.failureSteps += 1;
     if (typeof step.durationMs === 'number' && Number.isFinite(step.durationMs)) {
       totalDurationMs += Math.max(0, step.durationMs);
     }
@@ -201,6 +291,7 @@ export function summariseOperationChain(
     stepCount: steps.length,
     totalDurationMs,
     routeOutcomeDistribution,
+    coverage,
     steps,
   };
 }
@@ -217,9 +308,10 @@ export function renderOperationChainSummary(summary: OperationLogReplaySummary):
     `- stepCount: ${summary.stepCount}`,
     `- totalDurationMs: ${summary.totalDurationMs}`,
     `- routeOutcomeDistribution: ${JSON.stringify(summary.routeOutcomeDistribution)}`,
+    `- coverage: ${JSON.stringify(summary.coverage)}`,
     '',
-    '| ord | tool | dataSource | route | reason | fallback | empty | ms | ok | outcome |',
-    '|---:|---|---|---|---|---|---:|---:|---:|---|',
+    '| ord | tool | dataSource | route | reason | fallback | empty | ms | ok | outcome | coverage |',
+    '|---:|---|---|---|---|---|---:|---:|---:|---|---|',
   ];
   for (const step of summary.steps) {
     lines.push(
@@ -234,6 +326,7 @@ export function renderOperationChainSummary(summary: OperationLogReplaySummary):
         step.durationMs ?? '-',
         step.success ? 'true' : 'false',
         step.routeOutcome,
+        step.coverage,
       ]
         .map((value) => String(value))
         .join(' | '),

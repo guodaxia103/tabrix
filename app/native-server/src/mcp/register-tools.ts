@@ -1916,6 +1916,15 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                     ? 'true'
                     : 'false',
               bridgePath: liveObserved.bridgePath,
+              executionMode: 'direct_api',
+              readerMode: 'knowledge_driven',
+              endpointSource: liveObserved.endpointSource,
+              semanticValidation: 'pass',
+              layerContractReason: layerContract.reason,
+              fallbackEntryLayer: 'none',
+              apiFinalReason: 'none',
+              privacyCheck: liveObserved.privacyCheck,
+              relevanceCheck: 'passed',
             },
           },
         });
@@ -1937,6 +1946,17 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           tabHygiene: {
             liveObservedDataUsed: false,
             candidateEvidence: liveObservedEvidence,
+          },
+          metadata: {
+            apiTelemetry: 'live_observed_api_rows',
+            endpointSource: liveObservedEvidence[0]?.endpointSource ?? 'not_applicable',
+            fallbackPlan: liveObservedEvidence[0]?.fallbackCause ?? 'live_observed_api_unusable',
+            fallbackEntryLayer: 'L0+L1',
+            privacyCheck: liveObservedEvidence[0]?.privacyCheck ?? 'not_applicable',
+            relevanceCheck:
+              liveObservedEvidence[0]?.privacyCheck === 'failed' ? 'not_applicable' : 'failed',
+            responseSummarySource:
+              liveObservedEvidence[0]?.responseSummarySource ?? 'not_applicable',
           },
         };
       }
