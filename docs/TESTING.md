@@ -62,6 +62,17 @@ Before a release, contributors should also read:
 - `RELEASE_PROCESS.md`
 - `PLATFORM_SUPPORT.md`
 
+## V27 Public-Safe Gate Reports
+
+The public repository may contain deterministic V27 gate report schemas and fixture-level tests only. A V27 public-safe gate report uses:
+
+- `overallStatus`: `PASS`, `FAIL`, or `BLOCKED`
+- `releaseReadiness`: always `not_assessed`
+- `sections[].id`: one of `api_success`, `api_timeout_fallback`, `semantic_mismatch_fallback`, `api_unavailable_fallback`, `privacy_evidence`, or `benchmark_gate`
+- `sections[].evidence`: redacted counters or closed-vocabulary markers only
+
+These reports must not include raw URLs, raw query strings, cookies, Authorization headers, raw request or response bodies, or private benchmark artifacts. A public-safe `PASS` means the transformed public evidence shape passed deterministic checks; it is not a release-readiness claim. Real browser acceptance and final release judgment remain in the maintainer-private acceptance lane.
+
 ## Reporting Verification
 
 Task summaries should clearly state:
