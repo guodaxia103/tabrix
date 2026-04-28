@@ -349,3 +349,449 @@ export function classifyNetworkObserveEndpoint(
     queryKeysSorted,
   };
 }
+
+// ---------------------------------------------------------------------
+// V27-06 — Endpoint Candidate Classifier v2
+// ---------------------------------------------------------------------
+//
+// The v1 `classifyNetworkObserveEndpoint` above is the persisted-row
+// classifier — its closed enum is wired through SQLite (see
+// `EndpointSemanticType` in `knowledge-api-repository.ts`) and is
+// frozen by the v2.6 schema. V27-06 needs a **higher-level candidate
+// classification** that adds:
+//
+//   - `error`             — 4xx/5xx response status
+//   - `empty`             — successful response but rowCount=0 / empty
+//                           top-level shape
+//   - `document`          — HTML / text / markdown / PDF response
+//                           (doc-shaped, not API-shaped)
+//   - `noise`             — single bucket folding v1's
+//                           asset/analytics/auth/private/telemetry/mutation
+//                           plus favicon + source-map noise
+//   - `unknown_candidate` — replaces v1's `unknown` so a v2 consumer
+//                           can tell "we considered this and walked
+//                           away" from "we never observed this"
+//
+// The v2 classifier is a pure wrapper. It does NOT mutate the v1 row
+// classification, does NOT add columns to the repository, and does
+// NOT bypass v1 noise rules. It composes the v1 verdict with an
+// optional `EndpointShapeSummary` (provided by V27-06 capture-side
+// summariser) and the HTTP status code, then folds the result into
+// the brief's closed enum.
+
+/**
+ * V27-06 closed-enum candidate semantic type. Always include
+ * `'unknown_candidate'` so a downstream V27-07 correlator never has
+ * to infer "we have no opinion".
+ */
+export type EndpointCandidateSemanticType =
+  | 'search'
+  | 'list'
+  | 'detail'
+  | 'pagination'
+  | 'filter'
+  | 'document'
+  | 'empty'
+  | 'error'
+  | 'noise'
+  | 'unknown_candidate';
+
+export const ENDPOINT_CANDIDATE_SEMANTIC_TYPES = [
+  'search',
+  'list',
+  'detail',
+  'pagination',
+  'filter',
+  'document',
+  'empty',
+  'error',
+  'noise',
+  'unknown_candidate',
+] as const satisfies ReadonlyArray<EndpointCandidateSemanticType>;
+
+/**
+ * V27-06 — coarse content-type bucket. Closed enum so the candidate
+ * classifier can decide `document` vs `error` vs `noise` from a
+ * brand-neutral string.
+ */
+export type EndpointContentTypeBucket = 'json' | 'xml' | 'html' | 'text' | 'binary' | 'unknown';
+
+/**
+ * V27-06 — closed-enum response-size bucket. Mirrors the v2.7 fact
+ * collector's `NetworkFactSizeClass` so the two can be cross-checked
+ * during owner-lane Gate B.
+ */
+export type EndpointShapeSizeClass = 'empty' | 'small' | 'medium' | 'large' | 'unknown';
+
+/**
+ * V27-06 — closed-enum response-shape kind. Same vocabulary as the v1
+ * `KnowledgeApiResponseShape` so persistence can keep its existing
+ * column without a migration.
+ */
+export type EndpointShapeKind = 'object' | 'array' | 'scalar' | 'unknown';
+
+/**
+ * V27-06 — closed-enum field types the shape summariser is allowed to
+ * record. Strictly types only — never values.
+ */
+export type EndpointShapeFieldType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null';
+
+/**
+ * V27-06 — privacy-safe response-shape descriptor. Carries:
+ *   - top-level keys (names only, no values)
+ *   - array `rowCount` and a sample of item-keys (names only)
+ *   - per-key `fieldTypes` (closed enum, never values)
+ *   - bucketed `sizeClass`
+ *   - `available=false` when the producer could not see the body
+ *     (e.g. CORS-opaque, stream still in progress, web_request side
+ *     captured headers only). Such candidates are still classified —
+ *     `metadata_only` evidence — and never treated as "endpoint
+ *     unusable".
+ *
+ * ALL list / map members in this type are bounded — see the constants
+ * in `api-knowledge-capture.ts` (`RESPONSE_*_KEY_LIMIT`) — and contain
+ * names only. The PrivacyGate test suite asserts this.
+ */
+export interface EndpointShapeSummary {
+  kind: EndpointShapeKind;
+  topLevelKeys: readonly string[];
+  rowCount: number | null;
+  sampleItemKeys: readonly string[];
+  fieldTypes: Readonly<Record<string, EndpointShapeFieldType>>;
+  sizeClass: EndpointShapeSizeClass;
+  contentTypeBucket: EndpointContentTypeBucket;
+  /** False when no response body was available; classifier still runs. */
+  available: boolean;
+}
+
+/**
+ * V27-06 — input bag for the v2 candidate classifier. Every field is
+ * either a closed-enum bucket, a brand-neutral path/host, a count, or
+ * a key list. No raw values, no header values, no body.
+ */
+export interface EndpointCandidateClassifierInput {
+  url: string;
+  method?: string;
+  /** Chrome request type hint (`'xmlhttprequest' | 'fetch' | ...`). */
+  type?: string;
+  /** Response Content-Type header (header value is allowed because it is a closed-enum-ish string). */
+  mimeType?: string;
+  /** HTTP status code, when known. `null` for fetch errors. */
+  status?: number | null;
+  /** V27-06 shape summary, when the producer could see the body. */
+  shape?: EndpointShapeSummary | null;
+  /** Optional pre-extracted query keys. */
+  queryKeys?: readonly string[];
+}
+
+/**
+ * V27-06 — output of the v2 candidate classifier. The
+ * `evidenceLevel` field lets V27-07 / V27-08 reason about whether the
+ * candidate was shape-evidenced (response body was available and
+ * summarised) or only metadata-evidenced (URL + method + status + mime
+ * only). V27-08 uses this to refuse high confidence on metadata-only
+ * candidates.
+ */
+export interface EndpointCandidate {
+  semanticType: EndpointCandidateSemanticType;
+  /** Closed-enum-ish reason populated for `noise` / `error` / `empty` /
+   *  `unknown_candidate`; `null` for the read-shaped buckets. */
+  noiseReason: string | null;
+  /** Floor confidence the classifier has in this verdict. The Knowledge
+   *  layer composes this with sample count / correlation evidence — the
+   *  classifier itself never claims `> 0.9`. */
+  confidence: number;
+  /** `'shape_evidenced'` only when both the response shape was
+   *  available AND the verdict actually depended on shape evidence.
+   *  Otherwise `'metadata_only'`. */
+  evidenceLevel: 'shape_evidenced' | 'metadata_only';
+  /** Echoes back the input shape so consumers (V27-07 correlator,
+   *  V27-08 repository) do not have to re-summarise. `null` only when
+   *  the producer did not supply one. */
+  shape: EndpointShapeSummary | null;
+  /** Sorted, deduped query keys actually considered in the verdict. */
+  queryKeysSorted: readonly string[];
+  /** Underlying v1 row-classifier verdict. Carried so V27-08 lineage
+   *  can still cite the existing `EndpointSemanticType` column. */
+  rowClassification: NetworkObserveClassification;
+}
+
+/**
+ * V27-06 — additive noise patterns the v2 classifier rejects on top of
+ * the v1 rules. `favicon.ico`, `*.map` (source maps), and the
+ * platform-specific `_private/browser/stats` shape that we already
+ * filter at v1 are all collapsed into the `noise` bucket here.
+ */
+const FAVICON_PATH_RE = /(^|\/)favicon\.(ico|png|svg|gif|webp)(\?|$)/i;
+const SOURCE_MAP_PATH_RE = /\.map(\?|$)/i;
+
+/** Map a v1 `NetworkObserveSemanticType` to the v2 candidate enum. */
+function v1ToV2Semantic(v1: NetworkObserveSemanticType): EndpointCandidateSemanticType {
+  switch (v1) {
+    case 'search':
+    case 'list':
+    case 'detail':
+    case 'pagination':
+    case 'filter':
+      return v1;
+    case 'mutation':
+    case 'asset':
+    case 'analytics':
+    case 'auth':
+    case 'private':
+    case 'telemetry':
+      return 'noise';
+    case 'unknown':
+    default:
+      return 'unknown_candidate';
+  }
+}
+
+function classifyContentTypeBucket(mimeType: string | null | undefined): EndpointContentTypeBucket {
+  if (!mimeType) return 'unknown';
+  const m = mimeType.toLowerCase();
+  if (m.includes('json')) return 'json';
+  if (m.includes('xml')) return 'xml';
+  if (m.includes('html')) return 'html';
+  if (m.startsWith('text/')) return 'text';
+  if (
+    m.startsWith('image/') ||
+    m.startsWith('font/') ||
+    m.startsWith('audio/') ||
+    m.startsWith('video/') ||
+    m.includes('octet-stream') ||
+    m.includes('pdf')
+  ) {
+    return 'binary';
+  }
+  return 'unknown';
+}
+
+/**
+ * V27-06 — entry point. Pure: returns one of the 10 closed-enum
+ * candidate types from URL/method/status/shape (shape optional).
+ *
+ * Decision order (first match wins):
+ *
+ *   1. Invalid URL          → `unknown_candidate` / `invalid_url`.
+ *   2. Favicon / source-map → `noise` / `noise_*`. (additive over v1)
+ *   3. v1 noise verdict     → `noise` / v1's noiseReason.
+ *      (asset / analytics / auth / private / telemetry / mutation)
+ *   4. status 4xx/5xx       → `error` / `status_<class>`.
+ *   5. Document content-type → `document` / `document_response`.
+ *   6. Shape says empty     → `empty` / `empty_response`.
+ *   7. v1 read-shaped verdict (search/list/detail/pagination/filter)
+ *                            → carry through, evidence elevated when
+ *                              shape confirms a non-empty body.
+ *   8. Otherwise            → `unknown_candidate` / v1's noiseReason.
+ *
+ * The classifier never assigns `> 0.85` confidence — V27-08 is the
+ * authority on whether a candidate becomes a high-confidence row.
+ */
+export function classifyEndpointCandidate(
+  input: EndpointCandidateClassifierInput,
+): EndpointCandidate {
+  const v1 = classifyNetworkObserveEndpoint({
+    url: input.url,
+    method: input.method,
+    type: input.type,
+    mimeType: input.mimeType,
+    queryKeys: input.queryKeys,
+  });
+  const queryKeysSorted = v1.queryKeysSorted;
+  const shape = input.shape ?? null;
+  const evidenceLevel: EndpointCandidate['evidenceLevel'] =
+    shape && shape.available ? 'shape_evidenced' : 'metadata_only';
+
+  // 1. Invalid URL — v1 already returned `unknown` / `invalid_url`.
+  if (v1.semanticType === 'unknown' && v1.noiseReason === 'invalid_url') {
+    return {
+      semanticType: 'unknown_candidate',
+      noiseReason: 'invalid_url',
+      confidence: 0,
+      evidenceLevel: 'metadata_only',
+      shape,
+      queryKeysSorted,
+      rowClassification: v1,
+    };
+  }
+
+  // 2. Favicon / source-map — additive noise filter on top of v1.
+  let parsed: URL | null = null;
+  try {
+    parsed = new URL(input.url);
+  } catch {
+    parsed = null;
+  }
+  const path = parsed ? parsed.pathname : '';
+  if (FAVICON_PATH_RE.test(path)) {
+    return {
+      semanticType: 'noise',
+      noiseReason: 'noise_favicon',
+      confidence: 0.6,
+      evidenceLevel,
+      shape,
+      queryKeysSorted,
+      rowClassification: v1,
+    };
+  }
+  if (SOURCE_MAP_PATH_RE.test(path)) {
+    return {
+      semanticType: 'noise',
+      noiseReason: 'noise_source_map',
+      confidence: 0.6,
+      evidenceLevel,
+      shape,
+      queryKeysSorted,
+      rowClassification: v1,
+    };
+  }
+
+  // 3. v1 noise verdicts collapse into `noise`.
+  if (
+    v1.semanticType === 'asset' ||
+    v1.semanticType === 'analytics' ||
+    v1.semanticType === 'auth' ||
+    v1.semanticType === 'private' ||
+    v1.semanticType === 'telemetry' ||
+    v1.semanticType === 'mutation'
+  ) {
+    return {
+      semanticType: 'noise',
+      noiseReason: v1.noiseReason ?? `noise_${v1.semanticType}`,
+      confidence: 0.6,
+      evidenceLevel,
+      shape,
+      queryKeysSorted,
+      rowClassification: v1,
+    };
+  }
+
+  // 4. status 4xx/5xx → `error` regardless of v1 verdict.
+  const status = typeof input.status === 'number' ? input.status : null;
+  if (status !== null && Number.isFinite(status) && status >= 400 && status < 600) {
+    const statusClass = `${Math.floor(status / 100)}xx`;
+    return {
+      semanticType: 'error',
+      noiseReason: `status_${statusClass}`,
+      confidence: 0.7,
+      evidenceLevel,
+      shape,
+      queryKeysSorted,
+      rowClassification: v1,
+    };
+  }
+
+  // 5. document content-type → `document`. We use the explicit mime
+  //    bucket so a HTML response on a "search-y" URL still classifies
+  //    as a document (page-snapshot territory, not API).
+  const ctBucket = classifyContentTypeBucket(input.mimeType);
+  if (ctBucket === 'html' || ctBucket === 'text' || ctBucket === 'xml') {
+    // XML is doc-ish unless v1 already tagged it as a read-shaped JSON
+    // peer (i.e. JSON+XML mix); v1 lets `xml` through to read-shaped
+    // typing but we treat raw XML as document in v2 — APIs in 2026
+    // very rarely return raw XML.
+    if (ctBucket !== 'xml' || v1.semanticType === 'unknown') {
+      return {
+        semanticType: 'document',
+        noiseReason: 'document_response',
+        confidence: 0.65,
+        evidenceLevel,
+        shape,
+        queryKeysSorted,
+        rowClassification: v1,
+      };
+    }
+  }
+  // PDF / binary → noise (not interesting as a Knowledge candidate).
+  if (ctBucket === 'binary') {
+    return {
+      semanticType: 'noise',
+      noiseReason: 'noise_binary_response',
+      confidence: 0.55,
+      evidenceLevel,
+      shape,
+      queryKeysSorted,
+      rowClassification: v1,
+    };
+  }
+
+  // 6. Shape says empty — only when shape evidence is available AND
+  //    no v1 noise verdict already dominated. We avoid second-
+  //    guessing `unknown` v1 verdicts: an empty shape on a
+  //    `no_signal` URL is still `unknown_candidate`, not `empty`.
+  if (
+    shape &&
+    shape.available &&
+    isEmptyShape(shape) &&
+    (v1.usableForTask || v1.semanticType === 'unknown')
+  ) {
+    // We only flag `empty` when the underlying URL/query looks like
+    // it WAS asking for read-shaped data; a shapeless GET with no
+    // signal that happens to return `[]` stays `unknown_candidate`.
+    if (v1.usableForTask) {
+      return {
+        semanticType: 'empty',
+        noiseReason: 'empty_response',
+        confidence: 0.7,
+        evidenceLevel: 'shape_evidenced',
+        shape,
+        queryKeysSorted,
+        rowClassification: v1,
+      };
+    }
+  }
+
+  // 7. v1 read-shaped verdict — promote into v2 candidate enum.
+  if (v1.usableForTask) {
+    const baseConfidence =
+      evidenceLevel === 'shape_evidenced' && shape && !isEmptyShape(shape) ? 0.8 : 0.65;
+    return {
+      semanticType: v1ToV2Semantic(v1.semanticType),
+      noiseReason: null,
+      confidence: baseConfidence,
+      evidenceLevel,
+      shape,
+      queryKeysSorted,
+      rowClassification: v1,
+    };
+  }
+
+  // 8. Default — v1 walked away with `unknown`. We surface it as
+  //    `unknown_candidate` with v1's reason so V27-07 / V27-08 can
+  //    still cite the underlying signal.
+  return {
+    semanticType: 'unknown_candidate',
+    noiseReason: v1.noiseReason ?? 'no_signal',
+    confidence: 0.3,
+    evidenceLevel,
+    shape,
+    queryKeysSorted,
+    rowClassification: v1,
+  };
+}
+
+/**
+ * V27-06 — `true` when the shape descriptor describes a response that
+ * carries no usable rows.
+ */
+function isEmptyShape(shape: EndpointShapeSummary): boolean {
+  if (!shape.available) return false;
+  if (shape.kind === 'array') return shape.rowCount === 0;
+  if (shape.kind === 'object') {
+    if (shape.topLevelKeys.length === 0) return true;
+    // Objects that look like {items:[], total_count:0} — surface a
+    // scalar `*count*` zero or an empty top-level array as empty.
+    // We restrict the heuristic to *common* envelope keys to avoid
+    // false positives on `{status:'ok'}`.
+    const totalKey = shape.topLevelKeys.find((k) => /^(total_?count|count|total)$/i.test(k));
+    if (totalKey && shape.fieldTypes[totalKey] === 'number' && shape.rowCount === 0) {
+      return true;
+    }
+    const arrayKey = shape.topLevelKeys.find(
+      (k) => shape.fieldTypes[k] === 'array' && /^(items|results|data|rows|hits|edges)$/i.test(k),
+    );
+    if (arrayKey && shape.rowCount === 0) return true;
+  }
+  return false;
+}

@@ -41,7 +41,17 @@ import type {
   KnowledgeApiResponseSummary,
   UpsertKnowledgeApiEndpointInput,
 } from './knowledge-api-repository';
-import { classifyNetworkObserveEndpoint } from './network-observe-classifier';
+import {
+  classifyEndpointCandidate,
+  classifyNetworkObserveEndpoint,
+} from './network-observe-classifier';
+import type {
+  EndpointCandidate,
+  EndpointContentTypeBucket,
+  EndpointShapeFieldType,
+  EndpointShapeSizeClass,
+  EndpointShapeSummary,
+} from './network-observe-classifier';
 
 /**
  * Headers whose *values* would be a privacy / security regression to
@@ -702,4 +712,305 @@ function deriveStatusClass(req: CapturedNetworkRequest): string | null {
     return `${Math.floor(code / 100)}xx`;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------
+// V27-06 — Endpoint Candidate derivation
+// ---------------------------------------------------------------------
+//
+// These helpers are pure-additive readers over the same captured
+// network bundle that v2.6's persistence path already consumes. They
+// produce an `EndpointCandidate` view (closed-enum
+// search/list/detail/pagination/filter/document/empty/error/noise/unknown_candidate)
+// that V27-07 (DOM-Endpoint correlator) and V27-08 (Endpoint Knowledge
+// v2 lineage) will consume. V27-06 itself does NOT change the
+// persistence path, the repository schema, or any public MCP tool —
+// per Batch B hard boundary.
+//
+// Privacy invariant: every field exposed in `EndpointShapeSummary` is
+// either a *closed-enum bucket* (sizeClass, contentTypeBucket, kind,
+// fieldType) or a *name list* (top-level keys, sample item keys). No
+// raw values, no header values, no body, no query *values*. The
+// existing `RESPONSE_OBJECT_KEY_LIMIT` / `RESPONSE_ARRAY_SAMPLE_KEY_LIMIT`
+// caps remain authoritative — the v2 summariser composes them, never
+// raises them.
+
+const SHAPE_SIZE_SMALL_BYTES = 4 * 1024; // 4 KiB
+const SHAPE_SIZE_MEDIUM_BYTES = 64 * 1024; // 64 KiB
+const SHAPE_SIZE_LARGE_BYTES = 1024 * 1024; // 1 MiB
+
+function classifySizeClass(byteLen: number | null): EndpointShapeSizeClass {
+  if (byteLen === null || !Number.isFinite(byteLen)) return 'unknown';
+  if (byteLen <= 0) return 'empty';
+  if (byteLen < SHAPE_SIZE_SMALL_BYTES) return 'small';
+  if (byteLen < SHAPE_SIZE_MEDIUM_BYTES) return 'medium';
+  if (byteLen < SHAPE_SIZE_LARGE_BYTES) return 'large';
+  return 'large';
+}
+
+function classifyContentTypeBucketFromString(
+  contentType: string | null | undefined,
+): EndpointContentTypeBucket {
+  if (!contentType) return 'unknown';
+  const m = contentType.toLowerCase();
+  if (m.includes('json')) return 'json';
+  if (m.includes('xml')) return 'xml';
+  if (m.includes('html')) return 'html';
+  if (m.startsWith('text/')) return 'text';
+  if (
+    m.startsWith('image/') ||
+    m.startsWith('font/') ||
+    m.startsWith('audio/') ||
+    m.startsWith('video/') ||
+    m.includes('octet-stream') ||
+    m.includes('pdf')
+  ) {
+    return 'binary';
+  }
+  return 'unknown';
+}
+
+function fieldTypeOf(value: unknown): EndpointShapeFieldType {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  const t = typeof value;
+  if (t === 'string' || t === 'number' || t === 'boolean' || t === 'object') {
+    return t as EndpointShapeFieldType;
+  }
+  // undefined / function / symbol — treat as null for shape purposes.
+  return 'null';
+}
+
+/**
+ * V27-06 — produce an `EndpointShapeSummary` from a single captured
+ * request. Reuses the existing `computeResponseShape` for the
+ * structural sniff (so the v1 row classifier and v2 candidate
+ * classifier can never disagree on `kind` for the same body) and
+ * adds:
+ *   - bounded per-key field types (names → closed enum)
+ *   - bucketed size class
+ *   - closed-enum content-type bucket
+ *   - `available=false` when the body could not be summarised
+ *
+ * `available=false` is the metadata-only signal that V27-06's
+ * classifier reads — body absence MUST NOT be treated as
+ * "endpoint unusable".
+ */
+export function summarizeEndpointShapeFromCapturedRequest(
+  req: CapturedNetworkRequest,
+  commonResponseHeaders: Record<string, string>,
+): EndpointShapeSummary {
+  const mergedResponseHeaders = mergeHeaders(commonResponseHeaders, req.specificResponseHeaders);
+  const contentTypeRaw = pickHeader(mergedResponseHeaders, 'content-type') || req.mimeType || null;
+  const contentType = contentTypeRaw ? contentTypeRaw.split(';')[0].trim() : null;
+  const contentTypeBucket = classifyContentTypeBucketFromString(contentType);
+
+  const body = typeof req.responseBody === 'string' ? req.responseBody : null;
+  // Size measurement is independent of availability: an explicit
+  // empty-string body still measures 0 bytes, even though we cannot
+  // summarise its shape. This lets V27-08 distinguish "0 bytes seen"
+  // from "we never saw a body".
+  const sizeClass = classifySizeClass(body === null ? null : body.length);
+
+  // Body absent or empty or base64 → metadata-only candidate. Caller
+  // must treat this as "we have not seen a parseable shape yet", not
+  // "endpoint is broken".
+  if (!body || req.base64Encoded === true) {
+    return {
+      kind: 'unknown',
+      topLevelKeys: [],
+      rowCount: null,
+      sampleItemKeys: [],
+      fieldTypes: {},
+      sizeClass,
+      contentTypeBucket,
+      available: false,
+    };
+  }
+
+  // Reuse the v1 structural sniff so kind never disagrees across
+  // classifiers. v1 already enforces JSON-only structural parsing;
+  // for non-JSON bodies it returns `kind: 'unknown'` and we surface
+  // that as an `available` summary with no rowCount/keys.
+  // The early-return above already eliminates `base64Encoded === true`.
+  const v1Shape = computeResponseShape({
+    contentType,
+    body,
+    base64Encoded: false,
+  });
+
+  if (v1Shape.kind === 'unknown') {
+    return {
+      kind: 'unknown',
+      topLevelKeys: [],
+      rowCount: null,
+      sampleItemKeys: [],
+      fieldTypes: {},
+      sizeClass,
+      contentTypeBucket,
+      available: true,
+    };
+  }
+  if (v1Shape.kind === 'scalar') {
+    return {
+      kind: 'scalar',
+      topLevelKeys: [],
+      rowCount: null,
+      sampleItemKeys: [],
+      fieldTypes: {},
+      sizeClass,
+      contentTypeBucket,
+      available: true,
+    };
+  }
+
+  // Re-parse for fieldType extraction. We already paid the JSON.parse
+  // cost in v1Shape — the alternative is widening the v1 return type,
+  // which would need a v1 schema migration. Cheaper to re-parse: this
+  // path only runs from chrome_network_capture stop, never per-tab.
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    // v1 sniffed it OK; if we lose the race it is metadata-only.
+    return {
+      kind: v1Shape.kind,
+      topLevelKeys: [],
+      rowCount: null,
+      sampleItemKeys: [],
+      fieldTypes: {},
+      sizeClass,
+      contentTypeBucket,
+      available: true,
+    };
+  }
+
+  if (v1Shape.kind === 'array' && Array.isArray(parsed)) {
+    // Array body → v1 already sampled item keys (capped). Field types
+    // for arrays are recorded only against the *sample* keys. We do
+    // NOT record per-item field types — that would risk schema
+    // explosion for heterogeneous arrays.
+    const fieldTypes: Record<string, EndpointShapeFieldType> = {};
+    for (const item of parsed.slice(0, 5)) {
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        for (const k of v1Shape.sampleItemKeys) {
+          if (fieldTypes[k]) continue;
+          const v = (item as Record<string, unknown>)[k];
+          if (v !== undefined) fieldTypes[k] = fieldTypeOf(v);
+        }
+      }
+    }
+    return {
+      kind: 'array',
+      topLevelKeys: [],
+      rowCount: parsed.length,
+      sampleItemKeys: v1Shape.sampleItemKeys,
+      fieldTypes,
+      sizeClass,
+      contentTypeBucket,
+      available: true,
+    };
+  }
+
+  if (v1Shape.kind === 'object' && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const obj = parsed as Record<string, unknown>;
+    const fieldTypes: Record<string, EndpointShapeFieldType> = {};
+    for (const k of v1Shape.topLevelKeys) {
+      const v = obj[k];
+      if (v !== undefined) fieldTypes[k] = fieldTypeOf(v);
+    }
+    // rowCount derivation for envelope-shaped responses.
+    // {items:[], total_count: 0} / {results:[], hits:[]} → rowCount =
+    // length of the canonical inner array (preferred over total_count
+    // because total_count can lie about the actual page size).
+    let rowCount: number | null = null;
+    const arrayKey = v1Shape.topLevelKeys.find((k) => fieldTypes[k] === 'array');
+    if (arrayKey) {
+      const arr = obj[arrayKey];
+      if (Array.isArray(arr)) rowCount = arr.length;
+    } else {
+      const totalKey = v1Shape.topLevelKeys.find(
+        (k) => fieldTypes[k] === 'number' && /^(total_?count|count|total)$/i.test(k),
+      );
+      if (totalKey) {
+        const n = obj[totalKey];
+        if (typeof n === 'number' && Number.isFinite(n)) rowCount = n;
+      }
+    }
+    return {
+      kind: 'object',
+      topLevelKeys: v1Shape.topLevelKeys,
+      rowCount,
+      sampleItemKeys: [],
+      fieldTypes,
+      sizeClass,
+      contentTypeBucket,
+      available: true,
+    };
+  }
+
+  return {
+    kind: v1Shape.kind,
+    topLevelKeys: [],
+    rowCount: null,
+    sampleItemKeys: [],
+    fieldTypes: {},
+    sizeClass,
+    contentTypeBucket,
+    available: true,
+  };
+}
+
+/**
+ * V27-06 — produce an `EndpointCandidate[]` view of the captured
+ * bundle. Pure: no IO, no `Date.now()`, no env reads.
+ *
+ * Capped at `KNOWLEDGE_CAPTURE_PER_BATCH_LIMIT` to mirror the
+ * persistence path. The two paths share the same cap on purpose so
+ * V27-08 lineage rows and V27-07 correlation candidates always agree
+ * on which requests were "in scope" for a given capture.
+ */
+export function deriveEndpointCandidatesFromBundle(
+  bundle: CapturedNetworkBundle,
+): EndpointCandidate[] {
+  if (!bundle?.requests || bundle.requests.length === 0) return [];
+  const commonRes = bundle.commonResponseHeaders ?? {};
+  const out: EndpointCandidate[] = [];
+  for (const req of bundle.requests) {
+    if (!req?.url || typeof req.url !== 'string') continue;
+    if (out.length >= KNOWLEDGE_CAPTURE_PER_BATCH_LIMIT) break;
+    const candidate = deriveEndpointCandidateFromRequest(req, commonRes);
+    if (candidate) out.push(candidate);
+  }
+  return out;
+}
+
+/**
+ * V27-06 — single-request variant. Useful for V27-07 correlator
+ * flows that already have one captured request and want the
+ * candidate verdict without rebuilding a bundle.
+ */
+export function deriveEndpointCandidateFromRequest(
+  req: CapturedNetworkRequest,
+  commonResponseHeaders: Record<string, string>,
+): EndpointCandidate | null {
+  if (!req?.url || typeof req.url !== 'string') return null;
+  const mergedResponseHeaders = mergeHeaders(commonResponseHeaders, req.specificResponseHeaders);
+  const contentType =
+    pickHeader(mergedResponseHeaders, 'content-type') || req.mimeType || undefined;
+  const status =
+    typeof req.statusCode === 'number'
+      ? req.statusCode
+      : typeof req.status === 'number'
+        ? req.status
+        : null;
+  const shape = summarizeEndpointShapeFromCapturedRequest(req, commonResponseHeaders);
+  return classifyEndpointCandidate({
+    url: req.url,
+    method: normalizeMethod(req.method),
+    type: req.type,
+    mimeType: contentType,
+    status,
+    shape,
+  });
 }
