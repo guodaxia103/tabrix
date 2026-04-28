@@ -206,6 +206,300 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(ctx.pageRole).toBe('issues_list');
   });
 
+  it('V27-10R current-task observed search/list capture returns compact api_rows without seed adapter', async () => {
+    process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
+    markBridgeReady();
+    const captureBundle = {
+      tabUrl: 'https://neutral-social.example.test/search',
+      requests: [
+        {
+          url: 'https://api.neutral-social.example.test/v1/search/items?keyword=desk&page=1',
+          method: 'GET',
+          type: 'xmlhttprequest',
+          statusCode: 200,
+          mimeType: 'application/json',
+          specificResponseHeaders: { 'Content-Type': 'application/json; charset=utf-8' },
+          responseBody: JSON.stringify({
+            items: [
+              { title: 'compact result one', likeCount: 3, nested: { dropped: true } },
+              { title: 'compact result two', likeCount: 5 },
+            ],
+          }),
+        },
+      ],
+    };
+    const bridgeSpy = mockBridgeRoundTrip(JSON.stringify(captureBundle));
+
+    const captureResult = await handleToolCall(TOOL_NAMES.BROWSER.NETWORK_CAPTURE, {
+      action: 'stop',
+      tabId: 31,
+    });
+    expect(captureResult.isError).toBeFalsy();
+
+    const ctx = sessionManager.peekExternalTaskContext('mcp:auto:tab:31');
+    expect(ctx?.peekLiveObservedApiData()).toMatchObject({
+      endpointSource: 'observed',
+      selectedDataSource: 'api_rows',
+      rowCount: 2,
+      emptyResult: false,
+      fieldShapeSummaryAvailable: true,
+      pageRegion: 'current_page_network',
+      privacyCheck: 'passed',
+      knowledgeUpserted: true,
+    });
+    expect(
+      sessionManager.knowledgeApi!.listBySite('api.neutral-social.example.test')[0],
+    ).toMatchObject({
+      endpointSource: 'observed',
+    });
+
+    bridgeSpy.mockClear();
+    const readResult = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 31,
+    });
+
+    expect(readResult.isError).toBeFalsy();
+    const payload = JSON.parse(String(readResult.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      kind: 'api_rows',
+      liveObservedDataUsed: true,
+      endpointSource: 'observed',
+      selectedDataSource: 'api_rows',
+      rowCount: 2,
+      emptyResult: false,
+      fieldShapeSummaryAvailable: true,
+      pageRegion: 'current_page_network',
+      privacyCheck: 'passed',
+      fallbackCause: null,
+      fallbackUsed: 'none',
+      operationLogSuccess: true,
+      knowledgeUpserted: true,
+    });
+    expect(payload.liveObservedEndpointId).toEqual(expect.any(String));
+    expect(payload.correlationScore).toEqual(expect.any(Number));
+    expect(payload).not.toHaveProperty('rawBody');
+    expect(JSON.stringify(payload)).not.toContain('dropped');
+    assertNoCallToolInvocation(bridgeSpy);
+  });
+
+  it('V27-10R observed verified empty is a successful empty api_rows state', async () => {
+    process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
+    markBridgeReady();
+    const bridgeSpy = mockBridgeRoundTrip(
+      JSON.stringify({
+        tabUrl: 'https://neutral-social.example.test/search',
+        requests: [
+          {
+            url: 'https://api.neutral-social.example.test/v1/search/items?keyword=no-match',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            statusCode: 200,
+            mimeType: 'application/json',
+            specificResponseHeaders: { 'Content-Type': 'application/json' },
+            responseBody: JSON.stringify({ items: [], total: 0 }),
+          },
+        ],
+      }),
+    );
+
+    await handleToolCall(TOOL_NAMES.BROWSER.NETWORK_CAPTURE, { action: 'stop', tabId: 32 });
+    bridgeSpy.mockClear();
+    const readResult = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 32,
+    });
+
+    const payload = JSON.parse(String(readResult.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      kind: 'api_rows',
+      liveObservedDataUsed: true,
+      endpointSource: 'observed',
+      rowCount: 0,
+      emptyResult: true,
+      operationLogSuccess: true,
+      fallbackUsed: 'none',
+    });
+    assertNoCallToolInvocation(bridgeSpy);
+  });
+
+  it('V27-10R unproven observed empty records candidate evidence but falls back to read_page', async () => {
+    process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
+    markBridgeReady();
+    mockBridgeRoundTrip(
+      JSON.stringify({
+        tabUrl: 'https://neutral-social.example.test/search',
+        requests: [
+          {
+            url: 'https://api.neutral-social.example.test/v1/search/items?keyword=opaque',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            statusCode: 200,
+            mimeType: 'application/json',
+          },
+        ],
+      }),
+    );
+
+    await handleToolCall(TOOL_NAMES.BROWSER.NETWORK_CAPTURE, { action: 'stop', tabId: 33 });
+    const ctx = sessionManager.peekExternalTaskContext('mcp:auto:tab:33');
+    expect(ctx?.peekLiveObservedApiData()).toBeNull();
+    expect(ctx?.peekLiveObservedApiEvidence()[0]).toMatchObject({
+      endpointSource: 'observed',
+      fallbackCause: 'field_shape_unavailable',
+      fallbackUsed: true,
+    });
+
+    const bridgeSpy = mockBridgeRoundTrip(
+      JSON.stringify({ kind: 'page', pageContent: 'fallback-dom' }),
+    );
+    bridgeSpy.mockClear();
+    const readResult = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 33,
+    });
+    const payload = JSON.parse(String(readResult.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({ kind: 'page', pageContent: 'fallback-dom' });
+    expect(payload).not.toHaveProperty('liveObservedDataUsed', true);
+    const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
+      const messageType = call[1];
+      return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
+    });
+    expect(callToolInvocations).toHaveLength(1);
+  });
+
+  it('V27-10R unsafe observed endpoint is omitted from AI api_rows and kept as fallback evidence', async () => {
+    process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
+    markBridgeReady();
+    mockBridgeRoundTrip(
+      JSON.stringify({
+        tabUrl: 'https://neutral-social.example.test/search',
+        requests: [
+          {
+            url: 'https://api.neutral-social.example.test/v1/search/items?keyword=blocked',
+            method: 'GET',
+            type: 'xmlhttprequest',
+            statusCode: 500,
+            mimeType: 'application/json',
+            specificResponseHeaders: { 'Content-Type': 'application/json' },
+            responseBody: JSON.stringify({ error: 'server_error' }),
+          },
+        ],
+      }),
+    );
+
+    await handleToolCall(TOOL_NAMES.BROWSER.NETWORK_CAPTURE, { action: 'stop', tabId: 36 });
+    const ctx = sessionManager.peekExternalTaskContext('mcp:auto:tab:36');
+    expect(ctx?.peekLiveObservedApiData()).toBeNull();
+    expect(ctx?.peekLiveObservedApiEvidence()[0]).toMatchObject({
+      endpointSource: 'observed',
+      semanticType: 'error',
+      fallbackCause: 'status_5xx',
+      fallbackUsed: true,
+    });
+
+    const bridgeSpy = mockBridgeRoundTrip(
+      JSON.stringify({ kind: 'page', pageContent: 'unsafe-fallback' }),
+    );
+    bridgeSpy.mockClear();
+    const readResult = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 36,
+    });
+    const payload = JSON.parse(String(readResult.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({ kind: 'page', pageContent: 'unsafe-fallback' });
+    expect(payload).not.toHaveProperty('kind', 'api_rows');
+    const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
+      const messageType = call[1];
+      return typeof messageType === 'string' && messageType.toLowerCase().includes('call_tool');
+    });
+    expect(callToolInvocations).toHaveLength(1);
+  });
+
+  it('V27-10R seed adapter api_rows never satisfies liveObservedDataUsed evidence', async () => {
+    markBridgeReady();
+    const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:34');
+    ctx.noteChooseContextDecision({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0',
+      fullReadTokenEstimate: 1000,
+      replayCandidate: null,
+      apiCapability: {
+        available: true,
+        family: 'github_search_repositories',
+        dataPurpose: 'search_repositories',
+        params: { q: 'tabrix' },
+      },
+      executionMode: 'direct_api',
+      directApiResult: {
+        endpointFamily: 'github_search_repositories',
+        dataPurpose: 'search_repositories',
+        rows: [{ name: 'tabrix' }],
+        rowCount: 1,
+        compact: true,
+        rawBodyStored: false,
+        emptyResult: false,
+        emptyReason: null,
+        emptyMessage: null,
+        endpointSource: 'seed_adapter',
+        telemetry: {
+          endpointFamily: 'github_search_repositories',
+          method: 'GET',
+          reason: 'api_rows',
+          status: 200,
+          waitedMs: 1,
+          readAllowed: true,
+          fallbackEntryLayer: 'none',
+        },
+      },
+    });
+
+    const bridgeSpy = jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait');
+    const readResult = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0',
+      tabId: 34,
+    });
+
+    const payload = JSON.parse(String(readResult.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      kind: 'api_rows',
+      endpointSource: 'seed_adapter',
+      liveObservedDataUsed: false,
+    });
+    expect(payload).not.toHaveProperty('liveObservedDataUsed', true);
+    assertNoCallToolInvocation(bridgeSpy);
+  });
+
+  it('V27-10R chrome_read_page CallToolResult failure writes operationLog success=false', async () => {
+    markBridgeReady();
+    const completeSpy = jest.spyOn(sessionManager, 'completeStep');
+    jest
+      .spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait')
+      .mockResolvedValueOnce({ status: 'success', items: [] } as never)
+      .mockResolvedValueOnce({
+        status: 'success',
+        data: {
+          content: [{ type: 'text', text: JSON.stringify({ message: 'read failed' }) }],
+          isError: true,
+        },
+      } as never);
+
+    const readResult = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 35,
+    });
+
+    expect(readResult.isError).toBe(true);
+    const operationLogUpdate = completeSpy.mock.calls
+      .map((call) => call[2])
+      .find((update) => update?.operationLog)?.operationLog;
+    expect(operationLogUpdate).toMatchObject({
+      selectedDataSource: 'dom_json',
+      resultKind: 'read_page_failed',
+      success: false,
+    });
+  });
+
   // ------------------------------------------------------------------
   // (b) skip path: chrome_read_page returns read_page_skipped envelope
   // ------------------------------------------------------------------

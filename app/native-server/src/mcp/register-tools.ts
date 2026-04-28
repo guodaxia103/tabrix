@@ -714,8 +714,9 @@ const READ_PAGE_DEFAULT_LAYER: ReadPageRequestedLayer = 'L0+L1+L2';
  *
  * Only `chrome_read_page` (the gated tool), `chrome_navigate` (the
  * tool that invalidates the gate's lastReadLayer / targetRefsSeen
- * via `noteUrlChange`), and `tabrix_choose_context` (V26-03 — the
- * decision writer that the `chrome_read_page` shim consumes via
+ * via `noteUrlChange`), `chrome_network_capture` (V27-10R — the
+ * live observed API writer), and `tabrix_choose_context` (V26-03 —
+ * the decision writer that the `chrome_read_page` shim consumes via
  * `peekChooseContextDecision`) participate in auto-keying. Every
  * other tool returns `null`, so click/fill/screenshot/etc. cannot
  * accidentally mint phantom external task contexts or pollute the
@@ -763,6 +764,7 @@ function resolveTaskContextKey(
   const autoEligible =
     toolName === 'chrome_read_page' ||
     toolName === 'chrome_navigate' ||
+    toolName === TOOL_NAMES.BROWSER.NETWORK_CAPTURE ||
     toolName === 'tabrix_choose_context';
   if (!autoEligible) return null;
 
@@ -1774,9 +1776,149 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       fallbackUsed?: string | null;
       readCount?: number | null;
       tokensSaved?: number | null;
+      success?: boolean;
+      tabHygiene?: unknown;
+      metadata?: Record<string, string>;
     } | null = null;
     let apiFallbackEvidence: ApiReadFallbackEvidenceV26 | null = null;
     if (taskContext && name === 'chrome_read_page') {
+      const acceptanceApiFaultForLiveObserved = readAcceptanceApiFault(args);
+      const liveObserved = acceptanceApiFaultForLiveObserved
+        ? null
+        : taskContext.peekLiveObservedApiData();
+      if (liveObserved) {
+        taskContext.noteSkipRead({
+          source: liveObserved.selectedDataSource === 'api_detail' ? 'api_detail' : 'api_list',
+          layer: 'L0+L1',
+          tokensSavedEstimate: 0,
+          actionPathId: null,
+          apiFamily: liveObserved.endpointFamily,
+        });
+        const totals = taskContext.getTaskTotals();
+        const layerContract = mapDataSourceToLayerContract({
+          dataSource: liveObserved.selectedDataSource,
+          requestedLayer: 'L0+L1',
+          fallbackEntryLayer: 'L0+L1',
+        });
+        const liveObservedEvidence = {
+          liveObservedDataUsed: true,
+          endpointSource: liveObserved.endpointSource,
+          selectedDataSource: liveObserved.selectedDataSource,
+          liveObservedEndpointId: liveObserved.liveObservedEndpointId,
+          rowCount: liveObserved.rowCount,
+          emptyResult: liveObserved.emptyResult,
+          fieldShapeSummaryAvailable: liveObserved.fieldShapeSummaryAvailable,
+          pageRegion: liveObserved.pageRegion,
+          correlationScore: liveObserved.correlationScore,
+          privacyCheck: liveObserved.privacyCheck,
+          fallbackCause: null,
+          fallbackUsed: false,
+          operationLogSuccess: true,
+          knowledgeUpserted: liveObserved.knowledgeUpserted,
+          semanticType: liveObserved.semanticType,
+        };
+        const apiPayload = {
+          kind: liveObserved.selectedDataSource,
+          readPageAvoided: true,
+          sourceKind: liveObserved.selectedDataSource === 'api_detail' ? 'api_detail' : 'api_list',
+          sourceRoute: 'knowledge_supported_read',
+          chosenSource:
+            liveObserved.selectedDataSource === 'api_detail' ? 'api_detail' : 'api_list',
+          dataSource: liveObserved.selectedDataSource === 'api_detail' ? 'api_detail' : 'api_list',
+          selectedDataSource: liveObserved.selectedDataSource,
+          decisionReason: 'live_observed_current_task_api_data',
+          dispatcherInputSource: 'chrome_network_capture',
+          fallbackPlan: {
+            dataSource: 'dom_json',
+            entryLayer: 'L0+L1',
+            reason: 'live_observed_current_task_api_data',
+          },
+          layerContract,
+          chosenLayer: 'L0+L1',
+          tokenEstimateChosen: 0,
+          tokenEstimateFullRead: 0,
+          tokensSavedEstimate: 0,
+          tokensSavedEstimateSource: 'unavailable_live_observed_api_rows',
+          fallbackUsed: 'none',
+          fallbackCause: null,
+          fallbackEntryLayer: 'L0+L1',
+          requiresApiCall: false,
+          requiresExperienceReplay: false,
+          apiFamily: liveObserved.endpointFamily,
+          dataPurpose: liveObserved.dataPurpose,
+          rows: liveObserved.rows,
+          rowCount: liveObserved.rowCount,
+          compact: liveObserved.compact,
+          rawBodyStored: liveObserved.rawBodyStored,
+          emptyResult: liveObserved.emptyResult,
+          emptyReason: liveObserved.emptyReason,
+          emptyMessage: liveObserved.emptyMessage,
+          endpointSource: liveObserved.endpointSource,
+          apiTelemetry: {
+            endpointFamily: liveObserved.endpointFamily,
+            method: 'GET',
+            reason: 'live_observed_api_rows',
+            status: null,
+            waitedMs: 0,
+            readAllowed: true,
+            fallbackEntryLayer: 'none',
+          },
+          liveObservedDataUsed: true,
+          liveObservedEndpointId: liveObserved.liveObservedEndpointId,
+          fieldShapeSummaryAvailable: liveObserved.fieldShapeSummaryAvailable,
+          pageRegion: liveObserved.pageRegion,
+          correlationScore: liveObserved.correlationScore,
+          privacyCheck: liveObserved.privacyCheck,
+          operationLogSuccess: true,
+          knowledgeUpserted: liveObserved.knowledgeUpserted,
+          diagnostic: 'skip: current task already observed safe compact API rows',
+          taskTotals: totals,
+        };
+        const apiCallResult: CallToolResult = {
+          content: [{ type: 'text', text: JSON.stringify(apiPayload) }],
+        };
+        sessionManager.completeStep(session.sessionId, step.stepId, {
+          status: 'completed',
+          resultSummary: 'chrome_read_page fulfilled via current-task observed API data',
+          operationLog: {
+            requestedLayer: 'L0+L1',
+            selectedDataSource: liveObserved.selectedDataSource,
+            sourceRoute: 'knowledge_supported_read',
+            decisionReason: 'live_observed_current_task_api_data',
+            resultKind: liveObserved.selectedDataSource,
+            fallbackUsed: 'none',
+            readCount: totals.readPageAvoidedCount,
+            tokensSaved: 0,
+            success: true,
+            tabHygiene: liveObservedEvidence,
+            metadata: {
+              emptyResult: liveObserved.emptyResult ? 'true' : 'false',
+              apiTelemetry: 'live_observed_api_rows',
+              confidence: liveObserved.correlationScore.toFixed(2),
+            },
+          },
+        });
+        sessionManager.finishSession(session.sessionId, {
+          status: 'completed',
+          summary: 'chrome_read_page fulfilled via current-task observed API data',
+        });
+        return apiCallResult;
+      }
+      const liveObservedEvidence = taskContext.peekLiveObservedApiEvidence();
+      if (liveObservedEvidence.length > 0) {
+        operationLogHint = {
+          requestedLayer: 'L0+L1',
+          selectedDataSource: 'dom_json',
+          sourceRoute: 'knowledge_supported_read',
+          decisionReason: liveObservedEvidence[0]?.fallbackCause ?? 'live_observed_api_unusable',
+          resultKind: 'read_page_fallback',
+          fallbackUsed: 'dom_compact',
+          tabHygiene: {
+            liveObservedDataUsed: false,
+            candidateEvidence: liveObservedEvidence,
+          },
+        };
+      }
       // V26-03 (B-026) — skip-read orchestrator hook. We consult it
       // BEFORE the existing budget gate because a `'skip'` plan
       // means we never round-trip the bridge AND never spend the
@@ -1923,6 +2065,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                 // `endpointSourceDistribution` without re-deriving
                 // the bucket from the family string.
                 endpointSource: cachedDirect ? cachedDirect.endpointSource : 'seed_adapter',
+                liveObservedDataUsed: false,
                 apiTelemetry: apiResult.telemetry,
                 diagnostic: skipPlan.diagnostic,
                 taskTotals: totals,
@@ -2187,6 +2330,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         stepId: step.stepId,
         sessionId: session.sessionId,
         sessionManager,
+        taskContext: taskContextEarly,
         args,
       });
       // V26-05 (B-028): record a successful chrome_read_page so the
@@ -2200,7 +2344,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       // upstream, the budget gate already saw the clamped layer —
       // record the same value here so the post-success bookkeeping
       // cannot drift back to the caller's original layer.
-      if (name === 'chrome_read_page' && taskContext) {
+      if (name === 'chrome_read_page' && taskContext && postResult.rawResult.isError !== true) {
         const requestedLayer =
           forcedReadPageLayer ?? extractRequestedLayer(args) ?? READ_PAGE_DEFAULT_LAYER;
         taskContext.noteReadPage({
@@ -2210,6 +2354,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       }
       const rawResultWithEvidence = withFallbackEvidence(postResult.rawResult, apiFallbackEvidence);
       const normalized = normalizeToolCallResult(name, rawResultWithEvidence);
+      const toolResultFailed = rawResultWithEvidence.isError === true;
       sessionManager.completeStep(session.sessionId, step.stepId, {
         status: 'completed',
         resultSummary: normalized.stepSummary,
@@ -2224,7 +2369,13 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                   extractRequestedLayer(outgoingArgs) ??
                   READ_PAGE_DEFAULT_LAYER,
                 selectedDataSource: operationLogHint?.selectedDataSource ?? 'dom_json',
-                resultKind: operationLogHint?.resultKind ?? 'read_page',
+                resultKind:
+                  operationLogHint?.resultKind ??
+                  (toolResultFailed ? 'read_page_failed' : 'read_page'),
+                success: operationLogHint?.success ?? (toolResultFailed ? false : undefined),
+                decisionReason:
+                  operationLogHint?.decisionReason ??
+                  (toolResultFailed ? 'read_page_tool_error' : undefined),
               }
             : undefined,
       });
@@ -2256,6 +2407,22 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
             : 'tool_call_error',
         errorSummary: bridgeFailure ? bridgeFailure.message : responseError,
         resultSummary: `Tool ${name} failed`,
+        operationLog:
+          name === 'chrome_read_page'
+            ? {
+                ...(operationLogHint ?? {}),
+                requestedLayer:
+                  operationLogHint?.requestedLayer ??
+                  extractRequestedLayer(outgoingArgs) ??
+                  READ_PAGE_DEFAULT_LAYER,
+                selectedDataSource: operationLogHint?.selectedDataSource ?? 'dom_json',
+                resultKind: 'read_page_failed',
+                decisionReason:
+                  operationLogHint?.decisionReason ??
+                  (bridgeFailure ? bridgeFailure.code : 'tool_call_error'),
+                success: false,
+              }
+            : undefined,
       });
       sessionManager.finishSession(session.sessionId, {
         status: 'failed',

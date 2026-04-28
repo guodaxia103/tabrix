@@ -27,6 +27,10 @@
  */
 
 import type { ReadPageRequestedLayer } from '@tabrix/shared';
+import type {
+  LiveObservedApiData,
+  LiveObservedApiEvidence,
+} from '../api-knowledge/live-observed-data';
 import type { ChooseContextDecisionSnapshot, SkipReadSourceKind } from './skip-read-orchestrator';
 
 /**
@@ -44,6 +48,7 @@ export const DEFAULT_READ_BUDGET_PER_TASK = 6;
  * the bridge by accident.
  */
 const READ_BUDGET_HARD_CAP = 100;
+const LIVE_OBSERVED_CONTEXT_CAP = 10;
 
 /**
  * Closed enum for `chosenSource` on a `chrome_read_page` outcome we
@@ -273,6 +278,8 @@ export class TaskSessionContext {
    * decision).
    */
   private _chooseContextDecision: ChooseContextDecisionSnapshot | null = null;
+  private readonly liveObservedApiData: LiveObservedApiData[] = [];
+  private readonly liveObservedApiEvidence: LiveObservedApiEvidence[] = [];
 
   constructor(options?: TaskSessionContextOptions) {
     if (options?.readBudget !== undefined) {
@@ -314,6 +321,8 @@ export class TaskSessionContext {
       // Drop it so the orchestrator never skips a read on the new
       // page based on a decision that targeted the old one.
       this._chooseContextDecision = null;
+      this.liveObservedApiData.length = 0;
+      this.liveObservedApiEvidence.length = 0;
     }
   }
 
@@ -348,6 +357,33 @@ export class TaskSessionContext {
    */
   public peekChooseContextDecision(): ChooseContextDecisionSnapshot | null {
     return this._chooseContextDecision;
+  }
+
+  public noteLiveObservedApiData(
+    data: ReadonlyArray<LiveObservedApiData>,
+    evidence: ReadonlyArray<LiveObservedApiEvidence> = [],
+  ): void {
+    for (const item of data) {
+      this.liveObservedApiData.unshift(cloneLiveObservedApiData(item));
+    }
+    for (const item of evidence) {
+      this.liveObservedApiEvidence.unshift({ ...item });
+    }
+    if (this.liveObservedApiData.length > LIVE_OBSERVED_CONTEXT_CAP) {
+      this.liveObservedApiData.length = LIVE_OBSERVED_CONTEXT_CAP;
+    }
+    if (this.liveObservedApiEvidence.length > LIVE_OBSERVED_CONTEXT_CAP) {
+      this.liveObservedApiEvidence.length = LIVE_OBSERVED_CONTEXT_CAP;
+    }
+  }
+
+  public peekLiveObservedApiData(): LiveObservedApiData | null {
+    const [first] = this.liveObservedApiData;
+    return first ? cloneLiveObservedApiData(first) : null;
+  }
+
+  public peekLiveObservedApiEvidence(): readonly LiveObservedApiEvidence[] {
+    return this.liveObservedApiEvidence.map((item) => ({ ...item }));
   }
 
   /**
@@ -485,4 +521,11 @@ function layerRank(layer: ReadPageRequestedLayer): number {
     default:
       return 0;
   }
+}
+
+function cloneLiveObservedApiData(input: LiveObservedApiData): LiveObservedApiData {
+  return {
+    ...input,
+    rows: input.rows.map((row) => ({ ...row })),
+  };
 }

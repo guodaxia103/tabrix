@@ -25,6 +25,8 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { TOOL_NAMES } from '@tabrix/shared';
 import type { SessionManager } from '../execution/session-manager';
+import type { TaskSessionContext } from '../execution/task-session-context';
+import { deriveLiveObservedApiDataFromBundle } from '../api-knowledge/live-observed-data';
 import { ACTION_KIND_BY_TOOL } from '../memory/action-service';
 import {
   analyzeKnowledgeCaptureBundle,
@@ -43,6 +45,7 @@ export interface ToolPostProcessorContext {
    */
   sessionId: string;
   sessionManager: SessionManager;
+  taskContext?: TaskSessionContext | null;
   args: unknown;
 }
 
@@ -225,16 +228,40 @@ export const chromeNetworkCapturePostProcessor: ToolPostProcessor = (ctx) => {
       stepId: ctx.stepId ?? null,
       observedAt,
     });
+    const upsertedBySignature = new Map<
+      string,
+      { endpointId: string | null; knowledgeUpserted: boolean }
+    >();
     for (const input of analysis.upserts) {
       try {
-        repo.upsert(input);
+        const endpoint = repo.upsert(input);
+        upsertedBySignature.set(input.endpointSignature, {
+          endpointId: endpoint.endpointId,
+          knowledgeUpserted: true,
+        });
       } catch (innerError) {
         const message = innerError instanceof Error ? innerError.message : String(innerError);
 
         console.warn(
           `[tabrix/knowledge] api_knowledge upsert failed for ${input.endpointSignature}: ${message}`,
         );
+        upsertedBySignature.set(input.endpointSignature, {
+          endpointId: null,
+          knowledgeUpserted: false,
+        });
       }
+    }
+    if (ctx.taskContext) {
+      const live = deriveLiveObservedApiDataFromBundle({
+        bundle,
+        ctx: {
+          sessionId: ctx.sessionId ?? null,
+          stepId: ctx.stepId ?? null,
+          observedAt,
+        },
+        upsertedBySignature,
+      });
+      ctx.taskContext.noteLiveObservedApiData(live.selected, live.rejected);
     }
     return empty;
   } catch (error) {

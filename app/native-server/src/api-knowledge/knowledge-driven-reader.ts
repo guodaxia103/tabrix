@@ -222,7 +222,7 @@ const GENERIC_ARRAY_KEYS = [
   'edges',
 ];
 
-function compactGenericRows(body: unknown, limit: number): ApiKnowledgeCompactRow[] {
+export function compactGenericRows(body: unknown, limit: number): ApiKnowledgeCompactRow[] {
   const list = pickArrayField(body);
   if (!list) return [];
   const cap = Math.max(1, Math.min(GENERIC_ROW_LIMIT, limit));

@@ -149,6 +149,48 @@ describe('SessionManager', () => {
     }
   });
 
+  it('allows operation log success=false for completed tool envelopes that are failures', () => {
+    const manager = new SessionManager({ dbPath: ':memory:' });
+    try {
+      const task = manager.createTask({
+        taskType: 'browser-action',
+        title: 'operation log failed envelope task',
+        intent: 'read list',
+        origin: 'jest',
+      });
+      const session = manager.startSession({
+        taskId: task.taskId,
+        transport: 'stdio',
+        clientName: 'jest',
+      });
+      const step = manager.startStep({
+        sessionId: session.sessionId,
+        toolName: 'chrome_read_page',
+      });
+
+      manager.completeStep(session.sessionId, step.stepId, {
+        status: 'completed',
+        operationLog: {
+          requestedLayer: 'L0+L1',
+          selectedDataSource: 'dom_json',
+          resultKind: 'read_page_failed',
+          success: false,
+        },
+      });
+
+      const logs = manager.operationLogs?.listBySession(session.sessionId);
+      expect(logs?.[0]).toEqual(
+        expect.objectContaining({
+          success: false,
+          selectedDataSource: 'dom_json',
+          resultKind: 'read_page_failed',
+        }),
+      );
+    } finally {
+      manager.close();
+    }
+  });
+
   it('does not fail the tool lifecycle when operation-log persistence throws', () => {
     const manager = new SessionManager({ dbPath: ':memory:' });
     try {

@@ -409,6 +409,7 @@ export class SessionManager {
         fallbackUsed?: string | null;
         readCount?: number | null;
         tokensSaved?: number | null;
+        success?: boolean;
         tabHygiene?: unknown;
         /**
          * V26-FIX-07 — partial structured "why" envelope. Forwarded
@@ -460,6 +461,7 @@ export class SessionManager {
       fallbackUsed?: string | null;
       readCount?: number | null;
       tokensSaved?: number | null;
+      success?: boolean;
       tabHygiene?: unknown;
       metadata?: Partial<OperationLogMetadata>;
     },
@@ -485,7 +487,7 @@ export class SessionManager {
         decisionReason: extras?.decisionReason ?? null,
         resultKind: extras?.resultKind ?? null,
         durationMs,
-        success: step.status === 'completed',
+        success: extras?.success ?? step.status === 'completed',
         fallbackUsed: extras?.fallbackUsed ?? null,
         errorCode: step.errorCode ?? null,
         readCount: extras?.readCount ?? null,
