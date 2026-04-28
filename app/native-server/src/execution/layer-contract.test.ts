@@ -1,5 +1,6 @@
 import {
   assertLayerContract,
+  buildAiFacingLayerEnvelope,
   clampFallbackLayer,
   mapDataSourceToLayerContract,
   type LayerContractEnvelope,
@@ -157,5 +158,67 @@ describe('assertLayerContract — cross-module invariants', () => {
     });
     expect(assertLayerContract(apiDetail, 'detail_read').ok).toBe(false);
     expect(assertLayerContract(apiDetail, 'list_read').ok).toBe(true);
+  });
+});
+
+describe('AI-facing layer envelopes (V27-10)', () => {
+  it('keeps API rows as data-only context without locator or execution authority', () => {
+    const envelope = buildAiFacingLayerEnvelope({
+      dataSource: 'api_rows',
+      requestedLayer: 'L0+L1+L2',
+      summary: '  Search results  ',
+      stableRefs: ['node-2'],
+      candidateActionIds: ['click-1'],
+      detailRefs: ['detail-2', 'detail-1', 'detail-2'],
+      rowCount: 2.8,
+    });
+
+    expect(envelope.surface).toBe('api');
+    expect(envelope.layer).toBe('L0+L1');
+    expect(envelope.summary).toBe('Search results');
+    expect(envelope.rowCount).toBe(2);
+    expect(envelope.authority).toEqual({ locator: false, execution: false });
+    expect(envelope.domRefs).toEqual({ stableRefs: [], candidateActionIds: [] });
+    expect(envelope.detailRefs).toEqual(['detail-1', 'detail-2']);
+  });
+
+  it('keeps Markdown as a reading surface without DOM authority', () => {
+    const envelope = buildAiFacingLayerEnvelope({
+      dataSource: 'markdown',
+      taskRequiresDetail: true,
+      stableRefs: ['node-1'],
+      candidateActionIds: ['action-1'],
+    });
+
+    expect(envelope.surface).toBe('markdown');
+    expect(envelope.layer).toBe('L0+L1+L2');
+    expect(envelope.authority).toEqual({ locator: false, execution: false });
+    expect(envelope.domRefs).toEqual({ stableRefs: [], candidateActionIds: [] });
+  });
+
+  it('preserves stable refs and action ids only for DOM JSON envelopes', () => {
+    const envelope = buildAiFacingLayerEnvelope({
+      dataSource: 'dom_json',
+      requestedLayer: 'L0+L1+L2',
+      stableRefs: [' node-b ', 'node-a', 'node-a', ''],
+      candidateActionIds: ['action-b', ' action-a '],
+    });
+
+    expect(envelope.surface).toBe('dom');
+    expect(envelope.authority).toEqual({ locator: true, execution: true });
+    expect(envelope.domRefs).toEqual({
+      stableRefs: ['node-a', 'node-b'],
+      candidateActionIds: ['action-a', 'action-b'],
+    });
+  });
+
+  it('does not widen complex pages to L2 unless the layer contract already allows it', () => {
+    const envelope = buildAiFacingLayerEnvelope({
+      dataSource: 'api_rows',
+      pageComplexity: 'complex',
+    });
+
+    expect(envelope.layer).toBe('L0+L1');
+    expect(envelope.complexPageDefaultedToL2).toBe(false);
   });
 });

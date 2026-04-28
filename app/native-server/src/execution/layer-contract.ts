@@ -58,6 +58,36 @@ export interface LayerContractEnvelope {
   escalationReason: string;
 }
 
+export type AiFacingLayerEnvelopeSurface = 'dom' | 'api' | 'markdown' | 'json';
+
+export interface BuildAiFacingLayerEnvelopeInput extends LayerContractInput {
+  surface?: AiFacingLayerEnvelopeSurface;
+  pageComplexity?: 'simple' | 'medium' | 'complex' | 'unknown';
+  summary?: string | null;
+  stableRefs?: ReadonlyArray<string> | null;
+  candidateActionIds?: ReadonlyArray<string> | null;
+  rowCount?: number | null;
+  detailRefs?: ReadonlyArray<string> | null;
+}
+
+export interface AiFacingLayerEnvelope {
+  contract: LayerContractEnvelope;
+  surface: AiFacingLayerEnvelopeSurface;
+  layer: ReadPageRequestedLayer;
+  summary: string | null;
+  rowCount: number | null;
+  authority: {
+    locator: boolean;
+    execution: boolean;
+  };
+  domRefs: {
+    stableRefs: ReadonlyArray<string>;
+    candidateActionIds: ReadonlyArray<string>;
+  };
+  detailRefs: ReadonlyArray<string>;
+  complexPageDefaultedToL2: false;
+}
+
 export function mapDataSourceToLayerContract(input: LayerContractInput): LayerContractEnvelope {
   switch (input.dataSource) {
     case 'api_rows':
@@ -113,6 +143,36 @@ export function mapDataSourceToLayerContract(input: LayerContractInput): LayerCo
   }
 }
 
+export function buildAiFacingLayerEnvelope(
+  input: BuildAiFacingLayerEnvelopeInput,
+): AiFacingLayerEnvelope {
+  const contract = mapDataSourceToLayerContract(input);
+  return Object.freeze({
+    contract,
+    surface: input.surface ?? defaultSurfaceForDataSource(input.dataSource),
+    layer: contract.layer,
+    summary: normalizeNullableText(input.summary),
+    rowCount: normalizeNullableCount(input.rowCount),
+    authority: Object.freeze({
+      locator: contract.locatorAuthority,
+      execution: contract.executionAuthority,
+    }),
+    domRefs: Object.freeze({
+      stableRefs: Object.freeze(
+        contract.locatorAuthority ? stableStringList(input.stableRefs) : [],
+      ),
+      candidateActionIds: Object.freeze(
+        contract.executionAuthority ? stableStringList(input.candidateActionIds) : [],
+      ),
+    }),
+    detailRefs: Object.freeze(stableStringList(input.detailRefs)),
+    // V27-10 invariant: page complexity is advisory. A complex page
+    // alone must not widen the AI-facing envelope to L2; only the
+    // existing requestedLayer/taskRequiresDetail contract can do so.
+    complexPageDefaultedToL2: false as const,
+  });
+}
+
 /**
  * V26-FIX-06 — closed-result of asserting the contract envelope
  * against an intended downstream use.
@@ -163,6 +223,38 @@ function freezeEnvelope(envelope: LayerContractEnvelope): LayerContractEnvelope 
     allowedUses: Object.freeze([...envelope.allowedUses]),
     disallowedUses: Object.freeze([...envelope.disallowedUses]),
   });
+}
+
+function defaultSurfaceForDataSource(
+  dataSource: LayerContractDataSource,
+): AiFacingLayerEnvelopeSurface {
+  switch (dataSource) {
+    case 'dom_json':
+      return 'dom';
+    case 'api_rows':
+    case 'api_detail':
+      return 'api';
+    case 'markdown':
+      return 'markdown';
+  }
+}
+
+function normalizeNullableText(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeNullableCount(value: number | null | undefined): number | null {
+  if (!Number.isFinite(value)) return null;
+  return Math.max(0, Math.floor(value as number));
+}
+
+function stableStringList(values: ReadonlyArray<string> | null | undefined): string[] {
+  if (!Array.isArray(values)) return [];
+  return Array.from(
+    new Set(values.map((value) => value.trim()).filter((value) => value.length > 0)),
+  ).sort();
 }
 
 export function clampFallbackLayer(requestedLayer?: ReadPageRequestedLayer | null): 'L0' | 'L0+L1' {
