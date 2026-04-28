@@ -171,10 +171,23 @@ export interface DataSourceDecision {
    *  the SoT V3 evidence-contract spec. Derived from `dataSource`,
    *  not re-computed, so writer drift is impossible. */
   selectedDataSource: DataSourceKind;
-  /** V27-09 — read layer the router picked. Mirrors `chosenLayer` from
-   *  the input; surfaced explicitly so operation log can emit it
-   *  without re-reading the upstream layer-dispatcher decision. */
+  /** V27-09 — read layer the router actually authorised. Mirrors
+   *  `layerContract.layer`, NOT the raw `chosenLayer` input — the
+   *  layer contract is the only source of truth for what the
+   *  downstream reader is allowed to read. For api_rows / markdown
+   *  / non-detail api_detail this clamps to L0+L1 even when the
+   *  upstream layer dispatcher requested L0+L1+L2; this prevents
+   *  evidence reports from over-claiming L2 reads.
+   *
+   *  See `requestedLayer` for the original input layer, kept as an
+   *  additive internal field so operation logs that need both the
+   *  ask and the authorised layer have a non-lossy record. */
   selectedLayer: ReadPageRequestedLayer;
+  /** V27-09 closeout — original `chosenLayer` input from the upstream
+   *  layer dispatcher. Kept for evidence-trail completeness when
+   *  `selectedLayer` was clamped by the layer contract. Internal
+   *  native-server field; no public MCP surface change. */
+  requestedLayer: ReadPageRequestedLayer;
   /** V27-09 — context version the router consumed. `null` when the
    *  caller did not supply one (e.g. legacy v2.6 caller). */
   contextVersion: string | null;
@@ -266,6 +279,8 @@ interface DataSourceRouterRule {
 //   - endpointSource is NOT 'deprecated_seed' (deprecated_seed never
 //     wins API path; SoT V3 §V27-09 explicit invariant).
 //   - falseCorrelationGuard <= 0.5 (V27-07 false-positive ceiling).
+//   - lastFailureReason is NOT a "this endpoint just broke" verdict
+//     (closeout fix — see RECENT_FAILURE_BLOCKS_API_GATE below).
 //   - inferredSemanticType is one of the read-shaped verdicts.
 const READ_SHAPED_SEMANTIC_TYPES: ReadonlySet<EndpointCandidateSemanticType> = new Set([
   'search',
@@ -277,11 +292,44 @@ const READ_SHAPED_SEMANTIC_TYPES: ReadonlySet<EndpointCandidateSemanticType> = n
   'empty',
 ]);
 
+/**
+ * Closeout — closed-enum set of last-failure reasons that disqualify
+ * a Knowledge endpoint from winning the API high-confidence path.
+ *
+ * Includes `'empty_response'` on purpose: V27-08 records this when
+ * the most recent fetch returned no rows, but at the router layer we
+ * cannot tell whether that was a legitimate empty result or a
+ * silently-broken endpoint. The conservative reading is to demote
+ * to DOM L0+L1 and let the readiness profiler / DOM observer
+ * confirm the empty. The R_EMPTY_RESULT_API_CONFIRMED rule still
+ * has its own (`readinessVerdict==='empty'` + endpoint lineage)
+ * gate, so a clean "empty success" is unaffected.
+ *
+ * `'unknown'` is also blocking: an unknown failure verdict is
+ * exactly the case where we have no evidence the endpoint is OK.
+ *
+ * `null` (no last failure on file) does NOT block.
+ */
+const RECENT_FAILURE_BLOCKS_API_GATE: ReadonlySet<EndpointLastFailureReason> =
+  new Set<EndpointLastFailureReason>([
+    'timeout',
+    'status_4xx',
+    'status_5xx',
+    'semantic_mismatch',
+    'shape_drift',
+    'empty_response',
+    'rate_limited',
+    'unknown',
+  ]);
+
 function endpointPassesApiGate(ev: RouterEndpointEvidence | null): boolean {
   if (!ev) return false;
   if (!ev.usableForTask) return false;
   if (ev.endpointSource === 'deprecated_seed') return false;
   if (ev.falseCorrelationGuard > 0.5) return false;
+  if (ev.lastFailureReason !== null && RECENT_FAILURE_BLOCKS_API_GATE.has(ev.lastFailureReason)) {
+    return false;
+  }
   return READ_SHAPED_SEMANTIC_TYPES.has(ev.inferredSemanticType);
 }
 
@@ -375,6 +423,8 @@ const DATA_SOURCE_ROUTER_RULES: ReadonlyArray<DataSourceRouterRule> = [
       ctx.endpointEvidence.usableForTask &&
       ctx.endpointEvidence.endpointSource !== 'deprecated_seed' &&
       ctx.endpointEvidence.falseCorrelationGuard <= 0.5 &&
+      (ctx.endpointEvidence.lastFailureReason === null ||
+        !RECENT_FAILURE_BLOCKS_API_GATE.has(ctx.endpointEvidence.lastFailureReason)) &&
       (endpointSemanticIsEmpty(ctx.endpointEvidence) ||
         endpointSemanticIsListLike(ctx.endpointEvidence)) &&
       ctx.endpointEvidence.confidence >= 0.7,
@@ -393,14 +443,16 @@ const DATA_SOURCE_ROUTER_RULES: ReadonlyArray<DataSourceRouterRule> = [
 
   // 5. V27-09 — empty readiness without endpoint backing → fall back
   //    to compact DOM L0+L1 to confirm the empty.
+  //
+  //    Closeout — this rule runs strictly after R_EMPTY_RESULT_API_
+  //    CONFIRMED, so by the time we arrive here we KNOW the API
+  //    confirmed-empty path rejected the row (missing/low-confidence/
+  //    deprecated_seed/false-correlation/recent-failure). A bare
+  //    `readinessVerdict==='empty'` predicate is enough; we no longer
+  //    re-list every rejection condition (drift risk).
   {
     id: 'R_EMPTY_RESULT_DOM_CONFIRM',
-    match: (ctx) =>
-      ctx.readinessVerdict === 'empty' &&
-      (!ctx.endpointEvidence ||
-        !ctx.endpointEvidence.usableForTask ||
-        ctx.endpointEvidence.endpointSource === 'deprecated_seed' ||
-        ctx.endpointEvidence.confidence < 0.7),
+    match: (ctx) => ctx.readinessVerdict === 'empty',
     produce: (ctx) =>
       buildDecision({
         ctx,
@@ -533,11 +585,21 @@ const DATA_SOURCE_ROUTER_RULES: ReadonlyArray<DataSourceRouterRule> = [
   //     apiCandidateAvailable=true. This is the rule the existing
   //     choose-context.ts caller hits when no V27-09 evidence was
   //     supplied; produces the bit-identical v2.6 decision.
+  //
+  //     Closeout — only fires when the caller did NOT supply V27-09
+  //     endpoint evidence. A V27-09 caller that handed us an
+  //     `endpointEvidence` row and saw the API gate reject it
+  //     (e.g. `lastFailureReason='timeout'`) MUST NOT silently fall
+  //     through to the legacy api_list path; it falls all the way
+  //     to R_DOM_DEFAULT instead. This keeps the legacy back-compat
+  //     for v2.6 callers (who never set `endpointEvidence`) without
+  //     letting the legacy rule undo the evidence-driven gate.
   {
     id: 'R_KNOWLEDGE_SUPPORTED_LEGACY',
     match: (ctx) =>
       ctx.input.sourceRoute === 'knowledge_supported_read' &&
-      ctx.input.apiCandidateAvailable === true,
+      ctx.input.apiCandidateAvailable === true &&
+      ctx.endpointEvidence === null,
     produce: (ctx) =>
       buildDecision({
         ctx,
@@ -663,9 +725,17 @@ function buildDecision(args: BuildDecisionArgs): DataSourceDecision {
     decisionReason,
     dispatcherInputSource: args.dispatcherInputSource,
     layerContract,
-    // V27-09 additive evidence-contract fields.
+    // V27-09 additive evidence-contract fields. `selectedLayer`
+    // mirrors `layerContract.layer` (the authoritative read layer
+    // the contract permitted) — NOT the raw `chosenLayer` input.
+    // For api_rows / markdown / non-detail api_detail the contract
+    // clamps to L0+L1 even when the dispatcher requested L2; using
+    // the raw input here would leak a virtual L2 ask into the
+    // operation log when no L2 read was authorised. The original
+    // request is preserved on `requestedLayer` for trail-completeness.
     selectedDataSource: dataSource,
-    selectedLayer: ctx.input.chosenLayer,
+    selectedLayer: layerContract.layer,
+    requestedLayer: ctx.input.chosenLayer,
     contextVersion: ctx.input.contextVersion ?? null,
     factSnapshotVerdict: ctx.factSnapshotVerdict,
     decisionRuleId: ruleId,

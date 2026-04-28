@@ -105,12 +105,14 @@ describe('DataSourceRouter (V26-09 legacy back-compat)', () => {
       decisionReason: 'dom_compact_required',
     });
     expect(decision.decisionRuleId).toBe('R_DOM_DEFAULT');
-    // V27-09 — legacy caller did not request L2 widening; selectedLayer
-    // mirrors chosenLayer rather than over-reading.
-    expect(decision.selectedLayer).toBe('L0+L1+L2');
-    // Layer contract still exposes the dom_json envelope; downstream
-    // is the one that decides whether to actually pull L2.
+    // V27-09 closeout — `selectedLayer` mirrors `layerContract.layer`
+    // (the authoritative read layer). DOM JSON is the only execution
+    // authority and may legitimately surface the requested L2 layer;
+    // `requestedLayer` keeps the original input for trail completeness.
+    expect(decision.selectedLayer).toBe(decision.layerContract.layer);
+    expect(decision.requestedLayer).toBe('L0+L1+L2');
     expect(decision.layerContract.dataSource).toBe('dom_json');
+    expect(decision.layerContract.layer).toBe('L0+L1+L2');
   });
 
   describe('V26-FIX-06 cross-module layer contract', () => {
@@ -434,7 +436,12 @@ describe('DataSourceRouter — V27-09 truth table', () => {
     });
     // SoT V3 §V27-09 evidence contract fields — every one populated.
     expect(decision.selectedDataSource).toBe(decision.dataSource);
-    expect(decision.selectedLayer).toBe('L0');
+    // Closeout fix — selectedLayer mirrors layerContract.layer (api_rows
+    // is always L0+L1) instead of the raw L0 ask. requestedLayer keeps
+    // the original input for trail-completeness.
+    expect(decision.selectedLayer).toBe('L0+L1');
+    expect(decision.selectedLayer).toBe(decision.layerContract.layer);
+    expect(decision.requestedLayer).toBe('L0');
     expect(decision.contextVersion).toBe('ctx-42');
     expect(decision.factSnapshotVerdict).toBe('fresh');
     expect(typeof decision.confidence).toBe('number');
@@ -488,6 +495,190 @@ describe('DataSourceRouter — V27-09 truth table', () => {
       const d = build() as { publicSurfaceDelta: string };
       expect(d.publicSurfaceDelta).toBe('none');
     }
+  });
+});
+
+// ---------------------------------------------------------------
+// V27-09 review closeout — Finding 1: lastFailureReason must
+// participate in the API gate. A row whose most recent observation
+// was a failure (timeout / 4xx / 5xx / semantic_mismatch /
+// shape_drift / rate_limited / empty_response / unknown) MUST NOT
+// win the API high-confidence path; lastFailureReason=null is the
+// only "all clear" verdict.
+// ---------------------------------------------------------------
+describe('DataSourceRouter — V27-09 closeout: lastFailureReason API gate (Finding 1)', () => {
+  function searchListInput(failure: RouterEndpointEvidence['lastFailureReason']) {
+    return {
+      sourceRoute: 'knowledge_supported_read' as const,
+      chosenLayer: 'L0' as const,
+      apiCandidateAvailable: true,
+      taskIntent: 'search_list' as const,
+      factSnapshotVerdict: 'fresh' as const,
+      readinessVerdict: 'ready' as const,
+      complexityClass: 'list' as const,
+      endpointEvidence: evidence({
+        inferredSemanticType: 'search' as const,
+        confidence: 0.9,
+        lastFailureReason: failure,
+      }),
+    };
+  }
+
+  function detailInput(failure: RouterEndpointEvidence['lastFailureReason']) {
+    return {
+      sourceRoute: 'knowledge_supported_read' as const,
+      chosenLayer: 'L0+L1+L2' as const,
+      apiCandidateAvailable: true,
+      taskIntent: 'detail' as const,
+      factSnapshotVerdict: 'fresh' as const,
+      readinessVerdict: 'ready' as const,
+      complexityClass: 'detail' as const,
+      endpointEvidence: evidence({
+        inferredSemanticType: 'detail' as const,
+        confidence: 0.9,
+        lastFailureReason: failure,
+      }),
+    };
+  }
+
+  it('lastFailureReason=null still allows R_API_LIST_HIGH_CONFIDENCE', () => {
+    const decision = routeDataSource(searchListInput(null));
+    expect(decision.decisionRuleId).toBe('R_API_LIST_HIGH_CONFIDENCE');
+    expect(decision.dataSource).toBe('api_list');
+  });
+
+  it('lastFailureReason=null still allows R_API_DETAIL_HIGH_CONFIDENCE', () => {
+    const decision = routeDataSource(detailInput(null));
+    expect(decision.decisionRuleId).toBe('R_API_DETAIL_HIGH_CONFIDENCE');
+    expect(decision.dataSource).toBe('api_detail');
+  });
+
+  it.each(['timeout', 'status_4xx', 'status_5xx', 'rate_limited', 'unknown'] as const)(
+    'lastFailureReason=%s blocks R_API_LIST_HIGH_CONFIDENCE',
+    (failure) => {
+      const decision = routeDataSource(searchListInput(failure));
+      expect(decision.decisionRuleId).not.toBe('R_API_LIST_HIGH_CONFIDENCE');
+      expect(decision.dataSource).toBe('dom_json');
+    },
+  );
+
+  it('lastFailureReason=semantic_mismatch blocks BOTH list and detail high-confidence paths', () => {
+    const list = routeDataSource(searchListInput('semantic_mismatch'));
+    expect(list.decisionRuleId).not.toBe('R_API_LIST_HIGH_CONFIDENCE');
+    expect(list.dataSource).toBe('dom_json');
+
+    const detail = routeDataSource(detailInput('semantic_mismatch'));
+    expect(detail.decisionRuleId).not.toBe('R_API_DETAIL_HIGH_CONFIDENCE');
+    expect(detail.dataSource).toBe('dom_json');
+  });
+
+  it('lastFailureReason=shape_drift blocks API high-confidence', () => {
+    const list = routeDataSource(searchListInput('shape_drift'));
+    expect(list.decisionRuleId).not.toBe('R_API_LIST_HIGH_CONFIDENCE');
+    expect(list.dataSource).toBe('dom_json');
+
+    const detail = routeDataSource(detailInput('shape_drift'));
+    expect(detail.decisionRuleId).not.toBe('R_API_DETAIL_HIGH_CONFIDENCE');
+    expect(detail.dataSource).toBe('dom_json');
+  });
+
+  it('lastFailureReason=empty_response demotes empty-readiness API_CONFIRMED to DOM L0+L1 confirm', () => {
+    const decision = routeDataSource({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0',
+      apiCandidateAvailable: true,
+      taskIntent: 'search_list',
+      factSnapshotVerdict: 'fresh',
+      readinessVerdict: 'empty',
+      complexityClass: 'list',
+      endpointEvidence: evidence({
+        inferredSemanticType: 'empty',
+        confidence: 0.85,
+        lastFailureReason: 'empty_response',
+      }),
+    });
+    // Conservative posture — empty_response cannot be proven a
+    // successful empty state from the router's vantage point, so
+    // we fall back to DOM L0+L1 confirmation.
+    expect(decision.decisionRuleId).toBe('R_EMPTY_RESULT_DOM_CONFIRM');
+    expect(decision.dataSource).toBe('dom_json');
+  });
+});
+
+// ---------------------------------------------------------------
+// V27-09 review closeout — Finding 2: selectedLayer must reflect
+// the actual authorised read layer (i.e. layerContract.layer), not
+// the raw chosenLayer input. The original input is preserved on
+// the additive internal `requestedLayer` field.
+// ---------------------------------------------------------------
+describe('DataSourceRouter — V27-09 closeout: selectedLayer mirrors layerContract.layer (Finding 2)', () => {
+  it('api_list with chosenLayer=L0+L1+L2 clamps selectedLayer to L0+L1', () => {
+    const decision = routeDataSource({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0+L1+L2',
+      apiCandidateAvailable: true,
+      taskIntent: 'search_list',
+      factSnapshotVerdict: 'fresh',
+      readinessVerdict: 'ready',
+      complexityClass: 'list',
+      endpointEvidence: evidence({ inferredSemanticType: 'search', confidence: 0.9 }),
+    });
+    expect(decision.decisionRuleId).toBe('R_API_LIST_HIGH_CONFIDENCE');
+    expect(decision.dataSource).toBe('api_list');
+    expect(decision.layerContract.layer).toBe('L0+L1');
+    expect(decision.selectedLayer).toBe('L0+L1');
+    // requestedLayer preserves the original ask for the operation log.
+    expect(decision.requestedLayer).toBe('L0+L1+L2');
+    // Invariant — selectedLayer and layerContract.layer never disagree.
+    expect(decision.selectedLayer).toBe(decision.layerContract.layer);
+  });
+
+  it('markdown with chosenLayer=L0+L1+L2 (non-detail) clamps selectedLayer to layerContract.layer', () => {
+    const decision = routeDataSource({
+      strategy: 'read_page_markdown',
+      sourceRoute: 'read_page_required',
+      chosenLayer: 'L0+L1+L2',
+      apiCandidateAvailable: false,
+    });
+    expect(decision.decisionRuleId).toBe('R_MARKDOWN_READING_SURFACE');
+    expect(decision.dataSource).toBe('markdown');
+    expect(decision.selectedLayer).toBe(decision.layerContract.layer);
+    expect(decision.requestedLayer).toBe('L0+L1+L2');
+    // Markdown is a reading surface; the contract clamps L2 out.
+    expect(decision.layerContract.layer).not.toBe('L2');
+  });
+
+  it('api_detail with detail intent and chosenLayer=L0+L1+L2 keeps selectedLayer=L0+L1+L2', () => {
+    const decision = routeDataSource({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0+L1+L2',
+      apiCandidateAvailable: true,
+      taskIntent: 'detail',
+      factSnapshotVerdict: 'fresh',
+      readinessVerdict: 'ready',
+      complexityClass: 'detail',
+      endpointEvidence: evidence({ inferredSemanticType: 'detail', confidence: 0.9 }),
+    });
+    expect(decision.decisionRuleId).toBe('R_API_DETAIL_HIGH_CONFIDENCE');
+    expect(decision.dataSource).toBe('api_detail');
+    expect(decision.selectedLayer).toBe('L0+L1+L2');
+    expect(decision.requestedLayer).toBe('L0+L1+L2');
+    expect(decision.selectedLayer).toBe(decision.layerContract.layer);
+  });
+
+  it('DOM execution authority preserves the originally requested layer on selectedLayer', () => {
+    const decision = routeDataSource({
+      sourceRoute: 'read_page_required',
+      chosenLayer: 'L0+L1+L2',
+      taskIntent: 'click_or_fill',
+    });
+    expect(decision.decisionRuleId).toBe('R_CLICK_FILL_DOM_AUTHORITY');
+    expect(decision.dataSource).toBe('dom_json');
+    expect(decision.selectedLayer).toBe(decision.layerContract.layer);
+    expect(decision.requestedLayer).toBe('L0+L1+L2');
+    // dom_json is the only locator/execution authority and may
+    // legitimately surface L0+L1+L2.
+    expect(decision.layerContract.layer).toBe('L0+L1+L2');
   });
 });
 
