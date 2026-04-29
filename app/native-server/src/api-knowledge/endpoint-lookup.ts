@@ -22,10 +22,11 @@
  *      candidate path (which V26-FIX-05 will further constrain to
  *      `seed_adapter` compatibility).
  *   2. We only consider rows that the repository's
- *      `scoreEndpointKnowledge` already marked as `usableForTask`. A
- *      `mutation`/`asset`/`auth`/etc. semantic type is never a read
- *      candidate — those branches are handled exclusively by the
- *      legacy DOM `chrome_read_page` chain.
+ *      `scoreEndpointKnowledge` already marked as `usableForTask`.
+ *      `deprecated_seed` rows remain stored as evidence, but are not
+ *      executable candidates. A `mutation`/`asset`/`auth`/etc.
+ *      semantic type is never a read candidate — those branches are
+ *      handled exclusively by the legacy DOM `chrome_read_page` chain.
  *   3. When `semanticTypeWanted` is non-null, we prefer rows whose
  *      `semanticType` matches; rows with a different (but still
  *      usable) semanticType are only returned with
@@ -99,7 +100,9 @@ export function lookupEndpointFamily(
   const scored = repo.listScoredBySite(site, 50);
   if (scored.length === 0) return null;
 
-  const usable = scored.filter((row) => row.usableForTask);
+  const usable = scored.filter(
+    (row) => row.usableForTask && row.endpointSource !== 'deprecated_seed',
+  );
   if (usable.length === 0) return null;
 
   const wanted = dataNeed.semanticTypeWanted;

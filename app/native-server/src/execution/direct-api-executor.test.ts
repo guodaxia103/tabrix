@@ -530,6 +530,45 @@ describe('V26-FIX-04 tryDirectApiExecute — knowledge-driven path', () => {
     expect(result.rows!.dataPurpose).toBe('observed_search');
   });
 
+  it('deprecated_seed-only Knowledge row does not execute direct_api or masquerade as seed_adapter', async () => {
+    const fetchFn = jest.fn();
+    const repo = makeRepo([
+      knowledgeRow({
+        endpointId: 'deprecated-seed',
+        site: 'api.github.com',
+        family: 'github',
+        endpointSource: 'deprecated_seed',
+        urlPattern: 'api.github.com/search/repositories',
+        endpointSignature: 'GET api.github.com/search/repositories',
+        semanticType: 'search',
+        confidence: 0.95,
+        sampleCount: 10,
+      }),
+    ]);
+    const dataNeed: DataNeed = {
+      intent: 'search github code',
+      intentClass: 'read_only',
+      semanticTypeWanted: 'search',
+      urlHint: 'https://api.github.com/search/repositories?q=tabrix',
+      pageRole: null,
+      params: { query: 'tabrix' },
+    };
+
+    const result = await tryDirectApiExecute(
+      knowledgeDrivenInput({
+        dataNeed,
+        knowledgeRepo: repo,
+        fetchFn: fetchFn as unknown as DirectApiExecutorInput['fetchFn'],
+      }),
+    );
+
+    expect(result.executionMode).not.toBe('direct_api');
+    expect(result.executionMode).toBe('skipped_no_candidate');
+    expect(result.endpointSource).toBeNull();
+    expect(result.rows).toBeNull();
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
   it('lookup miss → falls through to legacy candidate path', async () => {
     const fetchFn = jsonFetch(200, { total_count: 0, items: [] });
     const repo = makeRepo([

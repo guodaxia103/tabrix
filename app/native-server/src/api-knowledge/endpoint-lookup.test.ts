@@ -485,4 +485,128 @@ describe('V27-08 lookupEndpointFamily — observed-vs-seed_adapter retirement', 
     expect(match!.chosenReason).toBe('seed_adapter_fallback');
     expect(match!.retiredPeer).toBeNull();
   });
+
+  it('deprecated_seed-only rows are not executable lookup matches', () => {
+    const repo = makeRepo([
+      endpoint({
+        endpointId: 'deprecated-only',
+        site: 'api.github.com',
+        family: 'github',
+        endpointSource: 'deprecated_seed',
+        urlPattern: 'api.github.com/search/repositories',
+        endpointSignature: 'GET api.github.com/search/repositories',
+        semanticType: 'search',
+        confidence: 0.95,
+        sampleCount: 10,
+      }),
+    ]);
+    expect(lookupEndpointFamily(githubDataNeed, repo)).toBeNull();
+  });
+
+  it('deprecated_seed does not compete when a qualifying observed row exists', () => {
+    const repo = makeRepo([
+      endpoint({
+        endpointId: 'deprecated-seed',
+        site: 'api.github.com',
+        family: 'github',
+        endpointSource: 'deprecated_seed',
+        urlPattern: 'api.github.com/search/repositories',
+        endpointSignature: 'GET api.github.com/search/repositories',
+        semanticType: 'search',
+        confidence: 0.99,
+        sampleCount: 10,
+      }),
+      endpoint({
+        endpointId: 'observed-row',
+        site: 'api.github.com',
+        family: 'observed',
+        endpointSource: 'observed',
+        urlPattern: 'api.github.com/search/code',
+        endpointSignature: 'GET api.github.com/search/code',
+        semanticType: 'search',
+        confidence: 0.82,
+        sampleCount: 2,
+      }),
+    ]);
+    const match = lookupEndpointFamily(githubDataNeed, repo);
+    expect(match).not.toBeNull();
+    expect(match!.endpoint.endpointId).toBe('observed-row');
+    expect(match!.endpointSource).toBe('observed');
+    expect(match!.retiredPeer).toBeNull();
+  });
+
+  it('active seed_adapter remains compatible when deprecated_seed is also present', () => {
+    const repo = makeRepo([
+      endpoint({
+        endpointId: 'deprecated-seed',
+        site: 'api.github.com',
+        family: 'github',
+        endpointSource: 'deprecated_seed',
+        urlPattern: 'api.github.com/search/repositories',
+        endpointSignature: 'GET api.github.com/search/repositories',
+        semanticType: 'search',
+        confidence: 0.99,
+        sampleCount: 10,
+      }),
+      endpoint({
+        endpointId: 'active-seed',
+        site: 'api.github.com',
+        family: 'github',
+        endpointSource: 'seed_adapter',
+        urlPattern: 'api.github.com/search/repositories',
+        endpointSignature: 'GET api.github.com/search/repositories',
+        semanticType: 'search',
+        confidence: 0.8,
+        sampleCount: 1,
+      }),
+    ]);
+    const match = lookupEndpointFamily(githubDataNeed, repo);
+    expect(match).not.toBeNull();
+    expect(match!.endpoint.endpointId).toBe('active-seed');
+    expect(match!.endpointSource).toBe('seed_adapter');
+    expect(match!.retiredPeer).toBeNull();
+  });
+
+  it('deprecated_seed never appears as retiredPeer when observed retires an active seed', () => {
+    const repo = makeRepo([
+      endpoint({
+        endpointId: 'deprecated-seed',
+        site: 'api.github.com',
+        family: 'github',
+        endpointSource: 'deprecated_seed',
+        urlPattern: 'api.github.com/search/repositories',
+        endpointSignature: 'GET api.github.com/search/repositories',
+        semanticType: 'search',
+        confidence: 0.99,
+        sampleCount: 10,
+      }),
+      endpoint({
+        endpointId: 'active-seed',
+        site: 'api.github.com',
+        family: 'github',
+        endpointSource: 'seed_adapter',
+        urlPattern: 'api.github.com/search/repositories',
+        endpointSignature: 'GET api.github.com/search/repositories',
+        semanticType: 'search',
+        confidence: 0.8,
+        sampleCount: 1,
+      }),
+      endpoint({
+        endpointId: 'observed-row',
+        site: 'api.github.com',
+        family: 'observed',
+        endpointSource: 'observed',
+        urlPattern: 'api.github.com/search/code',
+        endpointSignature: 'GET api.github.com/search/code',
+        semanticType: 'search',
+        confidence: 0.82,
+        sampleCount: 2,
+      }),
+    ]);
+    const match = lookupEndpointFamily(githubDataNeed, repo);
+    expect(match).not.toBeNull();
+    expect(match!.endpoint.endpointId).toBe('observed-row');
+    expect(match!.retiredPeer?.endpointSource).toBe('seed_adapter');
+    expect(match!.retiredPeer?.endpointSource).not.toBe('deprecated_seed');
+  });
 });

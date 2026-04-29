@@ -576,6 +576,7 @@ async function tryKnowledgeDrivenPath(
 
   const match = lookupEndpointFamily(dataNeed, repo);
   if (!match) return null;
+  if (match.endpointSource === 'deprecated_seed') return null;
   if (match.score < KNOWLEDGE_LOOKUP_CONFIDENCE_FLOOR) return null;
 
   const plan = buildSafeRequest(match, dataNeed);
@@ -705,7 +706,6 @@ function normalizeDirectApiEndpointSource(
     case 'manual_seed':
       return source;
     case 'deprecated_seed':
-      return 'seed_adapter';
     case 'unknown':
     default:
       return null;
