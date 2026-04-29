@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
+import { buildSmokeRuntimeLogSummary } from './smoke';
 import {
   assessClickOutcome,
   assessKeyboardOutcome,
@@ -59,6 +60,47 @@ function compactLayeredPayload(overrides: Record<string, unknown> = {}): Record<
   };
 }
 
+describe('buildSmokeRuntimeLogSummary — V27-OBS-00 smoke integration', () => {
+  it('passes when bridge is ready and page console has no errors', () => {
+    const summary = buildSmokeRuntimeLogSummary({
+      statusSnapshot: { bridge: { bridgeState: 'READY' } },
+      pageConsoleResult: [{ level: 'info', message: 'click button triggered' }],
+    });
+
+    expect(summary.runtimeLogMonitoringEnabled).toBe(true);
+    expect(summary.bridgeReady).toBe(true);
+    expect(summary.pageConsoleErrorCountDelta).toBe(0);
+    expect(summary.status).toBe('pass');
+  });
+
+  it('marks missing page console and bridge status sources explicitly', () => {
+    const summary = buildSmokeRuntimeLogSummary({});
+
+    expect(summary.status).toBe('blocked');
+    expect(summary.logSourceUnavailable).toEqual(['page_console', 'bridge_status']);
+    expect(summary.blockedReasons).toEqual([
+      'log_source_unavailable:page_console',
+      'log_source_unavailable:bridge_status',
+      'bridge_not_ready',
+    ]);
+  });
+  it('blocks when bridge is not ready, log sources are unavailable, or page console has errors', () => {
+    const summary = buildSmokeRuntimeLogSummary({
+      statusSnapshot: { bridge: { bridgeState: 'BRIDGE_BROKEN' } },
+      pageConsoleResult: [{ level: 'error', message: 'TypeError: failed' }],
+      unavailableSources: ['extension_service_worker', 'chrome_extensions', 'operation_log'],
+    });
+
+    expect(summary.status).toBe('blocked');
+    expect(summary.blockedReasons).toEqual([
+      'log_source_unavailable:extension_service_worker',
+      'log_source_unavailable:chrome_extensions',
+      'log_source_unavailable:operation_log',
+      'page_console_error_count_delta:1',
+      'bridge_not_ready',
+    ]);
+  });
+});
 describe('assessReadPagePayload — v2.6 layered acceptance', () => {
   it('accepts the current v2.6 compact payload (no legacy pageContent required)', () => {
     const payload = compactLayeredPayload();

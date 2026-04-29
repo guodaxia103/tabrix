@@ -8,6 +8,12 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'crypto';
 import { getChromeMcpUrl } from '../constant';
 import {
+  summariseV27RuntimeLogMonitoring,
+  type V27RuntimeLogMonitoringSummary,
+  type V27RuntimeLogSample,
+  type V27RuntimeLogSource,
+} from '../runtime/v27-runtime-log-monitoring';
+import {
   assessClickOutcome,
   assessKeyboardOutcome,
   assessReadPagePayload,
@@ -52,6 +58,7 @@ interface SmokeResult {
   mcpUrl: string;
   mode: 'protocol' | 'local-browser' | 'all-tools';
   steps: SmokeStep[];
+  runtimeLogSummary?: V27RuntimeLogMonitoringSummary;
 }
 
 function emitSmokeResult(result: SmokeResult, json = false): void {
@@ -77,6 +84,14 @@ interface HttpProbeResult {
 
 interface StatusProbeResult extends HttpProbeResult {
   snapshot?: Record<string, unknown>;
+}
+
+export interface SmokeRuntimeLogSummaryInput {
+  statusSnapshot?: Record<string, unknown>;
+  pageConsoleResult?: unknown;
+  operationLogStepCount?: number | null;
+  operationLogFailureSteps?: number | null;
+  unavailableSources?: V27RuntimeLogSource[] | null;
 }
 
 interface MpcCallResult {
@@ -515,11 +530,117 @@ async function probe(url: string, headers: Record<string, string> = {}): Promise
   }
 }
 
+function getBridgeSnapshot(
+  snapshot?: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  return snapshot && typeof snapshot.bridge === 'object' && snapshot.bridge !== null
+    ? (snapshot.bridge as Record<string, unknown>)
+    : undefined;
+}
+
+function isBridgeReady(snapshot?: Record<string, unknown>): boolean {
+  const bridge = getBridgeSnapshot(snapshot);
+  if (!bridge) return false;
+  const bridgeState = typeof bridge.bridgeState === 'string' ? bridge.bridgeState : 'unknown';
+  return bridgeState === 'READY';
+}
+
+export function buildSmokeRuntimeLogSummary(
+  input: SmokeRuntimeLogSummaryInput,
+): V27RuntimeLogMonitoringSummary {
+  const samples = extractConsoleSamples(input.pageConsoleResult);
+  const unavailableSources = new Set<V27RuntimeLogSource>(input.unavailableSources ?? []);
+  if (input.pageConsoleResult == null) unavailableSources.add('page_console');
+  if (!input.statusSnapshot) unavailableSources.add('bridge_status');
+  return summariseV27RuntimeLogMonitoring({
+    runtimeLogMonitoringEnabled: true,
+    nativeErrorCountDelta: 0,
+    extensionErrorCountDelta: 0,
+    pageConsoleErrorCountDelta: samples.filter((sample) => sample.level === 'error').length,
+    bridgeReady: isBridgeReady(input.statusSnapshot),
+    nativeMessageDisconnectCount: 0,
+    debuggerAttachErrorCount: 0,
+    debuggerDetachErrorCount: 0,
+    unhandledPromiseRejectionCount: 0,
+    logSourceUnavailable: Array.from(unavailableSources),
+    samples,
+    operationLogStepCount: input.operationLogStepCount,
+    operationLogFailureSteps: input.operationLogFailureSteps,
+  });
+}
+
+function extractConsoleSamples(value: unknown): V27RuntimeLogSample[] {
+  const samples: V27RuntimeLogSample[] = [];
+  collectConsoleSamples(value, samples);
+  return samples;
+}
+
+function collectConsoleSamples(value: unknown, samples: V27RuntimeLogSample[]): void {
+  if (samples.length >= 100 || value == null) return;
+  if (typeof value === 'string') {
+    if (value.trim()) {
+      samples.push({ source: 'page_console', level: inferLogLevel(value), message: value });
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectConsoleSamples(item, samples);
+    return;
+  }
+  if (typeof value !== 'object') return;
+  const record = value as Record<string, unknown>;
+  const message =
+    typeof record.message === 'string'
+      ? record.message
+      : typeof record.text === 'string'
+        ? record.text
+        : null;
+  if (message) {
+    samples.push({
+      source: 'page_console',
+      level: normalizeLogLevel(record.level),
+      message,
+    });
+  }
+  for (const [key, nested] of Object.entries(record)) {
+    if (key !== 'message' && key !== 'text' && key !== 'level')
+      collectConsoleSamples(nested, samples);
+  }
+}
+
+function normalizeLogLevel(value: unknown): V27RuntimeLogSample['level'] {
+  if (value === 'error' || value === 'warning' || value === 'info' || value === 'debug')
+    return value;
+  return typeof value === 'string' ? inferLogLevel(value) : 'info';
+}
+
+function inferLogLevel(message: string): V27RuntimeLogSample['level'] {
+  const lower = message.toLowerCase();
+  if (lower.includes('error') || lower.includes('exception')) return 'error';
+  if (lower.includes('warn')) return 'warning';
+  if (lower.includes('debug')) return 'debug';
+  return 'info';
+}
+
+function buildSmokeResult(input: {
+  ok: boolean;
+  baseUrl: string;
+  mcpUrl: string;
+  mode: SmokeResult['mode'];
+  steps: SmokeStep[];
+  runtimeLogSummary?: V27RuntimeLogMonitoringSummary;
+}): SmokeResult {
+  return {
+    ok: input.ok && (input.runtimeLogSummary ? input.runtimeLogSummary.status === 'pass' : true),
+    baseUrl: input.baseUrl,
+    mcpUrl: input.mcpUrl,
+    mode: input.mode,
+    steps: input.steps,
+    ...(input.runtimeLogSummary ? { runtimeLogSummary: input.runtimeLogSummary } : {}),
+  };
+}
 function describeBridgeFromStatus(snapshot?: Record<string, unknown>): string {
-  const bridge =
-    snapshot && typeof snapshot.bridge === 'object' && snapshot.bridge !== null
-      ? (snapshot.bridge as Record<string, unknown>)
-      : undefined;
+  const bridge = getBridgeSnapshot(snapshot);
   const bridgeState = typeof bridge?.bridgeState === 'string' ? bridge.bridgeState : 'unknown';
   const nativeAttached =
     typeof bridge?.nativeHostAttached === 'boolean' ? bridge.nativeHostAttached : undefined;
@@ -1028,6 +1149,8 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
   let tempTabId: number | null = null;
   let originalTabId: number | null = null;
   let originalWindowId: number | null = null;
+  let latestStatusSnapshot: Record<string, unknown> | undefined;
+  let pageConsoleResult: unknown;
   const mode: SmokeResult['mode'] = options.allTools
     ? 'all-tools'
     : protocolOnly
@@ -1124,6 +1247,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     if (!ping.ok) throw new Error(`Ping failed: ${ping.detail}`);
 
     const status = await probeStatus(statusUrl, defaultHeaders);
+    latestStatusSnapshot = status.snapshot;
     record(
       'runtime.status',
       status.ok,
@@ -1193,13 +1317,17 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
         throw new Error(`Failed to clear browser launch override: ${overrideCleared.detail}`);
       }
 
-      const result: SmokeResult = {
+      const result = buildSmokeResult({
         ok: steps.every((step) => step.ok),
         baseUrl: smokeServer?.baseUrl || mcpUrl,
         mcpUrl,
         mode,
         steps,
-      };
+        runtimeLogSummary: buildSmokeRuntimeLogSummary({
+          statusSnapshot: latestStatusSnapshot,
+          unavailableSources: ['extension_service_worker', 'chrome_extensions', 'operation_log'],
+        }),
+      });
       emitSmokeResult(result, options.json);
       return result.ok ? 0 : 1;
     }
@@ -1309,13 +1437,17 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
         await mcp.callTool('chrome_switch_tab', { tabId: originalTabId });
       }
 
-      const result: SmokeResult = {
+      const result = buildSmokeResult({
         ok: steps.every((step) => step.ok),
         baseUrl: smokeServer?.baseUrl || mcpUrl,
         mcpUrl,
         mode,
         steps,
-      };
+        runtimeLogSummary: buildSmokeRuntimeLogSummary({
+          statusSnapshot: latestStatusSnapshot,
+          unavailableSources: ['extension_service_worker', 'chrome_extensions', 'operation_log'],
+        }),
+      });
       emitSmokeResult(result, options.json);
       return result.ok ? 0 : 1;
     }
@@ -1348,6 +1480,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
       }
 
       const recoveryStatus = await probeStatus(buildCompanionUrl(mcpUrl, 'status'), defaultHeaders);
+      latestStatusSnapshot = recoveryStatus.snapshot;
       const recoveryBridge =
         recoveryStatus.snapshot &&
         typeof recoveryStatus.snapshot.bridge === 'object' &&
@@ -1397,13 +1530,17 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
         await mcp.callTool('chrome_switch_tab', { tabId: originalTabId });
       }
 
-      const result: SmokeResult = {
+      const result = buildSmokeResult({
         ok: steps.every((step) => step.ok),
         baseUrl: smokeServer?.baseUrl || mcpUrl,
         mcpUrl,
         mode,
         steps,
-      };
+        runtimeLogSummary: buildSmokeRuntimeLogSummary({
+          statusSnapshot: latestStatusSnapshot,
+          unavailableSources: ['extension_service_worker', 'chrome_extensions', 'operation_log'],
+        }),
+      });
       emitSmokeResult(result, options.json);
       return result.ok ? 0 : 1;
     }
@@ -1594,6 +1731,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
         clearAfterRead: true,
       }),
     );
+    pageConsoleResult = consoleLogs;
     record(
       'chrome_console',
       JSON.stringify(consoleLogs).includes('click button triggered'),
@@ -1782,13 +1920,18 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<number> {
     }
   }
 
-  const result: SmokeResult = {
+  const result = buildSmokeResult({
     ok: steps.every((step) => step.ok),
     baseUrl: smokeServer?.baseUrl || mcpUrl,
     mcpUrl,
     mode,
     steps,
-  };
+    runtimeLogSummary: buildSmokeRuntimeLogSummary({
+      statusSnapshot: latestStatusSnapshot,
+      pageConsoleResult,
+      unavailableSources: ['extension_service_worker', 'chrome_extensions', 'operation_log'],
+    }),
+  });
 
   emitSmokeResult(result, options.json);
 
