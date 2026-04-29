@@ -1036,6 +1036,11 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         visibleRegionRows: extractVisibleRegionRows({
           pageContent,
           sourceRegion: pageUnderstanding.primaryRegion,
+          url: currentUrl,
+          title: currentTitle,
+          viewport: treeOk ? resp.viewport : null,
+          scrollY: typeof resp?.scrollY === 'number' ? resp.scrollY : null,
+          pixelsBelow: typeof resp?.pixelsBelow === 'number' ? resp.pixelsBelow : null,
         }),
       };
 
@@ -1123,6 +1128,11 @@ class ReadPageTool extends BaseBrowserToolExecutor {
           basePayload.visibleRegionRows = extractVisibleRegionRows({
             pageContent: String(basePayload.pageContent || ''),
             sourceRegion: fallbackUnderstanding.primaryRegion,
+            url: currentUrl,
+            title: currentTitle,
+            viewport: basePayload.viewport,
+            scrollY: typeof fallback?.scrollY === 'number' ? fallback.scrollY : null,
+            pixelsBelow: typeof fallback?.pixelsBelow === 'number' ? fallback.pixelsBelow : null,
           });
 
           const modePayload = buildModeOutput({

@@ -93,15 +93,29 @@ function readVisibleRegionRowsFromResult(result: CallToolResult): TaskVisibleReg
   const rows: TaskVisibleRegionRow[] = rawRows
     .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
     .map((row) => ({
+      rowId: typeof row.rowId === 'string' ? row.rowId : undefined,
       title: typeof row.title === 'string' ? row.title : '',
       primaryText: typeof row.primaryText === 'string' ? row.primaryText : null,
       secondaryText: typeof row.secondaryText === 'string' ? row.secondaryText : null,
+      summary: typeof row.summary === 'string' ? row.summary : null,
       metaText: typeof row.metaText === 'string' ? row.metaText : null,
       interactionText: typeof row.interactionText === 'string' ? row.interactionText : null,
+      visibleTextFields: Array.isArray(row.visibleTextFields)
+        ? row.visibleTextFields.filter((item): item is string => typeof item === 'string')
+        : undefined,
       targetRef: typeof row.targetRef === 'string' ? row.targetRef : null,
+      targetRefCoverageRate:
+        typeof row.targetRefCoverageRate === 'number' && Number.isFinite(row.targetRefCoverageRate)
+          ? row.targetRefCoverageRate
+          : null,
+      boundingBox: parseVisibleBoundingBox(row.boundingBox),
+      regionId: typeof row.regionId === 'string' ? row.regionId : undefined,
       sourceRegion: typeof row.sourceRegion === 'string' ? row.sourceRegion : 'viewport',
       confidence:
         typeof row.confidence === 'number' && Number.isFinite(row.confidence) ? row.confidence : 0,
+      qualityReasons: Array.isArray(row.qualityReasons)
+        ? row.qualityReasons.filter((item): item is string => typeof item === 'string')
+        : undefined,
     }))
     .filter((row) => row.title.length > 0);
   const rowCount =
@@ -128,6 +142,10 @@ function readVisibleRegionRowsFromResult(result: CallToolResult): TaskVisibleReg
       typeof obj.targetRefCoverageRate === 'number' && Number.isFinite(obj.targetRefCoverageRate)
         ? obj.targetRefCoverageRate
         : null,
+    regionQualityScore:
+      typeof obj.regionQualityScore === 'number' && Number.isFinite(obj.regionQualityScore)
+        ? obj.regionQualityScore
+        : null,
     rejectedReason,
     visibleRegionRowsUsed: obj.visibleRegionRowsUsed === true,
     visibleRegionRowsRejectedReason: rejectedReason,
@@ -143,6 +161,39 @@ function readVisibleRegionRowsFromResult(result: CallToolResult): TaskVisibleReg
         ? Math.max(0, Math.floor(obj.cardRowsCount))
         : rowCount,
     rowOrder: 'visual_order',
+    visibleDomRowsCandidateCount: readNonNegativeInteger(obj.visibleDomRowsCandidateCount),
+    visibleDomRowsSelectedCount: readNonNegativeInteger(obj.visibleDomRowsSelectedCount),
+    lowValueRegionRejectedCount: readNonNegativeInteger(obj.lowValueRegionRejectedCount),
+    footerLikeRejectedCount: readNonNegativeInteger(obj.footerLikeRejectedCount),
+    navigationLikeRejectedCount: readNonNegativeInteger(obj.navigationLikeRejectedCount),
+    targetRefCoverageRejectedCount: readNonNegativeInteger(obj.targetRefCoverageRejectedCount),
+    rejectedRegionReasonDistribution: readNumberRecord(obj.rejectedRegionReasonDistribution),
+  };
+}
+
+function readNonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value))
+    : undefined;
+}
+
+function readNumberRecord(value: unknown): Record<string, number> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const out: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (typeof raw === 'number' && Number.isFinite(raw)) out[key] = Math.max(0, Math.floor(raw));
+  }
+  return out;
+}
+
+function parseVisibleBoundingBox(value: unknown): TaskVisibleRegionRow['boundingBox'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const obj = value as Record<string, unknown>;
+  return {
+    x: typeof obj.x === 'number' && Number.isFinite(obj.x) ? obj.x : null,
+    y: typeof obj.y === 'number' && Number.isFinite(obj.y) ? obj.y : null,
+    width: typeof obj.width === 'number' && Number.isFinite(obj.width) ? obj.width : null,
+    height: typeof obj.height === 'number' && Number.isFinite(obj.height) ? obj.height : null,
   };
 }
 

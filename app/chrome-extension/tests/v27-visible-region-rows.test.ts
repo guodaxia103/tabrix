@@ -10,6 +10,11 @@ describe('V27-P0-REAL-01 visible region rows', () => {
   it('extracts repeated visible cards into DOM region rows', () => {
     const rows = extractVisibleRegionRows({
       sourceRegion: 'main_results',
+      url: 'https://example.test/search',
+      title: 'Search results',
+      viewport: { width: 1280, height: 720, dpr: 1 },
+      scrollY: 240,
+      pixelsBelow: 960,
       pageContent: [
         '- main "Results" [ref=ref_main] (x=620,y=360)',
         '  - article "Result card" [ref=ref_card_1] (x=300,y=240)',
@@ -32,13 +37,32 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.cardRowsCount).toBe(2);
     expect(rows.rowOrder).toBe('visual_order');
     expect(rows.targetRefCoverageRate).toBeGreaterThanOrEqual(0.99);
+    expect(rows.regionQualityScore).toBeGreaterThanOrEqual(0.7);
+    expect(rows.visibleDomRowsCandidateCount).toBe(2);
+    expect(rows.visibleDomRowsSelectedCount).toBe(2);
+    expect(rows.pageInfo).toMatchObject({
+      url: 'https://example.test/search',
+      title: 'Search results',
+      viewport: { width: 1280, height: 720, dpr: 1 },
+      scrollY: 240,
+      pixelsAbove: 240,
+      pixelsBelow: 960,
+      candidateRegionCount: 2,
+    });
     expect(rows.rows[0]).toMatchObject({
+      rowId: expect.stringContaining('ref_card_1'),
       title: 'Mountain trip planning',
       primaryText: 'Travel Notes',
+      summary: expect.stringContaining('Travel Notes'),
       metaText: '3 hours ago',
       interactionText: '1.2k likes',
+      visibleTextFields: expect.arrayContaining(['Mountain trip planning', 'Travel Notes']),
       targetRef: 'ref_card_1_link',
+      targetRefCoverageRate: 0.99,
+      boundingBox: { x: 300, y: 210, width: 0, height: 102 },
+      regionId: 'ref_card_1',
       sourceRegion: 'main_results',
+      qualityReasons: expect.arrayContaining(['target_ref_available', 'visible_bounding_box']),
     });
     expect(rows.rows[1].title).toBe('Family route checklist');
   });
@@ -59,7 +83,48 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.visibleRegionRowsUsed).toBe(false);
     expect(rows.rowCount).toBe(0);
     expect(rows.cardExtractorUsed).toBe(false);
-    expect(rows.visibleRegionRowsRejectedReason).toBe('dom_region_rows_unavailable');
+    expect(rows.visibleRegionRowsRejectedReason).toBe('footer_like_region');
+    expect(rows.lowValueRegionRejectedCount).toBeGreaterThan(0);
+    expect(rows.footerLikeRejectedCount).toBeGreaterThan(0);
+    expect(rows.navigationLikeRejectedCount).toBeGreaterThan(0);
+    expect(rows.rejectedRegionReasonDistribution.footer_like_region).toBeGreaterThan(0);
+  });
+
+  it('rejects navigation and sidebar-only regions with closed evidence', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '- navigation "Primary navigation" [ref=ref_nav] (x=0,y=0)',
+        '  - link "Home" [ref=ref_home] (x=20,y=20) href="/"',
+        '  - link "Account settings" [ref=ref_settings] (x=20,y=60) href="/settings"',
+        '- generic "Sidebar menu" [ref=ref_side] (x=0,y=120)',
+        '  - link "Help center" [ref=ref_help] (x=20,y=160) href="/help"',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(false);
+    expect(rows.rowCount).toBe(0);
+    expect(rows.navigationLikeRejectedCount).toBeGreaterThan(0);
+    expect(rows.rejectedRegionReasonDistribution.navigation_like_region).toBeGreaterThan(0);
+  });
+
+  it('rejects visible cards when targetRef coverage is insufficient', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '- main "Results" (x=600,y=360)',
+        '  - article "Result card" (x=300,y=240)',
+        '    - link "Visible but unaddressable result" (x=300,y=210) href="/items/1"',
+        '    - generic "Source One" (x=300,y=248)',
+        '  - article "Result card" (x=700,y=250)',
+        '    - link "Second unaddressable result" (x=700,y=220) href="/items/2"',
+        '    - generic "Source Two" (x=700,y=258)',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleDomRowsCandidateCount).toBe(2);
+    expect(rows.visibleDomRowsSelectedCount).toBe(0);
+    expect(rows.visibleRegionRowsUsed).toBe(false);
+    expect(rows.visibleRegionRowsRejectedReason).toBe('target_ref_coverage_insufficient');
+    expect(rows.targetRefCoverageRejectedCount).toBe(2);
   });
 
   it('filters shell/legal/date/image-only fragments instead of returning them as result rows', () => {
@@ -67,9 +132,9 @@ describe('V27-P0-REAL-01 visible region rows', () => {
       pageContent: [
         '- generic "Search page" [ref=ref_root] (x=0,y=0)',
         '  - generic "业务合作" [ref=ref_business] (x=2100,y=50)',
-        '  - generic "小红书_营业执照" [ref=ref_license] (x=200,y=800)',
-        '    - generic "小红书_沪公网安备" [ref=ref_police] (x=220,y=820)',
-        '    - generic "小红书_网文" [ref=ref_culture] (x=240,y=840)',
+        '  - generic "示例站点_营业执照" [ref=ref_license] (x=200,y=800)',
+        '    - generic "示例站点_公网安备" [ref=ref_police] (x=220,y=820)',
+        '    - generic "示例站点_网络文化经营许可" [ref=ref_culture] (x=240,y=840)',
         '  - article "Result card" [ref=ref_card_1] (x=300,y=240)',
         '    - image "Image: cover.jpeg" [ref=ref_img_1] (x=300,y=210)',
         '    - link "五一周边游盘点 | 江浙沪20个旅游好去处！" [ref=ref_card_1_link] (x=300,y=360) href="/items/1"',
@@ -91,6 +156,7 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.rows.map((row) => row.title).join(' ')).not.toMatch(
       /Image:|业务合作|营业执照|公网安备|2026年4月27日|01:50/,
     );
+    expect(JSON.stringify(rows)).not.toContain('<article');
   });
 
   it('does not treat a broad page shell container as a single result row', () => {
@@ -194,7 +260,26 @@ describe('V27-P0-REAL-01 visible region rows', () => {
       sourceDataSource: 'dom_region_rows',
       visibleRegionRowsUsed: true,
       rowCount: 2,
+      regionQualityScore: expect.any(Number),
+      pageInfo: {
+        url: 'https://example.test/search',
+        title: 'Search results',
+        viewport: { width: 1280, height: 720, dpr: 1 },
+        scrollY: null,
+        pixelsAbove: null,
+        pixelsBelow: null,
+        visibleRegionCount: expect.any(Number),
+        candidateRegionCount: 2,
+      },
+    });
+    expect(payload.visibleRegionRows.rows[0]).toMatchObject({
+      rowId: expect.any(String),
+      targetRef: 'ref_card_1_link',
+      visibleTextFields: expect.arrayContaining(['First visible result']),
+      boundingBox: expect.any(Object),
+      qualityReasons: expect.arrayContaining(['target_ref_available']),
     });
     expect(payload.visibleRegionRows.rows[0].title).toBe('First visible result');
+    expect(JSON.stringify(payload.visibleRegionRows)).not.toContain('<html');
   });
 });

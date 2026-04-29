@@ -122,6 +122,7 @@ export interface RouterDomRegionRowsEvidence {
   rowCount: number;
   confidence: number;
   targetRefCoverageRate?: number | null;
+  regionQualityScore?: number | null;
   rejectedReason?: string | null;
 }
 
@@ -371,10 +372,13 @@ function domRegionRowsPassGate(ev: RouterDomRegionRowsEvidence | null): boolean 
   if (!ev.available) return false;
   if (ev.rowCount <= 0) return false;
   if (ev.confidence < 0.7) return false;
+  if (ev.regionQualityScore !== undefined && ev.regionQualityScore !== null) {
+    if (ev.regionQualityScore < 0.7) return false;
+  }
   if (
     ev.targetRefCoverageRate !== undefined &&
     ev.targetRefCoverageRate !== null &&
-    ev.targetRefCoverageRate <= 0
+    ev.targetRefCoverageRate < 0.95
   ) {
     return false;
   }

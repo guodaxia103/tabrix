@@ -92,6 +92,9 @@ export interface OperationLogReplayEvidence {
   visibleRegionRowsRejectedReason: string | null;
   apiRowsUnavailableReason: string | null;
   dataSourceDecisionReason: string | null;
+  targetRefCoverageRate: string | null;
+  regionQualityScore: string | null;
+  rejectedRegionReasonDistribution: string | null;
 }
 
 /**
@@ -238,6 +241,9 @@ function buildEvidence(metadata: OperationLogMetadata): OperationLogReplayEviden
     visibleRegionRowsRejectedReason: pickMetadataValue(metadata.visibleRegionRowsRejectedReason),
     apiRowsUnavailableReason: pickMetadataValue(metadata.apiRowsUnavailableReason),
     dataSourceDecisionReason: pickMetadataValue(metadata.dataSourceDecisionReason),
+    targetRefCoverageRate: pickMetadataValue(metadata.targetRefCoverageRate),
+    regionQualityScore: pickMetadataValue(metadata.regionQualityScore),
+    rejectedRegionReasonDistribution: pickMetadataValue(metadata.rejectedRegionReasonDistribution),
   };
 }
 

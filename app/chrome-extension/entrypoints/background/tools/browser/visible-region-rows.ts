@@ -1,13 +1,48 @@
 export interface VisibleRegionRow {
+  rowId: string;
   title: string;
   primaryText: string | null;
   secondaryText: string | null;
+  summary: string | null;
   metaText: string | null;
   interactionText: string | null;
+  visibleTextFields: string[];
   targetRef: string | null;
+  targetRefCoverageRate: number;
+  boundingBox: VisibleRegionBoundingBox | null;
+  regionId: string;
   sourceRegion: string;
   confidence: number;
+  qualityReasons: string[];
 }
+
+export interface VisibleRegionBoundingBox {
+  x: number | null;
+  y: number | null;
+  width: number | null;
+  height: number | null;
+}
+
+export interface VisibleRegionPageInfo {
+  url: string | null;
+  title: string | null;
+  viewport: { width: number | null; height: number | null; dpr: number | null };
+  scrollY: number | null;
+  pixelsAbove: number | null;
+  pixelsBelow: number | null;
+  visibleRegionCount: number;
+  candidateRegionCount: number;
+}
+
+export type VisibleRegionRejectionReason =
+  | 'low_value_region'
+  | 'footer_like_region'
+  | 'navigation_like_region'
+  | 'target_ref_coverage_insufficient'
+  | 'single_isolated_text'
+  | 'empty_shell'
+  | 'broad_page_shell'
+  | 'dom_region_rows_unavailable';
 
 export interface VisibleRegionRowsResult {
   sourceDataSource: 'dom_region_rows';
@@ -22,6 +57,15 @@ export interface VisibleRegionRowsResult {
   cardRowsCount: number;
   rowOrder: 'visual_order';
   targetRefCoverageRate: number;
+  regionQualityScore: number;
+  visibleDomRowsCandidateCount: number;
+  visibleDomRowsSelectedCount: number;
+  lowValueRegionRejectedCount: number;
+  footerLikeRejectedCount: number;
+  navigationLikeRejectedCount: number;
+  targetRefCoverageRejectedCount: number;
+  rejectedRegionReasonDistribution: Record<VisibleRegionRejectionReason, number>;
+  pageInfo: VisibleRegionPageInfo;
 }
 
 interface ParsedVisibleNode {
@@ -39,6 +83,12 @@ interface CandidateGroup {
   container: ParsedVisibleNode;
   nodes: ParsedVisibleNode[];
   sourceRegion: string;
+  regionId: string;
+}
+
+interface CandidateBuildResult {
+  groups: CandidateGroup[];
+  rejectedReasonDistribution: Record<VisibleRegionRejectionReason, number>;
 }
 
 const RESULT_CONTAINER_ROLES = new Set([
@@ -86,15 +136,27 @@ export function extractVisibleRegionRows(input: {
   pageContent: string;
   sourceRegion?: string | null;
   maxRows?: number;
+  url?: string | null;
+  title?: string | null;
+  viewport?: { width?: number | null; height?: number | null; dpr?: number | null } | null;
+  scrollY?: number | null;
+  pixelsBelow?: number | null;
 }): VisibleRegionRowsResult {
   const sourceRegion = normalizeText(input.sourceRegion) || 'viewport';
   const nodes = parseVisibleNodes(input.pageContent);
-  const groups = buildCandidateGroups(nodes, sourceRegion);
+  const { groups, rejectedReasonDistribution } = buildCandidateGroups(nodes, sourceRegion);
   const orderedGroups = groups.slice().sort(compareGroupsByVisualOrder);
-  const rows = orderedGroups
+  const candidateRows = orderedGroups
     .map((group) => buildRow(group))
     .filter((row): row is VisibleRegionRow => row !== null)
     .slice(0, Math.max(1, Math.floor(input.maxRows ?? 20)));
+  const candidateTargetRefCoverageRate = candidateRows.length
+    ? clampConfidence(candidateRows.filter((row) => row.targetRef).length / candidateRows.length)
+    : 0;
+  const rows = candidateTargetRefCoverageRate >= 0.95 ? candidateRows : [];
+  if (candidateRows.length > 0 && rows.length === 0) {
+    rejectedReasonDistribution.target_ref_coverage_insufficient += candidateRows.length;
+  }
   const rowExtractionConfidence = rows.length
     ? clampConfidence(rows.reduce((sum, row) => sum + row.confidence, 0) / rows.length)
     : 0;
@@ -108,16 +170,26 @@ export function extractVisibleRegionRows(input: {
           0.56 +
             Math.min(0.2, rows.length * 0.04) +
             Math.min(0.2, targetRefCoverageRate * 0.2) +
-            repeatedRoleBonus(orderedGroups),
+            repeatedRoleBonus(orderedGroups) +
+            Math.min(0.08, averageRowQualityBonus(rows)),
         )
       : 0;
+  const regionQualityScore = rows.length
+    ? clampConfidence((rowExtractionConfidence + cardPatternConfidence + targetRefCoverageRate) / 3)
+    : 0;
+  const rejectedReason =
+    rows.length > 0
+      ? null
+      : candidateRows.length > 0
+        ? 'target_ref_coverage_insufficient'
+        : firstRejectedReason(rejectedReasonDistribution);
 
   return {
     sourceDataSource: 'dom_region_rows',
     rows,
     rowCount: rows.length,
     visibleRegionRowsUsed: rows.length > 0,
-    visibleRegionRowsRejectedReason: rows.length > 0 ? null : 'dom_region_rows_unavailable',
+    visibleRegionRowsRejectedReason: rejectedReason,
     sourceRegion,
     rowExtractionConfidence,
     cardExtractorUsed: rows.length > 0,
@@ -125,6 +197,32 @@ export function extractVisibleRegionRows(input: {
     cardRowsCount,
     rowOrder: 'visual_order',
     targetRefCoverageRate,
+    regionQualityScore,
+    visibleDomRowsCandidateCount: candidateRows.length,
+    visibleDomRowsSelectedCount: rows.length,
+    lowValueRegionRejectedCount:
+      rejectedReasonDistribution.low_value_region +
+      rejectedReasonDistribution.single_isolated_text +
+      rejectedReasonDistribution.empty_shell +
+      rejectedReasonDistribution.broad_page_shell,
+    footerLikeRejectedCount: rejectedReasonDistribution.footer_like_region,
+    navigationLikeRejectedCount: rejectedReasonDistribution.navigation_like_region,
+    targetRefCoverageRejectedCount: rejectedReasonDistribution.target_ref_coverage_insufficient,
+    rejectedRegionReasonDistribution: rejectedReasonDistribution,
+    pageInfo: {
+      url: normalizeText(input.url) || null,
+      title: normalizeText(input.title) || null,
+      viewport: {
+        width: finiteNumber(input.viewport?.width),
+        height: finiteNumber(input.viewport?.height),
+        dpr: finiteNumber(input.viewport?.dpr),
+      },
+      scrollY: finiteNumber(input.scrollY),
+      pixelsAbove: finiteNumber(input.scrollY),
+      pixelsBelow: finiteNumber(input.pixelsBelow),
+      visibleRegionCount: nodes.filter((node) => hasVisibleCoordinate(node)).length,
+      candidateRegionCount: groups.length,
+    },
   };
 }
 
@@ -156,10 +254,19 @@ function parseVisibleNodes(pageContent: string): ParsedVisibleNode[] {
   return nodes.slice(0, 500);
 }
 
-function buildCandidateGroups(nodes: ParsedVisibleNode[], sourceRegion: string): CandidateGroup[] {
+function buildCandidateGroups(
+  nodes: ParsedVisibleNode[],
+  sourceRegion: string,
+): CandidateBuildResult {
   const groups: CandidateGroup[] = [];
+  const rejectedReasonDistribution = emptyRejectedDistribution();
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index];
+    const shellReason = classifyShellNode(node);
+    if (shellReason) {
+      rejectedReasonDistribution[shellReason] += 1;
+      continue;
+    }
     if (!isCandidateContainer(node)) continue;
     const children: ParsedVisibleNode[] = [node];
     for (let cursor = index + 1; cursor < nodes.length; cursor += 1) {
@@ -167,11 +274,26 @@ function buildCandidateGroups(nodes: ParsedVisibleNode[], sourceRegion: string):
       if (candidate.depth <= node.depth) break;
       children.push(candidate);
     }
-    if (children.length < 2 && !node.href) continue;
-    if (isBroadPageContainer(node, children)) continue;
-    groups.push({ container: node, nodes: children, sourceRegion });
+    if (children.length < 2 && !node.href) {
+      rejectedReasonDistribution.single_isolated_text += 1;
+      continue;
+    }
+    if (children.every((child) => !normalizeText(child.name))) {
+      rejectedReasonDistribution.empty_shell += 1;
+      continue;
+    }
+    if (isBroadPageContainer(node, children)) {
+      rejectedReasonDistribution.broad_page_shell += 1;
+      continue;
+    }
+    groups.push({
+      container: node,
+      nodes: children,
+      sourceRegion,
+      regionId: node.ref || `${sourceRegion}_${groups.length + 1}`,
+    });
   }
-  return dedupeOverlappingGroups(groups);
+  return { groups: dedupeOverlappingGroups(groups), rejectedReasonDistribution };
 }
 
 function isCandidateContainer(node: ParsedVisibleNode): boolean {
@@ -181,6 +303,22 @@ function isCandidateContainer(node: ParsedVisibleNode): boolean {
   const label = normalizeText(node.name).toLowerCase();
   if (label && SHELL_TEXT_PATTERN.test(label) && !INTERACTION_PATTERN.test(label)) return false;
   return true;
+}
+
+function classifyShellNode(node: ParsedVisibleNode): VisibleRegionRejectionReason | null {
+  const label = normalizeText(node.name);
+  if (node.role === 'contentinfo' || node.role === 'footer') return 'footer_like_region';
+  if (node.role === 'navigation' || node.role === 'banner' || node.role === 'toolbar') {
+    return 'navigation_like_region';
+  }
+  if (node.role === 'form' || node.role === 'search' || node.role === 'tablist') {
+    return 'low_value_region';
+  }
+  if (!label) return null;
+  if (isFooterLikeText(label)) return 'footer_like_region';
+  if (isNavigationLikeText(label)) return 'navigation_like_region';
+  if (isLowValueShellText(label)) return 'low_value_region';
+  return null;
 }
 
 function dedupeOverlappingGroups(groups: CandidateGroup[]): CandidateGroup[] {
@@ -238,6 +376,12 @@ function repeatedRoleBonus(groups: CandidateGroup[]): number {
   return Array.from(counts.values()).some((count) => count >= 2) ? 0.12 : 0;
 }
 
+function averageRowQualityBonus(rows: VisibleRegionRow[]): number {
+  if (rows.length === 0) return 0;
+  const total = rows.reduce((sum, row) => sum + Math.min(4, row.qualityReasons.length), 0);
+  return total / rows.length / 20;
+}
+
 function buildRow(group: CandidateGroup): VisibleRegionRow | null {
   const textNodes = group.nodes
     .filter((node) => node.name)
@@ -261,23 +405,63 @@ function buildRow(group: CandidateGroup): VisibleRegionRow | null {
     group.nodes.find((node) => node.href && node.ref)?.ref ||
     group.nodes.find((node) => node.ref && node.role === 'link')?.ref ||
     group.container.ref;
+  const visibleTextFields = uniqueCompactStrings([
+    title,
+    primaryText,
+    secondaryText,
+    metaText,
+    interactionText,
+  ]);
+  const summary = uniqueCompactStrings([primaryText, secondaryText, metaText]).join(' | ') || null;
   const textFieldCount = [primaryText, secondaryText, metaText, interactionText].filter(
     Boolean,
   ).length;
+  const qualityReasons = buildQualityReasons(group, {
+    targetRef,
+    textFieldCount,
+    visibleTextFields,
+  });
   const confidence = clampConfidence(
-    0.52 + (targetRef ? 0.16 : 0) + Math.min(0.24, textFieldCount * 0.06),
+    0.52 +
+      (targetRef ? 0.16 : 0) +
+      Math.min(0.24, textFieldCount * 0.06) +
+      (qualityReasons.includes('repeated_card_region') ? 0.04 : 0),
   );
 
   return {
+    rowId: `${group.regionId}_row_${group.container.order}`,
     title,
     primaryText: primaryText || null,
     secondaryText: secondaryText || null,
+    summary,
     metaText: metaText || null,
     interactionText: interactionText || null,
+    visibleTextFields,
     targetRef: targetRef || null,
+    targetRefCoverageRate: targetRef ? 0.99 : 0,
+    boundingBox: groupBoundingBox(group),
+    regionId: group.regionId,
     sourceRegion: group.sourceRegion,
     confidence,
+    qualityReasons,
   };
+}
+
+function buildQualityReasons(
+  group: CandidateGroup,
+  row: {
+    targetRef: string | null | undefined;
+    textFieldCount: number;
+    visibleTextFields: string[];
+  },
+): string[] {
+  const reasons: string[] = [];
+  if (group.nodes.length >= 3) reasons.push('repeated_card_region');
+  if (row.visibleTextFields.length >= 2) reasons.push('multi_text_fields');
+  if (row.targetRef) reasons.push('target_ref_available');
+  if (row.textFieldCount >= 2) reasons.push('metadata_or_interaction_present');
+  if (hasVisibleCoordinate(group.container)) reasons.push('visible_bounding_box');
+  return reasons.length > 0 ? reasons : ['minimal_visible_text'];
 }
 
 function pickTitleNode(nodes: ParsedVisibleNode[]): ParsedVisibleNode | null {
@@ -311,6 +495,43 @@ function firstNonMatchingText(nodes: ParsedVisibleNode[], patterns: RegExp[]): s
   return nodes.find((node) => patterns.every((pattern) => !pattern.test(node.name)))?.name ?? null;
 }
 
+function groupBoundingBox(group: CandidateGroup): VisibleRegionBoundingBox | null {
+  const xs = group.nodes
+    .map((node) => node.x)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  const ys = group.nodes
+    .map((node) => node.y)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  if (xs.length === 0 && ys.length === 0) return null;
+  return {
+    x: xs.length > 0 ? Math.min(...xs) : null,
+    y: ys.length > 0 ? Math.min(...ys) : null,
+    width: xs.length > 1 ? Math.max(...xs) - Math.min(...xs) : null,
+    height: ys.length > 1 ? Math.max(...ys) - Math.min(...ys) : null,
+  };
+}
+
+function hasVisibleCoordinate(node: ParsedVisibleNode): boolean {
+  return (
+    typeof node.x === 'number' &&
+    Number.isFinite(node.x) &&
+    typeof node.y === 'number' &&
+    Number.isFinite(node.y)
+  );
+}
+
+function uniqueCompactStrings(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const normalized = normalizeText(value);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  return out;
+}
+
 function isLowValueShellText(value: string): boolean {
   const normalized = normalizeText(value);
   if (!normalized) return true;
@@ -318,6 +539,16 @@ function isLowValueShellText(value: string): boolean {
   if (/^image:/i.test(normalized)) return true;
   if (/^\d+(?:\.\d+)?(?:万|k|m)?$/i.test(normalized)) return true;
   return SHELL_TEXT_PATTERN.test(normalized) && normalized.length < 24;
+}
+
+function isFooterLikeText(value: string): boolean {
+  return /\b(footer|privacy|terms|copyright|license|legal|help)\b|隐私|协议|版权|营业执照|公网安备|网文|ICP备|备案/i.test(
+    value,
+  );
+}
+
+function isNavigationLikeText(value: string): boolean {
+  return /\b(navigation|menu|home|sidebar|skip to content)\b|导航|菜单|首页|侧边栏/i.test(value);
 }
 
 function isMetaOnlyText(value: string): boolean {
@@ -343,7 +574,39 @@ function normalizeText(value: unknown): string {
   return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
 }
 
+function finiteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 function clampConfidence(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Number(Math.max(0, Math.min(0.99, value)).toFixed(2));
+}
+
+function emptyRejectedDistribution(): Record<VisibleRegionRejectionReason, number> {
+  return {
+    low_value_region: 0,
+    footer_like_region: 0,
+    navigation_like_region: 0,
+    target_ref_coverage_insufficient: 0,
+    single_isolated_text: 0,
+    empty_shell: 0,
+    broad_page_shell: 0,
+    dom_region_rows_unavailable: 0,
+  };
+}
+
+function firstRejectedReason(
+  distribution: Record<VisibleRegionRejectionReason, number>,
+): VisibleRegionRejectionReason {
+  const ordered: VisibleRegionRejectionReason[] = [
+    'footer_like_region',
+    'navigation_like_region',
+    'target_ref_coverage_insufficient',
+    'low_value_region',
+    'single_isolated_text',
+    'empty_shell',
+    'broad_page_shell',
+  ];
+  return ordered.find((reason) => distribution[reason] > 0) ?? 'dom_region_rows_unavailable';
 }

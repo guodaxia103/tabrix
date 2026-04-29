@@ -311,6 +311,9 @@ describe('summariseOperationChain — V26-PGB-05', () => {
           visibleRegionRowsRejectedReason: 'none',
           apiRowsUnavailableReason: 'semantic_mismatch',
           dataSourceDecisionReason: 'api_rows_rejected_semantic_mismatch_dom_rows',
+          targetRefCoverageRate: '0.99',
+          regionQualityScore: '0.82',
+          rejectedRegionReasonDistribution: '{"footer_like_region":2}',
           privacyCheck: 'passed',
           relevanceCheck: 'passed',
         }),
@@ -328,6 +331,9 @@ describe('summariseOperationChain — V26-PGB-05', () => {
         visibleRegionRowsRejectedReason: 'none',
         apiRowsUnavailableReason: 'semantic_mismatch',
         dataSourceDecisionReason: 'api_rows_rejected_semantic_mismatch_dom_rows',
+        targetRefCoverageRate: '0.99',
+        regionQualityScore: '0.82',
+        rejectedRegionReasonDistribution: '{"footer_like_region":2}',
       },
     });
     expect(summary.routeOutcomeDistribution.dom_region_rows_success).toBe(1);
@@ -495,6 +501,9 @@ describe('summariseOperationChain — V27-00 v2.6 NDJSON replay invariant', () =
       'visibleRegionRowsRejectedReason',
       'apiRowsUnavailableReason',
       'dataSourceDecisionReason',
+      'targetRefCoverageRate',
+      'regionQualityScore',
+      'rejectedRegionReasonDistribution',
     ];
     for (const key of v27SentinelKeys) {
       expect(v26OnlyMetadata[key]).toBe(NOT_APPLICABLE);

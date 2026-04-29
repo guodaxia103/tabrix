@@ -159,6 +159,12 @@ export interface OperationLogMetadata {
   apiRowsUnavailableReason: string | NotApplicable;
   /** V27-P0-REAL-04 — closed reason for the final data-source decision. */
   dataSourceDecisionReason: string | NotApplicable;
+  /** V27-P0-REAL-04 — selected visible row target-ref coverage, or unknown. */
+  targetRefCoverageRate: string | NotApplicable;
+  /** V27-P0-REAL-04 — visible DOM/card region quality score, or unknown. */
+  regionQualityScore: string | NotApplicable;
+  /** V27-P0-REAL-04 — compact closed-enum rejection distribution JSON. */
+  rejectedRegionReasonDistribution: string | NotApplicable;
 }
 
 export const METADATA_KEYS = [
@@ -207,6 +213,9 @@ export const METADATA_KEYS = [
   'visibleRegionRowsRejectedReason',
   'apiRowsUnavailableReason',
   'dataSourceDecisionReason',
+  'targetRefCoverageRate',
+  'regionQualityScore',
+  'rejectedRegionReasonDistribution',
 ] as const satisfies ReadonlyArray<keyof OperationLogMetadata>;
 
 /**
@@ -275,6 +284,9 @@ export function makeOperationLogMetadataDefaults(): OperationLogMetadata {
     visibleRegionRowsRejectedReason: NOT_APPLICABLE,
     apiRowsUnavailableReason: NOT_APPLICABLE,
     dataSourceDecisionReason: NOT_APPLICABLE,
+    targetRefCoverageRate: NOT_APPLICABLE,
+    regionQualityScore: NOT_APPLICABLE,
+    rejectedRegionReasonDistribution: NOT_APPLICABLE,
   };
 }
 

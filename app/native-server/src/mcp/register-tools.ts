@@ -254,11 +254,18 @@ function buildVisibleRowsRejectionReason(visibleRows: TaskVisibleRegionRowsData)
   if (!visibleRows.available || visibleRows.rowCount <= 0) return 'dom_region_rows_unavailable';
   if (visibleRows.confidence < 0.7) return 'dom_region_rows_low_confidence';
   if (
+    visibleRows.regionQualityScore !== undefined &&
+    visibleRows.regionQualityScore !== null &&
+    visibleRows.regionQualityScore < 0.7
+  ) {
+    return 'dom_region_rows_low_region_quality';
+  }
+  if (
     visibleRows.targetRefCoverageRate !== undefined &&
     visibleRows.targetRefCoverageRate !== null &&
-    visibleRows.targetRefCoverageRate <= 0
+    visibleRows.targetRefCoverageRate < 0.95
   ) {
-    return 'dom_region_rows_target_ref_coverage_missing';
+    return 'dom_region_rows_target_ref_coverage_insufficient';
   }
   return 'dom_region_rows_not_selected';
 }
@@ -2480,6 +2487,15 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               cardPatternConfidence: visibleRows.cardPatternConfidence,
               cardRowsCount: visibleRows.cardRowsCount,
               rowOrder: visibleRows.rowOrder,
+              regionQualityScore: visibleRows.regionQualityScore ?? null,
+              visibleDomRowsCandidateCount: visibleRows.visibleDomRowsCandidateCount ?? null,
+              visibleDomRowsSelectedCount: visibleRows.visibleDomRowsSelectedCount ?? null,
+              lowValueRegionRejectedCount: visibleRows.lowValueRegionRejectedCount ?? null,
+              footerLikeRejectedCount: visibleRows.footerLikeRejectedCount ?? null,
+              navigationLikeRejectedCount: visibleRows.navigationLikeRejectedCount ?? null,
+              targetRefCoverageRejectedCount: visibleRows.targetRefCoverageRejectedCount ?? null,
+              rejectedRegionReasonDistribution:
+                visibleRows.rejectedRegionReasonDistribution ?? null,
               apiRowsUnavailableReason: apiUnavailableReason,
               fallbackCause: null,
               fallbackUsed: 'none',
@@ -2508,6 +2524,11 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                   visibleRegionRowsRejectedReason: 'not_applicable',
                   apiRowsUnavailableReason: apiUnavailableReason,
                   dataSourceDecisionReason: routerDecision.decisionReason,
+                  targetRefCoverageRate: String(visibleRows.targetRefCoverageRate ?? 'unknown'),
+                  regionQualityScore: String(visibleRows.regionQualityScore ?? 'unknown'),
+                  rejectedRegionReasonDistribution: JSON.stringify(
+                    visibleRows.rejectedRegionReasonDistribution ?? {},
+                  ),
                 },
               },
             });
@@ -2529,6 +2550,11 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               visibleRegionRowsRejectedReason: rejectedReason,
               apiRowsUnavailableReason: apiUnavailableReason,
               dataSourceDecisionReason: routerDecision.decisionReason,
+              targetRefCoverageRate: String(visibleRows.targetRefCoverageRate ?? 'unknown'),
+              regionQualityScore: String(visibleRows.regionQualityScore ?? 'unknown'),
+              rejectedRegionReasonDistribution: JSON.stringify(
+                visibleRows.rejectedRegionReasonDistribution ?? {},
+              ),
             },
           };
         }

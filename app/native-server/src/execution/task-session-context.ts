@@ -68,14 +68,26 @@ export type TaskReadSource =
   | 'unknown';
 
 export interface TaskVisibleRegionRow {
+  rowId?: string;
   title: string;
   primaryText: string | null;
   secondaryText: string | null;
+  summary?: string | null;
   metaText: string | null;
   interactionText: string | null;
+  visibleTextFields?: string[];
   targetRef: string | null;
+  targetRefCoverageRate?: number | null;
+  boundingBox?: {
+    x: number | null;
+    y: number | null;
+    width: number | null;
+    height: number | null;
+  } | null;
+  regionId?: string;
   sourceRegion: string;
   confidence: number;
+  qualityReasons?: string[];
 }
 
 export interface TaskVisibleRegionRowsData extends RouterDomRegionRowsEvidence {
@@ -89,6 +101,14 @@ export interface TaskVisibleRegionRowsData extends RouterDomRegionRowsEvidence {
   cardPatternConfidence: number;
   cardRowsCount: number;
   rowOrder: 'visual_order';
+  regionQualityScore?: number | null;
+  visibleDomRowsCandidateCount?: number;
+  visibleDomRowsSelectedCount?: number;
+  lowValueRegionRejectedCount?: number;
+  footerLikeRejectedCount?: number;
+  navigationLikeRejectedCount?: number;
+  targetRefCoverageRejectedCount?: number;
+  rejectedRegionReasonDistribution?: Record<string, number>;
 }
 
 /**
@@ -429,6 +449,7 @@ export class TaskSessionContext {
       rowCount: this.visibleRegionRows.rowCount,
       confidence: this.visibleRegionRows.confidence,
       targetRefCoverageRate: this.visibleRegionRows.targetRefCoverageRate ?? null,
+      regionQualityScore: this.visibleRegionRows.regionQualityScore ?? null,
       rejectedReason: this.visibleRegionRows.rejectedReason ?? null,
     };
   }
@@ -580,6 +601,14 @@ function cloneLiveObservedApiData(input: LiveObservedApiData): LiveObservedApiDa
 function cloneVisibleRegionRowsData(input: TaskVisibleRegionRowsData): TaskVisibleRegionRowsData {
   return {
     ...input,
-    rows: input.rows.map((row) => ({ ...row })),
+    rows: input.rows.map((row) => ({
+      ...row,
+      visibleTextFields: row.visibleTextFields ? [...row.visibleTextFields] : undefined,
+      qualityReasons: row.qualityReasons ? [...row.qualityReasons] : undefined,
+      boundingBox: row.boundingBox ? { ...row.boundingBox } : row.boundingBox,
+    })),
+    rejectedRegionReasonDistribution: input.rejectedRegionReasonDistribution
+      ? { ...input.rejectedRegionReasonDistribution }
+      : undefined,
   };
 }
