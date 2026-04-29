@@ -2406,26 +2406,23 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         taskContext: taskContextEarly,
         args,
       });
-      // V26-05 (B-028): record a successful chrome_read_page so the
-      // budget reflects bridge-confirmed reads (failed reads do NOT
-      // consume the budget — V4.1 §6 "honest budget" rule). The
-      // taskContext lookup is repeated here because the post-processor
-      // may have produced a tabId/URL update we want to honour.
-      // v2.6 S1 P1-2 fix: read `requestedLayer` (with legacy `layer`
-      // fallback) so the bookkeeping matches what the gate decided.
-      // V26-03 review closeout: when a fallback layer was forced
-      // upstream, the budget gate already saw the clamped layer —
-      // record the same value here so the post-success bookkeeping
-      // cannot drift back to the caller's original layer.
-      if (name === 'chrome_read_page' && taskContext && postResult.rawResult.isError !== true) {
+      const rawResultWithEvidence = withFallbackEvidence(postResult.rawResult, apiFallbackEvidence);
+      let readPageRecorded = false;
+      const recordSuccessfulReadPage = (
+        source: 'unknown' | 'dom_region_rows',
+        targetRefs?: ReadonlyArray<string> | null,
+      ): void => {
+        if (readPageRecorded || name !== 'chrome_read_page' || !taskContext) return;
+        if (postResult.rawResult.isError === true) return;
         const requestedLayer =
           forcedReadPageLayer ?? extractRequestedLayer(args) ?? READ_PAGE_DEFAULT_LAYER;
         taskContext.noteReadPage({
           layer: requestedLayer,
-          source: 'unknown',
+          source,
+          targetRefs,
         });
-      }
-      const rawResultWithEvidence = withFallbackEvidence(postResult.rawResult, apiFallbackEvidence);
+        readPageRecorded = true;
+      };
       if (name === 'chrome_read_page' && taskContext && rawResultWithEvidence.isError !== true) {
         const visibleRows = taskContext.peekVisibleRegionRows();
         if (visibleRows) {
@@ -2448,13 +2445,12 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           });
 
           if (routerDecision.selectedDataSource === 'dom_region_rows') {
-            taskContext.noteReadPage({
-              layer: requestedLayer,
-              source: 'dom_region_rows',
-              targetRefs: visibleRows.rows
+            recordSuccessfulReadPage(
+              'dom_region_rows',
+              visibleRows.rows
                 .map((row) => row.targetRef)
                 .filter((ref): ref is string => typeof ref === 'string' && ref.length > 0),
-            });
+            );
             const layerContract = mapDataSourceToLayerContract({
               dataSource: 'dom_region_rows',
               requestedLayer,
@@ -2537,6 +2533,12 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           };
         }
       }
+      // V26-05 (B-028): record a successful chrome_read_page so the
+      // budget reflects bridge-confirmed reads (failed reads do NOT
+      // consume the budget). V27-P0-REAL keeps this single-write:
+      // dom_region_rows may replace the payload, but it is still one
+      // bridge-confirmed read_page call.
+      recordSuccessfulReadPage('unknown');
       const normalized = normalizeToolCallResult(name, rawResultWithEvidence);
       const toolResultFailed = rawResultWithEvidence.isError === true;
       sessionManager.completeStep(session.sessionId, step.stepId, {

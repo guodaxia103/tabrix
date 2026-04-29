@@ -811,6 +811,10 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
         apiRowsUnavailableReason: 'api_unavailable',
       },
     });
+    expect(ctx.readPageCount).toBe(1);
+    expect(ctx.lastReadSource).toBe('dom_region_rows');
+    expect(ctx.targetRefsSeen.has('ref_result_1')).toBe(true);
+    expect(ctx.targetRefsSeen.has('ref_result_2')).toBe(true);
   });
 
   it('V27-P0-REAL closeout: available API rows are not preempted by stored visible rows', async () => {
