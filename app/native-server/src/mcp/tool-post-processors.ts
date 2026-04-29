@@ -25,7 +25,11 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { TOOL_NAMES } from '@tabrix/shared';
 import type { SessionManager } from '../execution/session-manager';
-import type { TaskSessionContext } from '../execution/task-session-context';
+import type {
+  TaskSessionContext,
+  TaskVisibleRegionRow,
+  TaskVisibleRegionRowsData,
+} from '../execution/task-session-context';
 import { deriveLiveObservedApiDataFromBundle } from '../api-knowledge/live-observed-data';
 import { ACTION_KIND_BY_TOOL } from '../memory/action-service';
 import {
@@ -71,12 +75,84 @@ function pickTabIdFromArgs(args: unknown): number | null {
   return typeof tabId === 'number' && Number.isFinite(tabId) ? tabId : null;
 }
 
+function readVisibleRegionRowsFromResult(result: CallToolResult): TaskVisibleRegionRowsData | null {
+  const first = result.content?.[0];
+  if (!first || first.type !== 'text' || typeof first.text !== 'string') return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(first.text);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const visible = (parsed as { visibleRegionRows?: unknown }).visibleRegionRows;
+  if (!visible || typeof visible !== 'object' || Array.isArray(visible)) return null;
+  const obj = visible as Record<string, unknown>;
+  if (obj.sourceDataSource !== 'dom_region_rows') return null;
+  const rawRows = Array.isArray(obj.rows) ? obj.rows : [];
+  const rows: TaskVisibleRegionRow[] = rawRows
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
+    .map((row) => ({
+      title: typeof row.title === 'string' ? row.title : '',
+      primaryText: typeof row.primaryText === 'string' ? row.primaryText : null,
+      secondaryText: typeof row.secondaryText === 'string' ? row.secondaryText : null,
+      metaText: typeof row.metaText === 'string' ? row.metaText : null,
+      interactionText: typeof row.interactionText === 'string' ? row.interactionText : null,
+      targetRef: typeof row.targetRef === 'string' ? row.targetRef : null,
+      sourceRegion: typeof row.sourceRegion === 'string' ? row.sourceRegion : 'viewport',
+      confidence:
+        typeof row.confidence === 'number' && Number.isFinite(row.confidence) ? row.confidence : 0,
+    }))
+    .filter((row) => row.title.length > 0);
+  const rowCount =
+    typeof obj.rowCount === 'number' && Number.isFinite(obj.rowCount)
+      ? Math.max(0, Math.floor(obj.rowCount))
+      : rows.length;
+  const confidence =
+    typeof obj.rowExtractionConfidence === 'number' && Number.isFinite(obj.rowExtractionConfidence)
+      ? obj.rowExtractionConfidence
+      : rows.length > 0
+        ? rows.reduce((sum, row) => sum + row.confidence, 0) / rows.length
+        : 0;
+  const rejectedReason =
+    typeof obj.visibleRegionRowsRejectedReason === 'string'
+      ? obj.visibleRegionRowsRejectedReason
+      : null;
+  return {
+    sourceDataSource: 'dom_region_rows',
+    rows,
+    rowCount,
+    available: obj.visibleRegionRowsUsed === true && rowCount > 0 && rows.length > 0,
+    confidence,
+    targetRefCoverageRate:
+      typeof obj.targetRefCoverageRate === 'number' && Number.isFinite(obj.targetRefCoverageRate)
+        ? obj.targetRefCoverageRate
+        : null,
+    rejectedReason,
+    visibleRegionRowsUsed: obj.visibleRegionRowsUsed === true,
+    visibleRegionRowsRejectedReason: rejectedReason,
+    sourceRegion: typeof obj.sourceRegion === 'string' ? obj.sourceRegion : 'viewport',
+    rowExtractionConfidence: confidence,
+    cardExtractorUsed: obj.cardExtractorUsed === true,
+    cardPatternConfidence:
+      typeof obj.cardPatternConfidence === 'number' && Number.isFinite(obj.cardPatternConfidence)
+        ? obj.cardPatternConfidence
+        : 0,
+    cardRowsCount:
+      typeof obj.cardRowsCount === 'number' && Number.isFinite(obj.cardRowsCount)
+        ? Math.max(0, Math.floor(obj.cardRowsCount))
+        : rowCount,
+    rowOrder: 'visual_order',
+  };
+}
+
 export const chromeReadPagePostProcessor: ToolPostProcessor = (ctx) => {
   const empty: ToolPostProcessorResult = {
     rawResult: ctx.rawResult,
     extraArtifactRefs: [],
   };
   try {
+    ctx.taskContext?.noteVisibleRegionRows(readVisibleRegionRowsFromResult(ctx.rawResult));
     const service = ctx.sessionManager.pageSnapshots;
     if (!service) return empty;
 

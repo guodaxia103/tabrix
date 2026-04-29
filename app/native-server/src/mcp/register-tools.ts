@@ -30,13 +30,19 @@ import {
 } from '../policy/capabilities';
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
-import { planSkipRead, type SkipReadPlan } from '../execution/skip-read-orchestrator';
+import {
+  planSkipRead,
+  type ChooseContextDecisionSnapshot,
+  type SkipReadPlan,
+} from '../execution/skip-read-orchestrator';
 import {
   readApiKnowledgeEndpointPlan,
   type ApiKnowledgeFetch,
   type ApiKnowledgeReadFallback,
 } from '../api/api-knowledge';
 import { mapDataSourceToLayerContract } from '../execution/layer-contract';
+import { routeDataSource, type TaskIntentClass } from '../execution/data-source-router';
+import type { TaskVisibleRegionRowsData } from '../execution/task-session-context';
 import { runPostProcessor } from './tool-post-processors';
 import { getNativeToolHandler } from './native-tool-handlers';
 import type {
@@ -229,6 +235,32 @@ function withFallbackEvidence(
   });
 
   return attached ? { ...rawResult, content } : rawResult;
+}
+
+function inferDomRegionRowsTaskIntent(
+  decision: ChooseContextDecisionSnapshot | null,
+  visibleRows: TaskVisibleRegionRowsData,
+): TaskIntentClass | undefined {
+  if (decision?.dataSource === 'dom_region_rows' || decision?.chosenSource === 'dom_region_rows') {
+    return 'search_list';
+  }
+  if (decision?.sourceRoute === 'knowledge_supported_read') return 'search_list';
+  if (visibleRows.visibleRegionRowsUsed && visibleRows.rowCount > 0) return 'search_list';
+  return undefined;
+}
+
+function buildVisibleRowsRejectionReason(visibleRows: TaskVisibleRegionRowsData): string {
+  if (visibleRows.rejectedReason) return visibleRows.rejectedReason;
+  if (!visibleRows.available || visibleRows.rowCount <= 0) return 'dom_region_rows_unavailable';
+  if (visibleRows.confidence < 0.7) return 'dom_region_rows_low_confidence';
+  if (
+    visibleRows.targetRefCoverageRate !== undefined &&
+    visibleRows.targetRefCoverageRate !== null &&
+    visibleRows.targetRefCoverageRate <= 0
+  ) {
+    return 'dom_region_rows_target_ref_coverage_missing';
+  }
+  return 'dom_region_rows_not_selected';
 }
 
 function filterToolsByEnvironment(tools: Tool[]): Tool[] {
@@ -2394,6 +2426,117 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         });
       }
       const rawResultWithEvidence = withFallbackEvidence(postResult.rawResult, apiFallbackEvidence);
+      if (name === 'chrome_read_page' && taskContext && rawResultWithEvidence.isError !== true) {
+        const visibleRows = taskContext.peekVisibleRegionRows();
+        if (visibleRows) {
+          const requestedLayer =
+            forcedReadPageLayer ?? extractRequestedLayer(args) ?? READ_PAGE_DEFAULT_LAYER;
+          const recordedDecisionForRows = taskContext.peekChooseContextDecision();
+          const apiUnavailableReason =
+            apiFallbackEvidence?.fallbackCause ??
+            operationLogHint?.decisionReason ??
+            'api_rows_unavailable_dom_region_rows_available';
+          const routerDecision = routeDataSource({
+            sourceRoute: recordedDecisionForRows?.sourceRoute ?? 'read_page_required',
+            chosenLayer: recordedDecisionForRows?.chosenLayer ?? requestedLayer,
+            layerDispatchReason: recordedDecisionForRows?.decisionReason,
+            apiCandidateAvailable: false,
+            dispatcherInputSource: recordedDecisionForRows?.dispatcherInputSource ?? null,
+            taskIntent: inferDomRegionRowsTaskIntent(recordedDecisionForRows, visibleRows),
+            readinessVerdict: 'ready',
+            domRegionRowsEvidence: taskContext.peekVisibleRegionRowsEvidence(),
+          });
+
+          if (routerDecision.selectedDataSource === 'dom_region_rows') {
+            taskContext.noteReadPage({
+              layer: requestedLayer,
+              source: 'dom_region_rows',
+              targetRefs: visibleRows.rows
+                .map((row) => row.targetRef)
+                .filter((ref): ref is string => typeof ref === 'string' && ref.length > 0),
+            });
+            const layerContract = mapDataSourceToLayerContract({
+              dataSource: 'dom_region_rows',
+              requestedLayer,
+              fallbackEntryLayer: 'L0+L1',
+            });
+            const payload = {
+              kind: 'dom_region_rows',
+              readPageAvoided: false,
+              sourceDataSource: 'dom_region_rows',
+              sourceKind: 'dom_region_rows',
+              sourceRoute: routerDecision.sourceRoute,
+              chosenSource: 'dom_region_rows',
+              dataSource: 'dom_region_rows',
+              selectedDataSource: 'dom_region_rows',
+              decisionReason: routerDecision.decisionReason,
+              dispatcherInputSource: routerDecision.dispatcherInputSource,
+              layerContract,
+              chosenLayer: routerDecision.selectedLayer,
+              rows: visibleRows.rows,
+              rowCount: visibleRows.rowCount,
+              visibleRegionRowsUsed: true,
+              visibleRegionRowCount: visibleRows.rowCount,
+              targetRefCoverageRate: visibleRows.targetRefCoverageRate ?? null,
+              sourceRegion: visibleRows.sourceRegion,
+              rowExtractionConfidence: visibleRows.rowExtractionConfidence,
+              cardExtractorUsed: visibleRows.cardExtractorUsed,
+              cardPatternConfidence: visibleRows.cardPatternConfidence,
+              cardRowsCount: visibleRows.cardRowsCount,
+              rowOrder: visibleRows.rowOrder,
+              apiRowsUnavailableReason: apiUnavailableReason,
+              fallbackCause: null,
+              fallbackUsed: 'none',
+            };
+            const domRowsResult: CallToolResult = {
+              content: [{ type: 'text', text: JSON.stringify(payload) }],
+            };
+            sessionManager.completeStep(session.sessionId, step.stepId, {
+              status: 'completed',
+              resultSummary: 'chrome_read_page fulfilled via visible DOM region rows',
+              artifactRefs:
+                postResult.extraArtifactRefs.length > 0 ? postResult.extraArtifactRefs : undefined,
+              operationLog: {
+                requestedLayer,
+                selectedDataSource: 'dom_region_rows',
+                sourceRoute: routerDecision.sourceRoute,
+                decisionReason: routerDecision.decisionReason,
+                resultKind: 'dom_region_rows',
+                fallbackUsed: 'none',
+                readCount: taskContext.readPageCount,
+                tokensSaved: 0,
+                success: true,
+                metadata: {
+                  visibleRegionRowsUsed: 'true',
+                  visibleRegionRowCount: String(visibleRows.rowCount),
+                  visibleRegionRowsRejectedReason: 'not_applicable',
+                  apiRowsUnavailableReason: apiUnavailableReason,
+                  dataSourceDecisionReason: routerDecision.decisionReason,
+                },
+              },
+            });
+            sessionManager.finishSession(session.sessionId, {
+              status: 'completed',
+              summary: 'chrome_read_page fulfilled via visible DOM region rows',
+            });
+            return domRowsResult;
+          }
+
+          const rejectedReason = buildVisibleRowsRejectionReason(visibleRows);
+          operationLogHint = {
+            ...(operationLogHint ?? {}),
+            decisionReason: operationLogHint?.decisionReason ?? rejectedReason,
+            metadata: {
+              ...(operationLogHint?.metadata ?? {}),
+              visibleRegionRowsUsed: 'false',
+              visibleRegionRowCount: String(visibleRows.rowCount),
+              visibleRegionRowsRejectedReason: rejectedReason,
+              apiRowsUnavailableReason: apiUnavailableReason,
+              dataSourceDecisionReason: routerDecision.decisionReason,
+            },
+          };
+        }
+      }
       const normalized = normalizeToolCallResult(name, rawResultWithEvidence);
       const toolResultFailed = rawResultWithEvidence.isError === true;
       sessionManager.completeStep(session.sessionId, step.stepId, {

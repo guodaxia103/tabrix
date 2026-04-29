@@ -1,6 +1,11 @@
 import type { ReadPageRequestedLayer } from '@tabrix/shared';
 
-export type LayerContractDataSource = 'dom_json' | 'markdown' | 'api_rows' | 'api_detail';
+export type LayerContractDataSource =
+  | 'dom_json'
+  | 'dom_region_rows'
+  | 'markdown'
+  | 'api_rows'
+  | 'api_detail';
 
 /**
  * V26-FIX-06 — closed enum of intended uses that downstream
@@ -140,6 +145,18 @@ export function mapDataSourceToLayerContract(input: LayerContractInput): LayerCo
         disallowedUses: [],
         escalationReason: 'dom_json_is_full_authority_no_escalation_required',
       });
+    case 'dom_region_rows':
+      return freezeEnvelope({
+        dataSource: 'dom_region_rows',
+        layer: 'L0+L1',
+        locatorAuthority: true,
+        executionAuthority: true,
+        fallbackEntryLayer: input.fallbackEntryLayer ?? 'L0+L1',
+        reason: 'dom_region_rows_are_visible_dom_refs_for_list_tasks',
+        allowedUses: sortUses(['locator', 'execution', 'list_read']),
+        disallowedUses: sortUses(['detail_read']),
+        escalationReason: 'dom_region_rows_require_detail_read_before_detail_reuse',
+      });
   }
 }
 
@@ -230,6 +247,7 @@ function defaultSurfaceForDataSource(
 ): AiFacingLayerEnvelopeSurface {
   switch (dataSource) {
     case 'dom_json':
+    case 'dom_region_rows':
       return 'dom';
     case 'api_rows':
     case 'api_detail':

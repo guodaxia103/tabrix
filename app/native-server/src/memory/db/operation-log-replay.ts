@@ -65,6 +65,8 @@ export type OperationLogReplayRouteOutcome =
   | 'api_empty'
   | 'api_failure'
   | 'api_fallback'
+  | 'dom_region_rows_success'
+  | 'dom_region_rows_failure'
   | 'read_page_skipped'
   | 'read_page_warning'
   | 'read_page'
@@ -85,6 +87,11 @@ export interface OperationLogReplayEvidence {
   apiFinalReason: string | null;
   privacyCheck: string | null;
   relevanceCheck: string | null;
+  visibleRegionRowsUsed: string | null;
+  visibleRegionRowCount: string | null;
+  visibleRegionRowsRejectedReason: string | null;
+  apiRowsUnavailableReason: string | null;
+  dataSourceDecisionReason: string | null;
 }
 
 /**
@@ -178,6 +185,9 @@ function classifyRoute(log: OperationMemoryLog): OperationLogReplayRouteOutcome 
   if (!log.success && (dataSource === 'api_rows' || resultKind === 'api_rows')) {
     return 'api_failure';
   }
+  if (dataSource === 'dom_region_rows' || resultKind === 'dom_region_rows') {
+    return log.success ? 'dom_region_rows_success' : 'dom_region_rows_failure';
+  }
   if (dataSource === 'api_rows') {
     return emptyResult === 'true' ? 'api_empty' : 'api_success';
   }
@@ -223,6 +233,11 @@ function buildEvidence(metadata: OperationLogMetadata): OperationLogReplayEviden
     apiFinalReason: pickMetadataValue(metadata.apiFinalReason),
     privacyCheck: pickMetadataValue(metadata.privacyCheck),
     relevanceCheck: pickMetadataValue(metadata.relevanceCheck),
+    visibleRegionRowsUsed: pickMetadataValue(metadata.visibleRegionRowsUsed),
+    visibleRegionRowCount: pickMetadataValue(metadata.visibleRegionRowCount),
+    visibleRegionRowsRejectedReason: pickMetadataValue(metadata.visibleRegionRowsRejectedReason),
+    apiRowsUnavailableReason: pickMetadataValue(metadata.apiRowsUnavailableReason),
+    dataSourceDecisionReason: pickMetadataValue(metadata.dataSourceDecisionReason),
   };
 }
 
@@ -285,6 +300,8 @@ export function summariseOperationChain(
     api_empty: 0,
     api_failure: 0,
     api_fallback: 0,
+    dom_region_rows_success: 0,
+    dom_region_rows_failure: 0,
     read_page_skipped: 0,
     read_page_warning: 0,
     read_page: 0,

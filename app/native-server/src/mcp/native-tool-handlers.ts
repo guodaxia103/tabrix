@@ -197,6 +197,7 @@ const handleTabrixChooseContext: NativeToolHandler = async (args, deps) => {
     capabilityEnv: deps.capabilityEnv ?? {},
     telemetry: deps.sessionManager.chooseContextTelemetry,
     pageContext,
+    domRegionRowsEvidence: deps.taskContext?.peekVisibleRegionRowsEvidence() ?? null,
     // Private acceptance fault injection is exercised on the
     // read-side shim. Disable chooser-inline API execution so fallback
     // scenarios do not emit ignored api_rows evidence before the

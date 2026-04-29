@@ -728,6 +728,242 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     });
   });
 
+  it('V27-P0-REAL closeout: API unavailable plus high-confidence visible rows returns dom_region_rows', async () => {
+    markBridgeReady();
+    const completeSpy = jest.spyOn(sessionManager, 'completeStep');
+    const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:41');
+    ctx.noteUrlChange('https://neutral.example.test/search', 'search_list');
+    ctx.noteChooseContextDecision({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0+L1',
+      fullReadTokenEstimate: 9000,
+      replayCandidate: null,
+      apiCapability: null,
+    });
+    mockBridgeRoundTrip(
+      JSON.stringify({
+        kind: 'page',
+        pageContent: 'fallback page would be heavier',
+        visibleRegionRows: {
+          sourceDataSource: 'dom_region_rows',
+          rows: [
+            {
+              title: 'First visible result',
+              primaryText: 'Source One',
+              secondaryText: null,
+              metaText: null,
+              interactionText: '10 likes',
+              targetRef: 'ref_result_1',
+              sourceRegion: 'main_results',
+              confidence: 0.82,
+            },
+            {
+              title: 'Second visible result',
+              primaryText: 'Source Two',
+              secondaryText: null,
+              metaText: null,
+              interactionText: '8 likes',
+              targetRef: 'ref_result_2',
+              sourceRegion: 'main_results',
+              confidence: 0.8,
+            },
+          ],
+          rowCount: 2,
+          visibleRegionRowsUsed: true,
+          visibleRegionRowsRejectedReason: null,
+          sourceRegion: 'main_results',
+          rowExtractionConfidence: 0.81,
+          cardExtractorUsed: true,
+          cardPatternConfidence: 0.82,
+          cardRowsCount: 2,
+          rowOrder: 'visual_order',
+          targetRefCoverageRate: 0.99,
+        },
+      }),
+    );
+
+    const result = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 41,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      kind: 'dom_region_rows',
+      sourceDataSource: 'dom_region_rows',
+      visibleRegionRowsUsed: true,
+      rowCount: 2,
+      targetRefCoverageRate: 0.99,
+      apiRowsUnavailableReason: 'api_unavailable',
+      fallbackCause: null,
+      fallbackUsed: 'none',
+    });
+    expect(payload).not.toHaveProperty('pageContent');
+    const operationLog = takeLatestReadPageOperationLog(completeSpy);
+    expect(operationLog).toMatchObject({
+      selectedDataSource: 'dom_region_rows',
+      resultKind: 'dom_region_rows',
+      success: true,
+      metadata: {
+        visibleRegionRowsUsed: 'true',
+        visibleRegionRowCount: '2',
+        apiRowsUnavailableReason: 'api_unavailable',
+      },
+    });
+  });
+
+  it('V27-P0-REAL closeout: available API rows are not preempted by stored visible rows', async () => {
+    markBridgeReady();
+    const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:42');
+    ctx.noteUrlChange('https://github.com/search?q=tabrix', 'search_list');
+    ctx.noteVisibleRegionRows({
+      sourceDataSource: 'dom_region_rows',
+      rows: [
+        {
+          title: 'Visible fallback result',
+          primaryText: 'DOM Source',
+          secondaryText: null,
+          metaText: null,
+          interactionText: null,
+          targetRef: 'ref_visible',
+          sourceRegion: 'main_results',
+          confidence: 0.85,
+        },
+      ],
+      rowCount: 1,
+      available: true,
+      confidence: 0.85,
+      targetRefCoverageRate: 0.99,
+      rejectedReason: null,
+      visibleRegionRowsUsed: true,
+      visibleRegionRowsRejectedReason: null,
+      sourceRegion: 'main_results',
+      rowExtractionConfidence: 0.85,
+      cardExtractorUsed: true,
+      cardPatternConfidence: 0.8,
+      cardRowsCount: 1,
+      rowOrder: 'visual_order',
+    });
+    ctx.noteChooseContextDecision({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0+L1',
+      fullReadTokenEstimate: 9000,
+      replayCandidate: null,
+      apiCapability: {
+        available: true,
+        family: 'github_search_repositories',
+        dataPurpose: 'search_list',
+        params: { query: 'tabrix' },
+      },
+      executionMode: 'direct_api',
+      directApiResult: {
+        endpointFamily: 'github_search_repositories',
+        dataPurpose: 'search_list',
+        rows: [{ title: 'API result', url: 'https://github.com/octocat/repo' }],
+        rowCount: 1,
+        compact: true,
+        rawBodyStored: false,
+        emptyResult: false,
+        emptyReason: null,
+        emptyMessage: null,
+        endpointSource: 'observed',
+        telemetry: {
+          endpointFamily: 'github_search_repositories',
+          method: 'GET',
+          reason: 'ok',
+          status: 200,
+          waitedMs: 1,
+          readAllowed: true,
+          fallbackEntryLayer: 'none',
+        },
+      },
+    });
+    const bridgeSpy = jest.spyOn(nativeMessagingHostInstance, 'sendRequestToExtensionAndWait');
+
+    const result = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 42,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      kind: 'api_rows',
+      rowCount: 1,
+      liveObservedDataUsed: false,
+      endpointSource: 'observed',
+    });
+    expect(payload).not.toHaveProperty('sourceDataSource', 'dom_region_rows');
+    assertNoCallToolInvocation(bridgeSpy);
+  });
+
+  it('V27-P0-REAL closeout: low-confidence visible rows fall back with rejection evidence', async () => {
+    markBridgeReady();
+    const completeSpy = jest.spyOn(sessionManager, 'completeStep');
+    const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:43');
+    ctx.noteUrlChange('https://neutral.example.test/search', 'search_list');
+    ctx.noteChooseContextDecision({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0+L1',
+      fullReadTokenEstimate: 9000,
+      replayCandidate: null,
+      apiCapability: null,
+    });
+    mockBridgeRoundTrip(
+      JSON.stringify({
+        kind: 'page',
+        pageContent: 'fallback-dom',
+        visibleRegionRows: {
+          sourceDataSource: 'dom_region_rows',
+          rows: [
+            {
+              title: 'Weak visible result',
+              primaryText: null,
+              secondaryText: null,
+              metaText: null,
+              interactionText: null,
+              targetRef: null,
+              sourceRegion: 'main_results',
+              confidence: 0.45,
+            },
+          ],
+          rowCount: 1,
+          visibleRegionRowsUsed: true,
+          visibleRegionRowsRejectedReason: null,
+          sourceRegion: 'main_results',
+          rowExtractionConfidence: 0.45,
+          cardExtractorUsed: true,
+          cardPatternConfidence: 0.45,
+          cardRowsCount: 1,
+          rowOrder: 'visual_order',
+          targetRefCoverageRate: 0,
+        },
+      }),
+    );
+
+    const result = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 43,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      kind: 'read_page_fallback',
+      pageContent: 'fallback-dom',
+    });
+    expect(payload).not.toHaveProperty('kind', 'dom_region_rows');
+    const operationLog = takeLatestReadPageOperationLog(completeSpy);
+    expect(operationLog).toMatchObject({
+      selectedDataSource: 'dom_json',
+      metadata: {
+        visibleRegionRowsUsed: 'false',
+        visibleRegionRowsRejectedReason: 'dom_region_rows_low_confidence',
+      },
+    });
+  });
+
   // ------------------------------------------------------------------
   // (b) skip path: chrome_read_page returns read_page_skipped envelope
   // ------------------------------------------------------------------

@@ -59,6 +59,21 @@ describe('Layer Contract v1 (V26-13)', () => {
     });
   });
 
+  it('keeps DOM region rows compact while preserving DOM ref authority', () => {
+    expect(
+      mapDataSourceToLayerContract({
+        dataSource: 'dom_region_rows',
+        requestedLayer: 'L0+L1+L2',
+      }),
+    ).toMatchObject({
+      layer: 'L0+L1',
+      locatorAuthority: true,
+      executionAuthority: true,
+      fallbackEntryLayer: 'L0+L1',
+      reason: 'dom_region_rows_are_visible_dom_refs_for_list_tasks',
+    });
+  });
+
   it('clamps every fallback layer to L0 or L0+L1', () => {
     expect(clampFallbackLayer('L0')).toBe('L0');
     expect(clampFallbackLayer('L0+L1')).toBe('L0+L1');
@@ -92,6 +107,10 @@ describe('Layer Contract v2 (V26-FIX-06) — closed-enum allowed/disallowed uses
       'locator',
     ]);
     expect(dom.disallowedUses).toEqual([]);
+
+    const domRegionRows = mapDataSourceToLayerContract({ dataSource: 'dom_region_rows' });
+    expect(domRegionRows.allowedUses).toEqual(['execution', 'list_read', 'locator']);
+    expect(domRegionRows.disallowedUses).toEqual(['detail_read']);
   });
 
   it('clamps api_detail.allowedUses to list_read when taskRequiresDetail=false', () => {
@@ -109,6 +128,7 @@ describe('Layer Contract v2 (V26-FIX-06) — closed-enum allowed/disallowed uses
       mapDataSourceToLayerContract({ dataSource: 'api_detail' }),
       mapDataSourceToLayerContract({ dataSource: 'markdown' }),
       mapDataSourceToLayerContract({ dataSource: 'dom_json' }),
+      mapDataSourceToLayerContract({ dataSource: 'dom_region_rows' }),
     ];
     for (const envelope of envelopes) {
       expect(typeof envelope.escalationReason).toBe('string');
@@ -149,6 +169,14 @@ describe('assertLayerContract — cross-module invariants', () => {
       expect(a.ok).toBe(true);
       expect(a.rejectionReason).toBe('');
     }
+  });
+
+  it('authorises list refs but rejects detail reuse against dom_region_rows', () => {
+    const rows = mapDataSourceToLayerContract({ dataSource: 'dom_region_rows' });
+    expect(assertLayerContract(rows, 'list_read').ok).toBe(true);
+    expect(assertLayerContract(rows, 'locator').ok).toBe(true);
+    expect(assertLayerContract(rows, 'execution').ok).toBe(true);
+    expect(assertLayerContract(rows, 'detail_read').ok).toBe(false);
   });
 
   it('rejects detail_read against api_detail when task did not require detail', () => {

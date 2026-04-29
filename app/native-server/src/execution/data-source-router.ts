@@ -11,6 +11,7 @@ export type DataSourceKind =
   | 'experience_replay'
   | 'api_list'
   | 'api_detail'
+  | 'dom_region_rows'
   | 'markdown'
   | 'dom_json';
 
@@ -116,6 +117,14 @@ export interface RouterEndpointEvidence {
   usableForTask: boolean;
 }
 
+export interface RouterDomRegionRowsEvidence {
+  available: boolean;
+  rowCount: number;
+  confidence: number;
+  targetRefCoverageRate?: number | null;
+  rejectedReason?: string | null;
+}
+
 export interface DataSourceDecisionInput {
   // ---------------- v2.6 (kept verbatim for back-compat) ----------------
   strategy?: ContextStrategyName;
@@ -144,6 +153,8 @@ export interface DataSourceDecisionInput {
   complexityClass?: ComplexityClass;
   /** V27-06/07/08 endpoint evidence. Null when no candidate fired. */
   endpointEvidence?: RouterEndpointEvidence | null;
+  /** V27-P0-REAL-03 — DOM/AX visible-region row evidence from read_page. */
+  domRegionRowsEvidence?: RouterDomRegionRowsEvidence | null;
 }
 
 export interface DataSourceDecision {
@@ -233,6 +244,7 @@ export type DataSourceRouterRuleId =
   | 'R_DEPRECATED_SEED_DEMOTE_DOM'
   | 'R_API_LIST_HIGH_CONFIDENCE'
   | 'R_API_DETAIL_HIGH_CONFIDENCE'
+  | 'R_DOM_REGION_ROWS_HIGH_CONFIDENCE'
   | 'R_MARKDOWN_READING_SURFACE'
   | 'R_EMPTY_RESULT_API_CONFIRMED'
   | 'R_EMPTY_RESULT_DOM_CONFIRM'
@@ -247,6 +259,7 @@ export const DATA_SOURCE_ROUTER_RULE_IDS: ReadonlyArray<DataSourceRouterRuleId> 
   'R_DEPRECATED_SEED_DEMOTE_DOM',
   'R_API_LIST_HIGH_CONFIDENCE',
   'R_API_DETAIL_HIGH_CONFIDENCE',
+  'R_DOM_REGION_ROWS_HIGH_CONFIDENCE',
   'R_MARKDOWN_READING_SURFACE',
   'R_EMPTY_RESULT_API_CONFIRMED',
   'R_EMPTY_RESULT_DOM_CONFIRM',
@@ -264,8 +277,10 @@ interface RuleContext {
   complexityClass: ComplexityClass;
   taskIntent: TaskIntentClass;
   endpointEvidence: RouterEndpointEvidence | null;
+  domRegionRowsEvidence: RouterDomRegionRowsEvidence | null;
   factsAreFresh: boolean;
   endpointPassesGate: boolean;
+  domRegionRowsPassGate: boolean;
 }
 
 interface DataSourceRouterRule {
@@ -349,6 +364,21 @@ function endpointSemanticIsDetail(ev: RouterEndpointEvidence | null): boolean {
 
 function endpointSemanticIsEmpty(ev: RouterEndpointEvidence | null): boolean {
   return !!ev && ev.inferredSemanticType === 'empty';
+}
+
+function domRegionRowsPassGate(ev: RouterDomRegionRowsEvidence | null): boolean {
+  if (!ev) return false;
+  if (!ev.available) return false;
+  if (ev.rowCount <= 0) return false;
+  if (ev.confidence < 0.7) return false;
+  if (
+    ev.targetRefCoverageRate !== undefined &&
+    ev.targetRefCoverageRate !== null &&
+    ev.targetRefCoverageRate <= 0
+  ) {
+    return false;
+  }
+  return true;
 }
 
 const DATA_SOURCE_ROUTER_RULES: ReadonlyArray<DataSourceRouterRule> = [
@@ -478,7 +508,10 @@ const DATA_SOURCE_ROUTER_RULES: ReadonlyArray<DataSourceRouterRule> = [
   {
     id: 'R_FACTS_STALE_DEMOTE_DOM',
     match: (ctx) =>
-      callerSuppliedV27_09Evidence(ctx) && !ctx.factsAreFresh && ctx.readinessVerdict !== 'empty',
+      callerSuppliedV27_09Evidence(ctx) &&
+      !ctx.factsAreFresh &&
+      ctx.readinessVerdict !== 'empty' &&
+      !ctx.domRegionRowsPassGate,
     produce: (ctx) =>
       buildDecision({
         ctx,
@@ -499,7 +532,9 @@ const DATA_SOURCE_ROUTER_RULES: ReadonlyArray<DataSourceRouterRule> = [
   {
     id: 'R_DEPRECATED_SEED_DEMOTE_DOM',
     match: (ctx) =>
-      ctx.endpointEvidence !== null && ctx.endpointEvidence.endpointSource === 'deprecated_seed',
+      ctx.endpointEvidence !== null &&
+      ctx.endpointEvidence.endpointSource === 'deprecated_seed' &&
+      !ctx.domRegionRowsPassGate,
     produce: (ctx) =>
       buildDecision({
         ctx,
@@ -557,7 +592,31 @@ const DATA_SOURCE_ROUTER_RULES: ReadonlyArray<DataSourceRouterRule> = [
       }),
   },
 
-  // 10. Markdown reading surface. Honours both:
+  // 10. V27-P0-REAL-03 — search/list intent + API gate did not win
+  //     + visible DOM rows are high-confidence -> use DOM region
+  //     rows as the structured list source.
+  {
+    id: 'R_DOM_REGION_ROWS_HIGH_CONFIDENCE',
+    match: (ctx) =>
+      ctx.taskIntent === 'search_list' &&
+      (ctx.readinessVerdict === 'ready' || ctx.readinessVerdict === 'unknown') &&
+      !ctx.endpointPassesGate &&
+      ctx.input.apiCandidateAvailable !== true &&
+      ctx.domRegionRowsPassGate,
+    produce: (ctx) =>
+      buildDecision({
+        ctx,
+        ruleId: 'R_DOM_REGION_ROWS_HIGH_CONFIDENCE',
+        dataSource: 'dom_region_rows',
+        confidence: Math.max(0.7, Math.min(0.9, ctx.domRegionRowsEvidence?.confidence ?? 0.7)),
+        riskTier: 'low',
+        decisionReason: apiUnavailableReason(ctx.endpointEvidence),
+        dispatcherInputSource: 'dom_visible_region',
+        contractDataSource: 'dom_region_rows',
+      }),
+  },
+
+  // 11. Markdown reading surface. Honours both:
   //     - v2.6 strategy `'read_page_markdown'` (legacy callers)
   //     - V27-09 `taskIntent='document'` + complexity=document
   {
@@ -581,7 +640,7 @@ const DATA_SOURCE_ROUTER_RULES: ReadonlyArray<DataSourceRouterRule> = [
       }),
   },
 
-  // 11. v2.6 legacy back-compat: knowledge_supported_read +
+  // 12. v2.6 legacy back-compat: knowledge_supported_read +
   //     apiCandidateAvailable=true. This is the rule the existing
   //     choose-context.ts caller hits when no V27-09 evidence was
   //     supplied; produces the bit-identical v2.6 decision.
@@ -613,7 +672,7 @@ const DATA_SOURCE_ROUTER_RULES: ReadonlyArray<DataSourceRouterRule> = [
       }),
   },
 
-  // 12. Final fallback: compact DOM. Same shape as v2.6.
+  // 13. Final fallback: compact DOM. Same shape as v2.6.
   {
     id: 'R_DOM_DEFAULT',
     match: () => true,
@@ -639,8 +698,18 @@ function callerSuppliedV27_09Evidence(ctx: RuleContext): boolean {
     ctx.input.complexityClass !== undefined ||
     ctx.input.contextVersion !== undefined ||
     ctx.input.factSnapshotId !== undefined ||
+    !!ctx.input.domRegionRowsEvidence ||
     !!ctx.input.endpointEvidence
   );
+}
+
+function apiUnavailableReason(ev: RouterEndpointEvidence | null): string {
+  if (!ev) return 'api_rows_unavailable_dom_region_rows_available';
+  if (ev.endpointSource === 'deprecated_seed') return 'api_rows_rejected_deprecated_seed_dom_rows';
+  if (ev.falseCorrelationGuard > 0.5) return 'api_rows_rejected_false_correlation_dom_rows';
+  if (ev.lastFailureReason) return `api_rows_rejected_${ev.lastFailureReason}_dom_rows`;
+  if (!ev.usableForTask) return 'api_rows_rejected_low_relevance_dom_rows';
+  return 'api_rows_rejected_dom_region_rows_available';
 }
 
 export function routeDataSource(input: DataSourceDecisionInput): DataSourceDecision {
@@ -665,6 +734,7 @@ function buildRuleContext(input: DataSourceDecisionInput): RuleContext {
   const complexityClass: ComplexityClass = input.complexityClass ?? 'unknown';
   const taskIntent: TaskIntentClass = input.taskIntent ?? 'unknown';
   const endpointEvidence = input.endpointEvidence ?? null;
+  const domRegionRowsEvidence = input.domRegionRowsEvidence ?? null;
 
   // Facts are "fresh" only when explicitly fresh AND readiness is
   // either ready or empty (an `empty` page is a usable fact —
@@ -676,6 +746,7 @@ function buildRuleContext(input: DataSourceDecisionInput): RuleContext {
     (readinessVerdict === 'ready' || readinessVerdict === 'empty');
 
   const endpointPassesGate = endpointPassesApiGate(endpointEvidence);
+  const domRowsPassGate = domRegionRowsPassGate(domRegionRowsEvidence);
 
   return {
     input,
@@ -687,8 +758,10 @@ function buildRuleContext(input: DataSourceDecisionInput): RuleContext {
     complexityClass,
     taskIntent,
     endpointEvidence,
+    domRegionRowsEvidence,
     factsAreFresh,
     endpointPassesGate,
+    domRegionRowsPassGate: domRowsPassGate,
   };
 }
 
@@ -700,7 +773,7 @@ interface BuildDecisionArgs {
   riskTier: DataSourceRiskTier;
   decisionReason: string;
   dispatcherInputSource: string;
-  contractDataSource: 'dom_json' | 'markdown' | 'api_rows' | 'api_detail';
+  contractDataSource: 'dom_json' | 'dom_region_rows' | 'markdown' | 'api_rows' | 'api_detail';
 }
 
 function buildDecision(args: BuildDecisionArgs): DataSourceDecision {

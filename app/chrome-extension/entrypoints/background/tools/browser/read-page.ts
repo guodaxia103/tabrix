@@ -32,6 +32,7 @@ import {
   buildMarkdownProjection,
   MARKDOWN_ARTIFACT_KIND,
 } from './read-page-markdown';
+import { extractVisibleRegionRows, type VisibleRegionRowsResult } from './visible-region-rows';
 
 interface ReadPageStats {
   processed: number;
@@ -545,6 +546,7 @@ function buildExtensionLayer(params: {
   candidateActions: CandidateActionSeed[];
   interactiveElements: SnapshotInteractiveElement[];
   pageContext: ReadPagePageContext;
+  visibleRegionRows: VisibleRegionRowsResult;
   /** V25-02 — when 'L0' or 'L0+L1', strip detail layers below the requested envelope. */
   requestedLayer: ReadPageRequestedLayer;
 }): ReadPageExtensionFields {
@@ -604,7 +606,7 @@ function buildExtensionLayer(params: {
   // ref-free.
   const includeL1 = params.requestedLayer !== 'L0';
   const includeL2 = params.requestedLayer === 'L0+L1+L2';
-  return {
+  const extensionLayer = {
     candidateActions: includeL1 ? params.candidateActions : [],
     pageContext: params.pageContext,
     // T3.2: reserved extension fields (not locked as long-term schema yet).
@@ -618,9 +620,11 @@ function buildExtensionLayer(params: {
     L0: taskProtocol.L0,
     L1: includeL1 ? taskProtocol.L1 : undefined,
     L2: includeL2 ? taskProtocol.L2 : undefined,
+    visibleRegionRows: params.visibleRegionRows,
     renderMode: params.renderMode,
     markdown,
   };
+  return extensionLayer as ReadPageExtensionFields;
 }
 
 function buildModeOutput(params: {
@@ -659,6 +663,7 @@ function buildModeOutput(params: {
   tips: string;
   refMap: any[];
   candidateActions: CandidateActionSeed[];
+  visibleRegionRows: VisibleRegionRowsResult;
   /** V25-02 — layer envelope; defaults to 'L0+L1+L2' for legacy callers. */
   requestedLayer: ReadPageRequestedLayer;
 }): ReadPageCompactSnapshot | ReadPageNormalSnapshot | ReadPageFullSnapshot {
@@ -713,6 +718,7 @@ function buildModeOutput(params: {
     candidateActions,
     interactiveElements,
     pageContext,
+    visibleRegionRows: params.visibleRegionRows,
     requestedLayer: params.requestedLayer,
   });
 
@@ -909,6 +915,10 @@ class ReadPageTool extends BaseBrowserToolExecutor {
                   tips: standardTips,
                   refMap: [],
                   candidateActions: [],
+                  visibleRegionRows: extractVisibleRegionRows({
+                    pageContent: '',
+                    sourceRegion: 'unsupported_page',
+                  }),
                   requestedLayer: selectedLayer,
                 }),
                 reason: 'unsupported_page_type',
@@ -1023,6 +1033,10 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         reason: null,
         refMap: Array.isArray(resp?.refMap) ? resp.refMap : [],
         candidateActions: [],
+        visibleRegionRows: extractVisibleRegionRows({
+          pageContent,
+          sourceRegion: pageUnderstanding.primaryRegion,
+        }),
       };
 
       // Normal path: return tree
@@ -1058,6 +1072,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
           tips: basePayload.tips,
           refMap: basePayload.refMap,
           candidateActions: basePayload.candidateActions,
+          visibleRegionRows: basePayload.visibleRegionRows,
           requestedLayer: selectedLayer,
         });
         return {
@@ -1105,6 +1120,10 @@ class ReadPageTool extends BaseBrowserToolExecutor {
           basePayload.primaryRegionConfidence = fallbackUnderstanding.primaryRegionConfidence;
           basePayload.footerOnly = fallbackUnderstanding.footerOnly;
           basePayload.anchorTexts = fallbackUnderstanding.anchorTexts;
+          basePayload.visibleRegionRows = extractVisibleRegionRows({
+            pageContent: String(basePayload.pageContent || ''),
+            sourceRegion: fallbackUnderstanding.primaryRegion,
+          });
 
           const modePayload = buildModeOutput({
             mode: selectedMode,
@@ -1137,6 +1156,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
             tips: basePayload.tips,
             refMap: basePayload.refMap,
             candidateActions: basePayload.candidateActions,
+            visibleRegionRows: basePayload.visibleRegionRows,
             requestedLayer: selectedLayer,
           });
 

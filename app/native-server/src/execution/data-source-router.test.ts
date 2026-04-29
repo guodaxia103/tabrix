@@ -421,6 +421,57 @@ describe('DataSourceRouter — V27-09 truth table', () => {
     expect(decision.decisionRuleId).toBe('R_DOM_DEFAULT');
   });
 
+  it('routes API-rejected search/list tasks to high-confidence DOM region rows', () => {
+    const decision = routeDataSource({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0+L1',
+      taskIntent: 'search_list',
+      factSnapshotVerdict: 'fresh',
+      readinessVerdict: 'ready',
+      complexityClass: 'list',
+      endpointEvidence: evidence({
+        inferredSemanticType: 'search',
+        confidence: 0.9,
+        lastFailureReason: 'semantic_mismatch',
+      }),
+      domRegionRowsEvidence: {
+        available: true,
+        rowCount: 10,
+        confidence: 0.82,
+        targetRefCoverageRate: 0.9,
+      },
+    });
+
+    expect(decision.decisionRuleId).toBe('R_DOM_REGION_ROWS_HIGH_CONFIDENCE');
+    expect(decision.dataSource).toBe('dom_region_rows');
+    expect(decision.selectedDataSource).toBe('dom_region_rows');
+    expect(decision.dispatcherInputSource).toBe('dom_visible_region');
+    expect(decision.decisionReason).toBe('api_rows_rejected_semantic_mismatch_dom_rows');
+    expect(decision.layerContract.dataSource).toBe('dom_region_rows');
+    expect(assertLayerContract(decision.layerContract, 'list_read').ok).toBe(true);
+    expect(assertLayerContract(decision.layerContract, 'execution').ok).toBe(true);
+  });
+
+  it('keeps API rows ahead of DOM region rows when API evidence is high-confidence', () => {
+    const decision = routeDataSource({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0',
+      taskIntent: 'search_list',
+      factSnapshotVerdict: 'fresh',
+      readinessVerdict: 'ready',
+      complexityClass: 'list',
+      endpointEvidence: evidence({ inferredSemanticType: 'search', confidence: 0.9 }),
+      domRegionRowsEvidence: {
+        available: true,
+        rowCount: 10,
+        confidence: 0.9,
+      },
+    });
+
+    expect(decision.decisionRuleId).toBe('R_API_LIST_HIGH_CONFIDENCE');
+    expect(decision.dataSource).toBe('api_list');
+  });
+
   it('exposes the full V27-09 evidence-contract field set on every decision', () => {
     const decision = routeDataSource({
       sourceRoute: 'knowledge_supported_read',
@@ -733,6 +784,23 @@ describe('DataSourceRouter — truth table coverage', () => {
         factSnapshotVerdict: 'fresh',
         readinessVerdict: 'ready',
         endpointEvidence: evidence({ inferredSemanticType: 'search' }),
+      }).decisionRuleId,
+    R_DOM_REGION_ROWS_HIGH_CONFIDENCE: () =>
+      routeDataSource({
+        sourceRoute: 'knowledge_supported_read',
+        chosenLayer: 'L0+L1',
+        taskIntent: 'search_list',
+        factSnapshotVerdict: 'fresh',
+        readinessVerdict: 'ready',
+        endpointEvidence: evidence({
+          inferredSemanticType: 'search',
+          lastFailureReason: 'timeout',
+        }),
+        domRegionRowsEvidence: {
+          available: true,
+          rowCount: 4,
+          confidence: 0.82,
+        },
       }).decisionRuleId,
     R_API_DETAIL_HIGH_CONFIDENCE: () =>
       routeDataSource({

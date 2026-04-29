@@ -31,6 +31,7 @@ import type {
   LiveObservedApiData,
   LiveObservedApiEvidence,
 } from '../api-knowledge/live-observed-data';
+import type { RouterDomRegionRowsEvidence } from './data-source-router';
 import type { ChooseContextDecisionSnapshot, SkipReadSourceKind } from './skip-read-orchestrator';
 
 /**
@@ -60,10 +61,35 @@ const LIVE_OBSERVED_CONTEXT_CAP = 10;
  */
 export type TaskReadSource =
   | 'dom_json'
+  | 'dom_region_rows'
   | 'markdown_projection'
   | 'knowledge_api'
   | 'experience_replay'
   | 'unknown';
+
+export interface TaskVisibleRegionRow {
+  title: string;
+  primaryText: string | null;
+  secondaryText: string | null;
+  metaText: string | null;
+  interactionText: string | null;
+  targetRef: string | null;
+  sourceRegion: string;
+  confidence: number;
+}
+
+export interface TaskVisibleRegionRowsData extends RouterDomRegionRowsEvidence {
+  sourceDataSource: 'dom_region_rows';
+  rows: TaskVisibleRegionRow[];
+  visibleRegionRowsUsed: boolean;
+  visibleRegionRowsRejectedReason: string | null;
+  sourceRegion: string;
+  rowExtractionConfidence: number;
+  cardExtractorUsed: boolean;
+  cardPatternConfidence: number;
+  cardRowsCount: number;
+  rowOrder: 'visual_order';
+}
 
 /**
  * `shouldAllowReadPage` answer. Always returns a `suggestedLayer` so
@@ -280,6 +306,7 @@ export class TaskSessionContext {
   private _chooseContextDecision: ChooseContextDecisionSnapshot | null = null;
   private readonly liveObservedApiData: LiveObservedApiData[] = [];
   private readonly liveObservedApiEvidence: LiveObservedApiEvidence[] = [];
+  private visibleRegionRows: TaskVisibleRegionRowsData | null = null;
 
   constructor(options?: TaskSessionContextOptions) {
     if (options?.readBudget !== undefined) {
@@ -323,6 +350,7 @@ export class TaskSessionContext {
       this._chooseContextDecision = null;
       this.liveObservedApiData.length = 0;
       this.liveObservedApiEvidence.length = 0;
+      this.visibleRegionRows = null;
     }
   }
 
@@ -384,6 +412,25 @@ export class TaskSessionContext {
 
   public peekLiveObservedApiEvidence(): readonly LiveObservedApiEvidence[] {
     return this.liveObservedApiEvidence.map((item) => ({ ...item }));
+  }
+
+  public noteVisibleRegionRows(data: TaskVisibleRegionRowsData | null): void {
+    this.visibleRegionRows = data ? cloneVisibleRegionRowsData(data) : null;
+  }
+
+  public peekVisibleRegionRows(): TaskVisibleRegionRowsData | null {
+    return this.visibleRegionRows ? cloneVisibleRegionRowsData(this.visibleRegionRows) : null;
+  }
+
+  public peekVisibleRegionRowsEvidence(): RouterDomRegionRowsEvidence | null {
+    if (!this.visibleRegionRows) return null;
+    return {
+      available: this.visibleRegionRows.available,
+      rowCount: this.visibleRegionRows.rowCount,
+      confidence: this.visibleRegionRows.confidence,
+      targetRefCoverageRate: this.visibleRegionRows.targetRefCoverageRate ?? null,
+      rejectedReason: this.visibleRegionRows.rejectedReason ?? null,
+    };
   }
 
   /**
@@ -524,6 +571,13 @@ function layerRank(layer: ReadPageRequestedLayer): number {
 }
 
 function cloneLiveObservedApiData(input: LiveObservedApiData): LiveObservedApiData {
+  return {
+    ...input,
+    rows: input.rows.map((row) => ({ ...row })),
+  };
+}
+
+function cloneVisibleRegionRowsData(input: TaskVisibleRegionRowsData): TaskVisibleRegionRowsData {
   return {
     ...input,
     rows: input.rows.map((row) => ({ ...row })),

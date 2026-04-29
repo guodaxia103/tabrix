@@ -149,6 +149,16 @@ export interface OperationLogMetadata {
   privacyCheck: string | NotApplicable;
   /** V27-13 — task relevance gate result before AI output. */
   relevanceCheck: string | NotApplicable;
+  /** V27-P0-REAL-04 — whether visible DOM/AX rows were selected for this step. */
+  visibleRegionRowsUsed: string | NotApplicable;
+  /** V27-P0-REAL-04 — visible DOM/AX row count, stringified integer. */
+  visibleRegionRowCount: string | NotApplicable;
+  /** V27-P0-REAL-04 — why visible DOM/AX rows were rejected, or `none`. */
+  visibleRegionRowsRejectedReason: string | NotApplicable;
+  /** V27-P0-REAL-04 — why API rows were unavailable before DOM fallback. */
+  apiRowsUnavailableReason: string | NotApplicable;
+  /** V27-P0-REAL-04 — closed reason for the final data-source decision. */
+  dataSourceDecisionReason: string | NotApplicable;
 }
 
 export const METADATA_KEYS = [
@@ -192,6 +202,11 @@ export const METADATA_KEYS = [
   'apiFinalReason',
   'privacyCheck',
   'relevanceCheck',
+  'visibleRegionRowsUsed',
+  'visibleRegionRowCount',
+  'visibleRegionRowsRejectedReason',
+  'apiRowsUnavailableReason',
+  'dataSourceDecisionReason',
 ] as const satisfies ReadonlyArray<keyof OperationLogMetadata>;
 
 /**
@@ -255,6 +270,11 @@ export function makeOperationLogMetadataDefaults(): OperationLogMetadata {
     apiFinalReason: NOT_APPLICABLE,
     privacyCheck: NOT_APPLICABLE,
     relevanceCheck: NOT_APPLICABLE,
+    visibleRegionRowsUsed: NOT_APPLICABLE,
+    visibleRegionRowCount: NOT_APPLICABLE,
+    visibleRegionRowsRejectedReason: NOT_APPLICABLE,
+    apiRowsUnavailableReason: NOT_APPLICABLE,
+    dataSourceDecisionReason: NOT_APPLICABLE,
   };
 }
 

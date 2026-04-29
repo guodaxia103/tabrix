@@ -65,7 +65,9 @@ import {
   type DataSourceCostEstimate,
   type DataSourceFallbackPlan,
   type DataSourceKind,
+  type RouterDomRegionRowsEvidence,
   type DataSourceRiskTier,
+  type TaskIntentClass,
 } from '../execution/data-source-router';
 import { tryDirectApiExecute, type DirectApiIntentClass } from '../execution/direct-api-executor';
 import type { DataNeed, EndpointKnowledgeReader } from '../api-knowledge/types';
@@ -643,6 +645,12 @@ export interface RunTabrixChooseContextDeps {
    */
   pageContext?: PageContextProvider | null;
   /**
+   * V27-P0-REAL closeout — visible DOM/AX rows already extracted for
+   * this task. Kept native-server-internal; public MCP schemas stay
+   * unchanged.
+   */
+  domRegionRowsEvidence?: RouterDomRegionRowsEvidence | null;
+  /**
    * V26-FIX-02 — opt-in flag the upstream caller MAY set (typically
    * derived from `process.env.TABRIX_LEARNING_MODE`) to mark this run
    * as a "learning pass". When `true` the chooser emits
@@ -822,6 +830,7 @@ export function runTabrixChooseContext(
     0,
     layerDispatch.fullReadTokenEstimate - layerDispatch.tokenEstimate,
   );
+  const domRegionRowsEvidence = deps.domRegionRowsEvidence ?? null;
   const routerDecision = routeDataSource({
     strategy: decision.strategy,
     sourceRoute: layerDispatch.sourceRoute,
@@ -832,6 +841,9 @@ export function runTabrixChooseContext(
     tokensSavedEstimate,
     apiCandidateAvailable: !!apiCandidate,
     dispatcherInputSource: dispatcherInputs?.source ?? null,
+    taskIntent: domRegionRowsEvidence ? mapIntentHintToRouterTaskIntent(intentHint) : undefined,
+    readinessVerdict: domRegionRowsEvidence ? 'ready' : undefined,
+    domRegionRowsEvidence,
   });
   const knowledgeEndpointFamily =
     siteFamily === 'github' && knowledgeCatalog ? 'github.api.github.com' : null;
@@ -973,6 +985,23 @@ export function runTabrixChooseContext(
     costEstimate: routerDecision.costEstimate,
   };
   return result;
+}
+
+function mapIntentHintToRouterTaskIntent(
+  hint: LayerDispatchUserIntentHint,
+): TaskIntentClass | undefined {
+  switch (hint) {
+    case 'form_or_submit':
+      return 'search_list';
+    case 'details':
+      return 'detail';
+    case 'summary':
+      return 'document';
+    case 'open_or_select':
+      return 'click_or_fill';
+    default:
+      return undefined;
+  }
 }
 
 // ---------------------------------------------------------------------------

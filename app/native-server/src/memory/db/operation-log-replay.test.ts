@@ -169,6 +169,7 @@ describe('summariseOperationChain — V26-PGB-05', () => {
       api_success: 1,
       api_empty: 1,
       api_fallback: 1,
+      dom_region_rows_success: 0,
       read_page: 0,
       tool_call: 0,
     });
@@ -292,6 +293,66 @@ describe('summariseOperationChain — V26-PGB-05', () => {
     });
     expect(summary.routeOutcomeDistribution.api_failure).toBe(1);
     expect(summary.coverage.failureSteps).toBe(1);
+  });
+
+  it('classifies DOM region rows and surfaces API/DOM decision evidence', () => {
+    const reader = makeReader([
+      makeLog({
+        stepId: 'step-dom-rows',
+        selectedDataSource: 'dom_region_rows',
+        sourceRoute: 'knowledge_supported_read',
+        decisionReason: 'api_rows_rejected_semantic_mismatch_dom_rows',
+        resultKind: 'dom_region_rows',
+        success: true,
+        metadata: makeMetadata({
+          routerDecision: 'dom_region_rows',
+          visibleRegionRowsUsed: 'true',
+          visibleRegionRowCount: '10',
+          visibleRegionRowsRejectedReason: 'none',
+          apiRowsUnavailableReason: 'semantic_mismatch',
+          dataSourceDecisionReason: 'api_rows_rejected_semantic_mismatch_dom_rows',
+          privacyCheck: 'passed',
+          relevanceCheck: 'passed',
+        }),
+      }),
+    ]);
+
+    const summary = summariseOperationChain(reader, 'session-1');
+    expect(summary.steps[0]).toMatchObject({
+      routeOutcome: 'dom_region_rows_success',
+      success: true,
+      coverage: 'explained',
+      evidence: {
+        visibleRegionRowsUsed: 'true',
+        visibleRegionRowCount: '10',
+        visibleRegionRowsRejectedReason: 'none',
+        apiRowsUnavailableReason: 'semantic_mismatch',
+        dataSourceDecisionReason: 'api_rows_rejected_semantic_mismatch_dom_rows',
+      },
+    });
+    expect(summary.routeOutcomeDistribution.dom_region_rows_success).toBe(1);
+  });
+
+  it('keeps DOM rows unavailable paths classified as failure', () => {
+    const reader = makeReader([
+      makeLog({
+        stepId: 'step-dom-rows-failed',
+        selectedDataSource: 'dom_region_rows',
+        resultKind: 'dom_region_rows',
+        success: false,
+        metadata: makeMetadata({
+          visibleRegionRowsUsed: 'false',
+          visibleRegionRowCount: '0',
+          visibleRegionRowsRejectedReason: 'dom_region_rows_unavailable',
+          apiRowsUnavailableReason: 'timeout',
+        }),
+      }),
+    ]);
+
+    const summary = summariseOperationChain(reader, 'session-1');
+    expect(summary.steps[0].routeOutcome).toBe('dom_region_rows_failure');
+    expect(summary.coverage.failureSteps).toBe(1);
+    expect(summary.routeOutcomeDistribution.dom_region_rows_failure).toBe(1);
   });
 });
 
@@ -429,6 +490,11 @@ describe('summariseOperationChain — V27-00 v2.6 NDJSON replay invariant', () =
       'apiFinalReason',
       'privacyCheck',
       'relevanceCheck',
+      'visibleRegionRowsUsed',
+      'visibleRegionRowCount',
+      'visibleRegionRowsRejectedReason',
+      'apiRowsUnavailableReason',
+      'dataSourceDecisionReason',
     ];
     for (const key of v27SentinelKeys) {
       expect(v26OnlyMetadata[key]).toBe(NOT_APPLICABLE);

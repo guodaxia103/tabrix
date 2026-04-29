@@ -68,6 +68,7 @@ export type DataSourceRouterChosenSource =
   | 'experience_replay'
   | 'api_list'
   | 'api_detail'
+  | 'dom_region_rows'
   | 'markdown'
   | 'dom_json';
 
