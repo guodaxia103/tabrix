@@ -62,6 +62,68 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.visibleRegionRowsRejectedReason).toBe('dom_region_rows_unavailable');
   });
 
+  it('filters shell/legal/date/image-only fragments instead of returning them as result rows', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '- generic "Search page" [ref=ref_root] (x=0,y=0)',
+        '  - generic "业务合作" [ref=ref_business] (x=2100,y=50)',
+        '  - generic "小红书_营业执照" [ref=ref_license] (x=200,y=800)',
+        '    - generic "小红书_沪公网安备" [ref=ref_police] (x=220,y=820)',
+        '    - generic "小红书_网文" [ref=ref_culture] (x=240,y=840)',
+        '  - article "Result card" [ref=ref_card_1] (x=300,y=240)',
+        '    - image "Image: cover.jpeg" [ref=ref_img_1] (x=300,y=210)',
+        '    - link "五一周边游盘点 | 江浙沪20个旅游好去处！" [ref=ref_card_1_link] (x=300,y=360) href="/items/1"',
+        '    - generic "2026年4月27日 GMT+8 20:33" [ref=ref_card_1_time] (x=300,y=390)',
+        '    - generic "926" [ref=ref_card_1_likes] (x=300,y=420)',
+        '  - article "Result card" [ref=ref_card_2] (x=700,y=240)',
+        '    - image "Image: second.jpeg" [ref=ref_img_2] (x=700,y=210)',
+        '    - link "五一逃离江浙沪！5个冷门宝地1-3h直达" [ref=ref_card_2_link] (x=700,y=360) href="/items/2"',
+        '    - generic "01:50" [ref=ref_card_2_time] (x=700,y=390)',
+        '    - generic "560" [ref=ref_card_2_likes] (x=700,y=420)',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      '五一周边游盘点 | 江浙沪20个旅游好去处！',
+      '五一逃离江浙沪！5个冷门宝地1-3h直达',
+    ]);
+    expect(rows.rows.map((row) => row.title).join(' ')).not.toMatch(
+      /Image:|业务合作|营业执照|公网安备|2026年4月27日|01:50/,
+    );
+  });
+
+  it('does not treat a broad page shell container as a single result row', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '- generic "Page" [ref=ref_root] (x=0,y=0)',
+        '  - link "Skip to content" [ref=ref_skip] (x=10,y=10) href="#content"',
+        '  - navigation "Main menu" [ref=ref_nav] (x=20,y=20)',
+        '    - link "Home" [ref=ref_home] (x=30,y=30) href="/"',
+        '    - link "Explore" [ref=ref_explore] (x=80,y=30) href="/explore"',
+        '  - generic "沪ICP备123456号" [ref=ref_icp] (x=20,y=680)',
+        '  - generic "创作中心" [ref=ref_creator] (x=120,y=680)',
+        '  - generic "放映厅" [ref=ref_screen] (x=220,y=680)',
+        '  - article "Result card" [ref=ref_card_1] (x=300,y=240)',
+        '    - link "Real visible travel note" [ref=ref_card_1_link] (x=300,y=210) href="/items/1"',
+        '    - generic "Travel Author" [ref=ref_card_1_author] (x=300,y=248)',
+        '    - generic "88 likes" [ref=ref_card_1_likes] (x=300,y=312)',
+        '  - article "Result card" [ref=ref_card_2] (x=700,y=250)',
+        '    - link "Second real note" [ref=ref_card_2_link] (x=700,y=220) href="/items/2"',
+        '    - generic "Route Author" [ref=ref_card_2_author] (x=700,y=258)',
+        '    - generic "42 likes" [ref=ref_card_2_likes] (x=700,y=322)',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      'Real visible travel note',
+      'Second real note',
+    ]);
+    expect(rows.rows.map((row) => row.title)).not.toContain('Skip to content');
+    expect(rows.rows.map((row) => row.title).join(' ')).not.toMatch(/ICP备|创作中心|放映厅/);
+  });
+
   it('orders masonry-style cards by visual top-left position', () => {
     const rows = extractVisibleRegionRows({
       pageContent: [

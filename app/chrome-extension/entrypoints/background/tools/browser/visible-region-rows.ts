@@ -76,9 +76,9 @@ const CONTROL_ROLES = new Set([
 ]);
 
 const SHELL_TEXT_PATTERN =
-  /\b(filter|filters?|sort|footer|navigation|menu|home|login|sign in|submit|search|all|more|settings|privacy|terms|help)\b|筛选|过滤|排序|首页|登录|搜索|隐私|协议|帮助/i;
+  /\b(filter|filters?|sort|footer|navigation|menu|home|login|sign in|submit|search|all|more|settings|privacy|terms|help|skip to content|copyright)\b|筛选|过滤|排序|首页|登录|搜索|隐私|协议|帮助|创作中心|放映厅|小游戏|业务合作|营业执照|公网安备|网文|ICP备|备案/i;
 const META_PATTERN =
-  /\b(\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|m|min|mins|minute|minutes|ago)|yesterday|today|updated|posted|views?)\b|刚刚|分钟前|小时前|昨天|今天|发布|更新/i;
+  /\b(\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|m|min|mins|minute|minutes|ago)|yesterday|today|updated|posted|views?|\d{1,2}:\d{2})\b|\d{4}年\d{1,2}月\d{1,2}日|刚刚|分钟前|小时前|昨天|今天|发布|更新/i;
 const INTERACTION_PATTERN =
   /\b(\d+(?:\.\d+)?\s*[kKmM]?\s*(?:likes?|stars?|comments?|replies?|views?|shares?))\b|点赞|评论|收藏|转发|阅读|浏览/i;
 
@@ -168,6 +168,7 @@ function buildCandidateGroups(nodes: ParsedVisibleNode[], sourceRegion: string):
       children.push(candidate);
     }
     if (children.length < 2 && !node.href) continue;
+    if (isBroadPageContainer(node, children)) continue;
     groups.push({ container: node, nodes: children, sourceRegion });
   }
   return dedupeOverlappingGroups(groups);
@@ -196,6 +197,19 @@ function dedupeOverlappingGroups(groups: CandidateGroup[]): CandidateGroup[] {
     result.push(group);
   }
   return result;
+}
+
+function isBroadPageContainer(container: ParsedVisibleNode, nodes: ParsedVisibleNode[]): boolean {
+  if (container.role === 'article' || container.role === 'listitem' || container.role === 'row') {
+    return false;
+  }
+  const linkCount = nodes.filter((node) => node.role === 'link' || Boolean(node.href)).length;
+  const headingCount = nodes.filter((node) => node.role === 'heading').length;
+  const textCount = nodes.filter((node) => node.name).length;
+  if (nodes.length > 18) return true;
+  if (textCount > 12 && linkCount > 3) return true;
+  if (headingCount > 2 && linkCount > 2) return true;
+  return false;
 }
 
 function compareGroupsByVisualOrder(left: CandidateGroup, right: CandidateGroup): number {
@@ -269,7 +283,8 @@ function buildRow(group: CandidateGroup): VisibleRegionRow | null {
 function pickTitleNode(nodes: ParsedVisibleNode[]): ParsedVisibleNode | null {
   const candidates = nodes
     .filter((node) => !CONTROL_ROLES.has(node.role) || node.role === 'link')
-    .filter((node) => !META_PATTERN.test(node.name) && !INTERACTION_PATTERN.test(node.name))
+    .filter((node) => !isLowValueShellText(node.name))
+    .filter((node) => !isMetaOnlyText(node.name) && !INTERACTION_PATTERN.test(node.name))
     .filter((node) => node.name.length >= 2)
     .sort(
       (left, right) => scoreTitleNode(right) - scoreTitleNode(left) || left.order - right.order,
@@ -300,7 +315,28 @@ function isLowValueShellText(value: string): boolean {
   const normalized = normalizeText(value);
   if (!normalized) return true;
   if (normalized.length <= 1) return true;
+  if (/^image:/i.test(normalized)) return true;
+  if (/^\d+(?:\.\d+)?(?:万|k|m)?$/i.test(normalized)) return true;
   return SHELL_TEXT_PATTERN.test(normalized) && normalized.length < 24;
+}
+
+function isMetaOnlyText(value: string): boolean {
+  const normalized = normalizeText(value);
+  if (!normalized) return true;
+  if (/^\d{4}年\d{1,2}月\d{1,2}日(?:\s+GMT[+-]?\d*\s+\d{1,2}:\d{2})?$/i.test(normalized)) {
+    return true;
+  }
+  if (/^\d{1,2}:\d{2}$/.test(normalized)) return true;
+  if (/^(?:yesterday|today|updated|posted)$/i.test(normalized)) return true;
+  if (
+    /^\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|m|min|mins|minute|minutes)(?:\s+ago)?$/i.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+  if (/^(?:刚刚|分钟前|小时前|昨天|今天|发布|更新)$/.test(normalized)) return true;
+  return false;
 }
 
 function normalizeText(value: unknown): string {
