@@ -139,7 +139,7 @@ describe('live-observed-data selector', () => {
       bridgePath: 'main_world_to_content_to_native',
       pageRegion: 'task_query_network',
     });
-    expect(blob).not.toContain('responseBody');
+    expect(blob).not.toMatch(/"responseBody"/);
     expect(blob).not.toContain('desk');
   });
 
@@ -264,6 +264,81 @@ describe('live-observed-data selector', () => {
     });
   });
 
+  it('correlated CDP enhanced response body can produce compact rows with controlled evidence', () => {
+    const requestUrl =
+      'https://api.neutral-social.example.test/v1/search/items?keyword=desk&page=1';
+    const out = run({
+      bundle: {
+        observationMode: 'cdp_enhanced',
+        cdpUsed: true,
+        cdpReason: 'need_response_body',
+        cdpAttachDurationMs: 25,
+        cdpDetachSuccess: true,
+        debuggerConflict: false,
+        responseBodySource: 'debugger_api',
+        rawBodyPersisted: false,
+        bodyCompacted: true,
+        fallbackCause: null,
+        requests: [observedSearchRequest(requestUrl)],
+      },
+      selectorContext: {
+        currentPageUrl: 'https://neutral-social.example.test/search?keyword=desk&page=1',
+        expectedTaskQueryKeys: ['keyword', 'page'],
+      },
+    });
+
+    expect(out.rejected).toHaveLength(0);
+    expect(out.selected[0]).toMatchObject({
+      observationMode: 'cdp_enhanced',
+      selectedDataSource: 'cdp_enhanced_api_rows',
+      cdpUsed: true,
+      cdpReason: 'need_response_body',
+      cdpAttachDurationMs: 25,
+      cdpDetachSuccess: true,
+      debuggerConflict: false,
+      responseBodySource: 'debugger_api',
+      rawBodyPersisted: false,
+      bodyCompacted: true,
+      fallbackCause: null,
+      fallbackUsed: false,
+      rowCount: 2,
+    });
+    expect(JSON.stringify(out.selected[0])).not.toMatch(/"responseBody"/);
+  });
+
+  it('rejects CDP enhanced rows when detach did not succeed', () => {
+    const requestUrl =
+      'https://api.neutral-social.example.test/v1/search/items?keyword=desk&page=1';
+    const out = run({
+      bundle: {
+        observationMode: 'cdp_enhanced',
+        cdpUsed: true,
+        cdpReason: 'need_response_body',
+        cdpAttachDurationMs: 25,
+        cdpDetachSuccess: false,
+        debuggerConflict: false,
+        responseBodySource: 'debugger_api',
+        rawBodyPersisted: false,
+        bodyCompacted: true,
+        fallbackCause: 'cdp_detach_failed',
+        requests: [observedSearchRequest(requestUrl)],
+      },
+      selectorContext: {
+        currentPageUrl: 'https://neutral-social.example.test/search?keyword=desk&page=1',
+        expectedTaskQueryKeys: ['keyword', 'page'],
+      },
+    });
+
+    expect(out.selected).toHaveLength(0);
+    expect(out.rejected[0]).toMatchObject({
+      observationMode: 'cdp_enhanced',
+      cdpUsed: true,
+      cdpDetachSuccess: false,
+      fallbackCause: 'cdp_detach_failed',
+      fallbackUsed: true,
+    });
+  });
+
   it('correlated safe response body can produce compact rows', () => {
     const requestUrl =
       'https://api.neutral-social.example.test/v1/search/items?keyword=desk&page=1';
@@ -290,7 +365,7 @@ describe('live-observed-data selector', () => {
       fallbackUsed: false,
     });
     expect(out.selected[0].pageRegion).not.toBe('current_page_network');
-    expect(JSON.stringify(out.selected[0])).not.toContain('responseBody');
+    expect(JSON.stringify(out.selected[0])).not.toMatch(/"responseBody"/);
   });
 
   it('rejects debugger response-body rows with sensitive value shapes before output', () => {

@@ -210,6 +210,23 @@ describe('AI-facing layer envelopes (V27-10)', () => {
     expect(envelope.detailRefs).toEqual(['detail-1', 'detail-2']);
   });
 
+  it('keeps CDP enhanced API rows as list-only API context without DOM authority', () => {
+    const contract = mapDataSourceToLayerContract({ dataSource: 'cdp_enhanced_api_rows' });
+    expect(contract).toMatchObject({
+      dataSource: 'cdp_enhanced_api_rows',
+      layer: 'L0+L1',
+      locatorAuthority: false,
+      executionAuthority: false,
+      allowedUses: ['list_read'],
+      disallowedUses: ['detail_read', 'execution', 'locator'],
+      escalationReason: 'cdp_enhanced_api_rows_must_not_be_used_as_dom_locator_or_execution_target',
+    });
+
+    const envelope = buildAiFacingLayerEnvelope({ dataSource: 'cdp_enhanced_api_rows' });
+    expect(envelope.surface).toBe('api');
+    expect(envelope.authority).toEqual({ locator: false, execution: false });
+  });
+
   it('keeps Markdown as a reading surface without DOM authority', () => {
     const envelope = buildAiFacingLayerEnvelope({
       dataSource: 'markdown',

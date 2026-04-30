@@ -87,6 +87,14 @@ export interface OperationLogReplayEvidence {
   apiFinalReason: string | null;
   privacyCheck: string | null;
   relevanceCheck: string | null;
+  observationMode: string | null;
+  cdpUsed: string | null;
+  cdpReason: string | null;
+  cdpAttachDurationMs: string | null;
+  cdpDetachSuccess: string | null;
+  debuggerConflict: string | null;
+  responseBodySource: string | null;
+  bodyCompacted: string | null;
   visibleRegionRowsUsed: string | null;
   visibleRegionRowCount: string | null;
   visibleRegionRowsRejectedReason: string | null;
@@ -185,13 +193,19 @@ function classifyRoute(log: OperationMemoryLog): OperationLogReplayRouteOutcome 
   const dataSource = log.selectedDataSource ?? null;
   const resultKind = log.resultKind ?? null;
   const emptyResult = pickEmptyResult(log.metadata);
-  if (!log.success && (dataSource === 'api_rows' || resultKind === 'api_rows')) {
+  if (
+    !log.success &&
+    (dataSource === 'api_rows' ||
+      dataSource === 'cdp_enhanced_api_rows' ||
+      resultKind === 'api_rows' ||
+      resultKind === 'cdp_enhanced_api_rows')
+  ) {
     return 'api_failure';
   }
   if (dataSource === 'dom_region_rows' || resultKind === 'dom_region_rows') {
     return log.success ? 'dom_region_rows_success' : 'dom_region_rows_failure';
   }
-  if (dataSource === 'api_rows') {
+  if (dataSource === 'api_rows' || dataSource === 'cdp_enhanced_api_rows') {
     return emptyResult === 'true' ? 'api_empty' : 'api_success';
   }
   if (resultKind === 'read_page_fallback') return 'api_fallback';
@@ -236,6 +250,14 @@ function buildEvidence(metadata: OperationLogMetadata): OperationLogReplayEviden
     apiFinalReason: pickMetadataValue(metadata.apiFinalReason),
     privacyCheck: pickMetadataValue(metadata.privacyCheck),
     relevanceCheck: pickMetadataValue(metadata.relevanceCheck),
+    observationMode: pickMetadataValue(metadata.observationMode),
+    cdpUsed: pickMetadataValue(metadata.cdpUsed),
+    cdpReason: pickMetadataValue(metadata.cdpReason),
+    cdpAttachDurationMs: pickMetadataValue(metadata.cdpAttachDurationMs),
+    cdpDetachSuccess: pickMetadataValue(metadata.cdpDetachSuccess),
+    debuggerConflict: pickMetadataValue(metadata.debuggerConflict),
+    responseBodySource: pickMetadataValue(metadata.responseBodySource),
+    bodyCompacted: pickMetadataValue(metadata.bodyCompacted),
     visibleRegionRowsUsed: pickMetadataValue(metadata.visibleRegionRowsUsed),
     visibleRegionRowCount: pickMetadataValue(metadata.visibleRegionRowCount),
     visibleRegionRowsRejectedReason: pickMetadataValue(metadata.visibleRegionRowsRejectedReason),

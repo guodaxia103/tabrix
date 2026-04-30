@@ -33,6 +33,9 @@ interface NetworkRequestInfo {
   statusText?: string;
   requestBody?: string;
   responseBody?: string;
+  responseBodySource?: 'debugger_api';
+  rawBodyPersisted?: false;
+  bodyCompacted?: boolean;
   base64Encoded?: boolean; // For responseBody
   encodedDataLength?: number; // Actual bytes received
   errorText?: string; // If loading failed
@@ -41,6 +44,21 @@ interface NetworkRequestInfo {
   specificRequestHeaders?: Record<string, string>; // Headers unique to this request
   specificResponseHeaders?: Record<string, string>; // Headers unique to this response
   [key: string]: any; // Allow other properties from debugger events
+}
+
+type CdpObservationMode = 'no_cdp' | 'cdp_enhanced';
+
+interface CdpCaptureEvidence {
+  observationMode: CdpObservationMode;
+  cdpUsed: boolean;
+  cdpReason: string | null;
+  cdpAttachDurationMs: number | null;
+  cdpDetachSuccess: boolean;
+  debuggerConflict: boolean;
+  responseBodySource: 'debugger_api' | 'not_available';
+  rawBodyPersisted: false;
+  bodyCompacted: boolean;
+  fallbackCause: string | null;
 }
 
 const DEBUGGER_PROTOCOL_VERSION = '1.3';
@@ -154,7 +172,9 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
       const tab = await chrome.tabs.get(tabId);
 
       // Attach via shared manager (handles conflicts and refcount)
+      const attachStartedAt = Date.now();
       await cdpSessionManager.attach(tabId, 'network-capture');
+      const cdpAttachDurationMs = Date.now() - attachStartedAt;
 
       // Enable network tracking
       try {
@@ -176,6 +196,16 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
         includeStatic,
         requests: {},
         limitReached: false,
+        observationMode: 'cdp_enhanced',
+        cdpUsed: true,
+        cdpReason: 'need_response_body',
+        cdpAttachDurationMs,
+        cdpDetachSuccess: false,
+        debuggerConflict: false,
+        responseBodySource: 'not_available',
+        rawBodyPersisted: false,
+        bodyCompacted: false,
+        fallbackCause: null,
       });
 
       // Initialize request counter
@@ -467,6 +497,12 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
             requestInfo.responseBody = responseBodyData.body;
           }
           requestInfo.base64Encoded = responseBodyData.base64Encoded;
+          requestInfo.responseBodySource = 'debugger_api';
+          requestInfo.rawBodyPersisted = false;
+          requestInfo.bodyCompacted = responseBodyData.base64Encoded !== true;
+          captureInfo.responseBodySource = 'debugger_api';
+          captureInfo.bodyCompacted =
+            captureInfo.bodyCompacted || responseBodyData.base64Encoded !== true;
           // console.log(`NetworkDebuggerStartTool: Successfully got response body for ${requestId}, size: ${requestInfo.responseBody?.length || 0} bytes`);
         }
       } catch (error) {
@@ -596,6 +632,7 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
     );
 
     try {
+      let cdpDetachSuccess = false;
       // Attempt to disable network and detach via manager; it will no-op if others own the session
       try {
         await cdpSessionManager.sendCommand(tabId, 'Network.disable');
@@ -607,11 +644,15 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
       }
       try {
         await cdpSessionManager.detach(tabId, 'network-capture');
+        cdpDetachSuccess = true;
       } catch (e) {
         console.warn(
           `NetworkDebuggerStartTool: Error detaching debugger for tab ${tabId} (possibly already detached):`,
           e,
         );
+        captureInfo.fallbackCause = 'cdp_detach_failed';
+      } finally {
+        captureInfo.cdpDetachSuccess = cdpDetachSuccess;
       }
     } catch (error: any) {
       // Catch errors from getTargets or general logic
@@ -656,7 +697,28 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
     // Sort requests by requestTime
     processedRequests.sort((a, b) => (a.requestTime || 0) - (b.requestTime || 0));
 
+    const cdpEvidence: CdpCaptureEvidence = {
+      observationMode: captureInfo.observationMode ?? 'cdp_enhanced',
+      cdpUsed: captureInfo.cdpUsed === true,
+      cdpReason: typeof captureInfo.cdpReason === 'string' ? captureInfo.cdpReason : null,
+      cdpAttachDurationMs:
+        typeof captureInfo.cdpAttachDurationMs === 'number'
+          ? captureInfo.cdpAttachDurationMs
+          : null,
+      cdpDetachSuccess: captureInfo.cdpDetachSuccess === true,
+      debuggerConflict: captureInfo.debuggerConflict === true,
+      responseBodySource:
+        captureInfo.responseBodySource === 'debugger_api' ? 'debugger_api' : 'not_available',
+      rawBodyPersisted: false,
+      bodyCompacted: captureInfo.bodyCompacted === true,
+      fallbackCause:
+        typeof captureInfo.fallbackCause === 'string' && captureInfo.fallbackCause.length > 0
+          ? captureInfo.fallbackCause
+          : null,
+    };
+
     const resultData = {
+      ...cdpEvidence,
       captureStartTime: captureInfo.startTime,
       captureEndTime: Date.now(),
       totalDurationMs: Date.now() - captureInfo.startTime,
@@ -831,9 +893,32 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
           includeStatic,
         });
       } catch (error: any) {
-        return createErrorResponse(
-          `Failed to start capture for tab ${tabId}: ${error.message || String(error)}`,
-        );
+        const message = error.message || String(error);
+        const fallbackCause = /already attached|debugger/i.test(message)
+          ? 'debugger_conflict'
+          : 'cdp_attach_failed';
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: false,
+                message: `Failed to start capture for tab ${tabId}: ${message}`,
+                observationMode: 'no_cdp',
+                cdpUsed: false,
+                cdpReason: 'need_response_body',
+                cdpAttachDurationMs: null,
+                cdpDetachSuccess: false,
+                debuggerConflict: fallbackCause === 'debugger_conflict',
+                responseBodySource: 'not_available',
+                rawBodyPersisted: false,
+                bodyCompacted: false,
+                fallbackCause,
+              }),
+            },
+          ],
+          isError: true,
+        };
       }
 
       return {
@@ -849,6 +934,12 @@ class NetworkDebuggerStartTool extends BaseBrowserToolExecutor {
               inactivityTimeout,
               includeStatic,
               maxRequests: NetworkDebuggerStartTool.MAX_REQUESTS_PER_CAPTURE,
+              maxBodyBytes: MAX_RESPONSE_BODY_SIZE_BYTES,
+              observationMode: 'cdp_enhanced',
+              cdpUsed: true,
+              cdpReason: 'need_response_body',
+              debuggerConflict: false,
+              rawBodyPersisted: false,
             }),
           },
         ],
@@ -1008,6 +1099,16 @@ class NetworkDebuggerStopTool extends BaseBrowserToolExecutor {
             captureStartTime: resultData.captureStartTime,
             captureEndTime: resultData.captureEndTime,
             totalDurationMs: resultData.totalDurationMs,
+            observationMode: resultData.observationMode,
+            cdpUsed: resultData.cdpUsed,
+            cdpReason: resultData.cdpReason,
+            cdpAttachDurationMs: resultData.cdpAttachDurationMs,
+            cdpDetachSuccess: resultData.cdpDetachSuccess,
+            debuggerConflict: resultData.debuggerConflict,
+            responseBodySource: resultData.responseBodySource,
+            rawBodyPersisted: resultData.rawBodyPersisted,
+            bodyCompacted: resultData.bodyCompacted,
+            fallbackCause: resultData.fallbackCause,
             settingsUsed: resultData.settingsUsed || {},
             remainingCaptures: remainingCaptures,
             totalRequestsReceived: resultData.totalRequestsReceived || resultData.requestCount || 0,

@@ -42,9 +42,21 @@ const SAFE_SUMMARY_STRING_VALUE_CAP = 240;
 const SENSITIVE_FIELD_RE =
   /(authorization|cookie|password|passwd|token|secret|session|csrf|xsrf|api[_-]?key)/i;
 
-export type LiveObservedSelectedDataSource = 'api_rows' | 'api_detail';
+export type LiveObservedSelectedDataSource = 'api_rows' | 'api_detail' | 'cdp_enhanced_api_rows';
 
-export interface LiveObservedApiEvidence {
+export interface LiveObservedCdpEvidence {
+  observationMode: 'no_cdp' | 'cdp_enhanced';
+  cdpUsed: boolean;
+  cdpReason: string | null;
+  cdpAttachDurationMs: number | null;
+  cdpDetachSuccess: boolean;
+  debuggerConflict: boolean;
+  responseBodySource: 'debugger_api' | 'not_available';
+  rawBodyPersisted: false;
+  bodyCompacted: boolean;
+}
+
+export interface LiveObservedApiEvidence extends LiveObservedCdpEvidence {
   endpointSource: 'observed';
   liveObservedEndpointId: string | null;
   endpointSignature: string;
@@ -108,6 +120,7 @@ export function deriveLiveObservedApiDataFromBundle(
   const commonReq = input.bundle.commonRequestHeaders ?? {};
   const commonRes = input.bundle.commonResponseHeaders ?? {};
 
+  const bundleCdpEvidence = buildCdpEvidence(input.bundle);
   for (const req of input.bundle.requests ?? []) {
     const upsert = deriveKnowledgeFromRequest(req, commonReq, commonRes, input.ctx);
     const candidate = deriveEndpointCandidateFromRequest(req, commonRes);
@@ -128,12 +141,10 @@ export function deriveLiveObservedApiDataFromBundle(
       upsertState,
       pageRegion: relevance.pageRegion,
       correlationScore: relevance.correlationScore,
-      fallbackCause: null,
-      fallbackUsed: false,
-      privacyCheck: 'passed',
+      bundleCdpEvidence,
     });
 
-    const rowsResult = buildLiveRows(req, candidate);
+    const rowsResult = buildLiveRows(req, candidate, bundleCdpEvidence);
     if (!rowsResult.ok) {
       rejected.push({
         ...baseEvidence,
@@ -188,22 +199,21 @@ function buildEvidence(input: {
     | undefined;
   pageRegion: string;
   correlationScore: number;
-  privacyCheck: 'passed' | 'failed';
-  fallbackCause: string | null;
-  fallbackUsed: boolean;
+  bundleCdpEvidence: LiveObservedCdpEvidence;
 }): LiveObservedApiEvidence {
   const summary = input.req.safeResponseSummary;
   return {
     endpointSource: 'observed',
+    ...input.bundleCdpEvidence,
     liveObservedEndpointId: input.upsertState?.endpointId ?? null,
     endpointSignature: input.upsert.endpointSignature,
     semanticType: input.candidate.semanticType,
     pageRegion: input.pageRegion,
     correlationScore: input.correlationScore,
     fieldShapeSummaryAvailable: input.candidate.shapeSummaryAvailable,
-    privacyCheck: input.privacyCheck,
-    fallbackCause: input.fallbackCause,
-    fallbackUsed: input.fallbackUsed,
+    privacyCheck: 'passed',
+    fallbackCause: null,
+    fallbackUsed: false,
     knowledgeUpserted: input.upsertState?.knowledgeUpserted === true,
     responseSummarySource:
       summary?.responseSummarySource === 'browser_context_summary'
@@ -228,6 +238,7 @@ function buildEvidence(input: {
 function buildLiveRows(
   req: CapturedNetworkRequest,
   candidate: EndpointCandidate,
+  cdpEvidence: LiveObservedCdpEvidence,
 ):
   | {
       ok: true;
@@ -290,12 +301,29 @@ function buildLiveRows(
     }
     return {
       ok: true,
-      selectedDataSource: candidate.semanticType === 'detail' ? 'api_detail' : 'api_rows',
+      selectedDataSource:
+        cdpEvidence.observationMode === 'cdp_enhanced'
+          ? 'cdp_enhanced_api_rows'
+          : candidate.semanticType === 'detail'
+            ? 'api_detail'
+            : 'api_rows',
       rows,
     };
   }
 
   const body = typeof req.responseBody === 'string' ? req.responseBody : null;
+  if (cdpEvidence.observationMode === 'cdp_enhanced' && cdpEvidence.cdpDetachSuccess !== true) {
+    return { ok: false, cause: 'cdp_detach_failed' };
+  }
+  if (cdpEvidence.observationMode === 'cdp_enhanced' && cdpEvidence.debuggerConflict === true) {
+    return { ok: false, cause: 'debugger_conflict' };
+  }
+  if (cdpEvidence.observationMode === 'cdp_enhanced' && cdpEvidence.rawBodyPersisted !== false) {
+    return { ok: false, cause: 'raw_body_persistence_risk' };
+  }
+  if (cdpEvidence.observationMode === 'cdp_enhanced' && cdpEvidence.bodyCompacted !== true) {
+    return { ok: false, cause: 'compact_rows_unavailable' };
+  }
   if (!body || req.base64Encoded === true) {
     return {
       ok: false,
@@ -341,8 +369,30 @@ function buildLiveRows(
   }
   return {
     ok: true,
-    selectedDataSource: candidate.semanticType === 'detail' ? 'api_detail' : 'api_rows',
+    selectedDataSource:
+      cdpEvidence.observationMode === 'cdp_enhanced'
+        ? 'cdp_enhanced_api_rows'
+        : candidate.semanticType === 'detail'
+          ? 'api_detail'
+          : 'api_rows',
     rows,
+  };
+}
+
+function buildCdpEvidence(bundle: CapturedNetworkBundle): LiveObservedCdpEvidence {
+  const cdpEnhanced = bundle.observationMode === 'cdp_enhanced' || bundle.cdpUsed === true;
+  return {
+    observationMode: cdpEnhanced ? 'cdp_enhanced' : 'no_cdp',
+    cdpUsed: bundle.cdpUsed === true,
+    cdpReason: typeof bundle.cdpReason === 'string' ? bundle.cdpReason : null,
+    cdpAttachDurationMs:
+      typeof bundle.cdpAttachDurationMs === 'number' ? bundle.cdpAttachDurationMs : null,
+    cdpDetachSuccess: cdpEnhanced ? bundle.cdpDetachSuccess === true : false,
+    debuggerConflict: bundle.debuggerConflict === true,
+    responseBodySource:
+      bundle.responseBodySource === 'debugger_api' ? 'debugger_api' : 'not_available',
+    rawBodyPersisted: false,
+    bodyCompacted: bundle.bodyCompacted === true,
   };
 }
 

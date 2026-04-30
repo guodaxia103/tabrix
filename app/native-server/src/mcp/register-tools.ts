@@ -1862,6 +1862,14 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           capturedAfterArm: liveObserved.capturedAfterArm,
           bridgePath: liveObserved.bridgePath,
           responseSummaryRejectedReason: liveObserved.responseSummaryRejectedReason,
+          observationMode: liveObserved.observationMode,
+          cdpUsed: liveObserved.cdpUsed,
+          cdpReason: liveObserved.cdpReason,
+          cdpAttachDurationMs: liveObserved.cdpAttachDurationMs,
+          cdpDetachSuccess: liveObserved.cdpDetachSuccess,
+          debuggerConflict: liveObserved.debuggerConflict,
+          responseBodySource: liveObserved.responseBodySource,
+          bodyCompacted: liveObserved.bodyCompacted,
         };
         const apiPayload = {
           kind: liveObserved.selectedDataSource,
@@ -1923,6 +1931,14 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           rawBodyPersisted: liveObserved.rawBodyPersisted,
           capturedAfterArm: liveObserved.capturedAfterArm,
           bridgePath: liveObserved.bridgePath,
+          observationMode: liveObserved.observationMode,
+          cdpUsed: liveObserved.cdpUsed,
+          cdpReason: liveObserved.cdpReason,
+          cdpAttachDurationMs: liveObserved.cdpAttachDurationMs,
+          cdpDetachSuccess: liveObserved.cdpDetachSuccess,
+          debuggerConflict: liveObserved.debuggerConflict,
+          responseBodySource: liveObserved.responseBodySource,
+          bodyCompacted: liveObserved.bodyCompacted,
           diagnostic: 'skip: current task already observed safe compact API rows',
           taskTotals: totals,
         };
@@ -1964,6 +1980,17 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               apiFinalReason: 'none',
               privacyCheck: liveObserved.privacyCheck,
               relevanceCheck: 'passed',
+              observationMode: liveObserved.observationMode,
+              cdpUsed: liveObserved.cdpUsed ? 'true' : 'false',
+              cdpReason: liveObserved.cdpReason ?? 'not_applicable',
+              cdpAttachDurationMs:
+                liveObserved.cdpAttachDurationMs === null
+                  ? 'not_applicable'
+                  : String(liveObserved.cdpAttachDurationMs),
+              cdpDetachSuccess: liveObserved.cdpDetachSuccess ? 'true' : 'false',
+              debuggerConflict: liveObserved.debuggerConflict ? 'true' : 'false',
+              responseBodySource: liveObserved.responseBodySource,
+              bodyCompacted: liveObserved.bodyCompacted ? 'true' : 'false',
             },
           },
         });
@@ -1996,6 +2023,17 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               liveObservedEvidence[0]?.privacyCheck === 'failed' ? 'not_applicable' : 'failed',
             responseSummarySource:
               liveObservedEvidence[0]?.responseSummarySource ?? 'not_applicable',
+            observationMode: liveObservedEvidence[0]?.observationMode ?? 'not_applicable',
+            cdpUsed: liveObservedEvidence[0]?.cdpUsed === true ? 'true' : 'false',
+            cdpReason: liveObservedEvidence[0]?.cdpReason ?? 'not_applicable',
+            cdpAttachDurationMs:
+              typeof liveObservedEvidence[0]?.cdpAttachDurationMs === 'number'
+                ? String(liveObservedEvidence[0]?.cdpAttachDurationMs)
+                : 'not_applicable',
+            cdpDetachSuccess: liveObservedEvidence[0]?.cdpDetachSuccess === true ? 'true' : 'false',
+            debuggerConflict: liveObservedEvidence[0]?.debuggerConflict === true ? 'true' : 'false',
+            responseBodySource: liveObservedEvidence[0]?.responseBodySource ?? 'not_applicable',
+            bodyCompacted: liveObservedEvidence[0]?.bodyCompacted === true ? 'true' : 'false',
           },
         };
       }

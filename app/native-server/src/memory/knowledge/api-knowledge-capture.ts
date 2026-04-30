@@ -93,6 +93,9 @@ export interface CapturedNetworkRequest {
   mimeType?: string;
   requestBody?: string | null;
   responseBody?: string | null;
+  responseBodySource?: 'debugger_api' | 'not_available' | string;
+  rawBodyPersisted?: false;
+  bodyCompacted?: boolean;
   base64Encoded?: boolean;
   specificRequestHeaders?: Record<string, string>;
   specificResponseHeaders?: Record<string, string>;
@@ -106,6 +109,16 @@ export interface CapturedNetworkBundle {
   commonResponseHeaders?: Record<string, string>;
   tabUrl?: string;
   responseSummaryLifecycle?: CapturedResponseSummaryLifecycle;
+  observationMode?: 'cdp_enhanced' | 'no_cdp' | string;
+  cdpUsed?: boolean;
+  cdpReason?: string | null;
+  cdpAttachDurationMs?: number | null;
+  cdpDetachSuccess?: boolean;
+  debuggerConflict?: boolean;
+  responseBodySource?: 'debugger_api' | 'not_available' | string;
+  rawBodyPersisted?: false;
+  bodyCompacted?: boolean;
+  fallbackCause?: string | null;
 }
 
 export interface CapturedSafeResponseSummary {

@@ -5,7 +5,8 @@ export type LayerContractDataSource =
   | 'dom_region_rows'
   | 'markdown'
   | 'api_rows'
-  | 'api_detail';
+  | 'api_detail'
+  | 'cdp_enhanced_api_rows';
 
 /**
  * V26-FIX-06 — closed enum of intended uses that downstream
@@ -96,16 +97,23 @@ export interface AiFacingLayerEnvelope {
 export function mapDataSourceToLayerContract(input: LayerContractInput): LayerContractEnvelope {
   switch (input.dataSource) {
     case 'api_rows':
+    case 'cdp_enhanced_api_rows':
       return freezeEnvelope({
-        dataSource: 'api_rows',
+        dataSource: input.dataSource,
         layer: 'L0+L1',
         locatorAuthority: false,
         executionAuthority: false,
         fallbackEntryLayer: input.fallbackEntryLayer ?? 'L0+L1',
-        reason: 'api_rows_are_list_fields_not_locator_authority',
+        reason:
+          input.dataSource === 'cdp_enhanced_api_rows'
+            ? 'cdp_enhanced_api_rows_are_list_fields_not_locator_authority'
+            : 'api_rows_are_list_fields_not_locator_authority',
         allowedUses: sortUses(['list_read']),
         disallowedUses: sortUses(['locator', 'execution', 'detail_read']),
-        escalationReason: 'api_rows_must_not_be_used_as_dom_locator_or_execution_target',
+        escalationReason:
+          input.dataSource === 'cdp_enhanced_api_rows'
+            ? 'cdp_enhanced_api_rows_must_not_be_used_as_dom_locator_or_execution_target'
+            : 'api_rows_must_not_be_used_as_dom_locator_or_execution_target',
       });
     case 'api_detail':
       return freezeEnvelope({
@@ -251,6 +259,7 @@ function defaultSurfaceForDataSource(
       return 'dom';
     case 'api_rows':
     case 'api_detail':
+    case 'cdp_enhanced_api_rows':
       return 'api';
     case 'markdown':
       return 'markdown';

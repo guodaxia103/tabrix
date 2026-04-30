@@ -357,6 +357,129 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     assertNoCallToolInvocation(bridgeSpy);
   });
 
+  it('V27-CDP-01 current-task CDP enhanced rows carry controlled evidence into read_page logs', async () => {
+    process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
+    markBridgeReady();
+    sessionManager
+      .getOrCreateExternalTaskContext('mcp:auto:tab:33')
+      .noteUrlChange(
+        'https://neutral-social.example.test/search?keyword=desk&page=1',
+        'search_list',
+      );
+    const captureBundle = {
+      tabUrl: 'https://neutral-social.example.test/search',
+      observationMode: 'cdp_enhanced',
+      cdpUsed: true,
+      cdpReason: 'need_response_body',
+      cdpAttachDurationMs: 25,
+      cdpDetachSuccess: true,
+      debuggerConflict: false,
+      responseBodySource: 'debugger_api',
+      rawBodyPersisted: false,
+      bodyCompacted: true,
+      fallbackCause: null,
+      requests: [
+        {
+          url: 'https://api.neutral-social.example.test/v1/search/items?keyword=desk&page=1',
+          method: 'GET',
+          type: 'xmlhttprequest',
+          requestTime: 1200,
+          statusCode: 200,
+          mimeType: 'application/json',
+          specificResponseHeaders: { 'Content-Type': 'application/json; charset=utf-8' },
+          responseBody: JSON.stringify({
+            items: [
+              { title: 'compact result one', likeCount: 3 },
+              { title: 'compact result two', likeCount: 5 },
+            ],
+          }),
+          responseBodySource: 'debugger_api',
+          rawBodyPersisted: false,
+          bodyCompacted: true,
+        },
+      ],
+    };
+    const bridgeSpy = mockBridgeRoundTrip(JSON.stringify(captureBundle));
+
+    const captureResult = await handleToolCall(TOOL_NAMES.BROWSER.NETWORK_CAPTURE, {
+      action: 'stop',
+      tabId: 33,
+    });
+    expect(captureResult.isError).toBeFalsy();
+
+    const ctx = sessionManager.peekExternalTaskContext('mcp:auto:tab:33');
+    expect(ctx?.peekLiveObservedApiData()).toMatchObject({
+      selectedDataSource: 'cdp_enhanced_api_rows',
+      observationMode: 'cdp_enhanced',
+      cdpUsed: true,
+      cdpReason: 'need_response_body',
+      cdpAttachDurationMs: 25,
+      cdpDetachSuccess: true,
+      debuggerConflict: false,
+      responseBodySource: 'debugger_api',
+      rawBodyPersisted: false,
+      bodyCompacted: true,
+    });
+
+    bridgeSpy.mockClear();
+    const completeSpy = jest.spyOn(sessionManager, 'completeStep');
+    const readResult = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1',
+      tabId: 33,
+    });
+
+    expect(readResult.isError).toBeFalsy();
+    const payload = JSON.parse(String(readResult.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      kind: 'cdp_enhanced_api_rows',
+      liveObservedDataUsed: true,
+      selectedDataSource: 'cdp_enhanced_api_rows',
+      observationMode: 'cdp_enhanced',
+      cdpUsed: true,
+      cdpReason: 'need_response_body',
+      cdpAttachDurationMs: 25,
+      cdpDetachSuccess: true,
+      debuggerConflict: false,
+      responseBodySource: 'debugger_api',
+      rawBodyPersisted: false,
+      bodyCompacted: true,
+      fallbackCause: null,
+      fallbackUsed: 'none',
+      operationLogSuccess: true,
+    });
+    expect(payload).not.toHaveProperty('rawBody');
+    expect(payload).not.toHaveProperty('responseBody');
+    expect(JSON.stringify(payload)).not.toContain('keyword=desk');
+
+    const operationLog = takeLatestReadPageOperationLog(completeSpy);
+    expect(operationLog).toMatchObject({
+      selectedDataSource: 'cdp_enhanced_api_rows',
+      success: true,
+      tabHygiene: {
+        liveObservedDataUsed: true,
+        observationMode: 'cdp_enhanced',
+        cdpUsed: true,
+        cdpReason: 'need_response_body',
+        cdpAttachDurationMs: 25,
+        cdpDetachSuccess: true,
+        debuggerConflict: false,
+        responseBodySource: 'debugger_api',
+        rawBodyPersisted: false,
+        bodyCompacted: true,
+      },
+      metadata: {
+        observationMode: 'cdp_enhanced',
+        cdpUsed: 'true',
+        cdpReason: 'need_response_body',
+        cdpAttachDurationMs: '25',
+        cdpDetachSuccess: 'true',
+        debuggerConflict: 'false',
+        responseBodySource: 'debugger_api',
+        bodyCompacted: 'true',
+      },
+    });
+    assertNoCallToolInvocation(bridgeSpy);
+  });
   it('V27-10R observed verified empty is a successful empty api_rows state', async () => {
     process.env[CAPABILITIES_ENV_KEY] = 'api_knowledge';
     markBridgeReady();

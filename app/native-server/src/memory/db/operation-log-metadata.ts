@@ -149,6 +149,22 @@ export interface OperationLogMetadata {
   privacyCheck: string | NotApplicable;
   /** V27-13 — task relevance gate result before AI output. */
   relevanceCheck: string | NotApplicable;
+  /** V27-CDP-01 — network observation mode used by this step. */
+  observationMode: string | NotApplicable;
+  /** V27-CDP-01 — whether controlled CDP/debugger capture backed this step. */
+  cdpUsed: string | NotApplicable;
+  /** V27-CDP-01 — closed reason for enabling CDP, or not_applicable. */
+  cdpReason: string | NotApplicable;
+  /** V27-CDP-01 — CDP attach duration in milliseconds, stringified integer. */
+  cdpAttachDurationMs: string | NotApplicable;
+  /** V27-CDP-01 — whether CDP detach completed cleanly. */
+  cdpDetachSuccess: string | NotApplicable;
+  /** V27-CDP-01 — whether an existing debugger attachment forced fallback. */
+  debuggerConflict: string | NotApplicable;
+  /** V27-CDP-01 — response body evidence source, never the body itself. */
+  responseBodySource: string | NotApplicable;
+  /** V27-CDP-01 — whether response body data was compacted before output. */
+  bodyCompacted: string | NotApplicable;
   /** V27-P0-REAL-04 — whether visible DOM/AX rows were selected for this step. */
   visibleRegionRowsUsed: string | NotApplicable;
   /** V27-P0-REAL-04 — visible DOM/AX row count, stringified integer. */
@@ -208,6 +224,14 @@ export const METADATA_KEYS = [
   'apiFinalReason',
   'privacyCheck',
   'relevanceCheck',
+  'observationMode',
+  'cdpUsed',
+  'cdpReason',
+  'cdpAttachDurationMs',
+  'cdpDetachSuccess',
+  'debuggerConflict',
+  'responseBodySource',
+  'bodyCompacted',
   'visibleRegionRowsUsed',
   'visibleRegionRowCount',
   'visibleRegionRowsRejectedReason',
@@ -279,6 +303,14 @@ export function makeOperationLogMetadataDefaults(): OperationLogMetadata {
     apiFinalReason: NOT_APPLICABLE,
     privacyCheck: NOT_APPLICABLE,
     relevanceCheck: NOT_APPLICABLE,
+    observationMode: NOT_APPLICABLE,
+    cdpUsed: NOT_APPLICABLE,
+    cdpReason: NOT_APPLICABLE,
+    cdpAttachDurationMs: NOT_APPLICABLE,
+    cdpDetachSuccess: NOT_APPLICABLE,
+    debuggerConflict: NOT_APPLICABLE,
+    responseBodySource: NOT_APPLICABLE,
+    bodyCompacted: NOT_APPLICABLE,
     visibleRegionRowsUsed: NOT_APPLICABLE,
     visibleRegionRowCount: NOT_APPLICABLE,
     visibleRegionRowsRejectedReason: NOT_APPLICABLE,

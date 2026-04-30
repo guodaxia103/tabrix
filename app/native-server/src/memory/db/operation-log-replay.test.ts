@@ -339,6 +339,50 @@ describe('summariseOperationChain — V26-PGB-05', () => {
     expect(summary.routeOutcomeDistribution.dom_region_rows_success).toBe(1);
   });
 
+  it('surfaces controlled CDP evidence from operation metadata', () => {
+    const reader = makeReader([
+      makeLog({
+        stepId: 'step-cdp-rows',
+        selectedDataSource: 'cdp_enhanced_api_rows',
+        sourceRoute: 'knowledge_supported_read',
+        decisionReason: 'live_observed_current_task_api_data',
+        resultKind: 'cdp_enhanced_api_rows',
+        success: true,
+        metadata: makeMetadata({
+          routerDecision: 'cdp_enhanced_api_rows',
+          endpointSource: 'observed',
+          privacyCheck: 'passed',
+          relevanceCheck: 'passed',
+          observationMode: 'cdp_enhanced',
+          cdpUsed: 'true',
+          cdpReason: 'need_response_body',
+          cdpAttachDurationMs: '25',
+          cdpDetachSuccess: 'true',
+          debuggerConflict: 'false',
+          responseBodySource: 'debugger_api',
+          bodyCompacted: 'true',
+        }),
+      }),
+    ]);
+
+    const summary = summariseOperationChain(reader, 'session-1');
+    expect(summary.steps[0]).toMatchObject({
+      routeOutcome: 'api_success',
+      success: true,
+      coverage: 'explained',
+      evidence: {
+        observationMode: 'cdp_enhanced',
+        cdpUsed: 'true',
+        cdpReason: 'need_response_body',
+        cdpAttachDurationMs: '25',
+        cdpDetachSuccess: 'true',
+        debuggerConflict: 'false',
+        responseBodySource: 'debugger_api',
+        bodyCompacted: 'true',
+      },
+    });
+  });
+
   it('keeps DOM rows unavailable paths classified as failure', () => {
     const reader = makeReader([
       makeLog({
@@ -496,6 +540,14 @@ describe('summariseOperationChain — V27-00 v2.6 NDJSON replay invariant', () =
       'apiFinalReason',
       'privacyCheck',
       'relevanceCheck',
+      'observationMode',
+      'cdpUsed',
+      'cdpReason',
+      'cdpAttachDurationMs',
+      'cdpDetachSuccess',
+      'debuggerConflict',
+      'responseBodySource',
+      'bodyCompacted',
       'visibleRegionRowsUsed',
       'visibleRegionRowCount',
       'visibleRegionRowsRejectedReason',
