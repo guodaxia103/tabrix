@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { TOOL_NAMES } from '@tabrix/shared';
 import { SessionManager } from '../execution/session-manager';
+import { TaskSessionContext } from '../execution/task-session-context';
 import { __hostConfigInternals, setPersistedPolicyCapabilities } from '../host-config';
 import {
   runPostProcessor,
@@ -567,6 +568,66 @@ describe('chromeNetworkCapturePostProcessor (B-017 integration)', () => {
       // First-seen provenance sticks to the first observation; even after
       // 3 hits, sourceSessionId is still the original session.
       expect(row.sourceSessionId).toBe(session.sessionId);
+    } finally {
+      manager.close();
+    }
+  });
+
+  it('uses capture tabUrl as live observed relevance context when task currentUrl is absent', () => {
+    process.env[ENV_KEY] = 'api_knowledge';
+    const { manager, session, step } = bootstrap();
+    const taskContext = new TaskSessionContext();
+    const raw = wrap({
+      tabUrl: 'https://neutral-social.example.test/search?keyword=desk&page=1',
+      observationMode: 'cdp_enhanced',
+      cdpUsed: true,
+      cdpReason: 'need_response_body',
+      cdpAttachDurationMs: 8,
+      cdpDetachSuccess: true,
+      debuggerConflict: false,
+      responseBodySource: 'debugger_api',
+      rawBodyPersisted: false,
+      bodyCompacted: true,
+      requests: [
+        {
+          url: 'https://api.neutral-social.example.test/v1/search/items?keyword=desk&page=1',
+          method: 'GET',
+          statusCode: 200,
+          mimeType: 'application/json',
+          specificResponseHeaders: { 'Content-Type': 'application/json; charset=utf-8' },
+          responseBody: JSON.stringify({
+            items: [
+              { title: 'Desk Alpha', score: 1 },
+              { title: 'Desk Beta', score: 2 },
+            ],
+          }),
+          base64Encoded: false,
+          responseBodySource: 'debugger_api',
+          rawBodyPersisted: false,
+          bodyCompacted: true,
+        },
+      ],
+    });
+
+    try {
+      runPostProcessor({
+        toolName: TOOL_NAMES.BROWSER.NETWORK_CAPTURE,
+        rawResult: raw,
+        stepId: step.stepId,
+        sessionId: session.sessionId,
+        sessionManager: manager,
+        taskContext,
+        args: {},
+      });
+
+      expect(taskContext.currentUrl).toBeNull();
+      expect(taskContext.peekLiveObservedApiData()).toMatchObject({
+        selectedDataSource: 'cdp_enhanced_api_rows',
+        endpointSource: 'observed',
+        responseSummarySource: 'debugger_body_probe',
+        responseBodySource: 'debugger_api',
+        rowCount: 2,
+      });
     } finally {
       manager.close();
     }

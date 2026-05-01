@@ -398,7 +398,7 @@ export const chromeNetworkCapturePostProcessor: ToolPostProcessor = (ctx) => {
         },
         upsertedBySignature,
         selectorContext: {
-          currentPageUrl: ctx.taskContext.currentUrl,
+          currentPageUrl: ctx.taskContext.currentUrl ?? bundle.tabUrl ?? null,
           pageRole: ctx.taskContext.pageRole,
           expectedTaskQueryKeys: decision?.apiCapability?.params
             ? Object.keys(decision.apiCapability.params)

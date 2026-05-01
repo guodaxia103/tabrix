@@ -615,7 +615,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(ctx?.peekLiveObservedApiData()).toBeNull();
     expect(ctx?.peekLiveObservedApiEvidence()[0]).toMatchObject({
       endpointSource: 'observed',
-      fallbackCause: 'dom_region_correlation_missing',
+      fallbackCause: 'relevance_unproven',
       fallbackUsed: true,
       pageRegion: 'current_page_network',
     });
@@ -634,7 +634,7 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     const operationLog = takeLatestReadPageOperationLog(completeSpy);
     expect(operationLog).toMatchObject({
       selectedDataSource: 'dom_json',
-      decisionReason: 'dom_region_correlation_missing',
+      decisionReason: 'relevance_unproven',
     });
     const callToolInvocations = bridgeSpy.mock.calls.filter((call) => {
       const messageType = call[1];
