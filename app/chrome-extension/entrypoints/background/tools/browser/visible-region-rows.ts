@@ -126,7 +126,7 @@ const CONTROL_ROLES = new Set([
 ]);
 
 const SHELL_TEXT_PATTERN =
-  /\b(filter|filters?|sort|footer|navigation|menu|home|login|sign in|submit|search|all|more|settings|privacy|terms|help|skip to content|copyright)\b|筛选|过滤|排序|首页|登录|搜索|隐私|协议|帮助|创作中心|放映厅|小游戏|业务合作|营业执照|公网安备|网文|ICP备|备案/i;
+  /\b(filter|filters?|sort|footer|navigation|menu|home|login|sign in|submit|search|all|more|settings|privacy|terms|help|skip to content|copyright)\b|筛选|过滤|排序|首页|登录|搜索|隐私|协议|帮助|创作中心|放映厅|小游戏|业务合作|营业执照|公网安备|网文|ICP备|备案|许可证|许可|网络交易服务|医疗器械/i;
 const META_PATTERN =
   /\b(\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|m|min|mins|minute|minutes|ago)|yesterday|today|updated|posted|views?|\d{1,2}:\d{2})\b|\d{4}年\d{1,2}月\d{1,2}日|刚刚|分钟前|小时前|昨天|今天|发布|更新/i;
 const INTERACTION_PATTERN =
@@ -293,7 +293,34 @@ function buildCandidateGroups(
       regionId: node.ref || `${sourceRegion}_${groups.length + 1}`,
     });
   }
+  for (const node of nodes) {
+    if (!isStandaloneResultLink(node)) continue;
+    groups.push({
+      container: node,
+      nodes: [node],
+      sourceRegion,
+      regionId: node.ref || `${sourceRegion}_${groups.length + 1}`,
+    });
+  }
   return { groups: dedupeOverlappingGroups(groups), rejectedReasonDistribution };
+}
+
+function isStandaloneResultLink(node: ParsedVisibleNode): boolean {
+  if (node.role !== 'link') return false;
+  if (!node.ref || !node.href) return false;
+  const label = normalizeText(node.name);
+  if (label.length < 6) return false;
+  if (/^image:/i.test(label)) return false;
+  if (isLowValueShellText(label) || isFooterLikeText(label) || isNavigationLikeText(label)) {
+    return false;
+  }
+  const href = node.href.toLowerCase();
+  if (/^\/?(?:explore|home)(?:$|\?)/i.test(href)) return false;
+  if (/\.(?:pdf|png|jpe?g|webp|gif|svg)(?:$|\?)/i.test(href)) return false;
+  if (/(^|\/)(?:user|profile|account|settings|help|about|privacy|terms)(?:\/|$)/i.test(href)) {
+    return false;
+  }
+  return true;
 }
 
 function isCandidateContainer(node: ParsedVisibleNode): boolean {

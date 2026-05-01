@@ -214,6 +214,28 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.cardPatternConfidence).toBeGreaterThan(0.7);
   });
 
+  it('promotes standalone result links but rejects legal, profile, and image links', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '- main "Search results" [ref=ref_main] (x=620,y=360)',
+        '  - link "Image: cover" [ref=ref_img_1] (x=280,y=220) href="/media/cover.png"',
+        '  - link "Creator profile avatar" [ref=ref_profile_1] (x=280,y=420) href="/user/profile/alpha"',
+        '  - link "Neutral result guide for planning work" [ref=ref_result_1] (x=300,y=360) href="/search_result/note-1"',
+        '  - link "Neutral result checklist with useful tools" [ref=ref_result_2] (x=700,y=360) href="/search_result/note-2"',
+        '  - link "Example site network trading service license" [ref=ref_legal] (x=84,y=826) href="/legal/license.pdf"',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      'Neutral result guide for planning work',
+      'Neutral result checklist with useful tools',
+    ]);
+    expect(rows.regionQualityScore).toBeGreaterThanOrEqual(0.7);
+    expect(rows.targetRefCoverageRate).toBeGreaterThanOrEqual(0.95);
+    expect(rows.rows.map((row) => row.title).join(' ')).not.toMatch(/Image:|profile|license/i);
+  });
+
   it('attaches visibleRegionRows to chrome_read_page output', async () => {
     vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
       id: 5301,
