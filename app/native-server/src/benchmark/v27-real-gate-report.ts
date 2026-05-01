@@ -45,6 +45,9 @@ export interface V27RealPlatformGateEvidenceInput {
   apiRowsUsedCount: number;
   failureReasonDistribution: Record<string, number>;
   sensitivePersistedCount: number;
+  sourceDistribution?: Record<string, number>;
+  fallbackSuccessRate?: number;
+  readinessVerdictDistribution?: Record<string, number>;
 }
 
 export type V27CompetitorDeltaConclusion =
@@ -83,6 +86,9 @@ export interface V27PublicSafeGateReport {
 
 export interface V27RealPlatformGateEvidence extends V27RealPlatformGateEvidenceInput {
   scope: 'public_safe_real_platform_gate';
+  sourceDistribution?: Record<string, number>;
+  fallbackSuccessRate?: number;
+  readinessVerdictDistribution?: Record<string, number>;
 }
 
 export interface V27CompetitorDeltaGateEvidence extends V27CompetitorDeltaGateEvidenceInput {
@@ -159,7 +165,7 @@ function normalizeCompetitorDeltaGate(
 function normalizeRealPlatformGate(
   input: V27RealPlatformGateEvidenceInput,
 ): V27RealPlatformGateEvidence {
-  return {
+  const result: V27RealPlatformGateEvidence = {
     scope: 'public_safe_real_platform_gate',
     xhsSearchTop10RowsPass: normalizeRowsPass(input.xhsSearchTop10RowsPass),
     githubSearchRowsPass: normalizeRowsPass(input.githubSearchRowsPass),
@@ -169,6 +175,16 @@ function normalizeRealPlatformGate(
     failureReasonDistribution: normalizeDistribution(input.failureReasonDistribution),
     sensitivePersistedCount: nonNegativeInteger(input.sensitivePersistedCount),
   };
+  if (input.sourceDistribution) {
+    result.sourceDistribution = normalizeDistribution(input.sourceDistribution);
+  }
+  if (input.readinessVerdictDistribution) {
+    result.readinessVerdictDistribution = normalizeDistribution(input.readinessVerdictDistribution);
+  }
+  if (typeof input.fallbackSuccessRate === 'number') {
+    result.fallbackSuccessRate = finiteNumber(input.fallbackSuccessRate);
+  }
+  return result;
 }
 
 function normalizeRowsPass(value: V27RowsPassStatus): V27RowsPassStatus {
