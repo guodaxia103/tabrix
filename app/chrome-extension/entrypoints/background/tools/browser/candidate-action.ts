@@ -11,8 +11,9 @@ export type CandidateActionInput = Partial<
 >;
 
 /**
- * Optional B-011 hooks. Kept as a thin functional interface so the click
- * bridge can pass in a real registry while unit tests pass a stub.
+ * Optional stable-targetRef hooks. Kept as a thin functional interface
+ * so the click bridge can pass in a real registry while unit tests pass
+ * a stub.
  *
  * The contract is intentionally narrow:
  *   - `tabId` is the tab the resolved click will target. Without it the
@@ -90,9 +91,8 @@ export function resolveCandidateActionTarget(
 
   const candidateTargetRef = asNonEmptyString(params.candidateAction?.targetRef);
   if (candidateTargetRef) {
-    // B-011: if the caller hands us a stable targetRef (`tgt_*`) we MUST
-    // route it through the per-tab snapshot registry. The rationale is
-    // that stable targetRefs are NOT valid accessibility-tree handles —
+    // Stable targetRefs (`tgt_*`) MUST route through the per-tab snapshot
+    // registry. They are not valid accessibility-tree handles, so
     // forwarding one straight to the content script would always miss.
     // Failing closed here also prevents the click bridge from silently
     // aiming at a stale per-snapshot ref that happens to share a prefix.

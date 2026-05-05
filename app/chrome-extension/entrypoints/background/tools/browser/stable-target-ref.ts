@@ -1,5 +1,5 @@
 /**
- * B-011 stable targetRef builder.
+ * Stable targetRef builder.
  *
  * Pure, synchronous, dependency-free helpers that derive a deterministic
  * `targetRef` for each high-value object surfaced by `read_page`. The
@@ -78,7 +78,7 @@ export function normalizePageRole(input: unknown): string {
  * Reduce an `href` to a path-shape that is stable under host churn,
  * tracking parameters, and identity-prefix variation.
  *
- * Rules (intentionally tiny — B-011 v1 is not a full URL canonicalizer):
+ * Rules (intentionally tiny — this is not a full URL canonicalizer):
  *   1. Strip protocol+host so reloads via slightly different mirrors
  *      (e.g. `https://github.com` vs an in-app extension proxy) match.
  *   2. Drop the query string and fragment — these encode UI state, not
