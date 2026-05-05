@@ -592,6 +592,29 @@ describe('click-helper signals (end-to-end through jsdom)', () => {
     expect(merged.success).toBe(true);
   });
 
+  it('scroll readiness times out by wall clock when animation frames are throttled', async () => {
+    document.body.innerHTML = '<button id="btn">Throttled frame</button>';
+    const button = document.getElementById('btn') as HTMLButtonElement;
+    setRect(button, { left: 20, top: 30, width: 120, height: 32 });
+    document.elementFromPoint = vi.fn(() => button);
+    const originalRaf = window.requestAnimationFrame;
+    window.requestAnimationFrame = vi.fn(() => 1) as unknown as typeof window.requestAnimationFrame;
+
+    try {
+      const response = await sendClickRequest({
+        action: 'clickElement',
+        selector: '#btn',
+        waitForNavigation: false,
+        timeout: 1000,
+      });
+
+      expect(response.elementInfo.waitDiagnostics.scroll.reason).toBe('timeout');
+      expect(response.elementInfo.waitDiagnostics.scroll.waitedMs).toBeLessThan(1000);
+    } finally {
+      window.requestAnimationFrame = originalRaf;
+    }
+  });
+
   it('hash changes end the click outcome window before the 400ms cap', async () => {
     document.body.innerHTML = '<button id="btn">Hash</button>';
     const button = document.getElementById('btn') as HTMLButtonElement;

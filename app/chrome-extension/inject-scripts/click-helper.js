@@ -71,8 +71,15 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
       let lastRect = null;
       let stableFrames = 0;
       const deadline = startedAt + Math.max(0, maxMs);
+      let done = false;
+      let timeoutId = null;
 
       const finish = (reason, ready) => {
+        if (done) return;
+        done = true;
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+        }
         resolve({
           waitedMs: Math.max(0, Math.round(nowMs() - startedAt)),
           reason,
@@ -82,6 +89,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
       };
 
       const check = () => {
+        if (done) return;
         if (!(element instanceof Element) || !element.isConnected) {
           if (nowMs() >= deadline) {
             finish('timeout_disconnected', false);
@@ -117,6 +125,15 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         if (!requestNextFrame(check)) finish('raf_unavailable', false);
       };
 
+      timeoutId = setTimeout(
+        () => {
+          finish(
+            element instanceof Element && element.isConnected ? 'timeout' : 'timeout_disconnected',
+            false,
+          );
+        },
+        Math.max(0, maxMs),
+      );
       check();
     });
   }
@@ -593,7 +610,14 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
   function waitForClickOutcomeWindow(ms, earlyExitCheck) {
     return new Promise((resolve) => {
       const startedAt = nowMs();
+      let done = false;
+      let timeoutId = null;
       const finish = (reason) => {
+        if (done) return;
+        done = true;
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+        }
         resolve({
           waitedMs: Math.max(0, Math.round(nowMs() - startedAt)),
           reason,
@@ -606,6 +630,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
       }
       const deadline = startedAt + Math.max(0, ms);
       const tick = () => {
+        if (done) return;
         const reason = earlyExitCheck ? earlyExitCheck() : null;
         if (reason) {
           finish(reason);
@@ -617,6 +642,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         }
         if (!requestNextFrame(tick)) finish('raf_unavailable');
       };
+      timeoutId = setTimeout(() => finish('timeout'), Math.max(0, ms));
       tick();
     });
   }

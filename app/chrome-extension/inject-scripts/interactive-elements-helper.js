@@ -1,4 +1,4 @@
-/* global window, document, Element, CSS, Node, XPathResult, chrome */
+/* global window, document, Element, CSS, Node, XPathResult, HTMLAnchorElement, chrome */
 
 // interactive-elements-helper.js
 // This script is injected into the page to find interactive elements.
@@ -258,6 +258,9 @@
       };
     }
     info.inViewport = isElementInViewport(el);
+    if (el instanceof HTMLAnchorElement && el.href) {
+      info.href = el.getAttribute('href') || el.href;
+    }
     return info;
   }
 
