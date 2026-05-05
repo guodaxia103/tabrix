@@ -1115,22 +1115,29 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       const formatElementsAsPageContent = (elements: any[], refMap: any[]): string => {
         const out: string[] = [];
         for (let index = 0; index < (elements || []).length; index += 1) {
-          const e = elements[index];
-          const type = typeof e?.type === 'string' && e.type ? e.type : 'element';
-          const rawText = typeof e?.text === 'string' ? e.text.trim() : '';
+          const element = elements[index];
+          const elementType =
+            typeof element?.type === 'string' && element.type ? element.type : 'element';
+          const rawText = typeof element?.text === 'string' ? element.text.trim() : '';
           const text =
             rawText.length > 0
               ? ` "${rawText.replace(/\s+/g, ' ').slice(0, 100).replace(/"/g, '\\"')}"`
               : '';
           const selector =
-            typeof e?.selector === 'string' && e.selector ? ` selector="${e.selector}"` : '';
-          const href = typeof e?.href === 'string' && e.href ? ` href="${e.href}"` : '';
-          const ref = typeof refMap[index]?.ref === 'string' ? ` [ref=${refMap[index].ref}]` : '';
-          const coords =
-            e?.coordinates && Number.isFinite(e.coordinates.x) && Number.isFinite(e.coordinates.y)
-              ? ` (x=${Math.round(e.coordinates.x)},y=${Math.round(e.coordinates.y)})`
+            typeof element?.selector === 'string' && element.selector
+              ? ` selector="${element.selector}"`
               : '';
-          out.push(`- ${type}${text}${ref}${selector}${href}${coords}`);
+          const href =
+            typeof element?.href === 'string' && element.href ? ` href="${element.href}"` : '';
+          const refLabel =
+            typeof refMap[index]?.ref === 'string' ? ` [ref=${refMap[index].ref}]` : '';
+          const coords =
+            element?.coordinates &&
+            Number.isFinite(element.coordinates.x) &&
+            Number.isFinite(element.coordinates.y)
+              ? ` (x=${Math.round(element.coordinates.x)},y=${Math.round(element.coordinates.y)})`
+              : '';
+          out.push(`- ${elementType}${text}${refLabel}${selector}${href}${coords}`);
           if (out.length >= 150) break;
         }
         return out.join('\n');
