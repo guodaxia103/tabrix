@@ -113,6 +113,16 @@ export type ReadPageComplexityLevel = 'simple' | 'medium' | 'complex';
 
 export type ReadPageSourceKind = 'embedded_state' | 'page_api' | 'dom_semantic' | 'artifact';
 
+export type ReadPageSelectedDataSource =
+  | 'api_rows'
+  | 'cdp_enhanced_api_rows'
+  | 'dom_region_rows'
+  | 'dom_json'
+  | 'markdown'
+  | string;
+
+export type ReadPageReadinessVerdict = 'ready' | 'empty' | 'error' | 'blocked' | 'unknown' | string;
+
 /**
  * T5.4 object-type enumeration. Source of truth: Feishu
  * `Tabrix T5.4 高价值对象提取 正式产品级规格 v2026.04.20.1`.
@@ -255,6 +265,76 @@ export interface ReadPageTaskLevel2 {
   knowledgeRef?: string | null;
 }
 
+export interface ReadPageVisibleRegionBoundingBox {
+  x: number | null;
+  y: number | null;
+  width: number | null;
+  height: number | null;
+}
+
+export interface ReadPageVisibleRegionRow {
+  rowId: string;
+  title: string;
+  primaryText: string | null;
+  secondaryText: string | null;
+  summary: string | null;
+  metaText: string | null;
+  interactionText: string | null;
+  visibleTextFields: string[];
+  targetRef: string | null;
+  targetRefCoverageRate: number;
+  boundingBox: ReadPageVisibleRegionBoundingBox | null;
+  regionId: string;
+  sourceRegion: string;
+  confidence: number;
+  qualityReasons: string[];
+}
+
+export interface ReadPageVisibleRegionPageInfo {
+  url: string | null;
+  title: string | null;
+  viewport: { width: number | null; height: number | null; dpr: number | null };
+  scrollY: number | null;
+  pixelsAbove: number | null;
+  pixelsBelow: number | null;
+  visibleRegionCount: number;
+  candidateRegionCount: number;
+}
+
+export type ReadPageVisibleRegionRejectionReason =
+  | 'low_value_region'
+  | 'footer_like_region'
+  | 'navigation_like_region'
+  | 'target_ref_coverage_insufficient'
+  | 'single_isolated_text'
+  | 'empty_shell'
+  | 'broad_page_shell'
+  | 'dom_region_rows_unavailable';
+
+export interface ReadPageVisibleRegionRows {
+  sourceDataSource: 'dom_region_rows';
+  rows: ReadPageVisibleRegionRow[];
+  rowCount: number;
+  visibleRegionRowsUsed: boolean;
+  visibleRegionRowsRejectedReason: string | null;
+  sourceRegion: string;
+  rowExtractionConfidence: number;
+  cardExtractorUsed: boolean;
+  cardPatternConfidence: number;
+  cardRowsCount: number;
+  rowOrder: 'visual_order';
+  targetRefCoverageRate: number;
+  regionQualityScore: number;
+  visibleDomRowsCandidateCount: number;
+  visibleDomRowsSelectedCount: number;
+  lowValueRegionRejectedCount: number;
+  footerLikeRejectedCount: number;
+  navigationLikeRejectedCount: number;
+  targetRefCoverageRejectedCount: number;
+  rejectedRegionReasonDistribution: Record<ReadPageVisibleRegionRejectionReason, number>;
+  pageInfo: ReadPageVisibleRegionPageInfo;
+}
+
 export interface ReadPageExtensionFields {
   candidateActions?: ReadPageCandidateAction[];
   pageContext?: ReadPagePageContext;
@@ -268,6 +348,27 @@ export interface ReadPageExtensionFields {
   L0?: ReadPageTaskLevel0;
   L1?: ReadPageTaskLevel1;
   L2?: ReadPageTaskLevel2;
+  visibleRegionRows?: ReadPageVisibleRegionRows;
+  /**
+   * V27 additive AI-facing data-source router evidence.
+   * Mirrors `visibleRegionRows` only when DOM region rows are actually used,
+   * so gates and agents do not need to parse nested diagnostic details to
+   * know which source was selected.
+   */
+  kind?: ReadPageSelectedDataSource;
+  selectedDataSource?: ReadPageSelectedDataSource;
+  readinessVerdict?: ReadPageReadinessVerdict;
+  rowCount?: number;
+  visibleRegionRowsUsed?: boolean;
+  targetRefCoverageRate?: number;
+  regionQualityScore?: number;
+  visibleDomRowsCandidateCount?: number;
+  visibleDomRowsSelectedCount?: number;
+  lowValueRegionRejectedCount?: number;
+  footerLikeRejectedCount?: number;
+  navigationLikeRejectedCount?: number;
+  targetRefCoverageRejectedCount?: number;
+  rejectedRegionReasonDistribution?: Record<ReadPageVisibleRegionRejectionReason, number>;
   /**
    * V23-03 / B-015: which render mode was requested for this snapshot.
    * `'json'` is the default and matches the legacy contract. `'markdown'`

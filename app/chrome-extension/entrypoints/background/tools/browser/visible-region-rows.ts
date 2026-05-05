@@ -1,72 +1,20 @@
-export interface VisibleRegionRow {
-  rowId: string;
-  title: string;
-  primaryText: string | null;
-  secondaryText: string | null;
-  summary: string | null;
-  metaText: string | null;
-  interactionText: string | null;
-  visibleTextFields: string[];
-  targetRef: string | null;
-  targetRefCoverageRate: number;
-  boundingBox: VisibleRegionBoundingBox | null;
-  regionId: string;
-  sourceRegion: string;
-  confidence: number;
-  qualityReasons: string[];
-}
+import type {
+  ReadPageVisibleRegionBoundingBox,
+  ReadPageVisibleRegionPageInfo,
+  ReadPageVisibleRegionRejectionReason,
+  ReadPageVisibleRegionRow,
+  ReadPageVisibleRegionRows,
+} from '@tabrix/shared';
 
-export interface VisibleRegionBoundingBox {
-  x: number | null;
-  y: number | null;
-  width: number | null;
-  height: number | null;
-}
+export type VisibleRegionRow = ReadPageVisibleRegionRow;
 
-export interface VisibleRegionPageInfo {
-  url: string | null;
-  title: string | null;
-  viewport: { width: number | null; height: number | null; dpr: number | null };
-  scrollY: number | null;
-  pixelsAbove: number | null;
-  pixelsBelow: number | null;
-  visibleRegionCount: number;
-  candidateRegionCount: number;
-}
+export type VisibleRegionBoundingBox = ReadPageVisibleRegionBoundingBox;
 
-export type VisibleRegionRejectionReason =
-  | 'low_value_region'
-  | 'footer_like_region'
-  | 'navigation_like_region'
-  | 'target_ref_coverage_insufficient'
-  | 'single_isolated_text'
-  | 'empty_shell'
-  | 'broad_page_shell'
-  | 'dom_region_rows_unavailable';
+export type VisibleRegionPageInfo = ReadPageVisibleRegionPageInfo;
 
-export interface VisibleRegionRowsResult {
-  sourceDataSource: 'dom_region_rows';
-  rows: VisibleRegionRow[];
-  rowCount: number;
-  visibleRegionRowsUsed: boolean;
-  visibleRegionRowsRejectedReason: string | null;
-  sourceRegion: string;
-  rowExtractionConfidence: number;
-  cardExtractorUsed: boolean;
-  cardPatternConfidence: number;
-  cardRowsCount: number;
-  rowOrder: 'visual_order';
-  targetRefCoverageRate: number;
-  regionQualityScore: number;
-  visibleDomRowsCandidateCount: number;
-  visibleDomRowsSelectedCount: number;
-  lowValueRegionRejectedCount: number;
-  footerLikeRejectedCount: number;
-  navigationLikeRejectedCount: number;
-  targetRefCoverageRejectedCount: number;
-  rejectedRegionReasonDistribution: Record<VisibleRegionRejectionReason, number>;
-  pageInfo: VisibleRegionPageInfo;
-}
+export type VisibleRegionRejectionReason = ReadPageVisibleRegionRejectionReason;
+
+export type VisibleRegionRowsResult = ReadPageVisibleRegionRows;
 
 interface ParsedVisibleNode {
   role: string;
@@ -153,9 +101,14 @@ export function extractVisibleRegionRows(input: {
   const candidateTargetRefCoverageRate = candidateRows.length
     ? clampConfidence(candidateRows.filter((row) => row.targetRef).length / candidateRows.length)
     : 0;
-  const rows = candidateTargetRefCoverageRate >= 0.95 ? candidateRows : [];
+  const rows =
+    candidateRows.length >= 2 && candidateTargetRefCoverageRate >= 0.95 ? candidateRows : [];
   if (candidateRows.length > 0 && rows.length === 0) {
-    rejectedReasonDistribution.target_ref_coverage_insufficient += candidateRows.length;
+    if (candidateRows.length < 2) {
+      rejectedReasonDistribution.single_isolated_text += candidateRows.length;
+    } else {
+      rejectedReasonDistribution.target_ref_coverage_insufficient += candidateRows.length;
+    }
   }
   const rowExtractionConfidence = rows.length
     ? clampConfidence(rows.reduce((sum, row) => sum + row.confidence, 0) / rows.length)
@@ -181,7 +134,9 @@ export function extractVisibleRegionRows(input: {
     rows.length > 0
       ? null
       : candidateRows.length > 0
-        ? 'target_ref_coverage_insufficient'
+        ? candidateRows.length < 2
+          ? 'single_isolated_text'
+          : 'target_ref_coverage_insufficient'
         : firstRejectedReason(rejectedReasonDistribution);
 
   return {
@@ -293,8 +248,11 @@ function buildCandidateGroups(
       regionId: node.ref || `${sourceRegion}_${groups.length + 1}`,
     });
   }
-  for (const node of nodes) {
-    if (!isStandaloneResultLink(node)) continue;
+  const standaloneResultLinks = nodes.filter((node) => isStandaloneResultLink(node));
+  if (standaloneResultLinks.length < 2) {
+    rejectedReasonDistribution.single_isolated_text += standaloneResultLinks.length;
+  }
+  for (const node of standaloneResultLinks.length >= 2 ? standaloneResultLinks : []) {
     groups.push({
       container: node,
       nodes: [node],
@@ -351,7 +309,12 @@ function classifyShellNode(node: ParsedVisibleNode): VisibleRegionRejectionReaso
 function dedupeOverlappingGroups(groups: CandidateGroup[]): CandidateGroup[] {
   const result: CandidateGroup[] = [];
   const usedRefs = new Set<string>();
-  for (const group of groups) {
+  const orderedGroups = groups
+    .map((group, index) => ({ group, index, priority: groupDedupePriority(group) }))
+    .sort((left, right) => right.priority - left.priority || left.index - right.index)
+    .map((entry) => entry.group);
+
+  for (const group of orderedGroups) {
     const ownRef = group.container.ref;
     if (ownRef && usedRefs.has(ownRef)) continue;
     const descendantRefs = group.nodes
@@ -362,6 +325,25 @@ function dedupeOverlappingGroups(groups: CandidateGroup[]): CandidateGroup[] {
     result.push(group);
   }
   return result;
+}
+
+function groupDedupePriority(group: CandidateGroup): number {
+  if (isStrongCardContainer(group.container)) return 100;
+  if (group.container.role === 'link' && isStandaloneResultLink(group.container)) return 90;
+
+  const standaloneResultLinkCount = group.nodes.filter((node) =>
+    isStandaloneResultLink(node),
+  ).length;
+  if (group.container.role === 'generic') {
+    if (standaloneResultLinkCount === 1 && group.nodes.length <= 8) return 95;
+    if (standaloneResultLinkCount > 1) return 10;
+  }
+
+  return 50;
+}
+
+function isStrongCardContainer(node: ParsedVisibleNode): boolean {
+  return ['article', 'listitem', 'row', 'gridcell', 'cell', 'treeitem'].includes(node.role);
 }
 
 function isBroadPageContainer(container: ParsedVisibleNode, nodes: ParsedVisibleNode[]): boolean {
