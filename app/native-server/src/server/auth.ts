@@ -70,6 +70,7 @@ class TokenManager {
     try {
       fs.mkdirSync(TOKEN_DIR, { recursive: true });
       fs.writeFileSync(TOKEN_FILE, JSON.stringify(data, null, 2), 'utf8');
+      fs.chmodSync(TOKEN_FILE, 0o600);
     } catch {
       // Best effort — if home dir is read-only, token still works in memory
     }
