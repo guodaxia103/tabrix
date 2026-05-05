@@ -130,19 +130,21 @@ async function readGenericEndpoint(
       if (timeoutId) clearTimeout(timeoutId);
     });
     if (responseOrTimeout === 'timeout') {
-      return genericFallback('network_timeout', null, elapsed());
+      return buildGenericReadFallback('network_timeout', null, elapsed());
     }
     const response = responseOrTimeout;
-    if (response.status === 429) return genericFallback('rate_limited', response.status, elapsed());
+    if (response.status === 429)
+      return buildGenericReadFallback('rate_limited', response.status, elapsed());
     if (response.status === 403)
-      return genericFallback('http_forbidden', response.status, elapsed());
-    if (response.status >= 400) return genericFallback('http_error', response.status, elapsed());
+      return buildGenericReadFallback('http_forbidden', response.status, elapsed());
+    if (response.status >= 400)
+      return buildGenericReadFallback('http_error', response.status, elapsed());
 
     let body: unknown;
     try {
       body = await response.json();
     } catch {
-      return genericFallback('decode_error', response.status, elapsed());
+      return buildGenericReadFallback('decode_error', response.status, elapsed());
     }
 
     const rows = compactGenericRows(body, input.limit ?? GENERIC_ROW_LIMIT);
@@ -186,11 +188,11 @@ async function readGenericEndpoint(
       },
     };
   } catch {
-    return genericFallback('network_error', null, elapsed());
+    return buildGenericReadFallback('network_error', null, elapsed());
   }
 }
 
-function genericFallback(
+function buildGenericReadFallback(
   reason: ApiKnowledgeFallbackReason,
   status: number | null,
   waitedMs: number,
@@ -223,7 +225,7 @@ const GENERIC_ARRAY_KEYS = [
 ];
 
 export function compactGenericRows(body: unknown, limit: number): ApiKnowledgeCompactRow[] {
-  const list = pickArrayField(body);
+  const list = selectGenericRowsArray(body);
   if (!list) return [];
   const cap = Math.max(1, Math.min(GENERIC_ROW_LIMIT, limit));
   const out: ApiKnowledgeCompactRow[] = [];
@@ -234,14 +236,14 @@ export function compactGenericRows(body: unknown, limit: number): ApiKnowledgeCo
     const compact: ApiKnowledgeCompactRow = {};
     for (const key of keys) {
       const value = row[key];
-      compact[key] = compactPrimitive(value);
+      compact[key] = compactGenericScalarValue(value);
     }
     out.push(compact);
   }
   return out;
 }
 
-function pickArrayField(body: unknown): unknown[] | null {
+function selectGenericRowsArray(body: unknown): unknown[] | null {
   if (Array.isArray(body)) return body;
   if (body === null || typeof body !== 'object') return null;
   const obj = body as Record<string, unknown>;
@@ -252,7 +254,7 @@ function pickArrayField(body: unknown): unknown[] | null {
   return null;
 }
 
-function compactPrimitive(value: unknown): string | number | boolean | null {
+function compactGenericScalarValue(value: unknown): string | number | boolean | null {
   if (value === null || value === undefined) return null;
   if (typeof value === 'string') {
     return value.length > GENERIC_STRING_VALUE_CAP
