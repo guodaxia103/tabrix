@@ -42,12 +42,12 @@ import {
 import { registerMemoryRoutes } from './memory-routes';
 import { registerExecutionRoutes } from './execution-routes';
 import { getCapabilityDiagnostics, type CapabilitySourceKind } from '../policy/capabilities';
-import { getDefaultContextManager } from '../runtime/v27-context-manager';
-import { getDefaultFactCollector } from '../runtime/v27-fact-collector';
+import { getDefaultContextManager } from '../runtime/browser-context-manager';
+import { getDefaultFactCollector } from '../runtime/browser-fact-collector';
 import {
   getV27ObservationDiagnosticsSnapshot,
   type V27ObservationDiagnosticsSnapshot,
-} from '../runtime/v27-observation-diagnostics';
+} from '../runtime/observation-diagnostics';
 
 // Compatibility guard:
 // @hono/node-server may call socket.destroySoon() while draining incoming requests.

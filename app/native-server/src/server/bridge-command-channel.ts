@@ -13,7 +13,7 @@ import type {
   BridgeWsMessage,
 } from '@tabrix/shared';
 import { bridgeRuntimeState } from './bridge-state';
-import { ingestBridgeObservation } from '../runtime/v27-observation-ingest';
+import { ingestBridgeObservation } from '../runtime/observation-ingest';
 
 interface PendingCommand {
   resolve: (value: any) => void;

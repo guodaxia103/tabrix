@@ -1,5 +1,5 @@
 /**
- * V27-03 — Tabrix v2.7 Action Outcome Classifier (native runtime side).
+ * Action Outcome Classifier (native runtime side).
  *
  * Pure, in-memory, deterministic. Given an `ActionOutcomeEventEnvelope`
  * (action descriptor + a typed signal timeline produced by the v2.7

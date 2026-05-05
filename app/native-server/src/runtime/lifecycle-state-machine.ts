@@ -1,5 +1,5 @@
 /**
- * V27-01 — Tabrix v2.7 Lifecycle State Machine (pure).
+ * Lifecycle State Machine (pure).
  *
  * What this module is:
  * - A pure state machine that consumes typed lifecycle events
@@ -48,7 +48,7 @@ const DEFAULT_NAVIGATION_INTENT: NavigationIntent = 'unknown';
  * was confirmed by both `committed` and `document_complete` reaches
  * `>= 0.9`. The exact numbers are SoT-pinned (see
  * `.claude/strategy/TABRIX_V2_7_CONTRACT_V1_zh.md` §5) so any future
- * tweak shows up in the snapshot test for `v27-lifecycle.test.ts`.
+ * tweak shows up in the snapshot test for `lifecycle-state-machine.test.ts`.
  */
 const STATE_CONFIDENCE: Readonly<Record<LifecycleState, number>> = Object.freeze({
   idle: 0.5,

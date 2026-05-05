@@ -22,7 +22,7 @@ import {
   FACT_SNAPSHOT_DEFAULT_TTL_MS,
   createFactCollector,
   redactFactSnapshotForPersistence,
-} from './v27-fact-collector';
+} from './browser-fact-collector';
 
 function makeNetworkFact(overrides: Partial<NetworkRequestFact> = {}): NetworkRequestFact {
   return {
@@ -79,7 +79,7 @@ function makeNetworkEnvelope(
   };
 }
 
-describe('v27-fact-collector — ingest + lookup', () => {
+describe('browser-fact-collector — ingest + lookup', () => {
   it('folds network / dom / readiness events into one snapshot', () => {
     const collector = createFactCollector({ now: () => 1_000 });
     collector.ingestFactObservation(makeNetworkEnvelope('snap-1'));
@@ -156,7 +156,7 @@ describe('v27-fact-collector — ingest + lookup', () => {
   });
 });
 
-describe('v27-fact-collector — redactFactSnapshotForPersistence', () => {
+describe('browser-fact-collector — redactFactSnapshotForPersistence', () => {
   it('strips bookkeeping keys (tabId) before persistence', () => {
     const collector = createFactCollector({ now: () => 1_000 });
     collector.ingestFactObservation(makeNetworkEnvelope('snap-1'));

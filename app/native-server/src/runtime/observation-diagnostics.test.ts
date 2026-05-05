@@ -1,13 +1,13 @@
 import { describe, expect, test, beforeEach } from '@jest/globals';
 import type { BridgeObservationMessage } from '@tabrix/shared';
-import { ingestBridgeObservation } from './v27-observation-ingest';
-import { resetDefaultContextManager } from './v27-context-manager';
-import { resetDefaultFactCollector } from './v27-fact-collector';
-import { resetDefaultLifecycleStateMachine } from './v27-lifecycle';
+import { resetDefaultContextManager } from './browser-context-manager';
+import { resetDefaultFactCollector } from './browser-fact-collector';
+import { resetDefaultLifecycleStateMachine } from './lifecycle-state-machine';
+import { ingestBridgeObservation } from './observation-ingest';
 import {
   getV27ObservationDiagnosticsSnapshot,
   resetV27ObservationDiagnostics,
-} from './v27-observation-diagnostics';
+} from './observation-diagnostics';
 
 describe('V27-05R observation diagnostics', () => {
   beforeEach(() => {

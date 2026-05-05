@@ -24,17 +24,20 @@
  *   down ingestion of the other three.
  */
 import type { BridgeObservationMessage } from '@tabrix/shared';
-import { getDefaultContextManager, type ContextManager } from './v27-context-manager';
-import { getDefaultLifecycleStateMachine, type LifecycleStateMachine } from './v27-lifecycle';
-import { getDefaultFactCollector, type FactCollector } from './v27-fact-collector';
-import { classifyActionOutcome } from './v27-action-outcome';
+import { classifyActionOutcome } from './action-outcome-classifier';
+import { getDefaultContextManager, type ContextManager } from './browser-context-manager';
+import { getDefaultFactCollector, type FactCollector } from './browser-fact-collector';
+import {
+  getDefaultLifecycleStateMachine,
+  type LifecycleStateMachine,
+} from './lifecycle-state-machine';
 import {
   recordV27ObservationActionOutcome,
   recordV27ObservationFactSnapshot,
   recordV27ObservationLifecycle,
   recordV27ObservationTabEvent,
   recordV27ObservationUnknown,
-} from './v27-observation-diagnostics';
+} from './observation-diagnostics';
 
 interface IngestDeps {
   lifecycle: LifecycleStateMachine;

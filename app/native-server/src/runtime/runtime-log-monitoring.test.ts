@@ -3,7 +3,7 @@ import { describe, expect, it } from '@jest/globals';
 import {
   summariseV27RuntimeLogMonitoring,
   toPublicSafeV27RuntimeLogMonitoringSummary,
-} from './v27-runtime-log-monitoring';
+} from './runtime-log-monitoring';
 
 /** V27-OBS-00 — runtime log monitoring gate for real/simulated browser acceptance. */
 describe('summariseV27RuntimeLogMonitoring — V27-OBS-00', () => {

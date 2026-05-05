@@ -12,7 +12,7 @@ import {
   type V27RuntimeLogMonitoringSummary,
   type V27RuntimeLogSample,
   type V27RuntimeLogSource,
-} from '../runtime/v27-runtime-log-monitoring';
+} from '../runtime/runtime-log-monitoring';
 import {
   assessClickOutcome,
   assessKeyboardOutcome,

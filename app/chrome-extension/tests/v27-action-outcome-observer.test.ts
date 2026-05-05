@@ -2,7 +2,7 @@
  * V27-03 — extension-side tests for the Action Outcome Observer.
  *
  * The native classifier is unit-tested separately in
- * `app/native-server/src/runtime/v27-action-outcome.test.ts`. These
+ * `app/native-server/src/runtime/action-outcome-classifier.test.ts`. These
  * tests exercise the producer:
  *
  *   - background-derivable signals (lifecycle/tab/network) are folded

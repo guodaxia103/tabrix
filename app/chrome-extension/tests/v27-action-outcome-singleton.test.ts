@@ -1,7 +1,7 @@
 /**
  * V27-03 — extension-side test for the action-outcome observer
  * SINGLETON SEAM. The full producer is exercised in
- * `tests/v27-action-outcome-observer.test.ts`; this file pins the
+ * the extension observer tests; this file pins the
  * minimal contract that browser tools (e.g. `chrome_click_element`)
  * rely on:
  *

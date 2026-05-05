@@ -1,7 +1,7 @@
 /**
  * V27-03 — Tabrix v2.7 Action Outcome Observer (extension side).
  *
- * The native classifier in `app/native-server/src/runtime/v27-action-outcome.ts`
+ * The native classifier in `app/native-server/src/runtime/action-outcome-classifier.ts`
  * is a pure function over a closed-enum signal timeline. This module is
  * the producer side: it opens a settle window after an action is
  * dispatched, races browser-side signals (`chrome.webNavigation.*`,
@@ -42,7 +42,7 @@ const MAIN_FRAME_ID = 0;
 
 /** Default settle window the producer honours when the caller does not
  *  pass one explicitly. Mirrors the runtime-side default in
- *  `v27-action-outcome.ts` so the producer + classifier agree on the
+ *  `action-outcome-classifier.ts` so the producer + classifier agree on the
  *  effective window length. */
 export const ACTION_OUTCOME_OBSERVER_DEFAULT_SETTLE_MS = 1_500;
 

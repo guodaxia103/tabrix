@@ -114,7 +114,7 @@ export const NAVIGATION_INTENTS = [
 
 /**
  * Snapshot of the v2.7 lifecycle state machine. Producer: V27-01
- * `v27-lifecycle.ts`. Consumer: V27-05 `v27-context-manager.ts` (next
+ * `lifecycle-state-machine.ts`. Consumer: `browser-context-manager.ts` (next
  * batch task) + the operation-log writer.
  *
  * Privacy: this snapshot carries NO raw URL. The `urlPattern` field is
@@ -539,7 +539,7 @@ export interface ActionOutcomeEventEnvelope {
 }
 
 /**
- * V27-03 — output of `v27-action-outcome.ts`. Lives inside the
+ * Output of `action-outcome-classifier.ts`. Lives inside the
  * runtime; the operation-log writer copies `outcome` and the
  * formatted confidence into `actionOutcome` / `outcomeConfidence`
  * metadata keys (already declared by V27-00).
@@ -823,7 +823,7 @@ export const CONTEXT_LEVELS = [
  * stable-target-ref-registry is probed after a bfcache restore (or
  * any other invalidation that does not necessarily mean refs are
  * dead). Producer is the extension `observers/tab-window-context.ts`;
- * consumer is the runtime `v27-context-manager.ts`.
+ * consumer is the runtime `browser-context-manager.ts`.
  *
  * Always includes `'unknown'` per V27-00 invariant.
  *

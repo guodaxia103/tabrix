@@ -1,5 +1,5 @@
 /**
- * V27-02 — Tabrix v2.7 Browser Fact Collector (in-memory).
+ * Browser Fact Collector (in-memory).
  *
  * Goal:
  * - In-memory ring of `BrowserFactSnapshot` produced by the extension

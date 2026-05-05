@@ -6,7 +6,7 @@
  *
  * The classifier is the public V27-03 contract surface, so these tests
  * pin (a) every documented closed-enum verdict, (b) the confidence
- * calibration described in `v27-action-outcome.ts`, and (c) the
+ * calibration described in `action-outcome-classifier.ts`, and (c) the
  * inclusion / exclusion partition used by the DOM-region hash rule.
  */
 import type {
@@ -21,7 +21,7 @@ import {
   describeDomRegionSelectionRule,
   isKnownActionSignalKind,
   selectDomRegionSignalsForOutcome,
-} from './v27-action-outcome';
+} from './action-outcome-classifier';
 
 const T0 = 1_700_000_000_000;
 
@@ -49,7 +49,7 @@ function makeEnvelope(
   };
 }
 
-describe('v27-action-outcome — classifyActionOutcome', () => {
+describe('action-outcome-classifier — classifyActionOutcome', () => {
   const now = () => T0 + 9_999;
 
   it('returns no_observed_change with confidence 1.0 for an empty timeline', () => {
@@ -224,7 +224,7 @@ describe('v27-action-outcome — classifyActionOutcome', () => {
   });
 });
 
-describe('v27-action-outcome — isKnownActionSignalKind', () => {
+describe('action-outcome-classifier — isKnownActionSignalKind', () => {
   it('accepts every closed-enum signal kind except unknown', () => {
     const known: ActionSignalKind[] = [
       'lifecycle_committed',
@@ -238,7 +238,7 @@ describe('v27-action-outcome — isKnownActionSignalKind', () => {
   });
 });
 
-describe('v27-action-outcome — DOM region hash rule', () => {
+describe('action-outcome-classifier — DOM region hash rule', () => {
   it('describes the documented include / exclude allowlist', () => {
     const rule = describeDomRegionSelectionRule();
     expect(rule.included).toEqual(

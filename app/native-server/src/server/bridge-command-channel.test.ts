@@ -14,12 +14,15 @@ import type {
 import {
   getDefaultContextManager,
   resetDefaultContextManager,
-} from '../runtime/v27-context-manager';
+} from '../runtime/browser-context-manager';
 import {
   getDefaultLifecycleStateMachine,
   resetDefaultLifecycleStateMachine,
-} from '../runtime/v27-lifecycle';
-import { getDefaultFactCollector, resetDefaultFactCollector } from '../runtime/v27-fact-collector';
+} from '../runtime/lifecycle-state-machine';
+import {
+  getDefaultFactCollector,
+  resetDefaultFactCollector,
+} from '../runtime/browser-fact-collector';
 
 async function listen(server: HttpServer): Promise<number> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));

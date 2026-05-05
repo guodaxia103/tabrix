@@ -4,7 +4,10 @@
  * none of them touches the bridge or `chrome.*`.
  */
 import { LIFECYCLE_STATES, type LifecycleEventPayload, type LifecycleState } from '@tabrix/shared';
-import { createLifecycleStateMachine, getDefaultLifecycleStateMachine } from './v27-lifecycle';
+import {
+  createLifecycleStateMachine,
+  getDefaultLifecycleStateMachine,
+} from './lifecycle-state-machine';
 
 function makeEvent(overrides: Partial<LifecycleEventPayload>): LifecycleEventPayload {
   return {

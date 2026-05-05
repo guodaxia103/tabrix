@@ -1,5 +1,5 @@
 /**
- * V27-05 — Tabrix v2.7 Tab/Window Context Manager (native runtime side).
+ * Browser Context Manager (native runtime side).
  *
  * What this module is:
  * - A pure, in-memory, deterministic versioned context tree keyed by
@@ -31,9 +31,9 @@
  *
  * Boundary cross-ref:
  * - Public types: `packages/shared/src/browser-fact.ts` (V27-05 section).
- * - Lifecycle producer: `app/native-server/src/runtime/v27-lifecycle.ts`.
+ * - Lifecycle producer: `app/native-server/src/runtime/lifecycle-state-machine.ts`.
  * - Action outcome producer:
- *   `app/native-server/src/runtime/v27-action-outcome.ts`.
+ *   `app/native-server/src/runtime/action-outcome-classifier.ts`.
  * - Tab event producer (extension side):
  *   `app/chrome-extension/entrypoints/background/observers/tab-window-context.ts`.
  *

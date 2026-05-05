@@ -14,7 +14,7 @@ import {
   getDefaultContextManager,
   resetDefaultContextManager,
   type ContextManager,
-} from './v27-context-manager';
+} from './browser-context-manager';
 import type {
   ActionOutcomeSnapshot,
   ContextVersion,
@@ -81,7 +81,7 @@ function actionOutcome(outcome: ActionOutcomeSnapshot['outcome']): ActionOutcome
   };
 }
 
-describe('v27-context-manager — applyLifecycleSnapshot', () => {
+describe('browser-context-manager — applyLifecycleSnapshot', () => {
   it('mints a fresh contextId on the first cold_load for a tab', () => {
     const { manager } = makeManager();
     const ctx = manager.applyLifecycleSnapshot(
@@ -209,7 +209,7 @@ describe('v27-context-manager — applyLifecycleSnapshot', () => {
   });
 });
 
-describe('v27-context-manager — applyTabEvent', () => {
+describe('browser-context-manager — applyTabEvent', () => {
   it('tab_created mints a fresh record', () => {
     const { manager } = makeManager();
     const ctx = manager.applyTabEvent(
@@ -342,7 +342,7 @@ describe('v27-context-manager — applyTabEvent', () => {
   });
 });
 
-describe('v27-context-manager — applyActionOutcome', () => {
+describe('browser-context-manager — applyActionOutcome', () => {
   it('navigated_same_tab bumps under navigation/page', () => {
     const { manager } = makeManager();
     manager.applyLifecycleSnapshot(lifecycle({ tabId: 300, lifecycleFlag: 'cold_load' }));
@@ -390,7 +390,7 @@ describe('v27-context-manager — applyActionOutcome', () => {
   });
 });
 
-describe('v27-context-manager — invalidate / reset / size / determinism', () => {
+describe('browser-context-manager — invalidate / reset / size / determinism', () => {
   it('invalidate bumps under the caller-supplied reason', () => {
     const { manager } = makeManager();
     manager.applyLifecycleSnapshot(lifecycle({ tabId: 400, lifecycleFlag: 'cold_load' }));
@@ -447,7 +447,7 @@ describe('v27-context-manager — invalidate / reset / size / determinism', () =
   });
 });
 
-describe('v27-context-manager — singleton', () => {
+describe('browser-context-manager — singleton', () => {
   afterEach(() => {
     resetDefaultContextManager();
   });

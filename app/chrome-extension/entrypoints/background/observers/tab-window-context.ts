@@ -17,7 +17,7 @@
  *   `bfcache_restored`: the producer reports a closed-enum verdict
  *   (`'live' | 'stale' | 'missing' | 'unknown'`) plus liveCount /
  *   staleCount derived from the registry snapshot. The runtime-side
- *   `v27-context-manager.ts` uses the verdict to decide whether to
+ *   `browser-context-manager.ts` uses the verdict to decide whether to
  *   bump the page version under a `bfcache_restored` reason.
  *
  * Like `observers/lifecycle.ts`, this observer takes its `send` hook

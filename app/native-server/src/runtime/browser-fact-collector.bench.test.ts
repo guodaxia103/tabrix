@@ -13,7 +13,7 @@
  */
 
 import { OBSERVER_OVERHEAD_BUDGET_MS_PER_EVENT } from './latency-budget';
-import { createFactCollector } from './v27-fact-collector';
+import { createFactCollector } from './browser-fact-collector';
 import type { BrowserFactSnapshotEnvelope } from '@tabrix/shared';
 
 function makeEnvelope(seq: number): BrowserFactSnapshotEnvelope {
@@ -42,7 +42,7 @@ function makeEnvelope(seq: number): BrowserFactSnapshotEnvelope {
   };
 }
 
-describe('v27-fact-collector — synthetic per-event overhead', () => {
+describe('browser-fact-collector — synthetic per-event overhead', () => {
   it('stays within an order of magnitude of the V27-00 budget', () => {
     const collector = createFactCollector({ now: () => 0 });
     const N = 1_000;
