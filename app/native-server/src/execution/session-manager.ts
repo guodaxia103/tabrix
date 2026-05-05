@@ -239,17 +239,17 @@ export class SessionManager {
   private readonly chooseContextTelemetryRepo: ChooseContextTelemetryRepository | null;
 
   constructor(options?: SessionManagerOptions) {
-    const init = initStorage(options);
-    this.repos = init.repos;
-    this.dbHandle = init.dbHandle;
-    this.persistenceMode = init.persistenceMode;
-    this.pageSnapshotService = init.pageSnapshots;
-    this.actionService = init.actions;
-    this.operationLogRepo = init.operationLog;
-    this.experienceAggregator = init.experienceAggregator;
-    this.experienceQueryService = init.experienceQuery;
-    this.knowledgeApiRepo = init.knowledgeApi;
-    this.chooseContextTelemetryRepo = init.chooseContextTelemetry;
+    const storage = initStorage(options);
+    this.repos = storage.repos;
+    this.dbHandle = storage.dbHandle;
+    this.persistenceMode = storage.persistenceMode;
+    this.pageSnapshotService = storage.pageSnapshots;
+    this.actionService = storage.actions;
+    this.operationLogRepo = storage.operationLog;
+    this.experienceAggregator = storage.experienceAggregator;
+    this.experienceQueryService = storage.experienceQuery;
+    this.knowledgeApiRepo = storage.knowledgeApi;
+    this.chooseContextTelemetryRepo = storage.chooseContextTelemetry;
     if (this.repos) this.hydrateFromDb(this.repos);
   }
 
@@ -588,12 +588,12 @@ export class SessionManager {
    * task without ceremony. Returns the existing context when one is
    * already attached so callers cannot accidentally clobber state.
    */
-  public ensureTaskContext(taskId: string, ctx?: TaskSessionContext): TaskSessionContext {
+  public ensureTaskContext(taskId: string, context?: TaskSessionContext): TaskSessionContext {
     const existing = this.taskContexts.get(taskId);
     if (existing) return existing;
-    const next = ctx ?? new TaskSessionContext();
-    this.taskContexts.set(taskId, next);
-    return next;
+    const taskContext = context ?? new TaskSessionContext();
+    this.taskContexts.set(taskId, taskContext);
+    return taskContext;
   }
 
   /**
@@ -621,12 +621,12 @@ export class SessionManager {
     const existing = this.externalTaskContexts.get(externalKey);
     if (existing) return existing;
     if (this.externalTaskContexts.size >= EXTERNAL_TASK_CONTEXT_CAP) {
-      const oldest = this.externalTaskContexts.keys().next().value;
-      if (oldest !== undefined) this.externalTaskContexts.delete(oldest);
+      const oldestExternalKey = this.externalTaskContexts.keys().next().value;
+      if (oldestExternalKey !== undefined) this.externalTaskContexts.delete(oldestExternalKey);
     }
-    const next = new TaskSessionContext();
-    this.externalTaskContexts.set(externalKey, next);
-    return next;
+    const taskContext = new TaskSessionContext();
+    this.externalTaskContexts.set(externalKey, taskContext);
+    return taskContext;
   }
 
   /**
