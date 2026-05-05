@@ -131,9 +131,9 @@ export function createContextManager(options: ContextManagerOptions = {}): Conte
   const seqByTab = new Map<number, number>();
 
   function nextContextId(tabId: number): string {
-    const next = (seqByTab.get(tabId) ?? 0) + 1;
-    seqByTab.set(tabId, next);
-    return idFactory(tabId, next);
+    const nextSequence = (seqByTab.get(tabId) ?? 0) + 1;
+    seqByTab.set(tabId, nextSequence);
+    return idFactory(tabId, nextSequence);
   }
 
   function bumpVersion(
@@ -146,7 +146,7 @@ export function createContextManager(options: ContextManagerOptions = {}): Conte
     const previous = records.get(tabId) ?? null;
     const observedAtMs = clock();
     if (!previous || options.mintNewContextId) {
-      const next: ContextVersion = {
+      const contextVersion: ContextVersion = {
         contextId: nextContextId(tabId),
         tabId,
         urlPattern,
@@ -155,10 +155,10 @@ export function createContextManager(options: ContextManagerOptions = {}): Conte
         lastInvalidationReason: reason,
         observedAtMs,
       };
-      records.set(tabId, next);
-      return next;
+      records.set(tabId, contextVersion);
+      return contextVersion;
     }
-    const next: ContextVersion = {
+    const contextVersion: ContextVersion = {
       contextId: previous.contextId,
       tabId,
       urlPattern: urlPattern ?? previous.urlPattern,
@@ -167,8 +167,8 @@ export function createContextManager(options: ContextManagerOptions = {}): Conte
       lastInvalidationReason: reason,
       observedAtMs,
     };
-    records.set(tabId, next);
-    return next;
+    records.set(tabId, contextVersion);
+    return contextVersion;
   }
 
   function snapshot(tabId: number): ContextVersion | null {
@@ -344,8 +344,8 @@ export function createContextManager(options: ContextManagerOptions = {}): Conte
     invalidate(tabId, reason, level): ContextVersion | null {
       const previous = records.get(tabId);
       if (!previous) return null;
-      const next = bumpVersion(tabId, previous.urlPattern, reason, level ?? 'page');
-      return next;
+      const invalidatedContext = bumpVersion(tabId, previous.urlPattern, reason, level ?? 'page');
+      return invalidatedContext;
     },
 
     reset(): void {
