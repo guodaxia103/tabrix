@@ -795,9 +795,9 @@ function buildModeOutput(params: {
   // every successful read replaces the previous mapping atomically.
   if (Array.isArray(extensionLayer.highValueObjects)) {
     const entries: StableTargetRefEntry[] = [];
-    for (const obj of extensionLayer.highValueObjects) {
-      if (obj.targetRef && obj.ref) {
-        entries.push({ targetRef: obj.targetRef, ref: obj.ref });
+    for (const highValueObject of extensionLayer.highValueObjects) {
+      if (highValueObject.targetRef && highValueObject.ref) {
+        entries.push({ targetRef: highValueObject.targetRef, ref: highValueObject.ref });
       }
     }
     recordStableTargetRefSnapshot(params.tabId, entries);

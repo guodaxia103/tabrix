@@ -246,9 +246,9 @@ export function compactGenericRows(body: unknown, limit: number): ApiKnowledgeCo
 function selectGenericRowsArray(body: unknown): unknown[] | null {
   if (Array.isArray(body)) return body;
   if (body === null || typeof body !== 'object') return null;
-  const obj = body as Record<string, unknown>;
+  const bodyObject = body as Record<string, unknown>;
   for (const key of GENERIC_ARRAY_KEYS) {
-    const candidate = obj[key];
+    const candidate = bodyObject[key];
     if (Array.isArray(candidate)) return candidate;
   }
   return null;

@@ -193,32 +193,32 @@ export function annotateStableTargetRefs<T extends ReadPageHighValueObject>(
   pageRole: string | null,
 ): T[] {
   const counters = new Map<string, number>();
-  const out: T[] = [];
-  for (const obj of objects) {
+  const annotatedObjects: T[] = [];
+  for (const highValueObject of objects) {
     const baseKey = [
       normalizePageRole(pageRole),
-      normalizeSubType(obj.objectSubType ?? ''),
-      normalizeRole(obj.role ?? ''),
-      normalizeLabel(obj.label ?? ''),
-      normalizeHrefBucket(obj.href ?? ''),
+      normalizeSubType(highValueObject.objectSubType ?? ''),
+      normalizeRole(highValueObject.role ?? ''),
+      normalizeLabel(highValueObject.label ?? ''),
+      normalizeHrefBucket(highValueObject.href ?? ''),
     ].join('\u0001');
     const ordinal = counters.get(baseKey) ?? 0;
     counters.set(baseKey, ordinal + 1);
     const targetRef = computeStableTargetRef({
       pageRole,
-      objectSubType: obj.objectSubType,
-      role: obj.role,
-      label: obj.label,
-      href: obj.href,
+      objectSubType: highValueObject.objectSubType,
+      role: highValueObject.role,
+      label: highValueObject.label,
+      href: highValueObject.href,
       ordinal,
     });
     if (targetRef) {
-      out.push({ ...obj, targetRef });
+      annotatedObjects.push({ ...highValueObject, targetRef });
     } else {
-      out.push(obj);
+      annotatedObjects.push(highValueObject);
     }
   }
-  return out;
+  return annotatedObjects;
 }
 
 /**
