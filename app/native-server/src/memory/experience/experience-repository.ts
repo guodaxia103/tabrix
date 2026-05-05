@@ -116,7 +116,7 @@ function parseStepSequence(raw: string): ExperienceActionPathStep[] {
     return parsed
       .filter((item) => item && typeof item === 'object')
       .map((item) => {
-        const obj = item as {
+        const stepRecord = item as {
           toolName?: unknown;
           status?: unknown;
           historyRef?: unknown;
@@ -124,21 +124,27 @@ function parseStepSequence(raw: string): ExperienceActionPathStep[] {
           templateFields?: unknown;
         };
         const out: ExperienceActionPathStep = {
-          toolName: String(obj.toolName ?? ''),
-          status: String(obj.status ?? ''),
+          toolName: String(stepRecord.toolName ?? ''),
+          status: String(stepRecord.status ?? ''),
           historyRef:
-            typeof obj.historyRef === 'string' && obj.historyRef.length > 0 ? obj.historyRef : null,
+            typeof stepRecord.historyRef === 'string' && stepRecord.historyRef.length > 0
+              ? stepRecord.historyRef
+              : null,
         };
         // V24-01 forward-compat: preserve `args` / `templateFields`
         // when an existing row already carries them. Today the
         // aggregator does NOT write them; this read-side branch only
         // matters once a future capture-side PR starts populating them.
-        if (obj.args && typeof obj.args === 'object' && !Array.isArray(obj.args)) {
-          out.args = obj.args as Record<string, unknown>;
+        if (
+          stepRecord.args &&
+          typeof stepRecord.args === 'object' &&
+          !Array.isArray(stepRecord.args)
+        ) {
+          out.args = stepRecord.args as Record<string, unknown>;
         }
-        if (Array.isArray(obj.templateFields)) {
+        if (Array.isArray(stepRecord.templateFields)) {
           const seen: TabrixReplayPlaceholder[] = [];
-          for (const k of obj.templateFields) {
+          for (const k of stepRecord.templateFields) {
             if (k === 'queryText' || k === 'targetLabel') {
               if (!seen.includes(k)) seen.push(k);
             }

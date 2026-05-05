@@ -1070,10 +1070,10 @@ export function summarizeEndpointShapeFromCapturedRequest(
   }
 
   if (v1Shape.kind === 'object' && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    const obj = parsed as Record<string, unknown>;
+    const parsedObject = parsed as Record<string, unknown>;
     const fieldTypes: Record<string, EndpointShapeFieldType> = {};
     for (const k of v1Shape.topLevelKeys) {
-      const v = obj[k];
+      const v = parsedObject[k];
       if (v !== undefined) fieldTypes[k] = fieldTypeOf(v);
     }
     // rowCount derivation for envelope-shaped responses.
@@ -1083,14 +1083,14 @@ export function summarizeEndpointShapeFromCapturedRequest(
     let rowCount: number | null = null;
     const arrayKey = v1Shape.topLevelKeys.find((k) => fieldTypes[k] === 'array');
     if (arrayKey) {
-      const arr = obj[arrayKey];
+      const arr = parsedObject[arrayKey];
       if (Array.isArray(arr)) rowCount = arr.length;
     } else {
       const totalKey = v1Shape.topLevelKeys.find(
         (k) => fieldTypes[k] === 'number' && /^(total_?count|count|total)$/i.test(k),
       );
       if (totalKey) {
-        const n = obj[totalKey];
+        const n = parsedObject[totalKey];
         if (typeof n === 'number' && Number.isFinite(n)) rowCount = n;
       }
     }
