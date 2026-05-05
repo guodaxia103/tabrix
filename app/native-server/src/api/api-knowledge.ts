@@ -752,14 +752,14 @@ function compactRows(
     case 'github_search_repositories': {
       const items = asArray((body as { items?: unknown })?.items).slice(0, limit);
       return items.map((item) => {
-        const obj = asRecord(item);
+        const repositoryRecord = asRecord(item);
         return {
-          name: stringOrNull(obj.name),
-          fullName: stringOrNull(obj.full_name),
-          description: stringOrNull(obj.description),
-          language: stringOrNull(obj.language),
-          stars: numberOrZero(obj.stargazers_count),
-          url: stringOrNull(obj.html_url),
+          name: stringOrNull(repositoryRecord.name),
+          fullName: stringOrNull(repositoryRecord.full_name),
+          description: stringOrNull(repositoryRecord.description),
+          language: stringOrNull(repositoryRecord.language),
+          stars: numberOrZero(repositoryRecord.stargazers_count),
+          url: stringOrNull(repositoryRecord.html_url),
         };
       });
     }
@@ -767,17 +767,17 @@ function compactRows(
       const bodyRecord = asRecord(body);
       const items = Array.isArray(body) ? body : asArray(bodyRecord.items);
       return items.slice(0, limit).map((item) => {
-        const obj = asRecord(item);
-        const labels = asArray(obj.labels)
+        const issueRecord = asRecord(item);
+        const labels = asArray(issueRecord.labels)
           .map((label) => stringOrNull(asRecord(label).name))
           .filter((label): label is string => !!label)
           .join(',');
         return {
-          number: numberOrZero(obj.number),
-          title: stringOrNull(obj.title),
-          state: stringOrNull(obj.state),
+          number: numberOrZero(issueRecord.number),
+          title: stringOrNull(issueRecord.title),
+          state: stringOrNull(issueRecord.state),
           labels,
-          url: stringOrNull(obj.html_url),
+          url: stringOrNull(issueRecord.html_url),
         };
       });
     }
@@ -785,16 +785,16 @@ function compactRows(
       const bodyRecord = asRecord(body);
       const runs = Array.isArray(body) ? body : asArray(bodyRecord.workflow_runs);
       return runs.slice(0, limit).map((item) => {
-        const obj = asRecord(item);
+        const workflowRunRecord = asRecord(item);
         return {
-          name: stringOrNull(obj.name),
-          status: stringOrNull(obj.status),
-          conclusion: stringOrNull(obj.conclusion),
-          branch: stringOrNull(obj.head_branch),
-          event: stringOrNull(obj.event),
-          title: stringOrNull(obj.display_title),
-          createdAt: stringOrNull(obj.created_at),
-          url: stringOrNull(obj.html_url),
+          name: stringOrNull(workflowRunRecord.name),
+          status: stringOrNull(workflowRunRecord.status),
+          conclusion: stringOrNull(workflowRunRecord.conclusion),
+          branch: stringOrNull(workflowRunRecord.head_branch),
+          event: stringOrNull(workflowRunRecord.event),
+          title: stringOrNull(workflowRunRecord.display_title),
+          createdAt: stringOrNull(workflowRunRecord.created_at),
+          url: stringOrNull(workflowRunRecord.html_url),
         };
       });
     }
