@@ -679,8 +679,8 @@ function hasExecutableBridge(snapshot: BridgeRuntimeSnapshot): boolean {
 }
 
 /**
- * v2.6 S1 P1-1 fix — extract a stable, externally-supplied task /
- * session key from a tool-call's `args`. Lookup precedence:
+ * Extract a stable, externally-supplied task / session key from a
+ * tool-call's `args`. Lookup precedence:
  *
  *   1. `taskSessionId` (preferred — explicit naming)
  *   2. `taskId`        (alias for legacy MCP clients)
@@ -697,9 +697,9 @@ function hasExecutableBridge(snapshot: BridgeRuntimeSnapshot): boolean {
  */
 function extractStableTaskKey(args: unknown): string | null {
   if (!args || typeof args !== 'object') return null;
-  const obj = args as Record<string, unknown>;
+  const argsObject = args as Record<string, unknown>;
   for (const key of ['taskSessionId', 'taskId', 'clientTaskId'] as const) {
-    const raw = obj[key];
+    const raw = argsObject[key];
     if (typeof raw === 'string') {
       const trimmed = raw.trim();
       if (trimmed.length > 0) return trimmed;
@@ -709,11 +709,10 @@ function extractStableTaskKey(args: unknown): string | null {
 }
 
 /**
- * v2.6 S1 P1-2 fix — read the `chrome_read_page` requested layer
- * from tool args using the public schema name (`requestedLayer`)
- * with the legacy `layer` field as a graceful fallback for any
- * historical client. Returns `null` when neither field carries a
- * value belonging to the closed
+ * Read the `chrome_read_page` requested layer from tool args using
+ * the public schema name (`requestedLayer`) with the legacy `layer`
+ * field as a graceful fallback for any historical client. Returns
+ * `null` when neither field carries a value belonging to the closed
  * {@link READ_PAGE_REQUESTED_LAYER_VALUES} enum, which the caller
  * turns into the MCP-schema default (`'L0+L1+L2'`).
  *
@@ -725,9 +724,9 @@ function extractStableTaskKey(args: unknown): string | null {
  */
 function extractRequestedLayer(args: unknown): ReadPageRequestedLayer | null {
   if (!args || typeof args !== 'object') return null;
-  const obj = args as Record<string, unknown>;
+  const argsObject = args as Record<string, unknown>;
   for (const key of ['requestedLayer', 'layer'] as const) {
-    const raw = obj[key];
+    const raw = argsObject[key];
     if (typeof raw !== 'string') continue;
     if ((READ_PAGE_REQUESTED_LAYER_VALUES as readonly string[]).includes(raw)) {
       return raw as ReadPageRequestedLayer;
