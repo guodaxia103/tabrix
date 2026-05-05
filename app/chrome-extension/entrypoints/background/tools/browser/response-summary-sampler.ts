@@ -107,18 +107,23 @@ function sanitizeSummary(
   state: SamplerState,
 ): BrowserContextSafeResponseSummary | null {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
-  const obj = input as Record<string, unknown>;
+  const summaryPayload = input as Record<string, unknown>;
   const source =
-    obj.responseSummarySource === 'browser_context_summary' ? 'browser_context_summary' : null;
+    summaryPayload.responseSummarySource === 'browser_context_summary'
+      ? 'browser_context_summary'
+      : null;
   const bridgePath =
-    obj.bridgePath === 'main_world_to_content_to_native' ? 'main_world_to_content_to_native' : null;
+    summaryPayload.bridgePath === 'main_world_to_content_to_native'
+      ? 'main_world_to_content_to_native'
+      : null;
   if (!source || !bridgePath) return null;
 
-  const url = typeof obj.url === 'string' ? redactUrlForMetadata(obj.url) : '';
+  const url =
+    typeof summaryPayload.url === 'string' ? redactUrlForMetadata(summaryPayload.url) : '';
   if (!url) return null;
-  const rowsInput = Array.isArray(obj.rows) ? obj.rows : [];
+  const rowsInput = Array.isArray(summaryPayload.rows) ? summaryPayload.rows : [];
   const rows: BrowserContextSafeResponseSummary['rows'] = [];
-  let privacyFailed = obj.privacyCheck === 'failed';
+  let privacyFailed = summaryPayload.privacyCheck === 'failed';
   for (const rawRow of rowsInput.slice(0, MAX_ROWS)) {
     if (!rawRow || typeof rawRow !== 'object' || Array.isArray(rawRow)) continue;
     const row: Record<string, string | number | boolean | null> = {};
@@ -137,14 +142,18 @@ function sanitizeSummary(
     if (Object.keys(row).length > 0) rows.push(row);
   }
   const fieldNames = Array.from(new Set(rows.flatMap((row) => Object.keys(row)))).sort();
-  const capturedAt = typeof obj.capturedAt === 'number' ? obj.capturedAt : nowMs();
-  const emptyResultEvidence = obj.emptyResultEvidence === 'empty_array' ? 'empty_array' : null;
+  const capturedAt =
+    typeof summaryPayload.capturedAt === 'number' ? summaryPayload.capturedAt : nowMs();
+  const emptyResultEvidence =
+    summaryPayload.emptyResultEvidence === 'empty_array' ? 'empty_array' : null;
   const emptyResult =
-    rows.length === 0 && obj.emptyResult === true && emptyResultEvidence === 'empty_array';
+    rows.length === 0 &&
+    summaryPayload.emptyResult === true &&
+    emptyResultEvidence === 'empty_array';
   const compactUnavailable = !privacyFailed && rows.length === 0 && !emptyResult;
   const rejectedReason =
-    typeof obj.rejectedReason === 'string' && obj.rejectedReason.length > 0
-      ? obj.rejectedReason
+    typeof summaryPayload.rejectedReason === 'string' && summaryPayload.rejectedReason.length > 0
+      ? summaryPayload.rejectedReason
       : privacyFailed
         ? 'sensitive_field'
         : compactUnavailable
@@ -154,14 +163,14 @@ function sanitizeSummary(
   return {
     responseSummarySource: source,
     bridgePath,
-    capturedAfterArm: obj.capturedAfterArm === true && capturedAt >= state.armedAt,
+    capturedAfterArm: summaryPayload.capturedAfterArm === true && capturedAt >= state.armedAt,
     rawBodyPersisted: false,
     privacyCheck: privacyFailed ? 'failed' : 'passed',
     rejectedReason,
-    method: normalizeMethod(obj.method),
+    method: normalizeMethod(summaryPayload.method),
     url,
-    status: typeof obj.status === 'number' ? obj.status : null,
-    contentType: normalizeContentType(obj.contentType),
+    status: typeof summaryPayload.status === 'number' ? summaryPayload.status : null,
+    contentType: normalizeContentType(summaryPayload.contentType),
     rows: privacyFailed ? [] : rows,
     rowCount: privacyFailed ? 0 : rows.length,
     emptyResult: privacyFailed ? false : emptyResult,
@@ -169,7 +178,9 @@ function sanitizeSummary(
     fieldShapeSummaryAvailable: !privacyFailed && fieldNames.length > 0,
     fieldNames,
     taskQueryValueMatched:
-      typeof obj.taskQueryValueMatched === 'boolean' ? obj.taskQueryValueMatched : null,
+      typeof summaryPayload.taskQueryValueMatched === 'boolean'
+        ? summaryPayload.taskQueryValueMatched
+        : null,
     samplerArmedAt: state.armedAt,
     capturedAt,
   };
@@ -188,9 +199,9 @@ function buildBridgeScript(args: { samplerId: string; expiresAt: number; message
   const listener = (event: MessageEvent) => {
     if (event.source !== window) return;
     if (Date.now() > expiresAt) return;
-    const data = event.data;
-    if (!data || typeof data !== 'object') return;
-    const payload = data as Record<string, unknown>;
+    const eventData = event.data;
+    if (!eventData || typeof eventData !== 'object') return;
+    const payload = eventData as Record<string, unknown>;
     if (payload.type !== messageType || payload.samplerId !== samplerId) return;
     void chrome.runtime.sendMessage({
       type: messageType,
@@ -272,13 +283,13 @@ function buildMainWorldSampler(args: {
     return request.some((value) => current.includes(value));
   }
 
-  function compactPrimitive(value: unknown): string | number | boolean | null | undefined {
+  function compactSamplerScalarValue(value: unknown): string | number | boolean | null | undefined {
     if (value === null || typeof value === 'number' || typeof value === 'boolean') return value;
     if (typeof value === 'string') return value.length > 240 ? value.slice(0, 240) : value;
     return undefined;
   }
 
-  function pickRows(parsed: unknown): {
+  function selectSummaryRows(parsed: unknown): {
     rows: Array<Record<string, string | number | boolean | null>>;
     listLength: number | null;
   } {
@@ -297,9 +308,9 @@ function buildMainWorldSampler(args: {
     if (Array.isArray(parsed)) {
       list = parsed;
     } else if (parsed && typeof parsed === 'object') {
-      const obj = parsed as Record<string, unknown>;
+      const parsedObject = parsed as Record<string, unknown>;
       for (const key of arrayKeys) {
-        const candidate = obj[key];
+        const candidate = parsedObject[key];
         if (Array.isArray(candidate)) {
           list = candidate;
           break;
@@ -313,7 +324,7 @@ function buildMainWorldSampler(args: {
       const row: Record<string, string | number | boolean | null> = {};
       for (const key of Object.keys(raw as Record<string, unknown>).slice(0, 12)) {
         if (sensitiveRe.test(key)) continue;
-        const compact = compactPrimitive((raw as Record<string, unknown>)[key]);
+        const compact = compactSamplerScalarValue((raw as Record<string, unknown>)[key]);
         if (compact !== undefined) row[key] = compact;
       }
       if (Object.keys(row).length > 0) rows.push(row);
@@ -321,21 +332,21 @@ function buildMainWorldSampler(args: {
     return { rows, listLength: list.length };
   }
 
-  function hasSensitiveField(parsed: unknown): boolean {
+  function containsSensitiveField(parsed: unknown): boolean {
     if (!parsed || typeof parsed !== 'object') return false;
     const stack: unknown[] = [parsed];
     let inspected = 0;
     while (stack.length > 0 && inspected < 80) {
       inspected += 1;
-      const next = stack.pop();
-      if (!next || typeof next !== 'object') continue;
-      if (Array.isArray(next)) {
-        for (const item of next.slice(0, 5)) stack.push(item);
+      const candidateNode = stack.pop();
+      if (!candidateNode || typeof candidateNode !== 'object') continue;
+      if (Array.isArray(candidateNode)) {
+        for (const item of candidateNode.slice(0, 5)) stack.push(item);
         continue;
       }
-      for (const key of Object.keys(next as Record<string, unknown>).slice(0, 20)) {
+      for (const key of Object.keys(candidateNode as Record<string, unknown>).slice(0, 20)) {
         if (sensitiveRe.test(key)) return true;
-        stack.push((next as Record<string, unknown>)[key]);
+        stack.push((candidateNode as Record<string, unknown>)[key]);
       }
     }
     return false;
@@ -350,8 +361,10 @@ function buildMainWorldSampler(args: {
     rejectedReason: string | null;
   }) {
     if (Date.now() > expiresAt) return;
-    const privacyFailed = input.rejectedReason !== null || hasSensitiveField(input.parsed);
-    const compact = privacyFailed ? { rows: [], listLength: null } : pickRows(input.parsed);
+    const privacyFailed = input.rejectedReason !== null || containsSensitiveField(input.parsed);
+    const compact = privacyFailed
+      ? { rows: [], listLength: null }
+      : selectSummaryRows(input.parsed);
     const rows = compact.rows;
     const compactUnavailable =
       !privacyFailed &&
@@ -453,31 +466,31 @@ function buildMainWorldSampler(args: {
     this: XMLHttpRequest,
     ...sendArgs: Parameters<XMLHttpRequest['send']>
   ) {
-    const xhr = this as XMLHttpRequest & { __tabrixSummary?: { method: string; url: string } };
-    xhr.addEventListener('loadend', () => {
-      const meta = xhr.__tabrixSummary;
-      if (!meta) return;
-      const contentType = xhr.getResponseHeader('content-type');
+    const request = this as XMLHttpRequest & { __tabrixSummary?: { method: string; url: string } };
+    request.addEventListener('loadend', () => {
+      const requestMetadata = request.__tabrixSummary;
+      if (!requestMetadata) return;
+      const contentType = request.getResponseHeader('content-type');
       if (
         !contentType ||
         !/\b(application\/json|application\/.*\+json|text\/json)\b/i.test(contentType)
       )
         return;
       try {
-        const parsed = JSON.parse(String(xhr.responseText || 'null'));
+        const parsed = JSON.parse(String(request.responseText || 'null'));
         postSummary({
-          url: meta.url,
-          method: meta.method,
-          status: xhr.status,
+          url: requestMetadata.url,
+          method: requestMetadata.method,
+          status: request.status,
           contentType,
           parsed,
           rejectedReason: null,
         });
       } catch {
         postSummary({
-          url: meta.url,
-          method: meta.method,
-          status: xhr.status,
+          url: requestMetadata.url,
+          method: requestMetadata.method,
+          status: request.status,
           contentType,
           parsed: null,
           rejectedReason: 'compact_rows_unavailable',
