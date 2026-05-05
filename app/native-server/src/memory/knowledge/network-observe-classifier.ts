@@ -642,15 +642,17 @@ export function summarizeEndpointCandidates(
 const FAVICON_PATH_RE = /(^|\/)favicon\.(ico|png|svg|gif|webp)(\?|$)/i;
 const SOURCE_MAP_PATH_RE = /\.map(\?|$)/i;
 
-/** Map a v1 `NetworkObserveSemanticType` to the v2 candidate enum. */
-function v1ToV2Semantic(v1: NetworkObserveSemanticType): EndpointCandidateSemanticType {
-  switch (v1) {
+/** Map legacy `NetworkObserveSemanticType` to the endpoint-candidate enum. */
+function mapLegacySemanticToCandidateSemantic(
+  semanticType: NetworkObserveSemanticType,
+): EndpointCandidateSemanticType {
+  switch (semanticType) {
     case 'search':
     case 'list':
     case 'detail':
     case 'pagination':
     case 'filter':
-      return v1;
+      return semanticType;
     case 'mutation':
     case 'asset':
     case 'analytics':
@@ -904,7 +906,7 @@ export function classifyEndpointCandidate(
     if (input.mimeType) v1EvidenceKinds.push('content_type');
     if (shapeSummaryAvailable && shape && !isEmptyShape(shape)) v1EvidenceKinds.push('shape');
     return {
-      semanticType: v1ToV2Semantic(v1.semanticType),
+      semanticType: mapLegacySemanticToCandidateSemantic(v1.semanticType),
       noiseReason: null,
       confidence: baseConfidence,
       evidenceLevel,
