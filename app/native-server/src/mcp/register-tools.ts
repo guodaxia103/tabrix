@@ -71,9 +71,9 @@ import { describeBridgeRecoveryGuidance } from '../scripts/bridge-recovery-guida
  * the tool list unless explicitly allowed via ENABLE_MCP_TOOLS.
  */
 export const SENSITIVE_TOOL_NAMES: ReadonlySet<string> = new Set([
-  'chrome_javascript',
-  'chrome_bookmark_delete',
-  'chrome_upload_file',
+  TOOL_NAMES.BROWSER.JAVASCRIPT,
+  TOOL_NAMES.BROWSER.BOOKMARK_DELETE,
+  TOOL_NAMES.BROWSER.FILE_UPLOAD,
 ]);
 
 function parseToolList(value?: string): Set<string> {
@@ -801,10 +801,10 @@ function resolveTaskContextKey(
   if (explicit) return explicit;
 
   const autoEligible =
-    toolName === 'chrome_read_page' ||
-    toolName === 'chrome_navigate' ||
+    toolName === TOOL_NAMES.BROWSER.READ_PAGE ||
+    toolName === TOOL_NAMES.BROWSER.NAVIGATE ||
     toolName === TOOL_NAMES.BROWSER.NETWORK_CAPTURE ||
-    toolName === 'tabrix_choose_context';
+    toolName === TOOL_NAMES.CONTEXT.CHOOSE;
   if (!autoEligible) return null;
 
   const argTabId =
