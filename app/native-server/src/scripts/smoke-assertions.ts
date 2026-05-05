@@ -125,50 +125,56 @@ export function assessReadPagePayload(
     };
   }
 
-  const obj = payload as Record<string, unknown>;
+  const payloadObject = payload as Record<string, unknown>;
   const page =
-    obj.page && typeof obj.page === 'object' ? (obj.page as Record<string, unknown>) : null;
+    payloadObject.page && typeof payloadObject.page === 'object'
+      ? (payloadObject.page as Record<string, unknown>)
+      : null;
   const summary =
-    obj.summary && typeof obj.summary === 'object'
-      ? (obj.summary as Record<string, unknown>)
+    payloadObject.summary && typeof payloadObject.summary === 'object'
+      ? (payloadObject.summary as Record<string, unknown>)
       : null;
 
   const declaredPageType =
-    typeof obj.pageType === 'string'
-      ? obj.pageType
+    typeof payloadObject.pageType === 'string'
+      ? payloadObject.pageType
       : page && typeof page.pageType === 'string'
         ? (page.pageType as string)
         : null;
 
   // 1) explicit unsupported guard
   if (
-    obj.success === false ||
-    obj.reason === 'unsupported_page_type' ||
+    payloadObject.success === false ||
+    payloadObject.reason === 'unsupported_page_type' ||
     (declaredPageType && UNSUPPORTED_PAGE_TYPES.has(declaredPageType))
   ) {
     const recommended =
-      typeof obj.recommendedAction === 'string' ? obj.recommendedAction : 'switch_to_http_tab';
+      typeof payloadObject.recommendedAction === 'string'
+        ? payloadObject.recommendedAction
+        : 'switch_to_http_tab';
     const observedUrl =
-      page && typeof page.url === 'string' ? (page.url as string) : (obj.url as string | undefined);
+      page && typeof page.url === 'string'
+        ? (page.url as string)
+        : (payloadObject.url as string | undefined);
     return {
       ok: false,
       reason: 'unsupported_page_type',
       detail:
         `chrome_read_page declined: pageType=${declaredPageType ?? 'unknown'} ` +
-        `reason=${String(obj.reason ?? 'unsupported_page_type')} ` +
+        `reason=${String(payloadObject.reason ?? 'unsupported_page_type')} ` +
         `recommendedAction=${recommended} url=${brief(observedUrl ?? '<unknown>', 80)}`,
     };
   }
 
   // 2) v2.6 layered shape
   const hasLayered =
-    typeof obj.mode === 'string' &&
+    typeof payloadObject.mode === 'string' &&
     page !== null &&
     typeof page.url === 'string' &&
     typeof page.title === 'string' &&
     summary !== null &&
     typeof summary.pageRole === 'string' &&
-    Array.isArray(obj.interactiveElements);
+    Array.isArray(payloadObject.interactiveElements);
 
   if (hasLayered) {
     const url = page!.url as string;
@@ -179,35 +185,38 @@ export function assessReadPagePayload(
         detail: `chrome_read_page page.url=${brief(url, 80)} does not start with ${opts.expectedUrlPrefix}`,
       };
     }
-    const interactiveCount = (obj.interactiveElements as unknown[]).length;
+    const interactiveCount = (payloadObject.interactiveElements as unknown[]).length;
     return {
       ok: true,
       reason: 'ok_layered_v26',
       detail:
-        `mode=${String(obj.mode)} pageRole=${String((summary as Record<string, unknown>).pageRole)} ` +
-        `interactive=${interactiveCount} L0=${obj.L0 ? 'present' : 'absent'} ` +
-        `L1=${obj.L1 ? 'present' : 'absent'}`,
+        `mode=${String(payloadObject.mode)} pageRole=${String((summary as Record<string, unknown>).pageRole)} ` +
+        `interactive=${interactiveCount} L0=${payloadObject.L0 ? 'present' : 'absent'} ` +
+        `L1=${payloadObject.L1 ? 'present' : 'absent'}`,
     };
   }
 
   // 3) legacy back-compat (NOT the documented v2.6 path; kept so the smoke
   //    does not regress when older snapshots flow through fallback paths).
-  if (typeof obj.pageContent === 'string' && (obj.pageContent as string).length > 0) {
+  if (
+    typeof payloadObject.pageContent === 'string' &&
+    (payloadObject.pageContent as string).length > 0
+  ) {
     if (
       opts.expectedUrlPrefix &&
-      typeof obj.url === 'string' &&
-      !(obj.url as string).startsWith(opts.expectedUrlPrefix)
+      typeof payloadObject.url === 'string' &&
+      !(payloadObject.url as string).startsWith(opts.expectedUrlPrefix)
     ) {
       return {
         ok: false,
         reason: 'wrong_url',
-        detail: `legacy chrome_read_page url=${brief(obj.url, 80)} does not start with ${opts.expectedUrlPrefix}`,
+        detail: `legacy chrome_read_page url=${brief(payloadObject.url, 80)} does not start with ${opts.expectedUrlPrefix}`,
       };
     }
     return {
       ok: true,
       reason: 'ok_legacy_pageContent',
-      detail: `legacy v2.5 shape (pageContent length=${(obj.pageContent as string).length})`,
+      detail: `legacy v2.5 shape (pageContent length=${(payloadObject.pageContent as string).length})`,
     };
   }
 
@@ -217,7 +226,7 @@ export function assessReadPagePayload(
     detail:
       `chrome_read_page payload missing both layered fields ` +
       `(mode/page/summary/interactiveElements) and legacy pageContent. ` +
-      `Saw keys=[${Object.keys(obj).slice(0, 12).join(',')}]`,
+      `Saw keys=[${Object.keys(payloadObject).slice(0, 12).join(',')}]`,
   };
 }
 
