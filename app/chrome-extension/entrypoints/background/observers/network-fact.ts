@@ -1,5 +1,5 @@
 /**
- * V27-02 — Tabrix v2.7 Network Fact Observer (extension side).
+ * Network Fact Observer (extension side).
  *
  * Wires `chrome.webRequest.*` to a passive emitter that summarises each
  * completed XHR/fetch request into a brand-neutral `NetworkRequestFact`
@@ -9,14 +9,14 @@
  * Boundary:
  * - Passive observer. Never installs body / header capture, never
  *   blocks a request, never reads request bodies. The runtime MAY
- *   pivot to `chrome.debugger`-based body capture later (V27-06+ /
- *   on-demand capture tool); this observer stays passive.
+ *   pivot to `chrome.debugger`-based body capture later via the
+ *   on-demand capture tool; this observer stays passive.
  * - Brand-neutral: every emitted fact is a closed-enum bucket plus
  *   host + path-only `urlPattern`. Query string values, headers, and
  *   bodies never leave Chrome.
  * - XHR / fetch only: main_frame / sub_frame / image / stylesheet
  *   navigations are dropped at the boundary so the observer overhead
- *   stays inside the V27-00 budget
+ *   stays inside the runtime observation budget
  *   (`OBSERVER_OVERHEAD_BUDGET_MS_PER_EVENT`).
  *
  * Like `observers/lifecycle.ts`, this module receives a `send`

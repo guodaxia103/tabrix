@@ -5,10 +5,10 @@
  * - A pure, in-memory, deterministic versioned context tree keyed by
  *   `tabId`. Each tab's record carries (`contextId`, `version`,
  *   `urlPattern`, `level`, `lastInvalidationReason`).
- * - The single integration point for the v2.7 observation backbone:
- *   - V27-01 lifecycle snapshots feed `applyLifecycleSnapshot()`.
- *   - V27-03 action outcome snapshots feed `applyActionOutcome()`.
- *   - V27-05 tab/window events feed `applyTabEvent()`.
+ * - The single integration point for the observation backbone:
+ *   - lifecycle snapshots feed `applyLifecycleSnapshot()`.
+ *   - action outcome snapshots feed `applyActionOutcome()`.
+ *   - tab/window events feed `applyTabEvent()`.
  * - The Router/Policy is the only consumer that calls `getContext(tabId)`
  *   to detect "did the page underneath my plan change?". The manager
  *   does NOT decide policy — it only owns lifecycle/version/invalidation
@@ -26,11 +26,11 @@
  *   uses the closed-enum verdict to decide whether to bump the version
  *   under a `bfcache_restored` reason.
  * - It does not persist anything. Persistence is the operation log's
- *   responsibility through V27-00 PrivacyGate; the manager hands snapshots
+ *   responsibility through PrivacyGate; the manager hands snapshots
  *   to the writer, never the reverse.
  *
  * Boundary cross-ref:
- * - Public types: `packages/shared/src/browser-fact.ts` (V27-05 section).
+ * - Public types: `packages/shared/src/browser-fact.ts`.
  * - Lifecycle producer: `app/native-server/src/runtime/lifecycle-state-machine.ts`.
  * - Action outcome producer:
  *   `app/native-server/src/runtime/action-outcome-classifier.ts`.
@@ -58,7 +58,7 @@ import type {
  */
 export interface ContextManager {
   /**
-   * Apply a V27-01 lifecycle snapshot. The manager updates the
+   * Apply a lifecycle snapshot. The manager updates the
    *  `urlPattern` for the tab and bumps `version` when:
    *   - the previous record's urlPattern differs (navigation), OR
    *   - the lifecycleFlag is one of `back_forward` / `reload` /
@@ -70,14 +70,14 @@ export interface ContextManager {
   applyLifecycleSnapshot(snapshot: LifecycleStateSnapshot): ContextVersion;
 
   /**
-   * Apply a V27-05 tab/window event. Returns the updated context
+   * Apply a tab/window event. Returns the updated context
    * record for `event.tabId`. For `tab_removed`, the record is
    * removed and `null` is returned (the manager's cleanup hook).
    */
   applyTabEvent(event: TabWindowContextEventEnvelope): ContextVersion | null;
 
   /**
-   * Apply a V27-03 action-outcome snapshot. The manager bumps the
+   * Apply an action-outcome snapshot. The manager bumps the
    * version under `route_change` (for `spa_partial_update`) or
    * `navigation` (for `navigated_same_tab`) at the matching context
    * level. Other outcomes (`navigated_new_tab`, `modal_opened`,

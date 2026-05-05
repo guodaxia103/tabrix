@@ -1,8 +1,8 @@
 /**
  * Layer Budget Composer.
  *
- * Pure helper that combines a `ReadinessProfile` (V27-04a) and a
- * `ComplexityProfile` (V27-04b) into a `RecommendedLayerBudget`. The
+ * Pure helper that combines a `ReadinessProfile` and a
+ * `ComplexityProfile` into a `RecommendedLayerBudget`. The
  * composer is the only runtime module that is allowed to take both
  * arms as input at the same time — the readiness/complexity profilers
  * themselves stay orthogonal so the test matrix is small and the
@@ -10,13 +10,11 @@
  *
  * The recommendation is advisory. Router/Policy combine it with
  * privacy/risk policy + the active task intent + the latency budget
- * before committing. Batch A only declares the type and the composer;
- * actual wiring onto the production decision path lands later (V27-15
- * + V27-09 owner-lane Gate B).
+ * before committing. The helper stays advisory so Router/Policy can
+ * evolve without changing the profiler contract.
  *
  * Privacy / boundary: pure function, no I/O. Inputs are already
- * brand-neutral (V27-02 guarantee). Outputs carry closed-enum metadata
- * only.
+ * brand-neutral. Outputs carry closed-enum metadata only.
  */
 
 import type {
@@ -36,7 +34,7 @@ export interface ComposeLayerBudgetOptions {
 /**
  * Compose a `RecommendedLayerBudget` from the two arms.
  *
- * Decision rule (closed enum, matches the V27-04 SoT):
+ * Decision rule (closed enum):
  *   1. If readiness is `'error'` or `'empty'`, recommend `'L0'` with
  *      reason `'not_ready'` — there is no point reading deeper.
  *   2. If readiness is `'unknown'`, recommend `'unknown'` (the Router

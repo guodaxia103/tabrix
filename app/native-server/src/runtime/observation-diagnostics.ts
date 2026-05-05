@@ -1,12 +1,12 @@
 /**
- * V27-05R — in-memory diagnostics for the browser observation spine.
+ * In-memory diagnostics for the browser observation spine.
  *
  * This is intentionally a diagnostic surface, not a persistence path:
  * it records only counters, closed-enum reason fields, ids, and
  * context metadata that are already query-stripped by the producers.
  * It lets owner-lane real-browser gates prove that extension
- * observations reached the native runtime before V27-06 builds on
- * those facts.
+ * observations reached the native runtime before downstream readers
+ * build on those facts.
  */
 import type { ContextInvalidationReason, ObservationKind } from '@tabrix/shared';
 

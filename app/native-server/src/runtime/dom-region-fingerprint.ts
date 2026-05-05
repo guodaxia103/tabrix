@@ -14,8 +14,7 @@
  *
  * Out of scope:
  * - Real DOM access. The helper consumes producer-side region
- *   summaries; the producer (extension `observers/dom-fact.ts`,
- *   landed alongside V27-04 readiness profiler) is the only side
+ *   summaries; the producer (extension-side DOM observation) is the only side
  *   that touches the DOM, and even there only via existing
  *   stable-target-ref-registry / read-page paths.
  */
@@ -43,7 +42,7 @@ export interface RegionSummaryInput {
  * - Throws `Error` (privacy) if the producer accidentally embedded a
  *   value-shaped scalar (email / phone / long opaque token) in any
  *   `signal`. The throw is loud on purpose: a leak is a contract bug
- *   the V27-00 PrivacyGate must surface, not silently redact.
+ *   PrivacyGate must surface, not silently redact.
  */
 export function fingerprintRegions(
   regions: ReadonlyArray<RegionSummaryInput>,

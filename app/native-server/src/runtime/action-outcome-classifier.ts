@@ -2,17 +2,17 @@
  * Action Outcome Classifier (native runtime side).
  *
  * Pure, in-memory, deterministic. Given an `ActionOutcomeEventEnvelope`
- * (action descriptor + a typed signal timeline produced by the v2.7
+ * (action descriptor + a typed signal timeline produced by the
  * race observer in the extension), this module returns an
  * `ActionOutcomeSnapshot` carrying:
  *
- *   - `outcome`              — closed-enum verdict (V27-03 enum from
+ *   - `outcome`              — closed-enum verdict (shared enum from
  *                              `@tabrix/shared`, includes `'ambiguous'`,
  *                              `'multiple_signals'`, `'unknown'`).
  *   - `outcomeConfidence`    — clamped `[0, 1]` float. The operation-log
  *                              writer formats it as `'0.00'..'1.00'` for
  *                              the `outcomeConfidence` metadata key
- *                              (declared by V27-00).
+ *                              (declared by the operation-log contract).
  *   - `observedSignalKinds`  — deduplicated, sorted closed-enum signal
  *                              kinds that fired in the settle window.
  *
@@ -23,14 +23,14 @@
  * - No reliance on the raw URL: the producer pre-summarises into
  *   `urlPattern` / `host` / `pathPattern`. The runtime never inspects
  *   any string for sensitive content; persistence-side redaction stays
- *   the belt-and-suspenders defence (V27-00 PrivacyGate).
+ *   the belt-and-suspenders defence (PrivacyGate).
  * - All inputs and outputs are closed-enum bags (`ACTION_KINDS`,
- *   `ACTION_SIGNAL_KINDS`, `ACTION_OUTCOMES`); the V27-00
+ *   `ACTION_SIGNAL_KINDS`, `ACTION_OUTCOMES`); the
  *   `RequireUnknownFallback` invariant pins `'unknown'` as a member of
  *   each.
  *
  * Confidence model (calibrated against the SoT V2 acceptance scenarios
- * described in the V27-03 plan section, not against real-browser Gate
+ * for action-outcome classification, not against real-browser Gate
  * evidence — that stays owner-lane):
  *
  *   - A single corroborating signal in the closed allowlist scores
@@ -39,7 +39,7 @@
  *     score 0.95.
  *   - A signal kind that does not match any verdict bucket lowers the
  *     verdict confidence by 0.1 per stray signal, floored at 0.6 so
- *     `'ambiguous'` never collapses below the V27-00 confidence floor.
+ *     `'ambiguous'` never collapses below the ambiguity confidence floor.
  *   - `no_observed_change` (empty timeline) returns 1.0 — the absence
  *     of signals is itself a strong claim.
  *   - Anything outside the allowlist falls through to `'unknown'`
@@ -62,7 +62,7 @@ import type {
 export const ACTION_OUTCOME_DEFAULT_SETTLE_WINDOW_MS = 1_500;
 
 /** Lower bound on the classifier's reported confidence. Anything below
- *  this floor would conflict with the V27-00 `lifecycleConfidence`
+ *  this floor would conflict with the lifecycle confidence
  *  expectations elsewhere in the runtime. */
 export const ACTION_OUTCOME_MIN_AMBIGUOUS_CONFIDENCE = 0.6;
 
@@ -113,7 +113,7 @@ export function classifyActionOutcome(
   };
 }
 
-/** Closed-enum check: is this kind a v2.7 signal we know how to
+/** Closed-enum check: is this kind a signal we know how to
  *  reason about? Defensive guard for envelopes produced by a future
  *  schema generation that rolls back to this binary. */
 export function isKnownActionSignalKind(kind: ActionSignalKind): boolean {
@@ -134,7 +134,7 @@ interface VerdictResult {
 }
 
 /**
- * Bucket the timeline into the V27-03 closed-enum verdicts. The
+ * Bucket the timeline into closed-enum verdicts. The
  * algorithm prefers a strong single-signal match; only when more than
  * one orthogonal verdict fires does it fall back to
  * `'multiple_signals'`. Any unknown signal kind drops the confidence
@@ -239,7 +239,7 @@ function dedupeSorted<T extends string>(values: T[]): T[] {
 }
 
 // ---------------------------------------------------------------------------
-// V27-03 — DOM region inclusion/exclusion hash rule
+// DOM region inclusion/exclusion hash rule
 // ---------------------------------------------------------------------------
 
 /**
@@ -296,12 +296,12 @@ export interface RegionSignalSelectionResult {
 /**
  * Pure helper that splits a producer-side region-signal bag into
  * "include in DOM hash" vs "drop". The split is deterministic — the
- * same bag always produces the same partition — and is the V27-03
+ * same bag always produces the same partition — and is the
  * contract surface tested by the hash-rule golden tests.
  *
  * Unknown / unmapped tags are dropped (defensive default). The
  * producer must update this allowlist explicitly to add a new region
- * signal, which is the v2.7 schema-cite discipline.
+ * signal, which keeps schema evolution explicit.
  */
 export function selectDomRegionSignalsForOutcome(
   signals: DomRegionTaggedSignal[],

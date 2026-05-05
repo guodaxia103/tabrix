@@ -1,5 +1,5 @@
 /**
- * V27-03 — Background-side singleton seam for the Action Outcome Observer.
+ * Background-side singleton seam for the Action Outcome Observer.
  *
  * Why a seam?
  * - `attachActionOutcomeObserver()` returns a handle that only the
@@ -52,8 +52,8 @@ export function getActionOutcomeObserverHandle(): ActionOutcomeObserverHandle | 
  * No-op handle returned when no observer is wired (e.g. bridge not up
  * yet, or the SW just initialised). The tool's main path treats arming
  * as best-effort, so silently degrading is the right default — see the
- * SoT V2 V27-03 brief: "observer must remain best-effort and must not
- * block the tool's main path".
+ * product invariant: the observer must remain best-effort and must not
+ * block a tool's main path.
  */
 const NOOP_HANDLE: ActionOutcomeHandle = {
   pushSignal(): void {

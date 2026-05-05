@@ -1,5 +1,5 @@
 /**
- * V27-03 — Tabrix v2.7 Action Outcome Observer (extension side).
+ * Action Outcome Observer (extension side).
  *
  * The native classifier in `app/native-server/src/runtime/action-outcome-classifier.ts`
  * is a pure function over a closed-enum signal timeline. This module is
@@ -18,7 +18,7 @@
  * - Brand-neutral: every emitted signal carries closed-enum metadata
  *   only (host / pathPattern / regionTag / newTabId). Raw URLs, header
  *   values, and DOM strings never leave Chrome. The persistence-side
- *   V27-00 PrivacyGate is the belt-and-suspenders defence.
+ *   the persistence privacy gate is the belt-and-suspenders defence.
  * - Per-tab scoping: signals fire across the whole browser, but each
  *   in-flight observation only accepts signals matching its tabId.
  *   This avoids one tab's network noise polluting another tab's

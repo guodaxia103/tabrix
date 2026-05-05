@@ -1,17 +1,16 @@
 /**
  * Page Complexity Profiler.
  *
- * Pure function over the V27-02 fact snapshot. Asks one question only:
+ * Pure function over the browser fact snapshot. Asks one question only:
  * "what is the dominant SHAPE of this page?". It does NOT consult
- * readiness signals — readiness is V27-04a. The two arms compose only
+ * readiness signals. The two arms compose only
  * inside `composeLayerBudget()` (see `layer-budget.ts`).
  *
  * The classifier is deterministic: given the same
  * `BrowserFactSnapshot`, it returns the same `ComplexityProfile`
  * (modulo `producedAtMs`, which the caller controls via `options.now`).
  *
- * Privacy: the input snapshot is already brand-neutral (V27-02
- * guarantee). This module never reads raw URLs, headers, raw HTML, or
+ * Privacy: the input snapshot is already brand-neutral. This module never reads raw URLs, headers, raw HTML, or
  * innerText. Decisions ride on closed-enum metadata only:
  *   - `noiseClass`, `sizeClass`, `method`, `pathPattern` shape
  *     (e.g. trailing `/.../:id` segment) for the network arm,
@@ -45,8 +44,8 @@ const COMPLEXITY_TWO_SIGNAL_CONFIDENCE = 0.9;
 const COMPLEXITY_THREE_SIGNAL_CONFIDENCE = 1.0;
 
 /**
- * Closed-enum allowlist of brand-neutral region tags V27-04 understands.
- * The allowlist mirrors the V27-02 region-fingerprint helper (see
+ * Closed-enum allowlist of brand-neutral region tags the profiler understands.
+ * The allowlist mirrors the region-fingerprint helper (see
  * `dom-region-fingerprint.ts`); any tag outside the list is treated as a
  * "shell" hint (i.e. degrades the verdict to `simple` if no other
  * signal beats it).

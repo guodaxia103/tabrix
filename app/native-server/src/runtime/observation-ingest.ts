@@ -1,8 +1,8 @@
 /**
- * V27 runtime observation ingestion arm.
+ * Runtime observation ingestion arm.
  *
  * Single funnel between `bridge-command-channel.ts` (websocket handler)
- * and the four V27 default runtime singletons (lifecycle state machine,
+ * and the default runtime singletons (lifecycle state machine,
  * fact collector, action outcome classifier, tab/window context manager).
  *
  * This module is deliberately tiny on purpose: the bridge channel must
@@ -10,7 +10,7 @@
  * shape-checking, and best-effort error swallowing lives here. The
  * dispatch is purely in-memory — no persistence is performed; raw
  * payloads are never written to disk by this module. Persistence-side
- * redaction stays the operation log's responsibility through V27-00
+ * redaction stays the operation log's responsibility through
  * `PrivacyGate`.
  *
  * Boundary:
@@ -180,7 +180,7 @@ export function ingestBridgeObservation(
     case 'unknown':
     default:
       // Forward-compat: unknown observation kinds are intentionally
-      // dropped without error so a v2.7+ extension paired with this
+      // dropped without error so a newer extension paired with this
       // native server does not crash ingestion.
       recordV27ObservationUnknown(payload.kind);
       return;

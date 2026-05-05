@@ -1,7 +1,7 @@
 /**
- * V27-00 — Tabrix v2.7 Privacy Gate library.
+ * Privacy Gate library.
  *
- * Goal: every v2.7 observation persistence path (operation log, in-memory
+ * Goal: every observation persistence path (operation log, in-memory
  * fact ring, Gate B evidence transformer) MUST funnel its record through
  * `redactForPersistence` so a regression that introduces a `cookie`,
  * `Authorization`, raw response body, or value-shaped string cannot land
@@ -60,7 +60,7 @@ export function isSensitiveHeaderName(name: string): boolean {
 }
 
 /**
- * Closed list of object keys that v2.7 observation MUST never persist.
+ * Closed list of object keys that browser observation MUST never persist.
  * Either the key carries raw user content (request/response body), a
  * non-stable browser id (`tabId`, `windowId`, `frameId`, `refId`,
  * `nodeId`), or a query/url surface that has not been pre-summarised

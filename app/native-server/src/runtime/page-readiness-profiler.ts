@@ -1,9 +1,9 @@
 /**
  * Page Readiness Profiler.
  *
- * Pure function over the V27-02 fact snapshot. Asks one question only:
+ * Pure function over the browser fact snapshot. Asks one question only:
  * "is the page in a state where a list-shaped read would be wasted?".
- * It does NOT classify what the page IS — that is V27-04b
+ * It does NOT classify what the page IS — that is the complexity profiler's job
  * (`page-complexity-profiler.ts`). The two arms compose only inside
  * `composeLayerBudget()` (see `layer-budget.ts`).
  *
@@ -11,8 +11,7 @@
  * `BrowserFactSnapshot`, it returns the same `ReadinessProfile` (modulo
  * `producedAtMs`, which the caller controls via `options.now`).
  *
- * Privacy: the input snapshot is already brand-neutral (V27-02
- * guarantee). This module never reads raw URLs, headers, or DOM
+ * Privacy: the input snapshot is already brand-neutral. This module never reads raw URLs, headers, or DOM
  * strings. The output carries closed-enum readiness states only.
  *
  * Boundary: no I/O, no logging, no globals. The runtime composes the
@@ -56,7 +55,7 @@ export interface ReadinessClassifyOptions {
 /**
  * Compute a `ReadinessProfile` from a fact snapshot.
  *
- * Decision tree (closed enum, matches the V27-04 SoT):
+ * Decision tree (closed enum):
  *   1. If readiness signals carry an explicit error or the network arm
  *      reports a hard failure (HTTP 5xx + zero usable network facts),
  *      return `'error'`.
@@ -71,7 +70,7 @@ export interface ReadinessClassifyOptions {
  *   7. Otherwise, return `'unknown'` (zero useful signals).
  *
  * The branches are ordered so the strongest verdict wins; the rule
- * order is pinned by the V27-04 unit test.
+ * order is pinned by the unit test.
  */
 export function classifyReadiness(
   snapshot: BrowserFactSnapshot,

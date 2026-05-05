@@ -4,8 +4,8 @@
  * Goal:
  * - In-memory ring of `BrowserFactSnapshot` produced by the extension
  *   observers (`network-fact.ts`, `dom-fact.ts`, `readiness.ts`). The
- *   runtime queries snapshots by `factSnapshotId` from V27-04 readiness
- *   profiler and V27-05 context manager.
+ *   runtime queries snapshots by `factSnapshotId` from readiness
+ *   profilers and the context manager.
  *
  * What this module is:
  * - A pure module with one process-wide singleton. No I/O, no SQLite,
@@ -20,7 +20,7 @@
  *   snapshot through `redactFactSnapshotForPersistence` before any
  *   disk write. Producer-side observers MUST NOT include cookies,
  *   authorization headers, raw URLs, raw bodies, or value-shaped
- *   scalars — that contract is enforced by the V27-00 privacy-gate
+ *   scalars — that contract is enforced by the privacy-gate
  *   golden tests covering this module's persistence helper.
  *
  * What this module is NOT:
@@ -87,7 +87,7 @@ interface CollectorOptions {
 
 /**
  * Build a fresh fact collector. Most callers want
- * `getDefaultFactCollector()`; the constructor exists so V27-04 / V27-05
+ * `getDefaultFactCollector()`; the constructor exists so runtime
  * unit tests can spin up an isolated collector with a frozen clock.
  */
 export function createFactCollector(options: CollectorOptions = {}): FactCollector {
@@ -120,7 +120,7 @@ export function createFactCollector(options: CollectorOptions = {}): FactCollect
     nowMs: number = clock(),
   ): BrowserFactSnapshot {
     const id = envelope.factSnapshotId;
-    if (!id) throw new Error('V27-02 fact-collector: factSnapshotId is required');
+    if (!id) throw new Error('fact-collector: factSnapshotId is required');
 
     // The collector is an in-memory ring. We deliberately keep
     // bookkeeping keys (tabId, sessionId) in memory because the
@@ -260,7 +260,7 @@ export function resetDefaultFactCollector(): void {
 }
 
 /**
- * Funnel a `BrowserFactSnapshot` through the V27-00 privacy gate
+ * Funnel a `BrowserFactSnapshot` through the privacy gate
  * before any persistence write (operation log, future Experience).
  * Returns a *new* object — `tabId`, `sessionId`, host header bags,
  * raw bodies, cookies, and value-shaped scalars are dropped or

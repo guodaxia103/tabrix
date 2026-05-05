@@ -1264,8 +1264,8 @@ export const initNativeHostListener = () => {
   ensureHeartbeatLoop();
   clearBridgeSocketReconnectTimer();
   void connectBridgeSocket('sw_init').catch(() => {});
-  // V27-01 / V27-05: Attach the v2.7 lifecycle observer once per SW
-  // activation. The observer drops messages silently when the bridge
+  // Attach the lifecycle observer once per SW activation. The observer
+  // drops messages silently when the bridge
   // socket is not yet connected (no connectionId), so it is safe to
   // attach before the first bridge handshake completes.
   // `onForwardBackCommitted` is wired below after the tab/window
@@ -1288,7 +1288,7 @@ export const initNativeHostListener = () => {
       tabWindowContextHandle?.notifyBfcacheRestored(tabId, urlPattern);
     },
   });
-  // V27-02: Attach the v2.7 network fact observer alongside the lifecycle
+  // Attach the passive network fact observer alongside the lifecycle
   // observer. Same producer contract: brand-neutral envelope only, drops
   // silently when the bridge is not yet connected, and never blocks the
   // webRequest handler chain.
@@ -1303,8 +1303,8 @@ export const initNativeHostListener = () => {
     getExtensionId: () => chrome.runtime.id,
     warn: (msg, error) => console.warn(`${LOG_PREFIX} ${msg}`, error),
   });
-  // V27-03: Attach the v2.7 action outcome observer alongside the
-  // lifecycle/network observers. Tools (click/fill/etc.) call
+  // Attach the action outcome observer alongside the lifecycle/network
+  // observers. Tools (click/fill/etc.) call
   // observe()/pushSignal() on the returned handle; the observer
   // races browser-side signals into a per-action timeline and emits
   // ActionOutcomeEventEnvelope on flush. Best-effort send.
@@ -1323,8 +1323,8 @@ export const initNativeHostListener = () => {
   // can call `armActionOutcome()` without taking the handle through
   // every constructor.
   setActionOutcomeObserverHandle(actionOutcomeHandle);
-  // V27-05: Attach the v2.7 tab/window context observer. Emits
-  // tab_created / tab_removed / tab_replaced / window_focus_changed
+  // Attach the tab/window context observer. Emits tab_created /
+  // tab_removed / tab_replaced / window_focus_changed
   // events to the runtime ContextManager. bfcache restoration is
   // surfaced via notifyBfcacheRestored() invoked from the lifecycle
   // observer when it sees a 'forward_back' qualifier.

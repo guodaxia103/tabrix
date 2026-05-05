@@ -1,7 +1,7 @@
 /**
- * V27-05 — Tabrix v2.7 Tab/Window Context Observer (extension side).
+ * Tab/Window Context Observer (extension side).
  *
- * Wires `chrome.tabs.*` and `chrome.windows.*` events to the v2.7
+ * Wires `chrome.tabs.*` and `chrome.windows.*` events to the
  * native-server `ContextManager` via the additive `BridgeObservationMessage`
  * (`kind: 'tab_event'`) bridge member.
  *
@@ -68,7 +68,7 @@ export interface TabWindowContextObserverHandle {
   detach(): void;
 }
 
-/** V27-05 bfcache-revalidation helper. Reads the stable-target-ref-registry
+/** Bfcache-revalidation helper. Reads the stable-target-ref-registry
  *  snapshot and converts it into a closed-enum verdict. The registry is
  *  pure in-memory: `entryCounts[tabId] > 0` means we *had* refs for this
  *  tab, but those refs are presumed `'stale'` after a bfcache restore

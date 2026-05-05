@@ -1,7 +1,7 @@
 /**
- * V27-01 — Tabrix v2.7 Lifecycle Observer (extension side).
+ * Lifecycle Observer (extension side).
  *
- * Wires `chrome.webNavigation.*` and `chrome.tabs.*` events to the v2.7
+ * Wires `chrome.webNavigation.*` and `chrome.tabs.*` events to the
  * native-server lifecycle state machine via the additive
  * `BridgeObservationMessage` (`kind: 'lifecycle_event'`) bridge member.
  *
@@ -11,10 +11,10 @@
  * - Brand-neutral: every `LifecycleEventPayload.urlPattern` is the
  *   path-only, query-stripped form (no host, no query, no fragment).
  *   Raw URLs and tab/frame ids are filtered out at the observer
- *   boundary; the V27-00 PrivacyGate is the persistence-side belt
+ *   boundary; the persistence privacy gate is the persistence-side belt
  *   alongside this suspenders.
  * - Main-frame only. Sub-frame navigations are ignored to keep the
- *   observer overhead inside the V27-00 budget
+ *   observer overhead inside the runtime observation budget
  *   (`OBSERVER_OVERHEAD_BUDGET_MS_PER_EVENT`).
  *
  * The observer does NOT import native-host directly — `attachLifecycleObserver`
@@ -45,7 +45,7 @@ export interface LifecycleObserverContext {
   /** Optional logger; defaults to a noop. */
   warn?: (message: string, error?: unknown) => void;
   /**
-   * V27-05 hook — invoked on a main-frame `committed` event whose
+   * Back/forward-cache hook — invoked on a main-frame `committed` event whose
    * `navigationIntent` resolves to `'forward_back'`. The native-host
    * wires this to the tab-window-context observer's
    * `notifyBfcacheRestored(tabId, urlPattern)` so a bfcache restore
@@ -66,7 +66,7 @@ const MAIN_FRAME_ID = 0;
 
 /**
  * Convert a raw URL into the brand-neutral path-only urlPattern the
- * v2.7 contract allows on the wire. Returns `null` for any URL that
+ * bridge contract allows on the wire. Returns `null` for any URL that
  * cannot be parsed (e.g. `chrome://`, `about:blank`, malformed input).
  */
 export function toUrlPattern(rawUrl: string | null | undefined): string | null {
@@ -84,8 +84,8 @@ export function toUrlPattern(rawUrl: string | null | undefined): string | null {
 
 /**
  * Closed-enum mapping of `chrome.webNavigation` `transitionType` +
- * `transitionQualifiers` to the v2.7 `NavigationIntent` enum. Returns
- * `'unknown'` for unrecognised inputs (V27-00 invariant).
+ * `transitionQualifiers` to the `NavigationIntent` enum. Returns
+ * `'unknown'` for unrecognised inputs.
  */
 export function classifyNavigationIntent(
   transitionType: string | undefined,
@@ -208,7 +208,7 @@ export function attachLifecycleObserver(
   // (e.g. older Chrome, a test harness that stubs only the runtime
   // surface, a future SW restart partial-API window), we silently skip
   // that hook rather than crashing the background worker. The observer
-  // is best-effort by design — V27-05 ContextManager still works on the
+  // is best-effort by design — ContextManager still works on the
   // events it does receive.
   type AnyEventHook = {
     addListener: (listener: any) => void;

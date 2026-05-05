@@ -13,9 +13,8 @@
  *   observer (`app/chrome-extension/entrypoints/background/observers/lifecycle.ts`)
  *   pumps events into this machine via the manager API; the machine
  *   itself has zero I/O.
- * - It does NOT touch the operation log. V27-05 ContextManager will
- *   pick up snapshots from this manager and feed the runtime path
- *   via metadata; this batch only lands the state machine.
+ * - It does NOT touch the operation log. The context manager picks up
+ *   snapshots from this manager and feeds the runtime path via metadata.
  * - It does NOT decide policy. "Should we fetch L0 or L1 here?" is the
  *   Router's job. The lifecycle machine only answers "where is this
  *   tab in its document lifecycle right now, and how confident are we?".
@@ -23,7 +22,7 @@
  * Privacy:
  * - The machine carries `urlPattern` (path-only, brand-neutral) and
  *   never raw URLs. A future bug in the observer that leaks a query
- *   string is caught by the V27-00 PrivacyGate before persistence.
+ *   string is caught by PrivacyGate before persistence.
  *
  * Cross-ref:
  * - Public types: `packages/shared/src/browser-fact.ts`.
@@ -227,7 +226,7 @@ function clampUnit(value: number): number {
 /**
  * Public manager API. The extension's lifecycle observer calls
  * `ingest(event)` on each `chrome.webNavigation.*` / `chrome.tabs.*`
- * notification; the runtime caller (V27-05 in the next batch task)
+ * notification; the runtime caller
  * calls `getSnapshot(tabId)` to read the current per-tab snapshot.
  */
 export interface LifecycleStateMachine {
