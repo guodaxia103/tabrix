@@ -138,7 +138,7 @@ export function lookupEndpointFamily(
   // semantic_type as the leader). This keeps the seed adapter alive
   // as a compatibility safety net while making the observed lineage
   // visible in `chosenReason` / `retiredPeer`.
-  const top = selectV2RankedTop(pool);
+  const top = selectRankedEndpointCandidate(pool);
   if (!top) return null;
   if (top.candidate.confidence < KNOWLEDGE_LOOKUP_CONFIDENCE_FLOOR) return null;
 
@@ -183,7 +183,7 @@ export function lookupEndpointFamily(
   };
 }
 
-interface V2RankPick {
+interface RankedEndpointCandidatePick {
   candidate: ScoredKnowledgeApiEndpoint;
   retired: ScoredKnowledgeApiEndpoint | null;
   chosenReason: EndpointLookupChosenReason;
@@ -209,7 +209,9 @@ interface V2RankPick {
  *   4. When only one peer is present (or only `manual_seed` /
  *      `unknown` rows), we return the pool's leader unchanged.
  */
-function selectV2RankedTop(pool: ScoredKnowledgeApiEndpoint[]): V2RankPick | null {
+function selectRankedEndpointCandidate(
+  pool: ScoredKnowledgeApiEndpoint[],
+): RankedEndpointCandidatePick | null {
   const leader = pool[0];
   if (!leader) return null;
 
