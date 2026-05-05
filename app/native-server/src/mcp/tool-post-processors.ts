@@ -87,9 +87,9 @@ function readVisibleRegionRowsFromResult(result: CallToolResult): TaskVisibleReg
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
   const visible = (parsed as { visibleRegionRows?: unknown }).visibleRegionRows;
   if (!visible || typeof visible !== 'object' || Array.isArray(visible)) return null;
-  const obj = visible as Record<string, unknown>;
-  if (obj.sourceDataSource !== 'dom_region_rows') return null;
-  const rawRows = Array.isArray(obj.rows) ? obj.rows : [];
+  const visibleRowsPayload = visible as Record<string, unknown>;
+  if (visibleRowsPayload.sourceDataSource !== 'dom_region_rows') return null;
+  const rawRows = Array.isArray(visibleRowsPayload.rows) ? visibleRowsPayload.rows : [];
   const rows: TaskVisibleRegionRow[] = rawRows
     .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
     .map((row) => ({
@@ -119,55 +119,75 @@ function readVisibleRegionRowsFromResult(result: CallToolResult): TaskVisibleReg
     }))
     .filter((row) => row.title.length > 0);
   const rowCount =
-    typeof obj.rowCount === 'number' && Number.isFinite(obj.rowCount)
-      ? Math.max(0, Math.floor(obj.rowCount))
+    typeof visibleRowsPayload.rowCount === 'number' && Number.isFinite(visibleRowsPayload.rowCount)
+      ? Math.max(0, Math.floor(visibleRowsPayload.rowCount))
       : rows.length;
   const confidence =
-    typeof obj.rowExtractionConfidence === 'number' && Number.isFinite(obj.rowExtractionConfidence)
-      ? obj.rowExtractionConfidence
+    typeof visibleRowsPayload.rowExtractionConfidence === 'number' &&
+    Number.isFinite(visibleRowsPayload.rowExtractionConfidence)
+      ? visibleRowsPayload.rowExtractionConfidence
       : rows.length > 0
         ? rows.reduce((sum, row) => sum + row.confidence, 0) / rows.length
         : 0;
   const rejectedReason =
-    typeof obj.visibleRegionRowsRejectedReason === 'string'
-      ? obj.visibleRegionRowsRejectedReason
+    typeof visibleRowsPayload.visibleRegionRowsRejectedReason === 'string'
+      ? visibleRowsPayload.visibleRegionRowsRejectedReason
       : null;
   return {
     sourceDataSource: 'dom_region_rows',
     rows,
     rowCount,
-    available: obj.visibleRegionRowsUsed === true && rowCount > 0 && rows.length > 0,
+    available: visibleRowsPayload.visibleRegionRowsUsed === true && rowCount > 0 && rows.length > 0,
     confidence,
     targetRefCoverageRate:
-      typeof obj.targetRefCoverageRate === 'number' && Number.isFinite(obj.targetRefCoverageRate)
-        ? obj.targetRefCoverageRate
+      typeof visibleRowsPayload.targetRefCoverageRate === 'number' &&
+      Number.isFinite(visibleRowsPayload.targetRefCoverageRate)
+        ? visibleRowsPayload.targetRefCoverageRate
         : null,
     regionQualityScore:
-      typeof obj.regionQualityScore === 'number' && Number.isFinite(obj.regionQualityScore)
-        ? obj.regionQualityScore
+      typeof visibleRowsPayload.regionQualityScore === 'number' &&
+      Number.isFinite(visibleRowsPayload.regionQualityScore)
+        ? visibleRowsPayload.regionQualityScore
         : null,
     rejectedReason,
-    visibleRegionRowsUsed: obj.visibleRegionRowsUsed === true,
+    visibleRegionRowsUsed: visibleRowsPayload.visibleRegionRowsUsed === true,
     visibleRegionRowsRejectedReason: rejectedReason,
-    sourceRegion: typeof obj.sourceRegion === 'string' ? obj.sourceRegion : 'viewport',
+    sourceRegion:
+      typeof visibleRowsPayload.sourceRegion === 'string'
+        ? visibleRowsPayload.sourceRegion
+        : 'viewport',
     rowExtractionConfidence: confidence,
-    cardExtractorUsed: obj.cardExtractorUsed === true,
+    cardExtractorUsed: visibleRowsPayload.cardExtractorUsed === true,
     cardPatternConfidence:
-      typeof obj.cardPatternConfidence === 'number' && Number.isFinite(obj.cardPatternConfidence)
-        ? obj.cardPatternConfidence
+      typeof visibleRowsPayload.cardPatternConfidence === 'number' &&
+      Number.isFinite(visibleRowsPayload.cardPatternConfidence)
+        ? visibleRowsPayload.cardPatternConfidence
         : 0,
     cardRowsCount:
-      typeof obj.cardRowsCount === 'number' && Number.isFinite(obj.cardRowsCount)
-        ? Math.max(0, Math.floor(obj.cardRowsCount))
+      typeof visibleRowsPayload.cardRowsCount === 'number' &&
+      Number.isFinite(visibleRowsPayload.cardRowsCount)
+        ? Math.max(0, Math.floor(visibleRowsPayload.cardRowsCount))
         : rowCount,
     rowOrder: 'visual_order',
-    visibleDomRowsCandidateCount: readNonNegativeInteger(obj.visibleDomRowsCandidateCount),
-    visibleDomRowsSelectedCount: readNonNegativeInteger(obj.visibleDomRowsSelectedCount),
-    lowValueRegionRejectedCount: readNonNegativeInteger(obj.lowValueRegionRejectedCount),
-    footerLikeRejectedCount: readNonNegativeInteger(obj.footerLikeRejectedCount),
-    navigationLikeRejectedCount: readNonNegativeInteger(obj.navigationLikeRejectedCount),
-    targetRefCoverageRejectedCount: readNonNegativeInteger(obj.targetRefCoverageRejectedCount),
-    rejectedRegionReasonDistribution: readNumberRecord(obj.rejectedRegionReasonDistribution),
+    visibleDomRowsCandidateCount: readNonNegativeInteger(
+      visibleRowsPayload.visibleDomRowsCandidateCount,
+    ),
+    visibleDomRowsSelectedCount: readNonNegativeInteger(
+      visibleRowsPayload.visibleDomRowsSelectedCount,
+    ),
+    lowValueRegionRejectedCount: readNonNegativeInteger(
+      visibleRowsPayload.lowValueRegionRejectedCount,
+    ),
+    footerLikeRejectedCount: readNonNegativeInteger(visibleRowsPayload.footerLikeRejectedCount),
+    navigationLikeRejectedCount: readNonNegativeInteger(
+      visibleRowsPayload.navigationLikeRejectedCount,
+    ),
+    targetRefCoverageRejectedCount: readNonNegativeInteger(
+      visibleRowsPayload.targetRefCoverageRejectedCount,
+    ),
+    rejectedRegionReasonDistribution: readNumberRecord(
+      visibleRowsPayload.rejectedRegionReasonDistribution,
+    ),
   };
 }
 
@@ -188,12 +208,24 @@ function readNumberRecord(value: unknown): Record<string, number> | undefined {
 
 function parseVisibleBoundingBox(value: unknown): TaskVisibleRegionRow['boundingBox'] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const obj = value as Record<string, unknown>;
+  const boundingBoxPayload = value as Record<string, unknown>;
   return {
-    x: typeof obj.x === 'number' && Number.isFinite(obj.x) ? obj.x : null,
-    y: typeof obj.y === 'number' && Number.isFinite(obj.y) ? obj.y : null,
-    width: typeof obj.width === 'number' && Number.isFinite(obj.width) ? obj.width : null,
-    height: typeof obj.height === 'number' && Number.isFinite(obj.height) ? obj.height : null,
+    x:
+      typeof boundingBoxPayload.x === 'number' && Number.isFinite(boundingBoxPayload.x)
+        ? boundingBoxPayload.x
+        : null,
+    y:
+      typeof boundingBoxPayload.y === 'number' && Number.isFinite(boundingBoxPayload.y)
+        ? boundingBoxPayload.y
+        : null,
+    width:
+      typeof boundingBoxPayload.width === 'number' && Number.isFinite(boundingBoxPayload.width)
+        ? boundingBoxPayload.width
+        : null,
+    height:
+      typeof boundingBoxPayload.height === 'number' && Number.isFinite(boundingBoxPayload.height)
+        ? boundingBoxPayload.height
+        : null,
   };
 }
 
