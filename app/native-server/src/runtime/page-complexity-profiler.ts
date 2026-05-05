@@ -1,10 +1,10 @@
 /**
- * V27-04b — Tabrix v2.7 Complexity Profiler.
+ * Page Complexity Profiler.
  *
  * Pure function over the V27-02 fact snapshot. Asks one question only:
  * "what is the dominant SHAPE of this page?". It does NOT consult
  * readiness signals — readiness is V27-04a. The two arms compose only
- * inside `composeLayerBudget()` (see `v27-layer-budget.ts`).
+ * inside `composeLayerBudget()` (see `layer-budget.ts`).
  *
  * The classifier is deterministic: given the same
  * `BrowserFactSnapshot`, it returns the same `ComplexityProfile`
@@ -47,7 +47,7 @@ const COMPLEXITY_THREE_SIGNAL_CONFIDENCE = 1.0;
 /**
  * Closed-enum allowlist of brand-neutral region tags V27-04 understands.
  * The allowlist mirrors the V27-02 region-fingerprint helper (see
- * `v27-fact-fingerprint.ts`); any tag outside the list is treated as a
+ * `dom-region-fingerprint.ts`); any tag outside the list is treated as a
  * "shell" hint (i.e. degrades the verdict to `simple` if no other
  * signal beats it).
  */

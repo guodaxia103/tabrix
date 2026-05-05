@@ -7,9 +7,9 @@
  *   - privacy-safe (PII / secrets in producer signal aborts the hash).
  */
 
-import { fingerprintRegions } from './v27-fact-fingerprint';
+import { fingerprintRegions } from './dom-region-fingerprint';
 
-describe('v27-fact-fingerprint — fingerprintRegions', () => {
+describe('dom-region-fingerprint — fingerprintRegions', () => {
   it('is deterministic regardless of input order', () => {
     const a = fingerprintRegions(
       [

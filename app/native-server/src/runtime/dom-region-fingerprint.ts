@@ -1,5 +1,5 @@
 /**
- * V27-02 — DOM region fingerprint helper (pure).
+ * DOM region fingerprint helper (pure).
  *
  * Goals:
  * - Deterministic: same input produces same hash regardless of the
@@ -7,7 +7,7 @@
  * - Privacy-safe: every input is the producer's pre-summarised
  *   "signal" string; the helper never sees raw HTML, raw innerText,
  *   or raw URLs. The fingerprint module performs ONE final sanity
- *   check (V27-00 PrivacyGate `assertNoSensitive`) so a producer bug
+ *   check (`assertNoSensitive`) so a producer bug
  *   that leaks a value-shaped scalar still aborts before persistence.
  * - Cheap: SHA-1 via Node's `crypto` is fine here — fingerprints
  *   travel inside the same process and the input bag is bounded.

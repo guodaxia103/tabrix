@@ -8,12 +8,12 @@
  *
  * The composer is the only V27-04 module that is allowed to consume
  * both arms; the orthogonality guards in the per-arm tests
- * (`v27-readiness.test.ts`, `v27-complexity.test.ts`) pin that the arms
+ * (`page-readiness-profiler.test.ts`, `page-complexity-profiler.test.ts`) pin that the arms
  * themselves stay independent.
  */
 import type { ComplexityProfile, ReadinessProfile } from '@tabrix/shared';
 
-import { composeLayerBudget } from './v27-layer-budget';
+import { composeLayerBudget } from './layer-budget';
 
 function readiness(overrides: Partial<ReadinessProfile> = {}): ReadinessProfile {
   return {
@@ -34,7 +34,7 @@ function complexity(overrides: Partial<ComplexityProfile> = {}): ComplexityProfi
   };
 }
 
-describe('v27-layer-budget — composeLayerBudget', () => {
+describe('layer-budget — composeLayerBudget', () => {
   it('maps a list/search complexity over a ready page to L1 + needsApi', () => {
     const out = composeLayerBudget(readiness(), complexity({ kind: 'list_or_search' }));
     expect(out.recommendedLayer).toBe('L1');

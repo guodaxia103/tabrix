@@ -1,9 +1,9 @@
 /**
- * V27-04 — Tabrix v2.7 Layer Budget Composer.
+ * Layer Budget Composer.
  *
  * Pure helper that combines a `ReadinessProfile` (V27-04a) and a
  * `ComplexityProfile` (V27-04b) into a `RecommendedLayerBudget`. The
- * composer is the ONLY module in V27-04 that is allowed to take both
+ * composer is the only runtime module that is allowed to take both
  * arms as input at the same time — the readiness/complexity profilers
  * themselves stay orthogonal so the test matrix is small and the
  * decision rule has a paper trail.

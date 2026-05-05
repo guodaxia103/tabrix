@@ -1,11 +1,11 @@
 /**
- * V27-04a — Tabrix v2.7 Readiness Profiler.
+ * Page Readiness Profiler.
  *
  * Pure function over the V27-02 fact snapshot. Asks one question only:
  * "is the page in a state where a list-shaped read would be wasted?".
  * It does NOT classify what the page IS — that is V27-04b
- * (`v27-complexity.ts`). The two arms compose only inside
- * `composeLayerBudget()` (see `v27-layer-budget.ts`).
+ * (`page-complexity-profiler.ts`). The two arms compose only inside
+ * `composeLayerBudget()` (see `layer-budget.ts`).
  *
  * The classifier is deterministic: given the same
  * `BrowserFactSnapshot`, it returns the same `ReadinessProfile` (modulo
@@ -176,7 +176,7 @@ function dedupe(values: ReadinessState[]): ReadinessState[] {
 }
 
 /**
- * Re-exports — used by `v27-layer-budget.ts` and the tests.
+ * Re-exports — used by `layer-budget.ts` and the tests.
  */
 export const READINESS_CONFIDENCE_FLOOR = READINESS_UNKNOWN_CONFIDENCE;
 export const READINESS_NEGATIVE_FLOOR = READINESS_NEGATIVE_CONFIDENCE;

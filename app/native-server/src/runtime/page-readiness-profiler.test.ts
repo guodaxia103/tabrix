@@ -13,7 +13,7 @@
  */
 import type { BrowserFactSnapshot, ReadinessSignals } from '@tabrix/shared';
 
-import { classifyReadiness } from './v27-readiness';
+import { classifyReadiness } from './page-readiness-profiler';
 
 function makeReadiness(overrides: Partial<ReadinessSignals> = {}): ReadinessSignals {
   return {
@@ -43,7 +43,7 @@ function makeSnapshot(overrides: Partial<BrowserFactSnapshot> = {}): BrowserFact
   };
 }
 
-describe('v27-readiness — classifyReadiness', () => {
+describe('page-readiness-profiler — classifyReadiness', () => {
   it('returns unknown with low confidence when every signal is unknown', () => {
     const out = classifyReadiness(makeSnapshot());
     expect(out.state).toBe('unknown');

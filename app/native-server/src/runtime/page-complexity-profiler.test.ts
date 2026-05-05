@@ -13,7 +13,7 @@ import type {
   ReadinessSignals,
 } from '@tabrix/shared';
 
-import { classifyComplexity } from './v27-complexity';
+import { classifyComplexity } from './page-complexity-profiler';
 
 function makeReadiness(overrides: Partial<ReadinessSignals> = {}): ReadinessSignals {
   return {
@@ -68,7 +68,7 @@ function makeFact(overrides: Partial<NetworkRequestFact> = {}): NetworkRequestFa
   };
 }
 
-describe('v27-complexity — classifyComplexity', () => {
+describe('page-complexity-profiler — classifyComplexity', () => {
   it('returns unknown when both arms abstain', () => {
     const out = classifyComplexity(makeSnapshot());
     expect(out.kind).toBe('unknown');
