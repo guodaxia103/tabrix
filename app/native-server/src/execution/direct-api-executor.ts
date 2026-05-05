@@ -406,7 +406,7 @@ export async function tryDirectApiExecute(
   const clock = input.nowMs ?? Date.now;
 
   if (input.sourceRoute !== 'knowledge_supported_read') {
-    return short({
+    return buildShortCircuitResult({
       executionMode: 'skipped_route_mismatch',
       decisionReason: 'route_mismatch_not_knowledge_supported',
       endpointFamily: input.candidate?.endpointFamily ?? null,
@@ -416,7 +416,7 @@ export async function tryDirectApiExecute(
   }
 
   if (input.intentClass !== 'read_only') {
-    return short({
+    return buildShortCircuitResult({
       executionMode: 'skipped_not_read_only',
       decisionReason: 'intent_not_read_only',
       endpointFamily: input.candidate?.endpointFamily ?? null,
@@ -441,7 +441,7 @@ export async function tryDirectApiExecute(
   }
 
   if (!input.candidate) {
-    return short({
+    return buildShortCircuitResult({
       executionMode: 'skipped_no_candidate',
       decisionReason: 'endpoint_not_resolved',
       endpointFamily: null,
@@ -451,7 +451,7 @@ export async function tryDirectApiExecute(
   }
 
   if (input.candidate.confidence < threshold) {
-    return short({
+    return buildShortCircuitResult({
       executionMode: 'skipped_low_confidence',
       decisionReason: 'endpoint_low_confidence',
       endpointFamily: input.candidate.endpointFamily,
@@ -665,7 +665,7 @@ interface ShortCircuitInput {
   coldStartGuard: DirectApiColdStartGuard;
 }
 
-function short(input: ShortCircuitInput): DirectApiExecutionResult {
+function buildShortCircuitResult(input: ShortCircuitInput): DirectApiExecutionResult {
   return {
     executionMode: input.executionMode,
     decisionReason: input.decisionReason,

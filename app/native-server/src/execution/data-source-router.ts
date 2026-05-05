@@ -512,7 +512,7 @@ const DATA_SOURCE_ROUTER_RULES: ReadonlyArray<DataSourceRouterRule> = [
   {
     id: 'R_FACTS_STALE_DEMOTE_DOM',
     match: (ctx) =>
-      callerSuppliedV27_09Evidence(ctx) &&
+      callerSuppliedObservationEvidence(ctx) &&
       !ctx.factsAreFresh &&
       ctx.readinessVerdict !== 'empty' &&
       !ctx.domRegionRowsPassGate,
@@ -694,7 +694,7 @@ const DATA_SOURCE_ROUTER_RULES: ReadonlyArray<DataSourceRouterRule> = [
   },
 ];
 
-function callerSuppliedV27_09Evidence(ctx: RuleContext): boolean {
+function callerSuppliedObservationEvidence(ctx: RuleContext): boolean {
   return (
     ctx.input.taskIntent !== undefined ||
     ctx.input.factSnapshotVerdict !== undefined ||
