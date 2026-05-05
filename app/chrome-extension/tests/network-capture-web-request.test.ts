@@ -260,11 +260,21 @@ describe('V27-10R2 — browser-context response summary sampler', () => {
       },
       { tab: { id: 77 } },
     );
+    listeners.completed({
+      tabId: 77,
+      requestId: 'r1',
+      timeStamp: startPayload.responseSummarySampler.samplerArmedAt + 40,
+    });
 
     const stop = await networkCaptureStopTool.execute({ tabId: 77 });
     expect(stop.isError).toBe(false);
     const stopPayload = JSON.parse(String(stop.content[0].text)) as {
-      requests: Array<{ url: string; responseBody?: string; safeResponseSummary?: unknown }>;
+      requests: Array<{
+        url: string;
+        responseBody?: string;
+        encodedDataLength?: number;
+        safeResponseSummary?: unknown;
+      }>;
       responseSummaryLifecycle: { responseSummarySource: string; bridgePath: string };
     };
     const blob = JSON.stringify(stopPayload);
@@ -279,6 +289,7 @@ describe('V27-10R2 — browser-context response summary sampler', () => {
         rows: [{ title: 'desk result', score: 7 }],
       },
     });
+    expect(stopPayload.requests[0]?.encodedDataLength).toBe(0);
     expect(stopPayload.responseSummaryLifecycle).toMatchObject({
       responseSummarySource: 'browser_context_summary',
       bridgePath: 'main_world_to_content_to_native',

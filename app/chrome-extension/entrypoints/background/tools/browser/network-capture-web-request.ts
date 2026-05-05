@@ -220,6 +220,7 @@ interface NetworkRequestInfo {
   responseTime?: number;
   status?: number;
   statusText?: string;
+  encodedDataLength?: number;
   responseSize?: number;
   responseType?: string;
   responseBody?: string;
@@ -607,9 +608,21 @@ class NetworkCaptureStartTool extends BaseBrowserToolExecutor {
       if (!captureInfo || !captureInfo.requests[details.requestId]) return;
 
       const requestInfo = captureInfo.requests[details.requestId];
-      if ('responseSize' in details) {
-        requestInfo.responseSize = details.fromCache ? 0 : (details as any).responseSize;
+      const completionDetails = details as chrome.webRequest.WebResponseCacheDetails & {
+        responseSize?: number;
+        encodedDataLength?: number;
+      };
+      const responseSize =
+        typeof completionDetails.responseSize === 'number' ? completionDetails.responseSize : null;
+      const encodedDataLength =
+        typeof completionDetails.encodedDataLength === 'number'
+          ? completionDetails.encodedDataLength
+          : responseSize;
+
+      if (responseSize !== null) {
+        requestInfo.responseSize = details.fromCache ? 0 : responseSize;
       }
+      requestInfo.encodedDataLength = details.fromCache ? 0 : (encodedDataLength ?? 0);
 
       this.updateLastActivityTime(details.tabId);
     };
