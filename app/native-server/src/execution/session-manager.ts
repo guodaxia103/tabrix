@@ -105,12 +105,11 @@ interface StorageInit {
 const nowIso = () => new Date().toISOString();
 
 /**
- * v2.6 S1 P1-1 fix — hard cap on the number of distinct external
- * task-session keys we hold in memory. Sized for "every reasonable
- * daemon-mode workflow fits comfortably" (a single agent rarely runs
- * more than ~30 logical tasks in a session) while still bounded so a
- * misbehaving client cannot exhaust memory by minting fresh
- * `taskSessionId`s per call.
+ * Hard cap on the number of distinct external task-session keys we
+ * hold in memory. Sized for "every reasonable daemon-mode workflow
+ * fits comfortably" (a single agent rarely runs more than ~30 logical
+ * tasks in a session) while still bounded so a misbehaving client
+ * cannot exhaust memory by minting fresh `taskSessionId`s per call.
  */
 const EXTERNAL_TASK_CONTEXT_CAP = 256;
 
@@ -201,23 +200,20 @@ export class SessionManager {
   private tasks = new Map<string, Task>();
   private sessions = new Map<string, ExecutionSession>();
   /**
-   * V26-05 (B-028) — per-task in-process read-budget gate. Attached
-   * on `startSession`, detached on `finishSession`. Never persisted
-   * (V4.1 §0.1 — runtime cap, not a persisted budget). The
-   * `register-tools` `chrome_read_page` shim consults this via
-   * `getTaskContext(taskId)` before forwarding to the extension.
+   * Per-task in-process read-budget gate. Attached on `startSession`,
+   * detached on `finishSession`, and never persisted. The
+   * `register-tools` `chrome_read_page` shim consults this before
+   * forwarding to the extension.
    */
   private readonly taskContexts = new Map<string, TaskSessionContext>();
   /**
-   * v2.6 S1 P1-1 fix — externally-keyed read-budget gates. The MCP
-   * `handleToolCall` mints a fresh internal `taskId` per invocation,
-   * which previously meant `taskContexts` could never accumulate
-   * state across multiple tool calls of the same logical agent task.
-   * Callers can now pass a stable `taskSessionId` (or `taskId` /
-   * `clientTaskId` alias) in the tool args; this map keeps that
-   * context alive across `handleToolCall` round-trips so the read
-   * budget actually fires in production, not just in tests that
-   * spy on `getTaskContext`.
+   * Externally keyed read-budget gates. `handleToolCall` mints a
+   * fresh internal `taskId` per invocation, so `taskContexts` cannot
+   * accumulate state across multiple calls of the same logical agent
+   * task. Callers can pass a stable `taskSessionId` (or `taskId` /
+   * `clientTaskId` alias); this map keeps that context alive across
+   * `handleToolCall` round-trips so the read budget fires in the
+   * production path.
    *
    * Lifetime: independent of `startSession` / `finishSession` (the
    * external key has no relation to the internal `taskId`). To keep
@@ -597,14 +593,13 @@ export class SessionManager {
   }
 
   /**
-   * v2.6 S1 P1-1 fix — return (or lazily create) the
-   * {@link TaskSessionContext} keyed by an externally-supplied stable
-   * id. The MCP `handleToolCall` derives this key from
+   * Return (or lazily create) the {@link TaskSessionContext} keyed by
+   * an externally supplied stable id. The MCP `handleToolCall`
+   * derives this key from
    * `args.taskSessionId` / `args.taskId` / `args.clientTaskId` so the
    * read-budget gate accumulates state across consecutive tool calls
    * within the same logical agent task (the previous behaviour reset
-   * the budget on every `handleToolCall`, which the v2.6 S1 review
-   * correctly flagged as "spy-only" semantics).
+   * the budget on every `handleToolCall`).
    *
    * Lifetime is independent of any `startSession` / `finishSession`
    * pair. We bound memory at {@link EXTERNAL_TASK_CONTEXT_CAP}
@@ -630,9 +625,9 @@ export class SessionManager {
   }
 
   /**
-   * v2.6 S1 P1-1 fix — test seam. Returns `null` when no external
-   * context exists; never lazily creates. Lets tests assert "we did
-   * NOT contaminate session A from a session B call".
+   * Test seam. Returns `null` when no external context exists and
+   * never lazily creates one. Lets tests assert "we did NOT
+   * contaminate session A from a session B call".
    */
   public peekExternalTaskContext(externalKey: string): TaskSessionContext | null {
     return this.externalTaskContexts.get(externalKey) ?? null;
