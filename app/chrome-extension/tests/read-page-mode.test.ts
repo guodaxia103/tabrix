@@ -137,6 +137,70 @@ describe('read_page mode', () => {
     expect(payload.fullSnapshot).toBeUndefined();
   });
 
+  it('retries once when the first accessibility tree is sparse and the page hydrates late', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+        id: 5210,
+        windowId: 1,
+        active: true,
+        status: 'complete',
+        url: 'https://example.com/search',
+        title: 'Search',
+      });
+      vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+      const send = vi
+        .spyOn(readPageTool as any, 'sendMessageToTab')
+        .mockResolvedValueOnce({
+          success: true,
+          pageContent: '- generic "Loading" [ref=ref_loading] (x=640,y=300)',
+          refMap: [],
+          stats: { processed: 1, included: 1, durationMs: 4 },
+          viewport: { width: 1280, height: 720, dpr: 1 },
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          pageContent: [
+            '- main "Results" [ref=ref_main] (x=620,y=360)',
+            '  - article "Result card" [ref=ref_card_1] (x=300,y=240)',
+            '    - link "First hydrated result" [ref=ref_card_1_link] (x=300,y=210) href="/items/1"',
+            '    - generic "Source One" [ref=ref_card_1_source] (x=300,y=248)',
+            '  - article "Result card" [ref=ref_card_2] (x=700,y=250)',
+            '    - link "Second hydrated result" [ref=ref_card_2_link] (x=700,y=220) href="/items/2"',
+            '    - generic "Source Two" [ref=ref_card_2_source] (x=700,y=258)',
+            '    - generic "today" [ref=ref_card_2_meta] (x=700,y=290)',
+            '  - article "Result card" [ref=ref_card_3] (x=980,y=250)',
+            '    - link "Third hydrated result" [ref=ref_card_3_link] (x=980,y=220) href="/items/3"',
+            '    - generic "Source Three" [ref=ref_card_3_source] (x=980,y=258)',
+          ].join('\n'),
+          refMap: [
+            { ref: 'ref_card_1_link', selector: 'a[href="/items/1"]' },
+            { ref: 'ref_card_2_link', selector: 'a[href="/items/2"]' },
+            { ref: 'ref_card_3_link', selector: 'a[href="/items/3"]' },
+          ],
+          stats: { processed: 9, included: 7, durationMs: 8 },
+          viewport: { width: 1280, height: 720, dpr: 1 },
+        });
+
+      const pending = readPageTool.execute({ mode: 'compact' });
+      await vi.advanceTimersByTimeAsync(450);
+      const result = await pending;
+      const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+      expect(result.isError).toBe(false);
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(payload.visibleRegionRows.visibleRegionRowsUsed).toBe(true);
+      expect(payload.visibleRegionRows.rows.map((row: { title: string }) => row.title)).toEqual([
+        'First hydrated result',
+        'Second hydrated result',
+        'Third hydrated result',
+      ]);
+      expect(payload.pageContext.sparse).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('returns normal mode diagnostics block', async () => {
     vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
       id: 5203,
@@ -721,6 +785,92 @@ describe('read_page mode', () => {
     expect(payload.candidateActions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ targetRef: 'ref_run_detail', actionType: 'click' }),
+      ]),
+    );
+  });
+
+  it('aligns fallback refMap with elements when early rows have no selector (sparse tree)', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5399,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://example.test/page',
+      title: 'Page',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'ensureInteractiveElementsHelper').mockResolvedValue(undefined);
+    const sendMessage = vi.spyOn(readPageTool as any, 'sendMessageToTab');
+    sendMessage
+      .mockResolvedValueOnce({
+        success: true,
+        pageContent: '- generic "thin"',
+        refMap: [],
+        stats: { processed: 1, included: 1, durationMs: 4 },
+        viewport: { width: 1280, height: 720, dpr: 1 },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        pageContent: '- generic "thin"',
+        refMap: [],
+        stats: { processed: 1, included: 1, durationMs: 4 },
+        viewport: { width: 1280, height: 720, dpr: 1 },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        elements: [
+          {
+            type: 'generic',
+            text: 'No selector row',
+            coordinates: { x: 10, y: 10 },
+          },
+          {
+            type: 'link',
+            text: 'Second link',
+            selector: 'a.second',
+            href: '/second',
+            coordinates: { x: 20, y: 20 },
+          },
+        ],
+        scrollY: 0,
+        pixelsBelow: 0,
+      });
+
+    const result = await readPageTool.execute({ mode: 'full' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(result.isError).toBe(false);
+    expect(payload.pageContext.fallbackUsed).toBe(true);
+    expect(payload.pageContext.refMapCount).toBe(1);
+
+    const lines = String(payload.fullSnapshot.pageContent)
+      .split('\n')
+      .map((l: string) => l.trim())
+      .filter(Boolean);
+    expect(lines[0]).not.toContain('[ref=');
+    expect(lines[1]).toContain('[ref=ref_fallback_2]');
+    expect(lines[1]).toContain('selector="a.second"');
+
+    expect(payload.fullSnapshot.refMap[0]).toBeNull();
+    expect(payload.fullSnapshot.refMap[1]).toEqual({
+      ref: 'ref_fallback_2',
+      selector: 'a.second',
+    });
+
+    expect(payload.interactiveElements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ref: 'ref_fallback_2', name: 'Second link', role: 'link' }),
+      ]),
+    );
+    expect(payload.candidateActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetRef: 'ref_fallback_2',
+          actionType: 'click',
+          locatorChain: expect.arrayContaining([
+            expect.objectContaining({ type: 'css', value: 'a.second' }),
+          ]),
+        }),
       ]),
     );
   });

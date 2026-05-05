@@ -65,6 +65,14 @@ interface SchemeGuardSummary {
   recommendedAction: string | null;
 }
 
+const READ_PAGE_SPARSE_RETRY_DELAY_MS = 450;
+const INTERACTIVE_ELEMENTS_HELPER_FILE = 'inject-scripts/interactive-elements-helper.js';
+const INTERACTIVE_ELEMENTS_HELPER_PING_TIMEOUT_MS = 300;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function inferSchemeGuard(url: string): SchemeGuardSummary {
   const raw = String(url || '');
   const lower = raw.toLowerCase();
@@ -136,6 +144,33 @@ function summarizePageContent(pageContent: string) {
     lineCount,
     quality: normalized.length < 120 || lineCount < 10 ? 'sparse' : 'usable',
   };
+}
+
+function reconcilePageUnderstandingWithVisibleRows(payload: Record<string, any>): void {
+  const rows = payload.visibleRegionRows as VisibleRegionRowsResult | undefined;
+  if (payload.pageRole !== 'login_required' || !rows?.visibleRegionRowsUsed) {
+    return;
+  }
+
+  payload.pageRole = 'unknown';
+  payload.primaryRegion = 'visible_results';
+  payload.primaryRegionConfidence = 'medium';
+  payload.footerOnly = false;
+  payload.visibleRegionRows = {
+    ...rows,
+    sourceRegion: 'visible_results',
+    rows: rows.rows.map((row) => ({
+      ...row,
+      sourceRegion: 'visible_results',
+    })),
+  };
+}
+
+function hasMeaningfulReadPageText(contentSummary: {
+  normalizedLength: number;
+  lineCount: number;
+}): boolean {
+  return contentSummary.normalizedLength >= 80 || contentSummary.lineCount >= 2;
 }
 
 interface SnapshotNode {
@@ -606,7 +641,21 @@ function buildExtensionLayer(params: {
   // ref-free.
   const includeL1 = params.requestedLayer !== 'L0';
   const includeL2 = params.requestedLayer === 'L0+L1+L2';
+  const hasVisibleRows = params.visibleRegionRows.visibleRegionRowsUsed;
+  const hasTextSignal = hasMeaningfulReadPageText(params.contentSummary);
+  const selectedDataSource = hasVisibleRows
+    ? 'dom_region_rows'
+    : params.renderMode === 'markdown'
+      ? 'markdown'
+      : 'dom_json';
+  const readinessVerdict =
+    params.pageType === 'unsupported_page' ? 'error' : hasTextSignal ? 'ready' : 'empty';
   const extensionLayer = {
+    kind: selectedDataSource,
+    selectedDataSource,
+    readinessVerdict,
+    rowCount: hasVisibleRows ? params.visibleRegionRows.rowCount : 0,
+    visibleRegionRowsUsed: hasVisibleRows,
     candidateActions: includeL1 ? params.candidateActions : [],
     pageContext: params.pageContext,
     // T3.2: reserved extension fields (not locked as long-term schema yet).
@@ -624,6 +673,23 @@ function buildExtensionLayer(params: {
     renderMode: params.renderMode,
     markdown,
   };
+  if (hasVisibleRows) {
+    Object.assign(extensionLayer, {
+      kind: 'dom_region_rows',
+      selectedDataSource: 'dom_region_rows',
+      rowCount: params.visibleRegionRows.rowCount,
+      visibleRegionRowsUsed: true,
+      targetRefCoverageRate: params.visibleRegionRows.targetRefCoverageRate,
+      regionQualityScore: params.visibleRegionRows.regionQualityScore,
+      visibleDomRowsCandidateCount: params.visibleRegionRows.visibleDomRowsCandidateCount,
+      visibleDomRowsSelectedCount: params.visibleRegionRows.visibleDomRowsSelectedCount,
+      lowValueRegionRejectedCount: params.visibleRegionRows.lowValueRegionRejectedCount,
+      footerLikeRejectedCount: params.visibleRegionRows.footerLikeRejectedCount,
+      navigationLikeRejectedCount: params.visibleRegionRows.navigationLikeRejectedCount,
+      targetRefCoverageRejectedCount: params.visibleRegionRows.targetRefCoverageRejectedCount,
+      rejectedRegionReasonDistribution: params.visibleRegionRows.rejectedRegionReasonDistribution,
+    });
+  }
   return extensionLayer as ReadPageExtensionFields;
 }
 
@@ -789,6 +855,34 @@ function buildModeOutput(params: {
 class ReadPageTool extends BaseBrowserToolExecutor {
   name = TOOL_NAMES.BROWSER.READ_PAGE;
 
+  private async ensureInteractiveElementsHelper(tabId: number): Promise<void> {
+    try {
+      const response = await Promise.race([
+        chrome.tabs.sendMessage(tabId, {
+          action: `${TOOL_NAMES.BROWSER.GET_INTERACTIVE_ELEMENTS}_ping`,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('interactive elements helper ping timed out')),
+            INTERACTIVE_ELEMENTS_HELPER_PING_TIMEOUT_MS,
+          ),
+        ),
+      ]);
+
+      if (response && (response as any).status === 'pong') {
+        return;
+      }
+    } catch {
+      // Expected when the fallback helper has not been injected on this page yet.
+    }
+
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: [INTERACTIVE_ELEMENTS_HELPER_FILE],
+      world: 'ISOLATED',
+    } as any);
+  }
+
   // Execute read page
   async execute(args: ReadPageParams): Promise<ToolResult> {
     const { filter, depth, refId, mode, render, requestedLayer } = args || {};
@@ -944,7 +1038,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       );
 
       // Ask content script to generate accessibility tree
-      const resp = await this.sendMessageToTab(tab.id, {
+      let resp = await this.sendMessageToTab(tab.id, {
         action: TOOL_MESSAGE_TYPES.GENERATE_ACCESSIBILITY_TREE,
         filter: filter || null,
         depth: requestedDepth,
@@ -953,8 +1047,37 @@ class ReadPageTool extends BaseBrowserToolExecutor {
 
       // Evaluate tree result and decide whether to fallback
       const treeOk = resp && resp.success === true;
-      const pageContent: string =
+      let pageContent: string =
         resp && typeof resp.pageContent === 'string' ? resp.pageContent : '';
+      let lines = pageContent
+        ? pageContent.split('\n').filter((l: string) => l.trim().length > 0).length
+        : 0;
+      let refCount = Array.isArray(resp?.refMap) ? resp.refMap.length : 0;
+      let isSparse = !userControlled && lines < 10 && refCount < 3;
+
+      if (treeOk && isSparse) {
+        await delay(READ_PAGE_SPARSE_RETRY_DELAY_MS);
+        const retryResp = await this.sendMessageToTab(tab.id, {
+          action: TOOL_MESSAGE_TYPES.GENERATE_ACCESSIBILITY_TREE,
+          filter: filter || null,
+          depth: requestedDepth,
+          refId: focusRefId || undefined,
+        });
+        const retryContent =
+          retryResp && typeof retryResp.pageContent === 'string' ? retryResp.pageContent : '';
+        const retryLines = retryContent
+          ? retryContent.split('\n').filter((l: string) => l.trim().length > 0).length
+          : 0;
+        const retryRefCount = Array.isArray(retryResp?.refMap) ? retryResp.refMap.length : 0;
+        if (retryResp?.success === true && retryLines + retryRefCount > lines + refCount) {
+          resp = retryResp;
+          pageContent = retryContent;
+          lines = retryLines;
+          refCount = retryRefCount;
+          isSparse = !userControlled && lines < 10 && refCount < 3;
+        }
+      }
+
       const pageUnderstanding = inferPageUnderstanding(currentUrl, currentTitle, pageContent);
 
       // Extract stats from response
@@ -967,14 +1090,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
             }
           : null;
 
-      const lines = pageContent
-        ? pageContent.split('\n').filter((l: string) => l.trim().length > 0).length
-        : 0;
-      const refCount = Array.isArray(resp?.refMap) ? resp.refMap.length : 0;
       const contentSummary = summarizePageContent(pageContent);
-
-      // Skip sparse heuristics when user explicitly controls output
-      const isSparse = !userControlled && lines < 10 && refCount < 3;
 
       // User markers have been removed with the Element Marker surface
       // (MKEP pruning §P7). Keep the field on the payload as an empty
@@ -983,9 +1099,23 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       const markedElements: any[] = [];
 
       // Helper to convert elements array to pageContent format
-      const formatElementsAsPageContent = (elements: any[]): string => {
+      /** Parallel to `elements` (same length): entry or `null` when no selector — keeps indices aligned with formatted lines + selectors. */
+      const buildFallbackRefMap = (
+        elements: any[],
+      ): Array<{ ref: string; selector: string } | null> =>
+        (elements || []).slice(0, 150).map((element: any, index: number) => {
+          const selector = typeof element?.selector === 'string' ? element.selector.trim() : '';
+          if (!selector) return null;
+          return {
+            ref: `ref_fallback_${index + 1}`,
+            selector,
+          };
+        });
+
+      const formatElementsAsPageContent = (elements: any[], refMap: any[]): string => {
         const out: string[] = [];
-        for (const e of elements || []) {
+        for (let index = 0; index < (elements || []).length; index += 1) {
+          const e = elements[index];
           const type = typeof e?.type === 'string' && e.type ? e.type : 'element';
           const rawText = typeof e?.text === 'string' ? e.text.trim() : '';
           const text =
@@ -994,11 +1124,13 @@ class ReadPageTool extends BaseBrowserToolExecutor {
               : '';
           const selector =
             typeof e?.selector === 'string' && e.selector ? ` selector="${e.selector}"` : '';
+          const href = typeof e?.href === 'string' && e.href ? ` href="${e.href}"` : '';
+          const ref = typeof refMap[index]?.ref === 'string' ? ` [ref=${refMap[index].ref}]` : '';
           const coords =
             e?.coordinates && Number.isFinite(e.coordinates.x) && Number.isFinite(e.coordinates.y)
               ? ` (x=${Math.round(e.coordinates.x)},y=${Math.round(e.coordinates.y)})`
               : '';
-          out.push(`- ${type}${text}${selector}${coords}`);
+          out.push(`- ${type}${text}${ref}${selector}${href}${coords}`);
           if (out.length >= 150) break;
         }
         return out.join('\n');
@@ -1043,6 +1175,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
           pixelsBelow: typeof resp?.pixelsBelow === 'number' ? resp.pixelsBelow : null,
         }),
       };
+      reconcilePageUnderstandingWithVisibleRows(basePayload);
 
       // Normal path: return tree
       if (treeOk && !isSparse) {
@@ -1096,24 +1229,35 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         return createErrorResponse(resp?.error || 'Failed to generate accessibility tree');
       }
 
-      // Fallback path: try get_interactive_elements once
+      // Fallback path: try get_interactive_elements with one short retry.
+      // Newly opened MV3 pages can report document complete before the
+      // injected helper is ready to answer its first runtime message.
       try {
-        await this.injectContentScript(tab.id, ['inject-scripts/interactive-elements-helper.js']);
-        const fallback = await this.sendMessageToTab(tab.id, {
-          action: TOOL_MESSAGE_TYPES.GET_INTERACTIVE_ELEMENTS,
-          includeCoordinates: true,
-        });
+        let fallback: any = null;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          if (attempt > 0) await delay(READ_PAGE_SPARSE_RETRY_DELAY_MS);
+          await this.ensureInteractiveElementsHelper(tab.id);
+          fallback = await this.sendMessageToTab(tab.id, {
+            action: TOOL_MESSAGE_TYPES.GET_INTERACTIVE_ELEMENTS,
+            includeCoordinates: true,
+          });
+          if (fallback && fallback.success && Array.isArray(fallback.elements)) break;
+        }
 
         if (fallback && fallback.success && Array.isArray(fallback.elements)) {
           const merged = fallback.elements.slice(0, 150);
+          const fallbackRefMap = buildFallbackRefMap(merged);
+          const fallbackRefEntryCount = fallbackRefMap.filter((entry) => entry != null).length;
 
           basePayload.fallbackUsed = true;
           basePayload.fallbackSource = 'get_interactive_elements';
           basePayload.reason = treeOk ? 'sparse_tree' : resp?.error || 'tree_failed';
           basePayload.elements = merged;
           basePayload.count = fallback.elements.length;
-          if (!basePayload.pageContent) {
-            basePayload.pageContent = formatElementsAsPageContent(merged);
+          basePayload.refMap = fallbackRefMap;
+          basePayload.refMapCount = fallbackRefEntryCount;
+          if (merged.length > 0 || !basePayload.pageContent) {
+            basePayload.pageContent = formatElementsAsPageContent(merged, fallbackRefMap);
           }
           const fallbackUnderstanding = inferPageUnderstanding(
             currentUrl,
@@ -1134,6 +1278,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
             scrollY: typeof fallback?.scrollY === 'number' ? fallback.scrollY : null,
             pixelsBelow: typeof fallback?.pixelsBelow === 'number' ? fallback.pixelsBelow : null,
           });
+          reconcilePageUnderstandingWithVisibleRows(basePayload);
 
           const modePayload = buildModeOutput({
             mode: selectedMode,
