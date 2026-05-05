@@ -103,10 +103,10 @@ export function parseExperienceScoreStepInput(raw: unknown): ParsedExperienceSco
       'experience_score_step expects an object input',
     );
   }
-  const obj = raw as Record<string, unknown>;
+  const inputObject = raw as Record<string, unknown>;
 
   // actionPathId
-  const idValue = obj.actionPathId;
+  const idValue = inputObject.actionPathId;
   if (idValue === undefined || idValue === null || idValue === '') {
     throw new ExperienceScoreStepInputError(
       'missing_action_path_id',
@@ -133,13 +133,13 @@ export function parseExperienceScoreStepInput(raw: unknown): ParsedExperienceSco
   }
 
   // stepIndex
-  if (obj.stepIndex === undefined || obj.stepIndex === null) {
+  if (inputObject.stepIndex === undefined || inputObject.stepIndex === null) {
     throw new ExperienceScoreStepInputError(
       'missing_step_index',
       'experience_score_step: stepIndex is required',
     );
   }
-  const stepIndexRaw = obj.stepIndex;
+  const stepIndexRaw = inputObject.stepIndex;
   if (
     typeof stepIndexRaw !== 'number' ||
     !Number.isFinite(stepIndexRaw) ||
@@ -158,73 +158,81 @@ export function parseExperienceScoreStepInput(raw: unknown): ParsedExperienceSco
   }
 
   // observedOutcome
-  if (obj.observedOutcome === undefined || obj.observedOutcome === null) {
+  if (inputObject.observedOutcome === undefined || inputObject.observedOutcome === null) {
     throw new ExperienceScoreStepInputError(
       'missing_observed_outcome',
       'experience_score_step: observedOutcome is required',
     );
   }
-  if (typeof obj.observedOutcome !== 'string') {
+  if (typeof inputObject.observedOutcome !== 'string') {
     throw new ExperienceScoreStepInputError(
       'invalid_observed_outcome',
       'experience_score_step: observedOutcome must be a string',
     );
   }
-  if (!CLICK_OBSERVED_OUTCOMES_SET.has(obj.observedOutcome as ClickObservedOutcome)) {
+  if (!CLICK_OBSERVED_OUTCOMES_SET.has(inputObject.observedOutcome as ClickObservedOutcome)) {
     throw new ExperienceScoreStepInputError(
       'invalid_observed_outcome',
-      `experience_score_step: observedOutcome '${obj.observedOutcome}' is not in the ClickObservedOutcome enum`,
+      `experience_score_step: observedOutcome '${inputObject.observedOutcome}' is not in the ClickObservedOutcome enum`,
     );
   }
-  const observedOutcome = obj.observedOutcome as ClickObservedOutcome;
+  const observedOutcome = inputObject.observedOutcome as ClickObservedOutcome;
 
   // historyRef (optional)
   let historyRef: string | undefined;
-  if (obj.historyRef !== undefined && obj.historyRef !== null && obj.historyRef !== '') {
-    if (typeof obj.historyRef !== 'string') {
+  if (
+    inputObject.historyRef !== undefined &&
+    inputObject.historyRef !== null &&
+    inputObject.historyRef !== ''
+  ) {
+    if (typeof inputObject.historyRef !== 'string') {
       throw new ExperienceScoreStepInputError(
         'invalid_history_ref',
         'experience_score_step: historyRef must be a string',
       );
     }
-    if (obj.historyRef.length > MAX_TABRIX_EXPERIENCE_SCORE_STEP_REF_CHARS) {
+    if (inputObject.historyRef.length > MAX_TABRIX_EXPERIENCE_SCORE_STEP_REF_CHARS) {
       throw new ExperienceScoreStepInputError(
         'invalid_history_ref',
         `experience_score_step: historyRef exceeds ${MAX_TABRIX_EXPERIENCE_SCORE_STEP_REF_CHARS} chars`,
       );
     }
-    historyRef = obj.historyRef;
+    historyRef = inputObject.historyRef;
   }
 
   // replayId (optional)
   let replayId: string | undefined;
-  if (obj.replayId !== undefined && obj.replayId !== null && obj.replayId !== '') {
-    if (typeof obj.replayId !== 'string') {
+  if (
+    inputObject.replayId !== undefined &&
+    inputObject.replayId !== null &&
+    inputObject.replayId !== ''
+  ) {
+    if (typeof inputObject.replayId !== 'string') {
       throw new ExperienceScoreStepInputError(
         'invalid_replay_id',
         'experience_score_step: replayId must be a string',
       );
     }
-    if (obj.replayId.length > MAX_TABRIX_EXPERIENCE_SCORE_STEP_REF_CHARS) {
+    if (inputObject.replayId.length > MAX_TABRIX_EXPERIENCE_SCORE_STEP_REF_CHARS) {
       throw new ExperienceScoreStepInputError(
         'invalid_replay_id',
         `experience_score_step: replayId exceeds ${MAX_TABRIX_EXPERIENCE_SCORE_STEP_REF_CHARS} chars`,
       );
     }
-    replayId = obj.replayId;
+    replayId = inputObject.replayId;
   }
 
   // evidence (optional)
   let evidenceCode: string | undefined;
   let evidenceMessage: string | undefined;
-  if (obj.evidence !== undefined && obj.evidence !== null) {
-    if (typeof obj.evidence !== 'object' || Array.isArray(obj.evidence)) {
+  if (inputObject.evidence !== undefined && inputObject.evidence !== null) {
+    if (typeof inputObject.evidence !== 'object' || Array.isArray(inputObject.evidence)) {
       throw new ExperienceScoreStepInputError(
         'invalid_evidence',
         'experience_score_step: evidence must be an object',
       );
     }
-    const ev = obj.evidence as Record<string, unknown>;
+    const ev = inputObject.evidence as Record<string, unknown>;
     if (ev.code !== undefined && ev.code !== null && ev.code !== '') {
       if (typeof ev.code !== 'string') {
         throw new ExperienceScoreStepInputError(

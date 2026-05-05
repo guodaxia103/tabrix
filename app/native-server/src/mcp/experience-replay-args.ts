@@ -121,20 +121,23 @@ export function extractPortableReplayArgs(
 
 function extractPortableCandidateAction(raw: unknown): Record<string, unknown> | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-  const obj = raw as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
+  const candidateAction = raw as Record<string, unknown>;
+  const portableCandidateAction: Record<string, unknown> = {};
 
   // B-011 stable targetRef survives across snapshots and is the
   // explicitly portable form. Legacy `ref_xyz` accessibility-tree
   // refs are per-snapshot session-local handles; refusing them here
   // is the entire point of this PR.
-  if (typeof obj.targetRef === 'string' && obj.targetRef.startsWith(STABLE_TARGET_REF_PREFIX)) {
-    out.targetRef = obj.targetRef;
+  if (
+    typeof candidateAction.targetRef === 'string' &&
+    candidateAction.targetRef.startsWith(STABLE_TARGET_REF_PREFIX)
+  ) {
+    portableCandidateAction.targetRef = candidateAction.targetRef;
   }
 
-  if (Array.isArray(obj.locatorChain)) {
+  if (Array.isArray(candidateAction.locatorChain)) {
     const cssChain: Array<{ type: 'css'; value: string }> = [];
-    for (const item of obj.locatorChain) {
+    for (const item of candidateAction.locatorChain) {
       if (
         item &&
         typeof item === 'object' &&
@@ -146,20 +149,24 @@ function extractPortableCandidateAction(raw: unknown): Record<string, unknown> |
       // type === 'ref' (and any future non-portable type) is dropped
       // on the floor - same reason `targetRef: 'ref_*'` is dropped.
     }
-    if (cssChain.length > 0) out.locatorChain = cssChain;
+    if (cssChain.length > 0) portableCandidateAction.locatorChain = cssChain;
   }
 
-  if (Object.keys(out).length === 0) return undefined;
-  return out;
+  if (Object.keys(portableCandidateAction).length === 0) return undefined;
+  return portableCandidateAction;
 }
 
 function hasPortableTarget(args: Record<string, unknown>): boolean {
   if (typeof args.selector === 'string' && args.selector.length > 0) return true;
   const ca = args.candidateAction;
   if (ca && typeof ca === 'object' && !Array.isArray(ca)) {
-    const obj = ca as Record<string, unknown>;
-    if (typeof obj.targetRef === 'string' && obj.targetRef.length > 0) return true;
-    if (Array.isArray(obj.locatorChain) && obj.locatorChain.length > 0) return true;
+    const candidateAction = ca as Record<string, unknown>;
+    if (typeof candidateAction.targetRef === 'string' && candidateAction.targetRef.length > 0) {
+      return true;
+    }
+    if (Array.isArray(candidateAction.locatorChain) && candidateAction.locatorChain.length > 0) {
+      return true;
+    }
   }
   return false;
 }

@@ -122,10 +122,10 @@ export function parseExperienceReplayInput(raw: unknown): ParsedExperienceReplay
       'experience_replay expects an object input',
     );
   }
-  const obj = raw as Record<string, unknown>;
+  const inputObject = raw as Record<string, unknown>;
 
   // actionPathId
-  const idValue = obj.actionPathId;
+  const idValue = inputObject.actionPathId;
   if (idValue === undefined || idValue === null || idValue === '') {
     throw new ExperienceReplayInputError(
       'missing_action_path_id',
@@ -152,7 +152,7 @@ export function parseExperienceReplayInput(raw: unknown): ParsedExperienceReplay
   }
 
   // variableSubstitutions
-  const subsValue = obj.variableSubstitutions;
+  const subsValue = inputObject.variableSubstitutions;
   const variableSubstitutions: Partial<Record<TabrixReplayPlaceholder, string>> = {};
   if (subsValue !== undefined) {
     if (subsValue === null || typeof subsValue !== 'object' || Array.isArray(subsValue)) {
@@ -186,8 +186,8 @@ export function parseExperienceReplayInput(raw: unknown): ParsedExperienceReplay
 
   // maxSteps
   let maxSteps = MAX_TABRIX_EXPERIENCE_REPLAY_STEP_BUDGET;
-  if (obj.maxSteps !== undefined) {
-    const m = obj.maxSteps;
+  if (inputObject.maxSteps !== undefined) {
+    const m = inputObject.maxSteps;
     if (typeof m !== 'number' || !Number.isFinite(m) || !Number.isInteger(m)) {
       throw new ExperienceReplayInputError(
         'invalid_max_steps',
@@ -205,8 +205,8 @@ export function parseExperienceReplayInput(raw: unknown): ParsedExperienceReplay
 
   // targetTabId
   let targetTabId: number | undefined;
-  if (obj.targetTabId !== undefined) {
-    const t = obj.targetTabId;
+  if (inputObject.targetTabId !== undefined) {
+    const t = inputObject.targetTabId;
     if (typeof t !== 'number' || !Number.isFinite(t) || !Number.isInteger(t) || t < 1) {
       throw new ExperienceReplayInputError(
         'invalid_target_tab_id',
