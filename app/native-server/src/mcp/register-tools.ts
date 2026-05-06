@@ -98,13 +98,13 @@ function estimateApiRowsTokenSavings(args: {
   rowCount: number;
   recordedFullReadTokenEstimate: number;
   /**
-   * V26-PGB-01 — `true` iff the upstream reader returned ok with an
-   * empty row list. When set, we short-circuit to the conservative
+   * `true` iff the upstream reader returned ok with an empty row list.
+   * When set, we short-circuit to the conservative
    * `'unavailable_empty_api_rows'` bucket regardless of any recorded
-   * full-read estimate. The pre-PGB-01 path could fall through to
+   * full-read estimate. Older logic could fall through to
    * `'full_read_estimate_minus_api_rows'` when the chooser had a
    * higher full-read estimate, which over-claimed token savings on
-   * verified-empty answers (a regression PGB-01 explicitly bans).
+   * verified-empty answers.
    */
   emptyResult?: boolean;
 }): {
@@ -122,8 +122,8 @@ function estimateApiRowsTokenSavings(args: {
     rowCount: args.rowCount,
     compact: true,
   });
-  // V26-PGB-01 — verified-empty results MUST NOT inflate the
-  // tokens-saved estimate off a hypothetical full-read estimate.
+  // Verified-empty results MUST NOT inflate the tokens-saved estimate
+  // off a hypothetical full-read estimate.
   // Short-circuit to the conservative bucket so Gate B / release
   // notes never claim savings for "the API answered with no rows".
   if (args.emptyResult || args.rowCount === 0) {
@@ -153,40 +153,40 @@ function estimateApiRowsTokenSavings(args: {
   };
 }
 
-type ApiReadFallbackCauseV26 = 'api_timeout' | 'semantic_mismatch' | 'api_unavailable';
-type AcceptanceApiFaultV26 = 'network_timeout' | 'semantic_mismatch';
+type ApiReadFallbackCause = 'api_timeout' | 'semantic_mismatch' | 'api_unavailable';
+type AcceptanceApiFault = 'network_timeout' | 'semantic_mismatch';
 
-interface ApiReadFallbackEvidenceV26 {
+interface ApiReadFallbackEvidence {
   kind: 'read_page_fallback';
   readPageAvoided: false;
   sourceKind: 'dom_json';
   sourceRoute: string;
-  fallbackCause: ApiReadFallbackCauseV26;
+  fallbackCause: ApiReadFallbackCause;
   fallbackUsed: 'dom_compact';
   fallbackEntryLayer: 'L0+L1';
   apiFamily?: string;
   apiTelemetry: ApiKnowledgeReadFallback['telemetry'];
 }
 
-function normalizeApiFallbackCause(reason: string | null | undefined): ApiReadFallbackCauseV26 {
+function normalizeApiFallbackCause(reason: string | null | undefined): ApiReadFallbackCause {
   if (reason === 'network_timeout') return 'api_timeout';
   if (reason === 'semantic_mismatch') return 'semantic_mismatch';
   return 'api_unavailable';
 }
 
-function readAcceptanceApiFault(args: unknown): AcceptanceApiFaultV26 | null {
+function readAcceptanceApiFault(args: unknown): AcceptanceApiFault | null {
   if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
   const value = (args as { __tabrixAcceptanceApiFault?: unknown }).__tabrixAcceptanceApiFault;
   return value === 'network_timeout' || value === 'semantic_mismatch' ? value : null;
 }
 
-function apiFaultFetchOverride(fault: AcceptanceApiFaultV26 | null): ApiKnowledgeFetch | undefined {
+function apiFaultFetchOverride(fault: AcceptanceApiFault | null): ApiKnowledgeFetch | undefined {
   if (fault !== 'network_timeout') return undefined;
   return () => new Promise(() => undefined);
 }
 
 function apiFaultDataPurposeOverride(
-  fault: AcceptanceApiFaultV26 | null,
+  fault: AcceptanceApiFault | null,
   current: string | undefined,
 ): string | undefined {
   if (fault !== 'semantic_mismatch') return current;
@@ -202,7 +202,7 @@ function stripInternalReadPageArgs(args: unknown): unknown {
 
 function withFallbackEvidence(
   rawResult: CallToolResult,
-  evidence: ApiReadFallbackEvidenceV26 | null,
+  evidence: ApiReadFallbackEvidence | null,
 ): CallToolResult {
   if (!evidence || !Array.isArray(rawResult.content)) return rawResult;
 
@@ -1812,7 +1812,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       tabHygiene?: unknown;
       metadata?: Record<string, string>;
     } | null = null;
-    let apiFallbackEvidence: ApiReadFallbackEvidenceV26 | null = null;
+    let apiFallbackEvidence: ApiReadFallbackEvidence | null = null;
     if (taskContext && name === 'chrome_read_page') {
       const acceptanceApiFaultForLiveObserved = readAcceptanceApiFault(args);
       const liveObserved = acceptanceApiFaultForLiveObserved
@@ -2105,10 +2105,10 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                 rows: apiResult.rows,
                 rowCount: apiResult.rowCount,
                 recordedFullReadTokenEstimate: recordedDecision.fullReadTokenEstimate,
-                // V26-PGB-01 — when the API returned a verified-empty
-                // result we MUST NOT inflate `tokensSavedEstimate`
-                // off a hypothetical full-read estimate; pin it to
-                // the conservative `unavailable_empty_api_rows` bucket.
+                // When the API returned a verified-empty result we
+                // MUST NOT inflate `tokensSavedEstimate` off a
+                // hypothetical full-read estimate; pin it to the
+                // conservative `unavailable_empty_api_rows` bucket.
                 emptyResult: apiResult.emptyResult ?? false,
               });
               taskContext.noteSkipRead({
@@ -2155,21 +2155,20 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                 rowCount: apiResult.rowCount,
                 compact: apiResult.compact,
                 rawBodyStored: apiResult.rawBodyStored,
-                // V26-PGB-01 — explicit "verified empty" envelope.
+                // Explicit "verified empty" envelope.
                 // `emptyResult:true` MUST NOT trigger DOM fallback;
                 // it is a successful API outcome with zero rows.
-                // Defaults preserve the v2.5 wire shape for any
-                // pre-PGB-01 caller that has not threaded the
-                // closed-enum yet.
+                // Defaults preserve the legacy wire shape for callers
+                // that have not threaded the closed-enum yet.
                 emptyResult: apiResult.emptyResult ?? false,
                 emptyReason: apiResult.emptyReason ?? null,
                 emptyMessage: apiResult.emptyMessage ?? null,
-                // V26-PGB-04 — closed-enum endpoint-source lineage on
-                // every `chrome_read_page` `kind:'api_rows'` envelope.
+                // Closed-enum endpoint-source lineage on every
+                // `chrome_read_page` `kind:'api_rows'` envelope.
                 // The cached path inherits the chooser's
                 // `direct-api-executor` value verbatim; the live
                 // `readApiKnowledgeEndpointPlan` branch always uses
-                // the V25 hardcoded GitHub/npmjs adapter, so its
+                // the built-in GitHub/npmjs adapter, so its
                 // lineage is `seed_adapter` by construction. Surfacing
                 // this on the public envelope lets the Gate B
                 // benchmark transformer aggregate
@@ -2196,12 +2195,11 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                   fallbackUsed: 'none',
                   readCount: totals.readPageAvoidedCount,
                   tokensSaved: tokenSavings.tokensSavedEstimate,
-                  // V26-PGB-01 — record verified-empty evidence on
-                  // the operation log so a post-mortem can answer
-                  // "did the API really come back empty here?"
-                  // without grepping the raw envelope. `success`
-                  // stays `true` (the API call succeeded); only the
-                  // `emptyResult` evidence flips.
+                  // Record verified-empty evidence on the operation
+                  // log so a post-mortem can answer "did the API
+                  // really come back empty here?" without grepping the
+                  // raw envelope. `success` stays `true` (the API call
+                  // succeeded); only the `emptyResult` evidence flips.
                   metadata: {
                     emptyResult: apiResult.emptyResult ? 'true' : 'false',
                   },

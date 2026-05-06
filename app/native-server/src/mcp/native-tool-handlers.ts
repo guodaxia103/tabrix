@@ -50,9 +50,9 @@ import {
 } from './experience-replay';
 import { experienceScoreStepNativeHandler } from './experience-score-step';
 
-type AcceptanceApiFaultV26 = 'network_timeout' | 'semantic_mismatch';
+type AcceptanceApiFault = 'network_timeout' | 'semantic_mismatch';
 
-function readAcceptanceApiFault(args: unknown): AcceptanceApiFaultV26 | null {
+function readAcceptanceApiFault(args: unknown): AcceptanceApiFault | null {
   if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
   const value = (args as { __tabrixAcceptanceApiFault?: unknown }).__tabrixAcceptanceApiFault;
   return value === 'network_timeout' || value === 'semantic_mismatch' ? value : null;

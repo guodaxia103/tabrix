@@ -165,9 +165,9 @@ async function readGenericEndpoint(
       rowCount: rows.length,
       compact: true,
       rawBodyStored: false,
-      // V26-PGB-01 — same closed semantics as the V25 seed-family
-      // path: 200 + empty list is "verified empty", not a fallback.
-      // Generic observed endpoints take the same envelope so the
+      // Same closed semantics as the seed-family path: 200 + empty
+      // list is "verified empty", not a fallback. Generic observed
+      // endpoints take the same envelope so the
       // downstream consumer (chrome_read_page shim, operation log,
       // Gate B transformer) does not need to special-case the
       // observed branch.

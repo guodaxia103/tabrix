@@ -535,8 +535,8 @@ export interface TabrixDirectApiExecution {
   /**
    * `true` iff the API call succeeded but returned zero
    * rows; `false` on the non-empty happy path. `null` when the
-   * executor never reached a reader (no API attempt). Optional so a
-   * pre-PGB-01 caller stays bit-identical; PGB-01-aware consumers can
+   * executor never reached a reader (no API attempt). Optional so
+   * legacy callers stay bit-identical; current consumers can
    * distinguish "verified empty" from "API failed" without
    * re-deriving from `rowCount`.
    */
@@ -563,8 +563,8 @@ export interface TabrixDirectApiExecution {
    * `observed` (mainline, came from `chrome_network_capture`) vs
    * `seed_adapter` (legacy hardcoded family) vs `manual_seed`
    * (operator-curated). `null` on every short-circuit branch where
-   * no fetch was attempted; left optional so a pre-PGB-04 caller
-   * stays bit-identical on the wire.
+   * no fetch was attempted; left optional so legacy callers stay
+   * bit-identical on the wire.
    */
   endpointSource?: 'observed' | 'seed_adapter' | 'manual_seed' | null;
 }

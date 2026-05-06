@@ -44,7 +44,7 @@ import type { PageSnapshot } from '../memory/db/page-snapshot-repository';
 
 export type DispatcherInputSource = 'live_snapshot' | 'memory_snapshot' | 'fallback_zero';
 
-export type DispatcherInputFallbackCauseV26 =
+export type DispatcherInputFallbackCause =
   | 'persistence_off'
   | 'no_session_snapshots'
   | 'no_matching_snapshot'
@@ -65,7 +65,7 @@ export interface PageContextLookupResult {
   fullReadByteLength: number;
   pageRole: string | null;
   /** Set only when `source === 'fallback_zero'`. */
-  fallbackCause?: DispatcherInputFallbackCauseV26;
+  fallbackCause?: DispatcherInputFallbackCause;
 }
 
 export interface PageContextProvider {
@@ -94,7 +94,7 @@ export interface LivePageContextProviderOptions {
 }
 
 const FALLBACK_ZERO = (
-  cause: DispatcherInputFallbackCauseV26,
+  cause: DispatcherInputFallbackCause,
   pageRole: string | null,
 ): PageContextLookupResult => ({
   source: 'fallback_zero',
@@ -176,7 +176,7 @@ export class LivePageContextProvider implements PageContextProvider {
       // chooser telemetry remains diagnosable (operator can tell URL miss
       // apart from "we never had a hint" apart from "we had a hint but no row
       // matched").
-      let cause: DispatcherInputFallbackCauseV26;
+      let cause: DispatcherInputFallbackCause;
       if (url) {
         cause = 'no_session_snapshots';
       } else if (requestedPageRole) {

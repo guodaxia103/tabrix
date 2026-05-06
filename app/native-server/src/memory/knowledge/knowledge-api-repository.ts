@@ -656,7 +656,7 @@ export class KnowledgeApiRepository {
         `[knowledge-api-repository] invalid lastFailureReason '${lastFailureReason}'. Expected closed enum.`,
       );
     }
-    const isV2Write =
+    const writesEvidenceSchema =
       endpointSource !== null ||
       correlationConfidence !== null ||
       correlatedRegionId !== null ||
@@ -664,7 +664,7 @@ export class KnowledgeApiRepository {
       retirementCandidate !== null ||
       sourceLineageBlob !== null ||
       lastFailureReason !== null;
-    const schemaVersion = isV2Write ? 2 : null;
+    const schemaVersion = writesEvidenceSchema ? 2 : null;
 
     let previousRow: KnowledgeApiEndpointRow | undefined;
     const tx = this.db.transaction(() => {
@@ -822,13 +822,13 @@ export class KnowledgeApiRepository {
 
     let migrationMode: EndpointMigrationMode;
     if (!previousRow) {
-      migrationMode = isV2Write ? 'virgin_v2_write' : 'legacy_no_op';
+      migrationMode = writesEvidenceSchema ? 'virgin_v2_write' : 'legacy_no_op';
     } else {
-      const wasV2 = previousRow.schema_version === 2;
-      const isNowV2 = endpoint.schemaVersion === 2;
-      if (!wasV2 && isNowV2) migrationMode = 'additive_upgrade';
-      else if (wasV2 && isNowV2) migrationMode = 'v2_refresh';
-      else if (!wasV2 && !isNowV2) migrationMode = 'legacy_no_op';
+      const hadEvidenceSchema = previousRow.schema_version === 2;
+      const hasEvidenceSchema = endpoint.schemaVersion === 2;
+      if (!hadEvidenceSchema && hasEvidenceSchema) migrationMode = 'additive_upgrade';
+      else if (hadEvidenceSchema && hasEvidenceSchema) migrationMode = 'v2_refresh';
+      else if (!hadEvidenceSchema && !hasEvidenceSchema) migrationMode = 'legacy_no_op';
       else migrationMode = 'unknown';
     }
 
