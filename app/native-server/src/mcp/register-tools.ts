@@ -74,6 +74,7 @@ import {
   buildLiveObservedApiRowsSuccessResult,
   buildLiveObservedRejectedLogHint,
 } from './read-page-live-observed-result';
+import { buildReadPageWarningResult } from './read-page-warning-result';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { getDefaultPrimaryTabController } from '../runtime/primary-tab-controller';
@@ -1063,28 +1064,23 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         forcedReadPageLayer ?? extractRequestedLayer(args) ?? READ_PAGE_DEFAULT_LAYER;
       const decision = taskContext.shouldAllowReadPage({ requestedLayer });
       if (!decision.allowed || decision.reason === 'read_redundant') {
-        const warningPayload = {
-          warning: decision.reason || 'read_budget_exceeded',
-          readPageCount: decision.readPageCount,
-          readBudget: decision.readBudget,
-          suggestedLayer: decision.suggestedLayer,
-        };
-        const warningResult: CallToolResult = {
-          content: [{ type: 'text', text: JSON.stringify(warningPayload) }],
-        };
+        const {
+          result: warningResult,
+          warning,
+          operationLog,
+        } = buildReadPageWarningResult({
+          decision,
+          requestedLayer,
+          operationLogHint,
+        });
         sessionManager.completeStep(session.sessionId, step.stepId, {
           status: 'completed',
-          resultSummary: `chrome_read_page short-circuited (${warningPayload.warning})`,
-          operationLog: {
-            ...(operationLogHint ?? {}),
-            requestedLayer,
-            resultKind: 'read_page_warning',
-            decisionReason: warningPayload.warning,
-          },
+          resultSummary: `chrome_read_page short-circuited (${warning})`,
+          operationLog,
         });
         sessionManager.finishSession(session.sessionId, {
           status: 'completed',
-          summary: `chrome_read_page short-circuited (${warningPayload.warning})`,
+          summary: `chrome_read_page short-circuited (${warning})`,
         });
         return warningResult;
       }
