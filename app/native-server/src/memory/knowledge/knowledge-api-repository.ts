@@ -1,7 +1,7 @@
 /**
- * Knowledge API endpoint repository (B-017).
+ * Knowledge API endpoint repository.
  *
- * Storage side of GitHub-first API Knowledge capture v1. The shape of
+ * Storage side of API Knowledge capture. The shape of
  * what lands here is curated by `api-knowledge-capture.ts` — this file
  * only owns persistence and dedup-by-signature semantics.
  *
@@ -70,10 +70,10 @@ export interface KnowledgeApiEndpoint {
   firstSeenAt: string;
   lastSeenAt: string;
   /**
-   * V26-FIX-03 — generic classifier output, persisted alongside the
-   * pre-FIX-03 `semanticTag`. `null` for rows written before the
-   * migration; populated for every row written through
-   * `api-knowledge-capture.ts` from FIX-03 forward.
+   * Generic classifier output, persisted alongside the original
+   * `semanticTag`. `null` for rows written before the classifier
+   * columns were introduced; populated for every row written through
+   * `api-knowledge-capture.ts` after that point.
    */
   semanticTypePersisted: EndpointSemanticType | null;
   queryParamsShape: string | null;
@@ -81,14 +81,14 @@ export interface KnowledgeApiEndpoint {
   usableForTaskPersisted: boolean | null;
   noiseReason: string | null;
   /**
-   * V27-08 — Endpoint Knowledge v2 lineage. Always populated on read:
+   * Endpoint Knowledge lineage. Always populated on read:
    *  - `endpointSource` — closed enum, derived from the persisted
    *    column when present; otherwise back-derived from `family`
    *    (`'observed'` ↔ observed; `'github' | 'npmjs'` ↔ seed_adapter;
    *    everything else ↔ `'unknown'`).
-   *  - `correlationConfidence` — closed enum from V27-07. Single-
+   *  - `correlationConfidence` — closed enum from the DOM-endpoint correlator. Single-
    *    session writes are capped at `'low_confidence'`.
-   *  - `schemaVersion` — `1` for legacy rows, `2` for V27-08-aware
+   *  - `schemaVersion` — `1` for legacy rows, `2` for lineage-aware
    *    rows. Reader collapses `null` → `1`.
    */
   endpointSource: EndpointSource;
@@ -99,17 +99,17 @@ export interface KnowledgeApiEndpoint {
   sourceLineage: EndpointSourceLineage | null;
   schemaVersion: 1 | 2;
   /**
-   * Closeout — explicit V27-08 evidence-contract field. Closed-enum
+   * Explicit evidence-contract field. Closed-enum
    * reason for the most recent failure observed against this row
    * (timeout / status_4xx / status_5xx / semantic_mismatch /
    * shape_drift / empty_response / unknown). `null` when no failure
    * evidence is on file. The reader never invents a value here —
-   * absence is meaningful (e.g. legacy rows pre-closeout).
+   * absence is meaningful for older rows.
    */
   lastFailureReason: EndpointLastFailureReason | null;
   /**
-   * Closeout — derived from `endpointSource` + `retirementCandidate`.
-   * The SoT V3 evidence contract requires a stand-alone field for
+   * Derived from `endpointSource` + `retirementCandidate`.
+   * The evidence contract requires a stand-alone field for
    * the seed-adapter retirement state so consumers do not have to
    * compose two columns to answer "is this seed adapter still
    * authoritative?". Derivation rules:
@@ -127,19 +127,18 @@ export interface KnowledgeApiEndpoint {
 }
 
 /**
- * V27-08 — closed enum for "where did this row originate". The four
- * legal values are aligned with the brief and with
+ * Closed enum for "where did this row originate". The legal values are aligned with
  * `safe-request-builder.ts`:
  *   - `observed` — captured via `chrome_network_capture` and a
- *     V27-06 endpoint candidate classifier verdict.
- *   - `seed_adapter` — backed by a V25/V26 hardcoded GitHub/npmjs
+ *     endpoint candidate classifier verdict.
+ *   - `seed_adapter` — backed by a hardcoded GitHub/npmjs
  *     seed entry under `app/native-server/src/api/api-knowledge.ts`.
  *   - `manual_seed` — operator-curated row (currently unused; kept
  *     for forward-compat so a future maintainer-private seed import
  *     does not need a schema bump).
- *   - `unknown` — pre-V27-08 row with no derivable hint.
- *   - `deprecated_seed` — closeout: a seed_adapter row that has
- *     been explicitly retired by the V27-08 retirement-state writer
+ *   - `unknown` — legacy row with no derivable hint.
+ *   - `deprecated_seed` — a seed_adapter row that has
+ *     been explicitly retired by the retirement-state writer
  *     because a same-site observed peer has stably outperformed it.
  *     The row is NEVER deleted; the value lets the lookup ranker
  *     drop it below all live sources without losing the lineage.
@@ -152,7 +151,7 @@ export type EndpointSource =
   | 'deprecated_seed';
 
 /**
- * Closeout — derived view of where a row sits on the seed-adapter
+ * Derived view of where a row sits on the seed-adapter
  * retirement state machine. See `KnowledgeApiEndpoint.seedAdapterRetirementState`.
  *
  *   - `'not_applicable'`     — endpointSource is not a seed-flavoured row.
@@ -170,10 +169,10 @@ export type SeedAdapterRetirementState =
   | 'deprecated';
 
 /**
- * Closeout — closed-enum failure reason carried in the V27-08
- * evidence contract. The repository persists exactly the values the
+ * Closed-enum failure reason carried in the evidence contract.
+ * The repository persists exactly the values the
  * writer supplies; the reader never invents one. Adding a new value
- * here is a v2.7 schema-cite event.
+ * here is a schema-cite event.
  */
 export type EndpointLastFailureReason =
   | 'timeout'
@@ -186,17 +185,16 @@ export type EndpointLastFailureReason =
   | 'unknown';
 
 /**
- * Closeout — closed-enum migration mode emitted by `upsertWithEvidence`
- * so V27-08 evidence consumers can tell whether an upsert was a
- * legacy no-op, an additive upgrade of a pre-V27-08 row, or a virgin
- * V27-08-aware write.
+ * Closed-enum migration mode emitted by `upsertWithEvidence` so evidence
+ * consumers can tell whether an upsert was a legacy no-op, an additive
+ * upgrade of a legacy row, or a first lineage-aware write.
  *
- *   - `'legacy_no_op'`     — input did not carry any V27-08 lineage
+ *   - `'legacy_no_op'`     — input did not carry any lineage
  *                             field; the row stays at schemaVersion=1.
- *                             (Existing v2.6 callers that have not been
- *                             migrated to V27-08 take this path.)
+ *                             (Existing callers that have not been
+ *                             migrated to lineage-aware writes take this path.)
  *   - `'additive_upgrade'` — existing schemaVersion=1 row gained
- *                             V27-08 fields on this upsert; row now
+ *                             lineage fields on this upsert; row now
  *                             reports schemaVersion=2.
  *   - `'virgin_v2_write'`  — brand-new row written with schemaVersion=2
  *                             from the first upsert.
@@ -214,8 +212,8 @@ export type EndpointMigrationMode =
   | 'unknown';
 
 /**
- * Closeout — V27-08 evidence object returned alongside the upserted
- * row by `upsertWithEvidence`. Carries the SoT V3 evidence contract
+ * Evidence object returned alongside the upserted row by `upsertWithEvidence`.
+ * Carries the evidence contract
  * fields (`confidenceBefore`, `confidenceAfter`, `migrationMode`)
  * the row alone cannot express. The legacy `upsert(input)` path
  * still returns just the row for backward compatibility.
@@ -234,22 +232,22 @@ export interface UpsertEndpointEvidence {
 }
 
 /**
- * V27-08 — closed enum for the correlation confidence carried over
+ * Closed enum for the correlation confidence carried over
  * from `dom-endpoint-correlator.ts`. The single-session correlator
  * NEVER writes `'high_confidence'` — that bucket is reserved for
- * V27-08 multi-session escalation (out of scope for this task).
+ * multi-session escalation.
  */
 export type CorrelationConfidenceLevel = 'unknown_candidate' | 'low_confidence' | 'high_confidence';
 
 /**
- * V27-08 — small structured lineage breadcrumb persisted alongside a
+ * Small structured lineage breadcrumb persisted alongside a
  * row. Closed-enum fields only; never raw values, never user input.
  *
  * `semanticSource` records the producer of the semantic verdict:
- *   - `'capture'` — derived from `api-knowledge-capture.ts` (V26-FIX-03 path).
- *   - `'classifier_v2'` — derived from V27-06 endpoint candidate classifier.
- *   - `'correlator_v2'` — derived from V27-07 DOM-endpoint correlator.
- *   - `'seed_adapter'` — copied from the V25 seed table.
+ *   - `'capture'` — derived from `api-knowledge-capture.ts`.
+ *   - `'classifier_v2'` — derived from the endpoint candidate classifier.
+ *   - `'correlator_v2'` — derived from the DOM-endpoint correlator.
+ *   - `'seed_adapter'` — copied from the seed table.
  *   - `'unknown'` — fallback.
  */
 export interface EndpointSourceLineage {
@@ -268,12 +266,12 @@ export interface EndpointSourceLineage {
 }
 
 /**
- * V26-FIX-03 — the closed-enum semantic type produced by the generic
+ * Closed-enum semantic type produced by the generic
  * network-observe classifier (`network-observe-classifier.ts`).
  *
- * Pre-FIX-03 we had a 7-value enum derived from `semantic_tag`
- * heuristics. FIX-03 widened it to 12 values that the classifier
- * persists to the `semantic_type` column. The pre-FIX-03 value
+ * Older rows used a smaller enum derived from `semantic_tag`
+ * heuristics. The generic classifier widened it to the values
+ * persisted to the `semantic_type` column. The legacy value
  * `'noise'` is kept here as an *accepted-on-read* synonym so legacy
  * scoring rows still load; new writes never use it (the classifier
  * picks the more specific bucket instead).
@@ -315,7 +313,7 @@ export interface UpsertKnowledgeApiEndpointInput {
   sourceHistoryRef?: string | null;
   observedAt: string;
   /**
-   * V26-FIX-03 — generic classifier outputs. Optional for backward
+   * Generic classifier outputs. Optional for backward
    * compatibility (e.g. fixture builders in tests); the production
    * writer in `api-knowledge-capture.ts` always supplies them.
    */
@@ -325,17 +323,17 @@ export interface UpsertKnowledgeApiEndpointInput {
   usableForTask?: boolean | null;
   noiseReason?: string | null;
   /**
-   * V27-08 — additive lineage inputs. All optional for back-compat;
-   * the V27-08 writer in `api-knowledge-capture.ts` populates them
-   * for new rows. Setting `endpointSource` (or any other v2 field)
+   * Additive lineage inputs. All optional for back-compat;
+   * `api-knowledge-capture.ts` populates them for new rows.
+   * Setting `endpointSource` or another lineage field
    * implicitly bumps the persisted `schemaVersion` to `2`.
    *
    * Rules:
    *  - `correlationConfidence === 'high_confidence'` is REJECTED at
    *    the writer for single-session inputs; callers that need
    *    multi-session escalation must do so via a dedicated path
-   *    (out of scope for V27-08). Repository accepts the value but
-   *    callers in this PR never produce it.
+   *    through a dedicated path. Repository accepts the value but
+   *    single-session callers do not produce it.
    *  - `sourceLineage` is JSON-serialised via `JSON.stringify`; no
    *    raw values or user-supplied strings are allowed in it.
    */
@@ -346,8 +344,8 @@ export interface UpsertKnowledgeApiEndpointInput {
   retirementCandidate?: boolean | null;
   sourceLineage?: EndpointSourceLineage | null;
   /**
-   * Closeout — closed-enum failure reason for the most recent upsert.
-   * Optional so v2.6 callers (no failure evidence on hand) keep working.
+   * Closed-enum failure reason for the most recent upsert.
+   * Optional so callers without failure evidence keep working.
    * The repository persists the value verbatim; rejecting unknown values
    * is the closed-enum validator's job (see `LAST_FAILURE_REASON_VALUES`).
    */
@@ -432,7 +430,7 @@ function coerceLastFailureReason(value: string | null): EndpointLastFailureReaso
 }
 
 /**
- * Closeout — derive the V27-08 evidence-contract value from the two
+ * Derive the evidence-contract value from the two
  * persisted columns. Pure: no IO, no row mutation. The reader is the
  * single source of truth for `seedAdapterRetirementState` so the
  * writer cannot drift relative to it.
@@ -455,11 +453,11 @@ const CORRELATION_CONFIDENCE_VALUES: ReadonlySet<string> = new Set<CorrelationCo
 ]);
 
 /**
- * V27-08 — derive `endpointSource` for a row.
+ * Derive `endpointSource` for a row.
  *
  * Order of authority:
- *   1. Persisted `endpoint_source` column (V27-08-aware writers).
- *   2. Back-compat heuristic on `family`: pre-V27-08 rows captured by
+ *   1. Persisted `endpoint_source` column.
+ *   2. Back-compat heuristic on `family`: legacy rows captured by
  *      `api-knowledge-capture.ts` use `family='observed'` for
  *      browser-observed endpoints and `family='github' | 'npmjs'` for
  *      seed-adapter rows.
@@ -471,9 +469,9 @@ function deriveEndpointSource(row: KnowledgeApiEndpointRow): EndpointSource {
   if (persisted && ENDPOINT_SOURCE_VALUES.has(persisted)) {
     return persisted as EndpointSource;
   }
-  // Closeout — legacy back-compat. We never invent `deprecated_seed`
+  // Legacy back-compat. We never invent `deprecated_seed`
   // from the family column because retirement is a writer-only state
-  // transition; legacy rows that pre-date V27-08 fall back to
+  // transition; legacy rows fall back to
   // `seed_adapter` (active) so the lookup still considers them.
   const family = (row.family || '').toLowerCase();
   if (family === 'observed') return 'observed';
@@ -575,7 +573,7 @@ export class KnowledgeApiRepository {
    * pair is wrapped in an immediate transaction so concurrent post-processor
    * invocations (within a single Node process) cannot tear an upsert.
    *
-   * Closeout note: this is the legacy entry point. New V27-08 callers
+   * This is the legacy entry point. Evidence-aware callers
    * that need access to `confidenceBefore` / `confidenceAfter` /
    * `migrationMode` should use `upsertWithEvidence` instead. This
    * method is implemented as a thin wrapper that drops the evidence
@@ -586,9 +584,9 @@ export class KnowledgeApiRepository {
   }
 
   /**
-   * Closeout — V27-08 evidence-aware variant of `upsert`. Returns the
+   * Evidence-aware variant of `upsert`. Returns the
    * resulting row alongside an `UpsertEndpointEvidence` object that
-   * carries the SoT V3 evidence-contract fields the row alone cannot
+   * carries the evidence-contract fields the row alone cannot
    * express:
    *
    *   - `confidenceBefore` / `confidenceAfter` — the row's
@@ -626,10 +624,10 @@ export class KnowledgeApiRepository {
           : 0;
     const noiseReason = input.noiseReason ?? null;
 
-    // V27-08 lineage inputs. Coerce to NULL when absent so the SQL
+    // Lineage inputs. Coerce to NULL when absent so the SQL
     // bindings stay aligned with the (idempotent CREATE) column list.
     // Setting any of these implicitly bumps `schema_version` to `2`
-    // so a downstream consumer can tell V27-08 rows from legacy ones
+    // so a downstream consumer can tell lineage-aware rows from legacy ones
     // by inspecting a single field.
     const endpointSource = input.endpointSource ?? null;
     if (endpointSource && !ENDPOINT_SOURCE_VALUES.has(endpointSource)) {
@@ -676,9 +674,9 @@ export class KnowledgeApiRepository {
       previousRow = existing;
 
       if (existing) {
-        // V27-08 — for re-observations we keep the prior lineage when
-        // the new write does not supply one (so a V26-FIX-03 capture
-        // of an existing V27-08 row does not silently downgrade
+        // For re-observations we keep the prior lineage when
+        // the new write does not supply one (so a classifier-only capture
+        // of an existing lineage-aware row does not silently downgrade
         // `endpoint_source` back to NULL). When the new write does
         // supply a value, it wins (a fresh classifier_v2 / correlator
         // verdict is more authoritative than a stale lineage).
@@ -810,7 +808,7 @@ export class KnowledgeApiRepository {
       .get(endpointId) as KnowledgeApiEndpointRow;
     const endpoint = rowToEndpoint(row);
 
-    // Closeout — derive the V27-08 SoT V3 evidence-contract fields.
+    // Derive the evidence-contract fields.
     // `confidenceBefore` is the score the row would have had right
     // before this upsert (null for a brand-new row); `confidenceAfter`
     // is the score of the just-written row. Both are computed via
@@ -899,8 +897,8 @@ export function scoreEndpointKnowledge(endpoint: KnowledgeApiEndpoint): ScoredKn
 }
 
 function classifyEndpointSemanticType(endpoint: KnowledgeApiEndpoint): EndpointSemanticType {
-  // V26-FIX-03 — prefer the persisted classifier output when present.
-  // This is the canonical path for new rows; legacy rows (pre-FIX-03)
+  // Prefer the persisted classifier output when present.
+  // This is the canonical path for new rows; older rows
   // fall through to the original `semantic_tag`-derived heuristic.
   if (endpoint.semanticTypePersisted) return endpoint.semanticTypePersisted;
   const tag = (endpoint.semanticTag || '').toLowerCase();
@@ -929,7 +927,7 @@ function deriveEndpointFallbackReason(
   endpoint: KnowledgeApiEndpoint,
   semanticType: EndpointSemanticType,
 ): string | null {
-  // V26-FIX-03 — when the classifier already wrote a noise_reason on
+  // When the classifier already wrote a noise_reason on
   // the row, that is the authoritative answer; we don't try to
   // re-derive a different one.
   if (endpoint.usableForTaskPersisted === false && endpoint.noiseReason) {
