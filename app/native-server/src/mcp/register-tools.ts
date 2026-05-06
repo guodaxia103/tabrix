@@ -61,6 +61,11 @@ import {
   READ_PAGE_DEFAULT_LAYER,
   resolveTaskContextKey,
 } from './task-context-key';
+import {
+  buildDomRegionRowsRejectedLogHint,
+  buildDomRegionRowsSuccessResult,
+  type ReadPageOperationLogHint,
+} from './read-page-dom-region-rows-result';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { getDefaultPrimaryTabController } from '../runtime/primary-tab-controller';
@@ -961,19 +966,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     // `null` means "no fallback fired, keep the caller's original layer
     // bit-identical to the legacy path".
     let forcedReadPageLayer: 'L0' | 'L0+L1' | null = null;
-    let operationLogHint: {
-      requestedLayer?: string | null;
-      selectedDataSource?: string | null;
-      sourceRoute?: string | null;
-      decisionReason?: string | null;
-      resultKind?: string | null;
-      fallbackUsed?: string | null;
-      readCount?: number | null;
-      tokensSaved?: number | null;
-      success?: boolean;
-      tabHygiene?: unknown;
-      metadata?: Record<string, string>;
-    } | null = null;
+    let operationLogHint: ReadPageOperationLogHint | null = null;
     let apiFallbackEvidence: ApiReadFallbackEvidence | null = null;
     if (taskContext && name === 'chrome_read_page') {
       const acceptanceApiFaultForLiveObserved = readAcceptanceApiFault(args);
@@ -1650,74 +1643,20 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               requestedLayer,
               fallbackEntryLayer: 'L0+L1',
             });
-            const payload = {
-              kind: 'dom_region_rows',
-              readPageAvoided: false,
-              sourceDataSource: 'dom_region_rows',
-              sourceKind: 'dom_region_rows',
-              sourceRoute: routerDecision.sourceRoute,
-              chosenSource: 'dom_region_rows',
-              dataSource: 'dom_region_rows',
-              selectedDataSource: 'dom_region_rows',
-              decisionReason: routerDecision.decisionReason,
-              dispatcherInputSource: routerDecision.dispatcherInputSource,
+            const { result: domRowsResult, operationLog } = buildDomRegionRowsSuccessResult({
+              requestedLayer,
+              routerDecision,
               layerContract,
-              chosenLayer: routerDecision.selectedLayer,
-              rows: visibleRows.rows,
-              rowCount: visibleRows.rowCount,
-              visibleRegionRowsUsed: true,
-              visibleRegionRowCount: visibleRows.rowCount,
-              targetRefCoverageRate: visibleRows.targetRefCoverageRate ?? null,
-              sourceRegion: visibleRows.sourceRegion,
-              rowExtractionConfidence: visibleRows.rowExtractionConfidence,
-              cardExtractorUsed: visibleRows.cardExtractorUsed,
-              cardPatternConfidence: visibleRows.cardPatternConfidence,
-              cardRowsCount: visibleRows.cardRowsCount,
-              rowOrder: visibleRows.rowOrder,
-              regionQualityScore: visibleRows.regionQualityScore ?? null,
-              visibleDomRowsCandidateCount: visibleRows.visibleDomRowsCandidateCount ?? null,
-              visibleDomRowsSelectedCount: visibleRows.visibleDomRowsSelectedCount ?? null,
-              lowValueRegionRejectedCount: visibleRows.lowValueRegionRejectedCount ?? null,
-              footerLikeRejectedCount: visibleRows.footerLikeRejectedCount ?? null,
-              navigationLikeRejectedCount: visibleRows.navigationLikeRejectedCount ?? null,
-              targetRefCoverageRejectedCount: visibleRows.targetRefCoverageRejectedCount ?? null,
-              rejectedRegionReasonDistribution:
-                visibleRows.rejectedRegionReasonDistribution ?? null,
+              visibleRows,
               apiRowsUnavailableReason: apiUnavailableReason,
-              fallbackCause: null,
-              fallbackUsed: 'none',
-            };
-            const domRowsResult: CallToolResult = {
-              content: [{ type: 'text', text: JSON.stringify(payload) }],
-            };
+              readCount: taskContext.readPageCount,
+            });
             sessionManager.completeStep(session.sessionId, step.stepId, {
               status: 'completed',
               resultSummary: 'chrome_read_page fulfilled via visible DOM region rows',
               artifactRefs:
                 postResult.extraArtifactRefs.length > 0 ? postResult.extraArtifactRefs : undefined,
-              operationLog: {
-                requestedLayer,
-                selectedDataSource: 'dom_region_rows',
-                sourceRoute: routerDecision.sourceRoute,
-                decisionReason: routerDecision.decisionReason,
-                resultKind: 'dom_region_rows',
-                fallbackUsed: 'none',
-                readCount: taskContext.readPageCount,
-                tokensSaved: 0,
-                success: true,
-                metadata: {
-                  visibleRegionRowsUsed: 'true',
-                  visibleRegionRowCount: String(visibleRows.rowCount),
-                  visibleRegionRowsRejectedReason: 'not_applicable',
-                  apiRowsUnavailableReason: apiUnavailableReason,
-                  dataSourceDecisionReason: routerDecision.decisionReason,
-                  targetRefCoverageRate: String(visibleRows.targetRefCoverageRate ?? 'unknown'),
-                  regionQualityScore: String(visibleRows.regionQualityScore ?? 'unknown'),
-                  rejectedRegionReasonDistribution: JSON.stringify(
-                    visibleRows.rejectedRegionReasonDistribution ?? {},
-                  ),
-                },
-              },
+              operationLog,
             });
             sessionManager.finishSession(session.sessionId, {
               status: 'completed',
@@ -1727,23 +1666,13 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           }
 
           const rejectedReason = buildVisibleRowsRejectionReason(visibleRows);
-          operationLogHint = {
-            ...(operationLogHint ?? {}),
-            decisionReason: operationLogHint?.decisionReason ?? rejectedReason,
-            metadata: {
-              ...(operationLogHint?.metadata ?? {}),
-              visibleRegionRowsUsed: 'false',
-              visibleRegionRowCount: String(visibleRows.rowCount),
-              visibleRegionRowsRejectedReason: rejectedReason,
-              apiRowsUnavailableReason: apiUnavailableReason,
-              dataSourceDecisionReason: routerDecision.decisionReason,
-              targetRefCoverageRate: String(visibleRows.targetRefCoverageRate ?? 'unknown'),
-              regionQualityScore: String(visibleRows.regionQualityScore ?? 'unknown'),
-              rejectedRegionReasonDistribution: JSON.stringify(
-                visibleRows.rejectedRegionReasonDistribution ?? {},
-              ),
-            },
-          };
+          operationLogHint = buildDomRegionRowsRejectedLogHint({
+            existing: operationLogHint,
+            visibleRows,
+            rejectedReason,
+            apiRowsUnavailableReason: apiUnavailableReason,
+            routerDecision,
+          });
         }
       }
       // Record a successful chrome_read_page so the budget reflects
