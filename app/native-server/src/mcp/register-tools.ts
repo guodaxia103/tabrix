@@ -6,7 +6,6 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import nativeMessagingHostInstance from '../native-messaging-host';
 import { NativeMessageType, TOOL_NAMES, TOOL_SCHEMAS, getRequiredCapability } from '@tabrix/shared';
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { isToolAllowedByPolicy } from '../policy/phase0-opt-in';
 import { getCurrentCapabilityEnv, isCapabilityEnabled } from '../policy/capabilities';
 import { sessionManager } from '../execution/session-manager';
@@ -70,6 +69,7 @@ import {
   filterToolsByPolicy,
   isToolAllowed,
 } from './tool-registry-filters';
+import { listDynamicFlowTools } from './dynamic-flow-tools';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { getDefaultPrimaryTabController } from '../runtime/primary-tab-controller';
@@ -248,64 +248,10 @@ async function invokeExtensionCommand(
   );
 }
 
-async function listDynamicFlowTools(): Promise<Tool[]> {
-  try {
-    const response = await invokeExtensionCommand('list_published_flows', {}, 20000);
-    if (response && response.status === 'success' && Array.isArray(response.items)) {
-      const tools: Tool[] = [];
-      for (const item of response.items) {
-        const name = `flow.${item.slug}`;
-        const description =
-          (item.meta && item.meta.tool && item.meta.tool.description) ||
-          item.description ||
-          'Recorded flow';
-        const properties: Record<string, any> = {};
-        const required: string[] = [];
-        for (const v of item.variables || []) {
-          const desc = v.label || v.key;
-          const typ = (v.type || 'string').toLowerCase();
-          const prop: any = { description: desc };
-          if (typ === 'boolean') prop.type = 'boolean';
-          else if (typ === 'number') prop.type = 'number';
-          else if (typ === 'enum') {
-            prop.type = 'string';
-            if (v.rules && Array.isArray(v.rules.enum)) prop.enum = v.rules.enum;
-          } else if (typ === 'array') {
-            // default array of strings; can extend with itemType later
-            prop.type = 'array';
-            prop.items = { type: 'string' };
-          } else {
-            prop.type = 'string';
-          }
-          if (v.default !== undefined) prop.default = v.default;
-          if (v.rules && v.rules.required) required.push(v.key);
-          properties[v.key] = prop;
-        }
-        // Run options
-        properties['tabTarget'] = { type: 'string', enum: ['current', 'new'], default: 'current' };
-        properties['refresh'] = { type: 'boolean', default: false };
-        properties['captureNetwork'] = { type: 'boolean', default: false };
-        properties['returnLogs'] = { type: 'boolean', default: false };
-        properties['timeoutMs'] = { type: 'number', minimum: 0 };
-        const tool: Tool = {
-          name,
-          description,
-          inputSchema: { type: 'object', properties, required },
-        };
-        tools.push(tool);
-      }
-      return tools;
-    }
-    return [];
-  } catch (e) {
-    return [];
-  }
-}
-
 export const setupTools = (server: McpServer) => {
   // List tools handler
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const dynamicTools = await listDynamicFlowTools();
+    const dynamicTools = await listDynamicFlowTools(invokeExtensionCommand);
     const byEnv = filterToolsByEnvironment([...TOOL_SCHEMAS, ...dynamicTools]);
     const byPolicy = filterToolsByPolicy(byEnv);
     return { tools: filterToolsByCapability(byPolicy, getCurrentCapabilityEnv()) };
@@ -338,7 +284,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
   });
 
   try {
-    const dynamicTools = await listDynamicFlowTools();
+    const dynamicTools = await listDynamicFlowTools(invokeExtensionCommand);
     const allowedTools = filterToolsByEnvironment([...TOOL_SCHEMAS, ...dynamicTools]);
 
     if (!isToolAllowed(name, allowedTools)) {
