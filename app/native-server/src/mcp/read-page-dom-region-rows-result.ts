@@ -1,8 +1,9 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ReadPageRequestedLayer } from '@tabrix/shared';
-import type { DataSourceDecision } from '../execution/data-source-router';
+import type { DataSourceDecision, TaskIntentClass } from '../execution/data-source-router';
 import type { LayerContractEnvelope } from '../execution/layer-contract';
 import type { TaskVisibleRegionRowsData } from '../execution/task-session-context';
+import type { ChooseContextDecisionSnapshot } from '../execution/skip-read-orchestrator';
 
 export interface ReadPageOperationLogHint {
   requestedLayer?: string | null;
@@ -16,6 +17,39 @@ export interface ReadPageOperationLogHint {
   success?: boolean;
   tabHygiene?: unknown;
   metadata?: Record<string, string>;
+}
+
+export function inferDomRegionRowsTaskIntent(
+  decision: ChooseContextDecisionSnapshot | null,
+  visibleRows: TaskVisibleRegionRowsData,
+): TaskIntentClass | undefined {
+  if (decision?.dataSource === 'dom_region_rows' || decision?.chosenSource === 'dom_region_rows') {
+    return 'search_list';
+  }
+  if (decision?.sourceRoute === 'knowledge_supported_read') return 'search_list';
+  if (visibleRows.visibleRegionRowsUsed && visibleRows.rowCount > 0) return 'search_list';
+  return undefined;
+}
+
+export function buildVisibleRowsRejectionReason(visibleRows: TaskVisibleRegionRowsData): string {
+  if (visibleRows.rejectedReason) return visibleRows.rejectedReason;
+  if (!visibleRows.available || visibleRows.rowCount <= 0) return 'dom_region_rows_unavailable';
+  if (visibleRows.confidence < 0.7) return 'dom_region_rows_low_confidence';
+  if (
+    visibleRows.regionQualityScore !== undefined &&
+    visibleRows.regionQualityScore !== null &&
+    visibleRows.regionQualityScore < 0.7
+  ) {
+    return 'dom_region_rows_low_region_quality';
+  }
+  if (
+    visibleRows.targetRefCoverageRate !== undefined &&
+    visibleRows.targetRefCoverageRate !== null &&
+    visibleRows.targetRefCoverageRate < 0.95
+  ) {
+    return 'dom_region_rows_target_ref_coverage_insufficient';
+  }
+  return 'dom_region_rows_not_selected';
 }
 
 export function buildDomRegionRowsSuccessResult(args: {

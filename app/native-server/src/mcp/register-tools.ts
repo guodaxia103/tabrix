@@ -28,15 +28,10 @@ import {
 } from '../policy/capabilities';
 import { sessionManager } from '../execution/session-manager';
 import { normalizeToolCallResult } from '../execution/result-normalizer';
-import {
-  planSkipRead,
-  type ChooseContextDecisionSnapshot,
-  type SkipReadPlan,
-} from '../execution/skip-read-orchestrator';
+import { planSkipRead, type SkipReadPlan } from '../execution/skip-read-orchestrator';
 import { readApiKnowledgeEndpointPlan } from '../api/api-knowledge';
 import { mapDataSourceToLayerContract } from '../execution/layer-contract';
-import { routeDataSource, type TaskIntentClass } from '../execution/data-source-router';
-import type { TaskVisibleRegionRowsData } from '../execution/task-session-context';
+import { routeDataSource } from '../execution/data-source-router';
 import { runPostProcessor } from './tool-post-processors';
 import { getNativeToolHandler } from './native-tool-handlers';
 import type {
@@ -60,6 +55,8 @@ import {
 import {
   buildDomRegionRowsRejectedLogHint,
   buildDomRegionRowsSuccessResult,
+  buildVisibleRowsRejectionReason,
+  inferDomRegionRowsTaskIntent,
   type ReadPageOperationLogHint,
 } from './read-page-dom-region-rows-result';
 import {
@@ -94,39 +91,6 @@ function parseToolList(value?: string): Set<string> {
       .map((item) => item.trim())
       .filter(Boolean),
   );
-}
-
-function inferDomRegionRowsTaskIntent(
-  decision: ChooseContextDecisionSnapshot | null,
-  visibleRows: TaskVisibleRegionRowsData,
-): TaskIntentClass | undefined {
-  if (decision?.dataSource === 'dom_region_rows' || decision?.chosenSource === 'dom_region_rows') {
-    return 'search_list';
-  }
-  if (decision?.sourceRoute === 'knowledge_supported_read') return 'search_list';
-  if (visibleRows.visibleRegionRowsUsed && visibleRows.rowCount > 0) return 'search_list';
-  return undefined;
-}
-
-function buildVisibleRowsRejectionReason(visibleRows: TaskVisibleRegionRowsData): string {
-  if (visibleRows.rejectedReason) return visibleRows.rejectedReason;
-  if (!visibleRows.available || visibleRows.rowCount <= 0) return 'dom_region_rows_unavailable';
-  if (visibleRows.confidence < 0.7) return 'dom_region_rows_low_confidence';
-  if (
-    visibleRows.regionQualityScore !== undefined &&
-    visibleRows.regionQualityScore !== null &&
-    visibleRows.regionQualityScore < 0.7
-  ) {
-    return 'dom_region_rows_low_region_quality';
-  }
-  if (
-    visibleRows.targetRefCoverageRate !== undefined &&
-    visibleRows.targetRefCoverageRate !== null &&
-    visibleRows.targetRefCoverageRate < 0.95
-  ) {
-    return 'dom_region_rows_target_ref_coverage_insufficient';
-  }
-  return 'dom_region_rows_not_selected';
 }
 
 function filterToolsByEnvironment(tools: Tool[]): Tool[] {
