@@ -1,10 +1,10 @@
 /**
- * V26-03 (B-026) — Skip-Read Execution Orchestrator.
+ * Skip-Read Execution Orchestrator.
  *
  * Pure module. Converts a {@link LayerSourceRoute} (already decided
- * upstream by V26-04 `dispatchLayer` and recorded into the task
- * session context by `choose_context`) into an explicit skip-or-fall
- * back execution plan for the `chrome_read_page` hot path.
+ * upstream by `dispatchLayer` and recorded into the task session context by
+ * `choose_context`) into an explicit skip-or-fallback execution plan for the
+ * `chrome_read_page` hot path.
  *
  * Hard contracts (per session corrections #2/#3/#4):
  *
@@ -16,10 +16,9 @@
  *      yields a real layered `read_page` payload.
  *
  *   2. The orchestrator CANNOT infer a sourceRoute on its own. It
- *      consumes a decision that `choose_context` (V26-04) has
- *      explicitly written into the {@link TaskSessionContext}. Absent
- *      a recorded decision the caller MUST keep the legacy v2.5
- *      pathway (forward to `chrome_read_page`).
+ *      consumes a decision that `choose_context` has explicitly written into
+ *      the {@link TaskSessionContext}. Absent a recorded decision, the caller
+ *      MUST keep the legacy pathway (forward to `chrome_read_page`).
  *
  *   3. `experience_replay_skip_read` only resolves to `action='skip'`
  *      when the recorded choose_context decision attached an
@@ -27,11 +26,9 @@
  *      portable-args gate. Any missing field collapses to
  *      `action='fallback_required'` with a precise `fallbackCause`.
  *
- *   4. `api_list` / `api_detail` are not yet first-class enum members
- *      of {@link LayerSourceRoute}; V26-08 will land that migration.
- *      Until V26-07/08 wire the API capability layer, every API-class
- *      route resolves to `action='fallback_required'` with cause
- *      `'api_layer_not_available'`.
+ *   4. `api_list` / `api_detail` are capability-gated. Until the API
+ *      capability layer is available, every API-class route resolves to
+ *      `action='fallback_required'` with cause `'api_layer_not_available'`.
  *
  *   5. The fallback layer is ALWAYS `'L0' | 'L0+L1'` — never
  *      `'L0+L1+L2'`. This holds even when the upstream dispatcher
@@ -39,8 +36,8 @@
  *      not silently widen back to a full DOM read on failure.
  *
  *   6. The orchestrator is fail-soft. Any unrecognised or absent
- *      input falls through to `action='forward'` so the v2.5 happy
- *      path is preserved bit-identical when in doubt.
+ *      input falls through to `action='forward'` so the legacy happy path is
+ *      preserved when in doubt.
  *
  * No IO. No clock. No process.env reads. State lives only in the
  * caller-supplied {@link SkipReadPlanInput.taskCtx} snapshot.
@@ -58,9 +55,8 @@ import type { LayerSourceRoute, ReadPageRequestedLayer } from '@tabrix/shared';
  * "fall through to a real `chrome_read_page` call".
  *
  * Keep in sync with `BenchmarkChosenSource` in
- * `app/native-server/src/benchmark/v26-benchmark.ts` so V26-06's
- * NDJSON emitter can attach the `chosenSource` field directly off
- * this value.
+ * `app/native-server/src/benchmark/v26-benchmark.ts` so benchmark emitters can
+ * attach the `chosenSource` field directly off this value.
  */
 export type SkipReadSourceKind = 'experience_replay' | 'api_list' | 'api_detail' | 'dom_json';
 
@@ -108,10 +104,10 @@ export type SkipReadFallbackCause =
 export type SkipReadAction = 'skip' | 'fallback_required' | 'forward';
 
 /**
- * Execution snapshot from `choose_context` (V26-04). The orchestrator
+ * Execution snapshot from `choose_context`. The orchestrator
  * is the only consumer. The caller is responsible for producing
  * `replayCandidate` and `apiCapability` from authoritative sources
- * (Experience repository / V26-07 capability allowlist) before
+ * (Experience repository / capability allowlist) before
  * writing the decision into the task context — the orchestrator does
  * not rewalk those sources.
  */
@@ -134,24 +130,24 @@ export interface ChooseContextDecisionSnapshot {
    */
   replayCandidate?: {
     actionPathId: string;
-    /** True iff portable args resolution succeeded (V25-04). */
+    /** True iff portable args resolution succeeded. */
     portableArgsOk: boolean;
-    /** True iff policy / capability gates passed (V25-04). */
+    /** True iff policy / capability gates passed. */
     policyOk: boolean;
   } | null;
   /**
-   * Set ONLY by V26-08 once `knowledge_call_api` is wired. Until
-   * then the chooser leaves it `false` / unset and the orchestrator
-   * forces `'fallback_required' / 'api_layer_not_available'` on every
+   * Set only once `knowledge_call_api` is wired. Until then the chooser leaves
+   * it `false` / unset and the orchestrator forces
+   * `'fallback_required' / 'api_layer_not_available'` on every
    * `api_list` / `api_detail` route.
    */
   apiCapability?: {
     available: boolean;
     /** Endpoint family, e.g. `'github_search_repositories'`. */
     family: string;
-    /** API data purpose from the internal V26-07 reader. */
+    /** API data purpose from the internal reader. */
     dataPurpose?: string;
-    /** Redacted request params for the internal V26-07 reader. */
+    /** Redacted request params for the internal reader. */
     params?: Record<string, string>;
   } | null;
   chosenSource?: DataSourceRouterChosenSource;
@@ -160,26 +156,26 @@ export interface ChooseContextDecisionSnapshot {
   dispatcherInputSource?: string;
   fallbackPlan?: DataSourceRouterFallbackPlanSnapshot;
   /**
-   * V26-FIX-01 — closed-enum execution mode the chooser already
-   * resolved (NOT a re-runnable hint). `'direct_api'` means
+   * Closed-enum execution mode the chooser already resolved (NOT a
+   * re-runnable hint). `'direct_api'` means
    * `tabrix_choose_context` itself fetched the API rows inline;
    * downstream `chrome_read_page` (if it still fires) MUST treat
    * the read as already satisfied. `'via_read_page'` (default for
    * every legacy call site) means the chooser left execution to the
    * existing chrome_read_page shim path. The orchestrator only
    * forwards this onto the {@link SkipReadPlan} so the operation-log
-   * / telemetry side (V26-FIX-07) can write a single closed-enum
-   * value rather than re-deriving the mode from row counts.
+   * / telemetry side can write a single closed-enum value rather than
+   * re-deriving the mode from row counts.
    */
   executionMode?: 'direct_api' | 'via_read_page';
   /**
-   * V26-FIX-01 — cached direct-API rows the chooser produced inline.
+   * Cached direct-API rows the chooser produced inline.
    * Present iff `executionMode === 'direct_api'` AND the chooser's
    * direct-api-executor returned `executionMode='direct_api'`.
    * Downstream `chrome_read_page` (if it still fires) MUST consume
    * these rows verbatim instead of re-issuing a network fetch — that
-   * is the whole point of FIX-01: one user-visible task = one API
-   * round-trip, not two. The orchestrator does not inspect this
+   * keeps one user-visible task to one API round-trip, not two. The
+   * orchestrator does not inspect this
    * field; it is the read-side shim's responsibility to short-circuit
    * its `requiresApiCall` branch when this is set.
    */
@@ -193,22 +189,22 @@ export interface ChooseContextDecisionSnapshot {
     /** Always `false` — direct-api-executor never persists raw bodies. */
     rawBodyStored: false;
     /**
-     * V26-PGB-01 — `true` iff the upstream reader returned ok with an
-     * empty row list. Threaded verbatim from the executor so the
-     * chrome_read_page shim can mark the cached envelope as
-     * "verified empty" without re-issuing the network fetch.
+     * `true` iff the upstream reader returned ok with an empty row list.
+     * Threaded verbatim from the executor so the chrome_read_page shim can
+     * mark the cached envelope as "verified empty" without re-issuing the
+     * network fetch.
      */
     emptyResult: boolean;
-    /** V26-PGB-01 — closed-enum reason; `null` on the non-empty path. */
+    /** Closed-enum reason; `null` on the non-empty path. */
     emptyReason: 'no_matching_records' | null;
-    /** V26-PGB-01 — human-readable message; `null` on the non-empty path. */
+    /** Human-readable message; `null` on the non-empty path. */
     emptyMessage: string | null;
     /**
-     * V26-PGB-04 — closed-enum lineage marker carried verbatim from
-     * the executor. Surfaced here so the read-side shim can pipe it
-     * onto the `chrome_read_page` `kind:'api_rows'` envelope without
-     * re-deriving it from the endpoint-family string. `null` on every
-     * short-circuit branch where no reader was reached.
+     * Closed-enum lineage marker carried verbatim from the executor.
+     * Surfaced here so the read-side shim can pipe it onto the
+     * `chrome_read_page` `kind:'api_rows'` envelope without re-deriving it
+     * from the endpoint-family string. `null` on every short-circuit branch
+     * where no reader was reached.
      */
     endpointSource: 'observed' | 'seed_adapter' | 'manual_seed' | null;
     /** Underlying API telemetry forwarded from the reader. */
@@ -274,7 +270,6 @@ export interface SkipReadPlan {
   requiresApiCall: boolean;
   /**
    * True when `'skip'` requires the experience replay engine.
-   * V26-09 will consume this signal to start a replay run.
    */
   requiresExperienceReplay: boolean;
   /**
@@ -284,14 +279,13 @@ export interface SkipReadPlan {
    */
   diagnostic: string;
   /**
-   * V26-FIX-01 — closed-enum execution mode echoed from the
-   * recorded `ChooseContextDecisionSnapshot`. `'via_read_page'` is
-   * the default for every pre-V26-FIX-01 caller; `'direct_api'`
-   * surfaces only when the chooser already executed the API inline
-   * AND the upstream caller still chose to send `chrome_read_page`
-   * (in which case the shim must short-circuit because the rows
-   * are already on the wire). The orchestrator never DECIDES this
-   * mode — it copies what the chooser wrote.
+   * Closed-enum execution mode echoed from the recorded
+   * `ChooseContextDecisionSnapshot`. `'via_read_page'` is the default;
+   * `'direct_api'` surfaces only when the chooser already executed the API
+   * inline AND the upstream caller still chose to send `chrome_read_page` (in
+   * which case the shim must short-circuit because the rows are already on
+   * the wire). The orchestrator never DECIDES this mode: it copies what the
+   * chooser wrote.
    */
   executionMode: 'direct_api' | 'via_read_page';
 }
@@ -324,7 +318,7 @@ export interface SkipReadPlan {
  *
  *   3. `'knowledge_supported_read'`:
  *      a. `apiCapability.available === true` → `'skip'` via
- *         `api_list` (V26-08 wires this).
+ *         `api_list`.
  *      b. otherwise                         → `'fallback_required'`
  *         + `'api_layer_not_available'`.
  *
@@ -380,10 +374,9 @@ export function planSkipRead(input: SkipReadPlanInput): SkipReadPlan {
       });
 
     default:
-      // Defensive — the LayerSourceRoute enum is closed today, but a
-      // future migration (V26-08 promoting `api_list` to first-class)
-      // will pass through here before the switch is updated. We keep
-      // the v2.5 happy path bit-identical.
+      // Defensive: the LayerSourceRoute enum is closed today, but a future
+      // source-route migration will pass through here before the switch is
+      // updated. We keep the legacy happy path intact.
       return forwardPlan({
         sourceRoute: decision.sourceRoute,
         fallbackEntryLayer,
@@ -526,7 +519,7 @@ function planKnowledgeBacked(
       requiresApiCall: false,
       requiresExperienceReplay: false,
       diagnostic:
-        'fallback_required: knowledge_supported_read recorded but knowledge_call_api capability is not yet wired (V26-07/08)',
+        'fallback_required: knowledge_supported_read recorded but knowledge_call_api capability is not yet wired',
       executionMode,
     };
   }
@@ -571,12 +564,9 @@ function forwardPlan(args: {
 }
 
 /**
- * V26-FIX-01 — pick the executionMode the chooser already wrote onto
- * the decision, defaulting to `'via_read_page'` for any pre-V26-FIX-01
- * call site (the chooser wrote no `executionMode` because it never
- * executed the API inline). The default keeps the v2.5 happy path
- * bit-identical and only the new direct-execute branch sets
- * `'direct_api'`.
+ * Pick the executionMode the chooser already wrote onto the decision,
+ * defaulting to `'via_read_page'` for callers that did not execute the API
+ * inline. Only the direct-execute branch sets `'direct_api'`.
  */
 function pickExecutionMode(
   decision: ChooseContextDecisionSnapshot,
@@ -588,8 +578,7 @@ function pickExecutionMode(
  * Hard cap on the layer we authorise for any DOM fallback. The
  * dispatcher may have decided `'L0+L1+L2'` is "right" for the page,
  * but a skip-failure or capability-gap fallback MUST NOT silently
- * widen to L2 — that is the exact regression V26-03 exists to
- * prevent. V4.1 §0.1.
+ * widen to L2.
  */
 function clampFallbackLayer(chosen: ReadPageRequestedLayer): 'L0' | 'L0+L1' {
   return chosen === 'L0' ? 'L0' : 'L0+L1';
