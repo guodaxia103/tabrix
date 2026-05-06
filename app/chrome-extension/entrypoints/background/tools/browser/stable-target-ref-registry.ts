@@ -1,5 +1,5 @@
 /**
- * B-011 stable-targetRef → per-snapshot ref registry.
+ * Stable targetRef to per-snapshot ref registry.
  *
  * Why this exists:
  *   - HVO `targetRef` is a stable identity that survives reloads.
@@ -9,7 +9,7 @@
  *     a stable `tgt_*` back into the live `ref_*` of the most recent snapshot
  *     for the same tab.
  *
- * Design choices (intentionally tiny — B-011 is not a generic UI-state store):
+ * Design choices (intentionally tiny; this is not a generic UI-state store):
  *   - In-memory Map keyed by tabId. No persistence: if the service worker is
  *     evicted, lookups return `undefined` and the click bridge fails closed
  *     with a clear "re-read the page" message — which is the safe behavior.
@@ -17,8 +17,7 @@
  *     because a fresh `read_page` invalidates whatever ref handles existed
  *     before.
  *   - `clearTab(tabId)` is exposed so background lifecycle hooks can drop
- *     entries when a tab closes (caller responsibility — registering that
- *     hook is outside B-011 scope).
+ *     entries when a tab closes (caller responsibility).
  */
 
 export interface StableTargetRefEntry {
