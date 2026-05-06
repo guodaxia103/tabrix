@@ -1,9 +1,8 @@
 /**
  * Tabrix schema/boundary contract module.
  *
- * SoT for the per-key semantics is the maintainer-private doc
- * `.claude/strategy/TABRIX_V2_7_CONTRACT_V1_zh.md`. This module is the
- * machine-readable companion: it freezes the legacy metadata-key set so any
+ * SoT for the per-key semantics is the maintainer-private contract doc.
+ * This module is the machine-readable companion: it freezes the legacy metadata-key set so any
  * accidental rename/drop is caught by `schema-boundary-contract.test.ts`, and it
  * declares the additive metadata-key surface + the "every new closed enum MUST
  * include `'unknown'`" rule.
@@ -26,9 +25,9 @@ import {
  * rename a legacy key without a deliberate contract bump.
  *
  * Cross-ref: `app/native-server/src/memory/db/operation-log-metadata.ts`
- * (`METADATA_KEYS` constant, FIX-07 + PGB-01 baseline).
+ * (`METADATA_KEYS` constant, operation-log metadata baseline).
  */
-export const V26_FROZEN_METADATA_KEYS = [
+export const FROZEN_METADATA_KEYS = [
   'externalTaskKey',
   'runId',
   'scenarioId',
@@ -42,7 +41,7 @@ export const V26_FROZEN_METADATA_KEYS = [
   'emptyResult',
 ] as const satisfies ReadonlyArray<keyof OperationLogMetadata>;
 
-export type V26FrozenMetadataKey = (typeof V26_FROZEN_METADATA_KEYS)[number];
+export type FrozenMetadataKey = (typeof FROZEN_METADATA_KEYS)[number];
 
 /**
  * The first additive metadata keys introduced after the frozen baseline. Every key is
@@ -54,7 +53,7 @@ export type V26FrozenMetadataKey = (typeof V26_FROZEN_METADATA_KEYS)[number];
  * `app/native-server/src/memory/db/operation-log-metadata.ts`. The two
  * MUST stay in sync; the invariant test below pins both lists.
  */
-export const V27_ADDITIVE_METADATA_KEYS = [
+export const OBSERVATION_METADATA_KEYS = [
   'lifecycleState',
   'lifecycleConfidence',
   'actionOutcome',
@@ -67,7 +66,7 @@ export const V27_ADDITIVE_METADATA_KEYS = [
   'decisionRuleId',
 ] as const satisfies ReadonlyArray<keyof OperationLogMetadata>;
 
-export type V27AdditiveMetadataKey = (typeof V27_ADDITIVE_METADATA_KEYS)[number];
+export type ObservationMetadataKey = (typeof OBSERVATION_METADATA_KEYS)[number];
 
 /**
  * Later evidence metadata keys introduced by live-observation, controlled
@@ -75,7 +74,7 @@ export type V27AdditiveMetadataKey = (typeof V27_ADDITIVE_METADATA_KEYS)[number]
  * the meaning of the original additive set while still
  * making the full operation-log evidence surface explicit and ordered.
  */
-export const V27_EVIDENCE_METADATA_KEYS = [
+export const EVIDENCE_METADATA_KEYS = [
   'responseSummarySource',
   'capturedAfterArm',
   'bridgePath',
@@ -109,7 +108,7 @@ export const V27_EVIDENCE_METADATA_KEYS = [
   'rejectedRegionReasonDistribution',
 ] as const satisfies ReadonlyArray<keyof OperationLogMetadata>;
 
-export type V27EvidenceMetadataKey = (typeof V27_EVIDENCE_METADATA_KEYS)[number];
+export type EvidenceMetadataKey = (typeof EVIDENCE_METADATA_KEYS)[number];
 
 /**
  * Combined allowlist readers/writers can reference when iterating the
@@ -117,20 +116,20 @@ export type V27EvidenceMetadataKey = (typeof V27_EVIDENCE_METADATA_KEYS)[number]
  * keys, then later evidence keys, so a JSON dump
  * remains diff-friendly and matches `METADATA_KEYS`.
  */
-export const V27_ALL_METADATA_KEYS = [
-  ...V26_FROZEN_METADATA_KEYS,
-  ...V27_ADDITIVE_METADATA_KEYS,
-  ...V27_EVIDENCE_METADATA_KEYS,
+export const ALL_METADATA_KEYS = [
+  ...FROZEN_METADATA_KEYS,
+  ...OBSERVATION_METADATA_KEYS,
+  ...EVIDENCE_METADATA_KEYS,
 ] as const satisfies ReadonlyArray<keyof OperationLogMetadata>;
 
 /**
- * Persisted operation-log wrapper version.  v2.7 keeps the wrapper at
+ * Persisted operation-log wrapper version. The current contract keeps the wrapper at
  * the legacy value (`2`) because every later metadata key is additive and the
  * existing parser falls back to `'not_applicable'` for missing keys.
  * Re-exporting it here lets the invariant test pin "this did not bump
  * the wrapper" without giving callers a second source of truth.
  */
-export const V27_OPERATION_LOG_BLOB_SCHEMA_VERSION = OPERATION_LOG_BLOB_SCHEMA_VERSION;
+export const CONTRACT_OPERATION_LOG_BLOB_SCHEMA_VERSION = OPERATION_LOG_BLOB_SCHEMA_VERSION;
 
 /**
  * Contract generation marker. Generation 2 reflects the later evidence
@@ -138,7 +137,7 @@ export const V27_OPERATION_LOG_BLOB_SCHEMA_VERSION = OPERATION_LOG_BLOB_SCHEMA_V
  * NOT consume this; it is purely a maintainer-facing audit hint that release
  * review can cite.
  */
-export const V27_CONTRACT_GENERATION = 2 as const;
+export const CONTRACT_GENERATION = 2 as const;
 
 /**
  * Invariant helper: every closed-enum string union introduced here
@@ -146,7 +145,7 @@ export const V27_CONTRACT_GENERATION = 2 as const;
  * helper is enforced at type level — assigning an enum that omits
  * `'unknown'` to `RequireUnknownFallback<E>` produces a compile error.
  *
- * Usage from a v2.7 enum declaration:
+ * Usage from a closed enum declaration:
  *
  *   export type LifecycleState =
  *     | 'navigating'
@@ -163,10 +162,10 @@ export type RequireUnknownFallback<T extends string> = 'unknown' extends T ? T :
 
 /**
  * Canonical "I do not know" literal. Re-exporting `NOT_APPLICABLE`
- * keeps a single import surface for v2.7 modules that need both the
+ * keeps a single import surface for modules that need both the
  * metadata sentinel and the closed-enum sentinel.
  */
-export const V27_UNKNOWN = 'unknown' as const;
-export type V27Unknown = typeof V27_UNKNOWN;
+export const UNKNOWN_ENUM_VALUE = 'unknown' as const;
+export type UnknownEnumValue = typeof UNKNOWN_ENUM_VALUE;
 
 export { NOT_APPLICABLE };

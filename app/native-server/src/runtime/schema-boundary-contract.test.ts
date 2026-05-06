@@ -2,15 +2,15 @@
  * Invariants for the schema/boundary contract.
  *
  * What this pins:
- * 1. The v2.6 frozen metadata-key set is still present on
+ * 1. The frozen metadata-key set is still present on
  *    `OperationLogMetadata` (no rename / drop).
  * 2. The runtime metadata-keys allowlist (`METADATA_KEYS`) equals the
- *    explicit v2.7 contract list (so a v2.7 key cannot be declared on
+ *    explicit contract list (so a new key cannot be declared on
  *    the contract module without also being routed through the operation-log
  *    writer / replay reader).
  * 3. The `RequireUnknownFallback<T>` helper rejects a closed-enum that
  *    omits `'unknown'` at type level.
- * 4. The persisted operation-log wrapper version stays at v2.6's value
+ * 4. The persisted operation-log wrapper version stays at the current value
  *    (additive-only metadata extension, not a wrapper bump).
  */
 import {
@@ -19,18 +19,18 @@ import {
   type OperationLogMetadata,
 } from '../memory/db/operation-log-metadata';
 import {
-  V26_FROZEN_METADATA_KEYS,
-  V27_ADDITIVE_METADATA_KEYS,
-  V27_ALL_METADATA_KEYS,
-  V27_EVIDENCE_METADATA_KEYS,
-  V27_OPERATION_LOG_BLOB_SCHEMA_VERSION,
-  V27_CONTRACT_GENERATION,
-  V27_UNKNOWN,
+  ALL_METADATA_KEYS,
+  CONTRACT_GENERATION,
+  CONTRACT_OPERATION_LOG_BLOB_SCHEMA_VERSION,
+  EVIDENCE_METADATA_KEYS,
+  FROZEN_METADATA_KEYS,
+  OBSERVATION_METADATA_KEYS,
+  UNKNOWN_ENUM_VALUE,
   type RequireUnknownFallback,
 } from './schema-boundary-contract';
 
 describe('schema-boundary contract invariants', () => {
-  it('keeps every v2.6 metadata key on the OperationLogMetadata shape', () => {
+  it('keeps every frozen metadata key on the OperationLogMetadata shape', () => {
     const sample: OperationLogMetadata = {
       externalTaskKey: 'not_applicable',
       runId: 'not_applicable',
@@ -85,44 +85,44 @@ describe('schema-boundary contract invariants', () => {
       regionQualityScore: 'not_applicable',
       rejectedRegionReasonDistribution: 'not_applicable',
     };
-    for (const key of V26_FROZEN_METADATA_KEYS) {
+    for (const key of FROZEN_METADATA_KEYS) {
       expect(Object.prototype.hasOwnProperty.call(sample, key)).toBe(true);
     }
-    for (const key of V27_ADDITIVE_METADATA_KEYS) {
+    for (const key of OBSERVATION_METADATA_KEYS) {
       expect(Object.prototype.hasOwnProperty.call(sample, key)).toBe(true);
     }
-    for (const key of V27_EVIDENCE_METADATA_KEYS) {
+    for (const key of EVIDENCE_METADATA_KEYS) {
       expect(Object.prototype.hasOwnProperty.call(sample, key)).toBe(true);
     }
   });
 
-  it('keeps METADATA_KEYS == explicit v27 contract keys (same set, same order)', () => {
-    expect([...METADATA_KEYS]).toEqual([...V27_ALL_METADATA_KEYS]);
-    const v26 = new Set(V26_FROZEN_METADATA_KEYS as readonly string[]);
-    const v27 = new Set(V27_ADDITIVE_METADATA_KEYS as readonly string[]);
-    const evidence = new Set(V27_EVIDENCE_METADATA_KEYS as readonly string[]);
-    for (const k of v26) expect(v27.has(k)).toBe(false);
-    for (const k of v27) expect(v26.has(k)).toBe(false);
+  it('keeps METADATA_KEYS == explicit contract keys (same set, same order)', () => {
+    expect([...METADATA_KEYS]).toEqual([...ALL_METADATA_KEYS]);
+    const frozen = new Set(FROZEN_METADATA_KEYS as readonly string[]);
+    const observation = new Set(OBSERVATION_METADATA_KEYS as readonly string[]);
+    const evidence = new Set(EVIDENCE_METADATA_KEYS as readonly string[]);
+    for (const k of frozen) expect(observation.has(k)).toBe(false);
+    for (const k of observation) expect(frozen.has(k)).toBe(false);
     for (const k of evidence) {
-      expect(v26.has(k)).toBe(false);
-      expect(v27.has(k)).toBe(false);
+      expect(frozen.has(k)).toBe(false);
+      expect(observation.has(k)).toBe(false);
     }
-    expect(v26.size + v27.size + evidence.size).toBe(METADATA_KEYS.length);
+    expect(frozen.size + observation.size + evidence.size).toBe(METADATA_KEYS.length);
   });
 
   it('does NOT bump the persisted operation-log wrapper version', () => {
-    expect(V27_OPERATION_LOG_BLOB_SCHEMA_VERSION).toBe(OPERATION_LOG_BLOB_SCHEMA_VERSION);
-    expect(V27_OPERATION_LOG_BLOB_SCHEMA_VERSION).toBe(2);
+    expect(CONTRACT_OPERATION_LOG_BLOB_SCHEMA_VERSION).toBe(OPERATION_LOG_BLOB_SCHEMA_VERSION);
+    expect(CONTRACT_OPERATION_LOG_BLOB_SCHEMA_VERSION).toBe(2);
   });
 
   it('declares a contract generation marker', () => {
-    expect(V27_CONTRACT_GENERATION).toBe(2);
+    expect(CONTRACT_GENERATION).toBe(2);
   });
 
   it("RequireUnknownFallback<T> rejects an enum without 'unknown'", () => {
     type GoodEnum = 'a' | 'b' | 'unknown';
     type BadEnum = 'a' | 'b';
-    const good: RequireUnknownFallback<GoodEnum> = V27_UNKNOWN;
+    const good: RequireUnknownFallback<GoodEnum> = UNKNOWN_ENUM_VALUE;
     expect(good).toBe('unknown');
     type BadCheck = RequireUnknownFallback<BadEnum>;
     const _badIsNever: BadCheck extends never ? true : false = true;
