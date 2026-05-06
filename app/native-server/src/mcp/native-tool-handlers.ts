@@ -74,37 +74,36 @@ export interface NativeToolHandlerDeps {
    */
   capabilityEnv?: CapabilityEnv;
   /**
-   * V24-01: bridge into the existing extension-side dispatch path
+   * Bridge into the existing extension-side dispatch path
    * (`invokeExtensionCommand('call_tool', …)`). Required at runtime
    * for `experience_replay`; other handlers ignore it. Optional so
-   * pre-existing handler tests (and the SUGGEST_PLAN / CONTEXT
+   * existing handler tests (and the SUGGEST_PLAN / CONTEXT
    * handlers themselves) stay source-compatible.
    */
   dispatchBridged?: DispatchBridgedFn;
   /**
-   * V24-01: per-step `memory_steps` recorder bound to the wrapper's
-   * current session. Required for `experience_replay`.
+   * Per-step `memory_steps` recorder bound to the wrapper's current
+   * session. Required for `experience_replay`.
    */
   recorder?: ReplayStepRecorder;
   /**
-   * V24-01: callback to re-tag the wrapper-owned session's
-   * `task.intent` with the `experience_replay:<id>` prefix. Required
-   * for `experience_replay` so the aggregator's brief §7 special-case
-   * triggers.
+   * Callback to re-tag the wrapper-owned session's `task.intent` with
+   * the `experience_replay:<id>` prefix. Required for
+   * `experience_replay` so the aggregator special-case triggers.
    */
   updateTaskIntent?: UpdateTaskIntentFn;
   /**
-   * V24-02: per-step write-back hook used by the replay engine.
-   * Optional so existing handler tests stay source-compatible.
+   * Per-step write-back hook used by the replay engine. Optional so
+   * existing handler tests stay source-compatible.
    */
   outcomeWriter?: ReplayOutcomeWriter;
   /**
-   * V26-03 (B-026): the externally-keyed `TaskSessionContext` the
-   * dispatcher resolved for this tool call. Wired exclusively for
-   * `tabrix_choose_context` so its decision (sourceRoute / chosenLayer
-   * / token estimate / replay candidate / API capability) lands in
-   * the SAME context the `chrome_read_page` shim later peeks via
-   * `peekChooseContextDecision`. Other handlers ignore the field.
+   * Externally-keyed `TaskSessionContext` the dispatcher resolved for
+   * this tool call. Wired exclusively for `tabrix_choose_context` so its
+   * decision (sourceRoute / chosenLayer / token estimate / replay
+   * candidate / API capability) lands in the SAME context the
+   * `chrome_read_page` shim later peeks via `peekChooseContextDecision`.
+   * Other handlers ignore the field.
    *
    * `null` when the wrapper resolved no context (tools outside the
    * auto-key set without an explicit `taskSessionId`). The chooser
@@ -177,20 +176,18 @@ const handleExperienceSuggestPlan: NativeToolHandler = (args, deps) => {
 };
 
 const handleTabrixChooseContext: NativeToolHandler = async (args, deps) => {
-  // V26-04 (B-027): wire the live page context provider so the
-  // dispatcher receives real candidateActions / HVO counts instead
-  // of the v25 hard-coded zeros. When persistence is off
-  // `pageSnapshots` is `null` and the provider returns
-  // `fallback_zero` with cause `persistence_off` — honest telemetry,
-  // same numerical dispatcher input the chooser used to ship.
+  // Wire the live page context provider so the dispatcher receives real
+  // candidateActions / HVO counts instead of legacy hard-coded zeros.
+  // When persistence is off `pageSnapshots` is `null` and the provider
+  // returns `fallback_zero` with cause `persistence_off` — honest
+  // telemetry, same numerical dispatcher input the chooser used to ship.
   const pageContext = createLivePageContextProvider(deps.sessionManager.pageSnapshots ?? null);
-  // V26-FIX-01: wrap the synchronous chooser with the
-  // direct-api-executor so a high-confidence read-only
-  // `knowledge_supported_read` route may execute the API inline
-  // (compact rows arrive on `result.directApiExecution`). For every
-  // other route + every capability-disabled invocation the wrapper
-  // returns the synchronous chooser result bit-identical, so the
-  // pre-V26-FIX-01 happy path is preserved.
+  // Wrap the synchronous chooser with the direct-api-executor so a
+  // high-confidence read-only `knowledge_supported_read` route may
+  // execute the API inline (compact rows arrive on
+  // `result.directApiExecution`). For every other route + every
+  // capability-disabled invocation the wrapper returns the synchronous
+  // chooser result bit-identical, so the legacy happy path is preserved.
   const result = await runTabrixChooseContextWithDirectApi(args, {
     experience: deps.sessionManager.experience,
     knowledgeApi: deps.sessionManager.knowledgeApi,
@@ -204,21 +201,21 @@ const handleTabrixChooseContext: NativeToolHandler = async (args, deps) => {
     // product under test reaches chrome_read_page.
     directApiEnabled: readAcceptanceApiFault(args) ? false : undefined,
   });
-  // V26-03 (B-026): close the skip-read execution loop. When the
-  // wrapper provided a `TaskSessionContext` AND the chooser produced
-  // an actionable layer-dispatch result, write the decision into
-  // the context BEFORE we return. The next `chrome_read_page` call
-  // on the same key reads it via `peekChooseContextDecision` and
-  // the orchestrator decides skip vs forward vs fallback. Hard
-  // rules (session corrections #2/#3/#4):
+  // Close the skip-read execution loop. When the wrapper provided a
+  // `TaskSessionContext` AND the chooser produced an actionable
+  // layer-dispatch result, write the decision into the context BEFORE
+  // we return. The next `chrome_read_page` call on the same key reads it
+  // via `peekChooseContextDecision` and the orchestrator decides skip vs
+  // forward vs fallback. Hard rules:
   //   * `noteUrlChange` runs FIRST so a chooser call against a
   //     different page than the one currently held in the context
   //     wipes the prior decision (per task-session-context tests).
   //   * Only `experience_replay_skip_read` may attach a real
   //     `replayCandidate`; every other route stores `null` so the
   //     orchestrator's gates fire honestly (`replay_candidate_missing`).
-  //   * `apiCapability` is attached only when V26-07 can resolve a
-  //     real read-only API candidate for the `knowledge_supported_read`
+  //   * `apiCapability` is attached only when the API Knowledge layer
+  //     can resolve a real read-only API candidate for the
+  //     `knowledge_supported_read`
   //     route — never fake `available: true`.
   if (deps.taskContext && result.status === 'ok') {
     persistChooseContextDecision(args, result, deps.taskContext);
@@ -227,15 +224,15 @@ const handleTabrixChooseContext: NativeToolHandler = async (args, deps) => {
 };
 
 /**
- * V26-03 (B-026) — translate the chooser result + raw args into a
+ * Translate the chooser result + raw args into a
  * {@link ChooseContextDecisionSnapshot} and write it onto the live
  * `TaskSessionContext`. Pure-ish: only side-effect is the two
  * setters on the context. Skips the write when `chosenLayer` /
  * `sourceRoute` are absent (would mean the chooser hit a
- * pre-V25-02 path that has no layer dispatch attached — extremely
- * unlikely on the production code path, but the sentinel keeps the
- * read-side `planSkipRead` happy because it would otherwise see
- * `undefined` fields and force `'forward'`).
+ * legacy path that has no layer dispatch attached — extremely unlikely
+ * on the production code path, but the sentinel keeps the read-side
+ * `planSkipRead` happy because it would otherwise see `undefined`
+ * fields and force `'forward'`).
  */
 function persistChooseContextDecision(
   rawArgs: unknown,
@@ -314,18 +311,16 @@ function persistChooseContextDecision(
         : 0,
     replayCandidate,
     apiCapability,
-    // V26-FIX-01: echo the closed-enum execution mode the chooser
-    // produced so the orchestrator's `SkipReadPlan` carries the same
-    // signal downstream. Defaults to `'via_read_page'` for every
-    // non-direct-api route — same wire shape as pre-V26-FIX-01 plus
-    // an explicit declarative flag.
+    // Echo the closed-enum execution mode the chooser produced so the
+    // orchestrator's `SkipReadPlan` carries the same signal downstream.
+    // Defaults to `'via_read_page'` for every non-direct-api route —
+    // same wire shape as legacy output plus an explicit declarative flag.
     executionMode:
       result.directApiExecution?.executionMode === 'direct_api' ? 'direct_api' : 'via_read_page',
-    // V26-FIX-01: persist the inline direct-api rows so the read-side
-    // shim can short-circuit its own `readApiKnowledgeEndpointPlan`
-    // call. Without this the wrapper executes the API once and a
-    // follow-up `chrome_read_page` would issue a redundant second
-    // fetch (the regression V26-FIX-01 tests pin against).
+    // Persist the inline direct-api rows so the read-side shim can
+    // short-circuit its own `readApiKnowledgeEndpointPlan` call. Without
+    // this the wrapper executes the API once and a follow-up
+    // `chrome_read_page` would issue a redundant second fetch.
     directApiResult:
       result.directApiExecution?.executionMode === 'direct_api' &&
       result.directApiExecution.rows &&
@@ -338,21 +333,20 @@ function persistChooseContextDecision(
             rowCount: result.directApiExecution.rowCount ?? result.directApiExecution.rows.length,
             compact: true,
             rawBodyStored: false,
-            // V26-PGB-01 — pipe the empty-result envelope through the
-            // cached snapshot so a follow-up `chrome_read_page` does
-            // not re-derive the verdict from `rowCount === 0`. The
-            // chooser-side path already filled these fields when the
-            // executor reached a reader on the `direct_api` branch;
-            // null-coalesce the optionals to keep the shape closed.
+            // Pipe the empty-result envelope through the cached snapshot
+            // so a follow-up `chrome_read_page` does not re-derive the
+            // verdict from `rowCount === 0`. The chooser-side path
+            // already filled these fields when the executor reached a
+            // reader on the `direct_api` branch; null-coalesce the
+            // optionals to keep the shape closed.
             emptyResult: result.directApiExecution.emptyResult ?? false,
             emptyReason: result.directApiExecution.emptyReason ?? null,
             emptyMessage: result.directApiExecution.emptyMessage ?? null,
-            // V26-PGB-04 — pipe the closed-enum endpoint-source marker
-            // onto the cached snapshot so the read-side shim can
-            // attribute the cached api_rows reply into the same
-            // `observed` / `seed_adapter` / `manual_seed` bucket as
-            // the chooser-side direct-API record without consulting
-            // the executor again.
+            // Pipe the closed-enum endpoint-source marker onto the
+            // cached snapshot so the read-side shim can attribute the
+            // cached api_rows reply into the same `observed` /
+            // `seed_adapter` / `manual_seed` bucket as the chooser-side
+            // direct-API record without consulting the executor again.
             endpointSource: result.directApiExecution.endpointSource ?? null,
             telemetry: result.directApiExecution.apiTelemetry,
           }
@@ -379,7 +373,7 @@ const handleTabrixChooseContextRecordOutcome: NativeToolHandler = (args, deps) =
 };
 
 /**
- * V24-01 adapter. Reshapes the experience-replay handler's typed deps
+ * Experience replay adapter. Reshapes the handler's typed deps
  * (`ExperienceReplayHandlerDeps`) into the generic
  * {@link NativeToolHandlerDeps} contract so it slots into the
  * existing dispatch table without leaking replay-specific types
@@ -403,11 +397,12 @@ const handleExperienceReplayBridged: NativeToolHandler = async (args, deps) => {
 };
 
 /**
- * V24-02 adapter. Same plumbing as `handleExperienceReplayBridged` —
- * the score-step handler reads `experience` (write-back capable) and
- * `persistenceMode` from `deps` via a structural cast. No bridge /
- * recorder / intent re-tagger needed: the tool only writes to
- * SQLite, never to the extension-side dispatch path.
+ * Experience score-step adapter. Same plumbing as
+ * `handleExperienceReplayBridged` — the score-step handler reads
+ * `experience` (write-back capable) and `persistenceMode` from `deps`
+ * via a structural cast. No bridge / recorder / intent re-tagger
+ * needed: the tool only writes to SQLite, never to the extension-side
+ * dispatch path.
  */
 const handleExperienceScoreStepBridged: NativeToolHandler = async (args, deps) => {
   const persistenceMode = deps.sessionManager.getPersistenceStatus().mode;
