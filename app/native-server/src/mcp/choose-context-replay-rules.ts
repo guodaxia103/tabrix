@@ -1,9 +1,7 @@
 /**
- * V24-03 — chooser-side replay eligibility + ranking helpers.
+ * Chooser-side replay eligibility + ranking helpers.
  *
- * SoT: `.claude/TABRIX_V2_4_0_PLAN.md` §V24-03 + the `experience_replay`
- * brief (`docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`). Lives in its own
- * module so:
+ * Lives in its own module so:
  *   - the `chooseContextStrategy` pure layer stays tiny and easy to
  *     audit,
  *   - tests can exercise the eligibility / ranking matrix without
@@ -56,18 +54,18 @@ export interface ReplayEligibilityResult {
 }
 
 /**
- * V24-03 — single-row eligibility check. Returns the FIRST blocker in
- * the closed {@link ReplayEligibilityBlockReason} order so post-mortem
- * grouping is deterministic. The order matches what `replayability`
- * actually depends on (cheap → expensive checks first):
+ * Single-row eligibility check. Returns the FIRST blocker in the closed
+ * {@link ReplayEligibilityBlockReason} order so post-mortem grouping is
+ * deterministic. The order matches what `replayability` actually
+ * depends on (cheap → expensive checks first):
  *
  *   1. `capability_off`     — operator never opted in
  *   2. `unsupported_step_kind` — row has a tool outside v1's allowlist
  *   3. `non_portable_args`  — args carry only session-local handles
  *   4. `non_github_pageRole`— pageRole outside the GitHub v1 allowlist
  *   5. `below_threshold`    — successRate / successCount under the bar
- *   6. `stale_locator`      — reserved (V24-02 step-outcome write-back
- *      future signal); v1 chooser does NOT fire this on its own.
+ *   6. `stale_locator`      — reserved for step-outcome write-back
+ *      signals; the chooser does NOT fire this on its own.
  *
  * `'none'` is reserved for the success branch (caller MUST set it
  * when emitting the `experience_replay` strategy).
@@ -108,10 +106,10 @@ export function isReplayEligible(
 }
 
 /**
- * V24-03 — composite score the chooser ranks on. Reads the V24-02
- * cache (`compositeScoreDecayed`) when present; otherwise re-derives
- * from per-row counters using the same math the writer used so a row
- * the writer has not yet visited still has a deterministic score.
+ * Composite score the chooser ranks on. Reads the cached decayed score
+ * (`compositeScoreDecayed`) when present; otherwise re-derives from
+ * per-row counters using the same math the writer used so a row the
+ * writer has not yet visited still has a deterministic score.
  *
  * The fallback projection uses `successCount / failureCount` to seed
  * `accuracy` + `stability` (the writer's `extractScoreComponentsFromSession`
@@ -144,7 +142,7 @@ function deriveCandidateScore(
  *   3. lastReplayAt DESC NULLS LAST (lexicographic ISO 8601 compare),
  *   4. actionPathId ASC.
  *
- * Tie-break #3 deliberately uses `lastReplayAt` (V24-02 write-back
+ * Tie-break #3 deliberately uses `lastReplayAt` (active replay
  * timestamp), NOT `lastUsedAt` (legacy aggregator), so a row that was
  * actually replayed wins over a row that was only ever passively
  * suggested.
@@ -209,7 +207,7 @@ export interface RankExperienceCandidatesResult {
 }
 
 /**
- * V24-03 — deterministic top-N replay ranking.
+ * Deterministic top-N replay ranking.
  *
  * The chooser ALWAYS returns a ranked list when `rows` is non-empty
  * (even when nothing is replay-eligible); telemetry post-mortems
