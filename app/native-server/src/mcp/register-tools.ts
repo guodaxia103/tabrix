@@ -297,7 +297,7 @@ function isToolAllowed(toolName: string, tools: Tool[]): boolean {
  * Phase 0 Policy view of the tools list. Removes P3 opt-in tools that have not been opted-in
  * and injects the Tabrix-private `riskTier` annotation so clients that choose to render it can.
  *
- * V24-01: also injects `requiresExplicitOptIn: true` for tools listed
+ * Also injects `requiresExplicitOptIn: true` for tools listed
  * in {@link CAPABILITY_GATED_TOOLS} (e.g. `experience_replay`), even
  * though they are NOT in `P3_EXPLICIT_OPT_IN_TOOLS`. This is the
  * first non-P3 use of that annotation; the actual filtering happens
@@ -330,7 +330,7 @@ function filterToolsByPolicy(tools: Tool[]): Tool[] {
 }
 
 /**
- * V24-01 capability gate. Drops tools listed in
+ * Capability gate. Drops tools listed in
  * {@link CAPABILITY_GATED_TOOLS} when the matching capability is not
  * present in the active capability allowlist (`TABRIX_POLICY_CAPABILITIES`
  * — see {@link isCapabilityEnabled}).
@@ -353,7 +353,7 @@ function filterToolsByCapability(tools: Tool[], env: CapabilityEnv): Tool[] {
 }
 
 /**
- * V24-01 production wiring for the `experience_replay` handler.
+ * Production wiring for the `experience_replay` handler.
  * Binds:
  *   - `dispatchBridged` to the existing `invokeExtensionCommand`
  *     round-trip (with the same recovery-aware wrapper used for
@@ -450,14 +450,14 @@ function buildReplayDeps(wrapperSessionId: string): {
     }
   };
 
-  // V24-02: per-step write-back hook. Isolation is enforced TWICE:
+  // Per-step write-back hook. Isolation is enforced TWICE:
   //   1. here, where any thrown SQLite error is caught and downgraded
   //      to a structured warning row (so the user's replay path stays
   //      alive); and
   //   2. inside `ReplayEngine.tryWriteOutcome`, which already wraps
   //      the call in its own try/catch as defense-in-depth.
   // We deliberately swallow the inner `recordWritebackWarning` failure
-  // for the same reason the V24-02 handler does — at that point even
+  // for the same reason the score-step handler does — at that point even
   // the warning row could not land, but throwing would defeat the
   // isolation contract.
   const outcomeWriter: ReplayOutcomeWriter = {
@@ -744,30 +744,29 @@ function extractRequestedLayer(args: unknown): ReadPageRequestedLayer | null {
 const READ_PAGE_DEFAULT_LAYER: ReadPageRequestedLayer = 'L0+L1+L2';
 
 /**
- * v2.6 S1 last-mile P1 fix — make the read-budget task key visible
- * to schema-following MCP clients that DO NOT (and cannot) pass
- * `taskSessionId / taskId / clientTaskId`, since those fields are
- * not part of the public `chrome_read_page` schema (a strict client
- * may even strip unknown fields).
+ * Make the read-budget task key visible to schema-following MCP clients
+ * that DO NOT (and cannot) pass `taskSessionId / taskId / clientTaskId`,
+ * since those fields are not part of the public `chrome_read_page`
+ * schema (a strict client may even strip unknown fields).
  *
  * Only `chrome_read_page` (the gated tool), `chrome_navigate` (the
  * tool that invalidates the gate's lastReadLayer / targetRefsSeen
- * via `noteUrlChange`), `chrome_network_capture` (V27-10R — the
- * live observed API writer), and `tabrix_choose_context` (V26-03 —
- * the decision writer that the `chrome_read_page` shim consumes via
+ * via `noteUrlChange`), `chrome_network_capture` (the live observed API
+ * writer), and `tabrix_choose_context` (the decision writer that the
+ * `chrome_read_page` shim consumes via
  * `peekChooseContextDecision`) participate in auto-keying. Every
  * other tool returns `null`, so click/fill/screenshot/etc. cannot
  * accidentally mint phantom external task contexts or pollute the
  * LRU map.
  *
- * V26-03 (B-026) — `tabrix_choose_context` joins the auto set so a
- * chooser → reader pair issued back-to-back without an explicit
- * `taskSessionId` lands on the SAME `TaskSessionContext`. This is
- * the only way the orchestrator can read what the chooser wrote
- * without the test having to spy on `getTaskContext`. The chooser's
- * public schema does not advertise `tabId` either, so the auto
- * fallback (primary tab → `mcp:auto:tab:default`) is what makes the
- * pairing work in the schema-strict path.
+ * `tabrix_choose_context` joins the auto set so a chooser → reader pair
+ * issued back-to-back without an explicit `taskSessionId` lands on the
+ * SAME `TaskSessionContext`. This is the only way the orchestrator can
+ * read what the chooser wrote without the test having to spy on
+ * `getTaskContext`. The chooser's public schema does not advertise
+ * `tabId` either, so the auto fallback (primary tab →
+ * `mcp:auto:tab:default`) is what makes the pairing work in the
+ * schema-strict path.
  *
  * Resolution order (highest precedence first):
  *
@@ -787,9 +786,9 @@ const READ_PAGE_DEFAULT_LAYER: ReadPageRequestedLayer = 'L0+L1+L2';
  *      via `chrome_navigate` still keeps redundancy honest inside
  *      this single context.
  *
- * Returning `null` (only possible for tools outside the auto set
- * with no explicit key) preserves the v2.5/v2.6 internal-taskId
- * fallback path in `handleToolCall`.
+ * Returning `null` (only possible for tools outside the auto set with no
+ * explicit key) preserves the internal-taskId fallback path in
+ * `handleToolCall`.
  */
 function resolveTaskContextKey(
   toolName: string,
@@ -821,11 +820,11 @@ function resolveTaskContextKey(
 }
 
 /**
- * V26-02 (B-026) — defensively walk a `chrome_navigate` extension
- * response and extract the resulting `tabId`. The extension may
- * return the tabId directly on the data object OR embed it in a
- * stringified JSON content payload (CallToolResult shape). Returns
- * `null` when no integer-valued `tabId` is found anywhere.
+ * Defensively walk a `chrome_navigate` extension response and extract
+ * the resulting `tabId`. The extension may return the tabId directly on
+ * the data object OR embed it in a stringified JSON content payload
+ * (CallToolResult shape). Returns `null` when no integer-valued `tabId`
+ * is found anywhere.
  *
  * Pure function. Tolerates malformed inputs (returns `null`) so the
  * controller observation hook in `handleToolCall` cannot throw.
@@ -1556,7 +1555,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       return result;
     }
 
-    // V24-01 capability gate (defense-in-depth — `filterToolsByCapability`
+    // Capability gate (defense-in-depth — `filterToolsByCapability`
     // already removed disabled tools from `listTools`, but a curious
     // client may still try to call one directly). Returns the same
     // `denied / capability_off` payload shape the experience_replay
@@ -1578,15 +1577,14 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       return result;
     }
 
-    // V26-03 (B-026) — resolve the task context BEFORE we branch into
-    // the native handler so `tabrix_choose_context` (a native-handled
-    // tool) can write its decision into the same `TaskSessionContext`
-    // the `chrome_read_page` shim later peeks. Auto-keying covers the
-    // schema-strict client case (chooser's public schema does not
-    // advertise `taskSessionId / tabId`) so the pair lands on the
-    // same `mcp:auto:tab:<id|default>` key without spying on
-    // `getTaskContext`. Tools outside the auto set still get the
-    // freshly-minted internal `taskId` fallback so their v2.5/v2.6
+    // Resolve the task context BEFORE we branch into the native handler
+    // so `tabrix_choose_context` (a native-handled tool) can write its
+    // decision into the same `TaskSessionContext` the `chrome_read_page`
+    // shim later peeks. Auto-keying covers the schema-strict client case
+    // (chooser's public schema does not advertise `taskSessionId /
+    // tabId`) so the pair lands on the same `mcp:auto:tab:<id|default>`
+    // key without spying on `getTaskContext`. Tools outside the auto set
+    // still get the freshly-minted internal `taskId` fallback so their
     // contract is preserved bit-for-bit.
     const bridgeForKeyEarly = bridgeRuntimeState.getSnapshot();
     const externalTaskKeyEarly = resolveTaskContextKey(name, args, {
@@ -1598,27 +1596,25 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
 
     // Native-handled tools short-circuit the extension round-trip — see
     // `mcp/native-tool-handlers.ts`. Currently Experience read-side
-    // queries (B-013), the context selector (B-018 v1), and the V24-01
-    // `experience_replay` write-side tool qualify; everything else
-    // still goes through the Chrome extension via
-    // `invokeExtensionCommand`.
+    // queries, the context selector, and the `experience_replay`
+    // write-side tool qualify; everything else still goes through the
+    // Chrome extension via `invokeExtensionCommand`.
     const nativeHandler = getNativeToolHandler(name);
     if (nativeHandler) {
-      // V24-01: only the experience_replay handler needs the bridge
-      // adapter + per-step recorder + intent re-tagger. The other
-      // native handlers ignore them, but always passing them keeps
-      // the deps shape uniform.
+      // Only the experience_replay handler needs the bridge adapter +
+      // per-step recorder + intent re-tagger. The other native handlers
+      // ignore them, but always passing them keeps the deps shape
+      // uniform.
       const replayDeps =
         name === TOOL_NAMES.EXPERIENCE.REPLAY ? buildReplayDeps(session.sessionId) : {};
       const nativeResult = await nativeHandler(args, {
         sessionManager,
         capabilityEnv: getCurrentCapabilityEnv(),
-        // V26-03 (B-026): carries the `TaskSessionContext` the
-        // `tabrix_choose_context` handler writes into via
-        // `noteChooseContextDecision`. `null` for tools outside the
-        // auto-key set when there is no live external context;
-        // handlers that do not need it (e.g. experience suggest /
-        // record-outcome) ignore the field.
+        // Carries the `TaskSessionContext` the `tabrix_choose_context`
+        // handler writes into via `noteChooseContextDecision`. `null`
+        // for tools outside the auto-key set when there is no live
+        // external context; handlers that do not need it (e.g.
+        // experience suggest / record-outcome) ignore the field.
         taskContext: taskContextEarly,
         ...replayDeps,
       });
@@ -1735,12 +1731,12 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         return result;
       }
     }
-    // V26-02 (B-026) — Primary Tab Controller hook. When
+    // Primary Tab Controller hook. When
     // `TABRIX_PRIMARY_TAB_ENFORCE=true`, inject `tabId: primaryTabId`
-    // into `chrome_navigate` args before forwarding to the extension
-    // so multi-site flows reuse the primary tab. When the env flag is
-    // off (default), `getInjectedTabId()` returns null and `args` is
-    // forwarded unchanged — bit-identical to v2.5 behaviour. The
+    // into `chrome_navigate` args before forwarding to the extension so
+    // multi-site flows reuse the primary tab. When the env flag is off
+    // (default), `getInjectedTabId()` returns null and `args` is
+    // forwarded unchanged — bit-identical to legacy behaviour. The
     // `args.tabId` caller-provided value always wins so allowlisted
     // scenarios that explicitly want a fresh tab still get it.
     const primaryTabController = getDefaultPrimaryTabController();
@@ -1755,28 +1751,27 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         }
       }
     }
-    // V26-05 (B-028) — Task Session Context read-budget gate. Only the
-    // `chrome_read_page` hot path is gated; everything else passes
-    // through. The gate is fail-soft: when no task context is attached
-    // (persistence off, or `startSession` was bypassed) we forward the
-    // call unchanged so the v2.5 happy path is preserved bit-for-bit.
+    // Task Session Context read-budget gate. Only the `chrome_read_page`
+    // hot path is gated; everything else passes through. The gate is
+    // fail-soft: when no task context is attached (persistence off, or
+    // `startSession` was bypassed) we forward the call unchanged so the
+    // legacy happy path is preserved bit-for-bit.
     //
-    // v2.6 S1 last-mile P1 fix: resolve the gate's task key from a
-    // ladder that BOTH honours an explicit caller-supplied key AND
-    // remains usable for schema-following MCP clients that cannot
-    // see `taskSessionId / taskId / clientTaskId` (those names are
-    // not in the public `chrome_read_page` schema, so a strict
-    // client may strip them on the wire). See
-    // `resolveTaskContextKey` above for the full ladder; the short
-    // version is: explicit > args.tabId > bridge.primaryTabId >
-    // single-process `mcp:auto:tab:default`. Auto-keying only fires
-    // for `chrome_read_page` and `chrome_navigate`, so click/fill/
+    // Resolve the gate's task key from a ladder that BOTH honours an
+    // explicit caller-supplied key AND remains usable for
+    // schema-following MCP clients that cannot see `taskSessionId /
+    // taskId / clientTaskId` (those names are not in the public
+    // `chrome_read_page` schema, so a strict client may strip them on
+    // the wire). See `resolveTaskContextKey` above for the full ladder;
+    // the short version is: explicit > args.tabId > bridge.primaryTabId
+    // > single-process `mcp:auto:tab:default`. Auto-keying only fires
+    // for `chrome_read_page` and `chrome_navigate`, so click/fill /
     // navigate-adjacent tools cannot mint phantom contexts.
     //
     // When `resolveTaskContextKey` returns null (only possible for
     // tools outside the auto set without an explicit key), we fall
-    // back to the freshly-minted internal `taskId` so the v2.5/v2.6
-    // contract for those tools is preserved bit-for-bit.
+    // back to the freshly-minted internal `taskId` so the contract for
+    // those tools is preserved bit-for-bit.
     //
     // Decisions returned by `shouldAllowReadPage`:
     //   * `read_budget_exceeded` → return a structured warning
@@ -1790,20 +1785,19 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     // wipes `lastReadLayer` / `targetRefsSeen` and the next read is
     // treated as a fresh first read on the new page.
     // Reuse the same `TaskSessionContext` we resolved before the
-    // native-handler branch (V26-03 wiring). Re-resolving here would
-    // be functionally equivalent under the current
+    // native-handler branch. Re-resolving here would be functionally
+    // equivalent under the current
     // `getOrCreateExternalTaskContext` LRU semantics, but the fewer
     // resolution sites the harder it is for a future edit to drift
     // the chooser-write and reader-peek apart.
     const taskContext = taskContextEarly;
-    // V26-03 review closeout: when the orchestrator returns
-    // `'fallback_required'` we MUST forward to the bridge with the
-    // clamped fallback entry layer (`'L0'` / `'L0+L1'`), never the
-    // caller's original `requestedLayer`. Otherwise an upstream
-    // `requestedLayer='L0+L1+L2'` (the schema default) would silently
-    // re-widen the read on the failure path — exactly the regression
-    // V26-03 §0.1 forbids. `null` means "no fallback fired, keep the
-    // caller's original layer bit-identical to the pre-V26-03 path".
+    // When the orchestrator returns `'fallback_required'` we MUST
+    // forward to the bridge with the clamped fallback entry layer (`L0`
+    // / `L0+L1`), never the caller's original `requestedLayer`.
+    // Otherwise an upstream `requestedLayer='L0+L1+L2'` (the schema
+    // default) would silently re-widen the read on the failure path.
+    // `null` means "no fallback fired, keep the caller's original layer
+    // bit-identical to the legacy path".
     let forcedReadPageLayer: 'L0' | 'L0+L1' | null = null;
     let operationLogHint: {
       requestedLayer?: string | null;
@@ -2036,16 +2030,16 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           },
         };
       }
-      // V26-03 (B-026) — skip-read orchestrator hook. We consult it
-      // BEFORE the existing budget gate because a `'skip'` plan
-      // means we never round-trip the bridge AND never spend the
-      // budget on a read we proved we could avoid.
+      // Skip-read orchestrator hook. We consult it BEFORE the existing
+      // budget gate because a `'skip'` plan means we never round-trip
+      // the bridge AND never spend the budget on a read we proved we
+      // could avoid.
       //
       // Hard rules (session corrections #2/#3/#4):
       //   * The orchestrator only fires when `choose_context` has
       //     ALREADY recorded a decision into this task context. Any
       //     in-flight read without a recorded decision keeps the
-      //     v2.5 happy path bit-identical.
+      //     legacy happy path bit-identical.
       //   * On `'skip'` we return a STRUCTURED skip envelope —
       //     never a synthetic `chrome_read_page` compact payload.
       //     A consumer can tell the read was avoided by the explicit
@@ -2068,13 +2062,13 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           if (skipPlan.requiresApiCall) {
             const cap = recordedDecision.apiCapability;
             const acceptanceApiFault = readAcceptanceApiFault(args);
-            // V26-FIX-01: when `tabrix_choose_context` already executed
-            // the API inline (executionMode='direct_api'), reuse the
-            // cached rows verbatim instead of re-issuing the request.
-            // One user-visible task ↔ one API round-trip — that's the
-            // whole point of FIX-01. The acceptance-fault override is
-            // only honoured when the cached result is absent so tests
-            // can still simulate a fresh-API failure path.
+            // When `tabrix_choose_context` already executed the API
+            // inline (executionMode='direct_api'), reuse the cached rows
+            // verbatim instead of re-issuing the request. One
+            // user-visible task maps to one API round-trip. The
+            // acceptance-fault override is only honoured when the cached
+            // result is absent so tests can still simulate a fresh-API
+            // failure path.
             const cachedDirect =
               recordedDecision.executionMode === 'direct_api' &&
               recordedDecision.directApiResult &&
@@ -2090,10 +2084,10 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                   rowCount: cachedDirect.rowCount,
                   compact: cachedDirect.compact,
                   rawBodyStored: cachedDirect.rawBodyStored,
-                  // V26-PGB-01 — surface the cached empty-result
-                  // envelope so the shim consumes the same closed
-                  // shape regardless of whether the chooser executed
-                  // inline or the shim issued the read here.
+                  // Surface the cached empty-result envelope so the
+                  // shim consumes the same closed shape regardless of
+                  // whether the chooser executed inline or the shim
+                  // issued the read here.
                   emptyResult: cachedDirect.emptyResult,
                   emptyReason: cachedDirect.emptyReason,
                   emptyMessage: cachedDirect.emptyMessage,
@@ -2299,19 +2293,16 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
             return skipResult;
           }
         }
-        // `fallback_required` / `forward` falls through to the
-        // existing budget gate path below. The chooser decision
-        // stays recorded so a follow-up read on the same page can
-        // re-evaluate (e.g. once V26-07 wires capability we may
-        // upgrade `api_layer_not_available` → skip without needing
-        // a fresh chooser run).
+        // `fallback_required` / `forward` falls through to the existing
+        // budget gate path below. The chooser decision stays recorded so
+        // a follow-up read on the same page can re-evaluate API
+        // availability without needing a fresh chooser run.
         if (skipPlan.action === 'fallback_required') {
-          // V26-03 review closeout: pin the bridge-side
-          // `requestedLayer` to the orchestrator's clamped
-          // fallback entry layer. Used below by the budget gate,
+          // Pin the bridge-side `requestedLayer` to the orchestrator's
+          // clamped fallback entry layer. Used below by the budget gate,
           // the bridge `call_tool` payload, and the post-success
-          // `noteReadPage` bookkeeping so the three sites cannot
-          // drift back to `'L0+L1+L2'`.
+          // `noteReadPage` bookkeeping so the three sites cannot drift
+          // back to `'L0+L1+L2'`.
           forcedReadPageLayer = skipPlan.fallbackEntryLayer;
           if (skipPlan.sourceRoute === 'knowledge_supported_read') {
             apiFallbackEvidence = {
@@ -2342,13 +2333,13 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           };
         }
       }
-      // P1-2 fix: read the public `requestedLayer` field (with
-      // legacy `layer` fallback) instead of `(args as any).layer`,
-      // and default to the MCP-schema default `'L0+L1+L2'` when
-      // nothing is supplied. When the orchestrator demanded a
-      // fallback, override the caller-supplied layer with the
-      // clamped fallback entry layer so the gate decision matches
-      // what we are about to forward to the bridge.
+      // Read the public `requestedLayer` field (with legacy `layer`
+      // fallback) instead of `(args as any).layer`, and default to the
+      // MCP-schema default `'L0+L1+L2'` when nothing is supplied. When
+      // the orchestrator demanded a fallback, override the
+      // caller-supplied layer with the clamped fallback entry layer so
+      // the gate decision matches what we are about to forward to the
+      // bridge.
       const requestedLayer =
         forcedReadPageLayer ?? extractRequestedLayer(args) ?? READ_PAGE_DEFAULT_LAYER;
       const decision = taskContext.shouldAllowReadPage({ requestedLayer });
@@ -2386,13 +2377,12 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           : null;
       taskContext.noteUrlChange(url);
     }
-    // V26-03 review closeout: when the orchestrator demanded a
-    // fallback for `chrome_read_page`, replace the caller's
-    // `requestedLayer` (which may be the schema default
-    // `'L0+L1+L2'`) with the clamped fallback entry layer
-    // (`'L0'` / `'L0+L1'`). Every other field on `args`
-    // (`tabId` / `windowId` / `refId` / …) is preserved verbatim
-    // so call-site contracts that rely on them are unaffected.
+    // When the orchestrator demanded a fallback for `chrome_read_page`,
+    // replace the caller's `requestedLayer` (which may be the schema
+    // default `'L0+L1+L2'`) with the clamped fallback entry layer (`L0`
+    // / `L0+L1`). Every other field on `args` (`tabId` / `windowId` /
+    // `refId` / …) is preserved verbatim so call-site contracts that
+    // rely on them are unaffected.
     if (name === 'chrome_read_page' && forcedReadPageLayer) {
       outgoingArgs = {
         ...(outgoingArgs && typeof outgoingArgs === 'object' ? outgoingArgs : {}),
@@ -2414,12 +2404,12 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
         ),
       `tool:${name}`,
     );
-    // V26-02: regardless of the enforcement gate, observe every
-    // `chrome_navigate` outcome so the bridge runtime snapshot
-    // exposes hygiene metrics (`primaryTabReuseRate`,
-    // `benchmarkOwnedTabCount`) that the v26-benchmark transformer
-    // and any operator UI can read. Defensive: tolerate missing /
-    // malformed `tabId` in the response without throwing.
+    // Regardless of the enforcement gate, observe every
+    // `chrome_navigate` outcome so the bridge runtime snapshot exposes
+    // hygiene metrics (`primaryTabReuseRate`, `benchmarkOwnedTabCount`)
+    // that benchmark transformers and any operator UI can read.
+    // Defensive: tolerate missing / malformed `tabId` in the response
+    // without throwing.
     if (name === 'chrome_navigate') {
       const responseTabId =
         response &&
@@ -2596,9 +2586,8 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
           };
         }
       }
-      // V26-05 (B-028): record a successful chrome_read_page so the
-      // budget reflects bridge-confirmed reads (failed reads do NOT
-      // consume the budget). V27-P0-REAL keeps this single-write:
+      // Record a successful chrome_read_page so the budget reflects
+      // bridge-confirmed reads (failed reads do NOT consume the budget).
       // dom_region_rows may replace the payload, but it is still one
       // bridge-confirmed read_page call.
       recordSuccessfulReadPage('unknown');
