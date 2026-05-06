@@ -1,12 +1,10 @@
 /**
- * B-024 (Click V2 · verifier hook v1).
+ * Optional click verifier for routes where "something changed" is not enough.
  *
- * Narrow, surgical addition on top of the B-023 click contract.
- *
- * The generic click pipeline in `interaction.ts` (B-023) already merges
- * page-local + browser-level signals into `observedOutcome` + `success`.
- * That answers "what changed". It does NOT answer "did the user reach the
- * intended destination".
+ * The generic click pipeline in `interaction.ts` already merges page-local
+ * and browser-level signals into `observedOutcome` + `success`. That answers
+ * "what changed". It does NOT answer "did the user reach the intended
+ * destination".
  *
  * This module adds one more optional stage: a family-aware post-click
  * verifier. For v1 it only covers three GitHub repo-nav flows. It is

@@ -319,13 +319,13 @@ class ComputerTool extends BaseBrowserToolExecutor {
       lookupStableTargetRef,
     });
 
-    // B-011: same fail-closed contract as click/fill — never silently route
-    // an unresolved stable targetRef into the content-script ref map.
+    // Same fail-closed contract as click/fill: never silently route an
+    // unresolved stable targetRef into the content-script ref map.
     if (resolvedTarget.source === 'unresolved_stable_target_ref') {
       return createErrorResponse(
         `${ERROR_MESSAGES.INVALID_PARAMETERS}: candidateAction.targetRef "${
           resolvedTarget.unresolvedStableTargetRef
-        }" is a stable id (B-011) but no current snapshot of this tab has it. Call chrome_read_page on this tab first, then re-issue the action with the latest targetRef.`,
+        }" is a stable id, but no current snapshot of this tab has it. Call chrome_read_page on this tab first, then re-issue the action with the latest targetRef.`,
       );
     }
 
