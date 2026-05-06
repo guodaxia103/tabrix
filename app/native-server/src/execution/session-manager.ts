@@ -250,10 +250,9 @@ export class SessionManager {
   }
 
   /**
-   * Stage 3b / B-013 read API. Read-only Experience layer queries.
-   * `null` when persistence is off (or DB init failed). Callers must
-   * treat `null` as "Memory unavailable" and surface
-   * `persistenceMode: 'off'` to the upstream agent.
+   * Read-only Experience layer queries. `null` when persistence is off (or DB
+   * init failed). Callers must treat `null` as "Memory unavailable" and
+   * surface `persistenceMode: 'off'` to the upstream agent.
    */
   public get experience(): ExperienceQueryService | null {
     return this.experienceQueryService;
@@ -277,30 +276,29 @@ export class SessionManager {
   }
 
   /**
-   * V26-14A — factual operation log repository. `null` when persistence
-   * is off. Tool calls must treat it as best-effort evidence storage,
-   * never as part of the browser-tool success path.
+   * Factual operation log repository. `null` when persistence is off. Tool
+   * calls must treat it as best-effort evidence storage, never as part of the
+   * browser-tool success path.
    */
   public get operationLogs(): OperationMemoryLogRepository | null {
     return this.operationLogRepo;
   }
 
   /**
-   * B-017 — Knowledge API endpoint repository. Capture writes go through
-   * here from the `chrome_network_capture` post-processor (gated by the
-   * `api_knowledge` capability). `null` when persistence is off, in
-   * which case the post-processor short-circuits.
+   * Knowledge API endpoint repository. Capture writes go through here from
+   * the `chrome_network_capture` post-processor (gated by the `api_knowledge`
+   * capability). `null` when persistence is off, in which case the
+   * post-processor short-circuits.
    */
   public get knowledgeApi(): KnowledgeApiRepository | null {
     return this.knowledgeApiRepo;
   }
 
   /**
-   * V23-04 / B-018 v1.5 — telemetry repository for `tabrix_choose_context`
-   * decisions and outcome write-backs. `null` when persistence is off.
-   * Native handlers must treat `null` as "telemetry disabled, skip
-   * the decisionId write-back" — the chooser still returns a usable
-   * result without a `decisionId`.
+   * Telemetry repository for `tabrix_choose_context` decisions and outcome
+   * write-backs. `null` when persistence is off. Native handlers must treat
+   * `null` as "telemetry disabled, skip the decisionId write-back" — the
+   * chooser still returns a usable result without a `decisionId`.
    */
   public get chooseContextTelemetry(): ChooseContextTelemetryRepository | null {
     return this.chooseContextTelemetryRepo;
@@ -354,12 +352,11 @@ export class SessionManager {
     this.repos?.session.insert(session);
     this.sessions.set(session.sessionId, session);
     this.updateTaskStatus(task.taskId, 'running');
-    // V26-05 (B-028): attach a fresh per-task read-budget gate. Idempotent
-    // — `startSession` may be called more than once per task (e.g. retry
-    // after an aborted session) and we deliberately keep the existing
-    // context so the budget already spent on the prior session still
-    // counts. A truly virgin task (first `startSession`) gets a brand-new
-    // context with the env-resolved budget.
+    // Attach a fresh per-task read-budget gate. Idempotent: `startSession`
+    // may be called more than once per task (e.g. retry after an aborted
+    // session) and we deliberately keep the existing context so the budget
+    // already spent on the prior session still counts. A truly virgin task
+    // gets a brand-new context with the env-resolved budget.
     if (!this.taskContexts.has(task.taskId)) {
       this.taskContexts.set(task.taskId, new TaskSessionContext());
     }
@@ -408,11 +405,11 @@ export class SessionManager {
         success?: boolean;
         tabHygiene?: unknown;
         /**
-         * V26-FIX-07 — partial structured "why" envelope. Forwarded
-         * verbatim to the repository, which fills in any missing
-         * field with `'not_applicable'`. Pass through whatever the
-         * call site already knows (decisionReason, sourceRoute,
-         * fallbackPlan, etc.) — do NOT invent values.
+         * Partial structured "why" envelope. Forwarded verbatim to the
+         * repository, which fills in any missing field with
+         * `'not_applicable'`. Pass through whatever the call site already
+         * knows (decisionReason, sourceRoute, fallbackPlan, etc.) — do NOT
+         * invent values.
          */
         metadata?: Partial<OperationLogMetadata>;
       };
@@ -489,10 +486,10 @@ export class SessionManager {
         readCount: extras?.readCount ?? null,
         tokensSaved: extras?.tokensSaved ?? null,
         tabHygiene: extras?.tabHygiene,
-        // V26-FIX-07 — auto-derive a metadata floor from the
-        // already-known operationLog fields so every step lands a
-        // structured "why" record even when the caller did not pass
-        // an explicit `metadata` block. Caller-provided fields win.
+        // Auto-derive a metadata floor from the already-known operationLog
+        // fields so every step lands a structured "why" record even when the
+        // caller did not pass an explicit `metadata` block. Caller-provided
+        // fields win.
         metadata: {
           decisionReason: extras?.decisionReason ?? undefined,
           routerDecision: extras?.selectedDataSource ?? undefined,
@@ -544,30 +541,28 @@ export class SessionManager {
 
       console.warn(`[tabrix/experience] aggregation failed: ${message}`);
     }
-    // V26-05 (B-028): release the per-task read-budget gate. The task is
-    // logically finished (completed / failed / aborted) so any future
-    // tool call against the same taskId should start a fresh budget.
-    // Detach is best-effort: if `taskContexts` does not have the entry
-    // we silently no-op (e.g. tests that bypass `startSession`).
+    // Release the per-task read-budget gate. The task is logically finished
+    // (completed / failed / aborted) so any future tool call against the same
+    // taskId should start a fresh budget. Detach is best-effort: if
+    // `taskContexts` does not have the entry, we silently no-op.
     this.taskContexts.delete(session.taskId);
     return session;
   }
 
   /**
-   * V26-05 (B-028) — read-only accessor used by the
-   * `register-tools::handleToolCall` `chrome_read_page` shim. Returns
-   * `null` when no context is attached (e.g. the task finished, the
-   * caller bypassed `startSession`, or persistence/runtime state was
-   * reset between sessions).
+   * Read-only accessor used by the `register-tools::handleToolCall`
+   * `chrome_read_page` shim. Returns `null` when no context is attached (e.g.
+   * the task finished, the caller bypassed `startSession`, or
+   * persistence/runtime state was reset between sessions).
    */
   public getTaskContext(taskId: string): TaskSessionContext | null {
     return this.taskContexts.get(taskId) ?? null;
   }
 
   /**
-   * V26-05 (B-028) — convenience used by `register-tools` when only
-   * the `sessionId` is in scope. Walks `session → task → context`
-   * defensively so a missing session does not throw.
+   * Convenience used by `register-tools` when only the `sessionId` is in
+   * scope. Walks `session → task → context` defensively so a missing session
+   * does not throw.
    */
   public getTaskContextForSession(sessionId: string): TaskSessionContext | null {
     const session = this.sessions.get(sessionId);
@@ -576,13 +571,12 @@ export class SessionManager {
   }
 
   /**
-   * V26-05 (B-028) — test seam. Lets unit / integration tests
-   * pre-seed a context (e.g. drive `readPageCount` over the budget)
-   * without going through `startSession`. Production callers must
-   * prefer `getTaskContext` — this method exists so the
-   * `register-tools` integration tests can simulate a long-running
-   * task without ceremony. Returns the existing context when one is
-   * already attached so callers cannot accidentally clobber state.
+   * Test seam. Lets unit / integration tests pre-seed a context (e.g. drive
+   * `readPageCount` over the budget) without going through `startSession`.
+   * Production callers must prefer `getTaskContext` — this method exists so
+   * `register-tools` integration tests can simulate a long-running task
+   * without ceremony. Returns the existing context when one is already
+   * attached so callers cannot accidentally clobber state.
    */
   public ensureTaskContext(taskId: string, context?: TaskSessionContext): TaskSessionContext {
     const existing = this.taskContexts.get(taskId);
@@ -658,11 +652,10 @@ export class SessionManager {
   }
 
   /**
-   * Stage 3e / B-001 read API. Returns the most recent sessions with
-   * task title + intent + step count pre-joined, for the sidepanel
-   * Memory tab. Returns `[]` when persistence is off (the UI treats an
-   * empty response the same way as "no sessions yet" and surfaces a
-   * neutral message).
+   * Returns the most recent sessions with task title + intent + step count
+   * pre-joined, for the sidepanel Memory tab. Returns `[]` when persistence is
+   * off (the UI treats an empty response the same way as "no sessions yet"
+   * and surfaces a neutral message).
    */
   public listRecentSessionSummaries(limit: number, offset: number): SessionSummary[] {
     if (!this.repos) return [];
@@ -670,8 +663,8 @@ export class SessionManager {
   }
 
   /**
-   * Stage 3e / B-001 read API. Returns total session count to drive
-   * pagination. Returns 0 when persistence is off.
+   * Returns total session count to drive pagination. Returns 0 when
+   * persistence is off.
    */
   public countAllSessions(): number {
     if (!this.repos) return 0;
@@ -679,9 +672,8 @@ export class SessionManager {
   }
 
   /**
-   * Stage 3e / B-001 read API. Returns chronologically-ordered steps
-   * for the given session, read from SQLite. Empty array when the
-   * session does not exist or persistence is off.
+   * Returns chronologically-ordered steps for the given session, read from
+   * SQLite. Empty array when the session does not exist or persistence is off.
    */
   public getStepsForSession(sessionId: string): ExecutionStep[] {
     if (!this.repos) return [];
@@ -689,9 +681,9 @@ export class SessionManager {
   }
 
   /**
-   * Stage 3e / B-001 read API. Returns a Task row by id, or `null`
-   * when the task is unknown or persistence is off. Intentionally
-   * non-throwing so the HTTP route can surface a clean 404.
+   * Returns a Task row by id, or `null` when the task is unknown or
+   * persistence is off. Intentionally non-throwing so the HTTP route can
+   * surface a clean 404.
    */
   public getTaskOrNull(taskId: string): Task | null {
     if (!this.repos) return null;
@@ -720,13 +712,12 @@ export class SessionManager {
     }
     this.tasks.clear();
     this.sessions.clear();
-    // v2.6 S1 P1-1: clear externally-keyed task contexts too, so a
-    // test calling `reset()` between cases starts with a virgin
-    // budget. Internal `taskContexts` is intentionally not touched
-    // here — those entries are owned by `startSession`/`finishSession`
-    // and would have been collected already if the corresponding
-    // sessions had finished cleanly; clearing them blindly risks
-    // hiding leaks in failing tests.
+    // Clear externally-keyed task contexts too, so a test calling `reset()`
+    // between cases starts with a virgin budget. Internal `taskContexts` is
+    // intentionally not touched here: those entries are owned by
+    // `startSession`/`finishSession` and would have been collected already if
+    // the corresponding sessions had finished cleanly; clearing them blindly
+    // risks hiding leaks in failing tests.
     this.externalTaskContexts.clear();
   }
 
@@ -739,11 +730,11 @@ export class SessionManager {
   }
 
   /**
-   * V24-01: re-tag a task's intent column. The `experience_replay`
-   * MCP handler uses this to mark its wrapper-owned session with the
-   * `experience_replay:<actionPathId>` prefix the aggregator's
-   * special-case (brief §7) keys off. Intentionally narrow: only
-   * intent + updated_at are mutated, never task status / title.
+   * Re-tag a task's intent column. The `experience_replay` MCP handler uses
+   * this to mark its wrapper-owned session with the
+   * `experience_replay:<actionPathId>` prefix the aggregator's special-case
+   * keys off. Intentionally narrow: only intent + updated_at are mutated,
+   * never task status / title.
    *
    * No-op when the task is unknown OR persistence is disabled — the
    * handler invokes this best-effort and never lets a tagging failure
