@@ -2,7 +2,7 @@ import type { TabrixCapability } from '../capabilities';
 import { TOOL_NAMES } from './names';
 
 /**
- * V24-01: tools whose visibility AND dispatch are gated by a Tabrix
+ * Tools whose visibility AND dispatch are gated by a Tabrix
  * capability (`TABRIX_POLICY_CAPABILITIES`), independent of the P3
  * opt-in path.
  *
@@ -29,7 +29,7 @@ export const CAPABILITY_GATED_TOOLS: ReadonlyMap<string, TabrixCapability> = new
   TabrixCapability
 >([
   [TOOL_NAMES.EXPERIENCE.REPLAY, 'experience_replay'],
-  // V24-02: re-uses the `experience_replay` capability — one capability
+  // Re-uses the `experience_replay` capability — one capability
   // gates the whole replay/score-step write-back family. Gating both
   // the engine-side write-back (called from `experience_replay`) and
   // any direct upstream call to `experience_score_step` with the same

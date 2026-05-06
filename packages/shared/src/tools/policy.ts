@@ -16,7 +16,7 @@ import { TOOL_NAMES } from './names';
 export type TabrixRiskTier = 'P0' | 'P1' | 'P2' | 'P3';
 
 /**
- * Phase 0 Policy-attached tool annotations. Tabrix-private extension; MCP clients that do not
+ * Policy-attached tool annotations. Tabrix-private extension; MCP clients that do not
  * understand these fields can safely ignore them.
  */
 export interface TabrixToolPolicyAnnotations {
@@ -89,13 +89,13 @@ export const TOOL_RISK_TIERS: Readonly<Record<string, TabrixRiskTier>> = Object.
 
   // ---- MKEP Experience layer (read-only SELECT against native SQLite) ----
   [TOOL_NAMES.EXPERIENCE.SUGGEST_PLAN]: 'P0',
-  // V24-01 write/execute path. P1 (per-step P2 actions are still gated
+  // Experience write/execute path. P1 (per-step P2 actions are still gated
   // by their own dispatch); first non-P3 use of `requiresExplicitOptIn`,
   // additionally guarded by the `experience_replay` capability gate
   // (CAPABILITY_GATED_TOOLS below) so listing + dispatch require an
   // explicit operator opt-in independent of `TABRIX_POLICY_ALLOW_P3`.
   [TOOL_NAMES.EXPERIENCE.REPLAY]: 'P1',
-  // V24-02 write-back tool. P1 because it persists outcome facts
+  // Experience write-back tool. P1 because it persists outcome facts
   // (counter delta + audit warning row) that influence subsequent
   // chooser ranking; capability-gated via the same
   // `experience_replay` gate so the score-step channel is governed
@@ -104,7 +104,7 @@ export const TOOL_RISK_TIERS: Readonly<Record<string, TabrixRiskTier>> = Object.
 
   // ---- MKEP Context selector (read-only SELECT against native SQLite) ----
   [TOOL_NAMES.CONTEXT.CHOOSE]: 'P0',
-  // V23-04 / B-018 v1.5: pure-INSERT outcome write-back. P0 because
+  // Pure-INSERT outcome write-back. P0 because
   // it appends one telemetry row keyed by `decisionId`, never replays,
   // and is gated by the same Memory persistence check the chooser uses.
   [TOOL_NAMES.CONTEXT.RECORD_OUTCOME]: 'P0',

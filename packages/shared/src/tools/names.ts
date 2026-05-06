@@ -49,32 +49,32 @@ export const TOOL_NAMES = {
   EXPERIENCE: {
     SUGGEST_PLAN: 'experience_suggest_plan',
     /**
-     * V24-01: write/execute path. Replays a NAMED `actionPathId`
+     * Write/execute path. Replays a NAMED `actionPathId`
      * previously recorded in `experience_action_paths`. Bridged tool
      * — calls `chrome_click_element` / `chrome_fill_or_select` through
      * the existing per-step Policy + verifier dispatch. Capability-gated
-     * by `experience_replay`. SoT: `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`.
+     * by `experience_replay`.
      */
     REPLAY: 'experience_replay',
     /**
-     * V24-02: per-step replay outcome write-back. Records one
+     * Per-step replay outcome write-back. Records one
      * (success | failure) observation against the named action path,
      * keyed by `(actionPathId, stepIndex)`. Native-handled, gated by
      * the same `experience_replay` capability so the score-step
      * channel is always governed by the capability that controls the
-     * replay tool itself. SoT: `.claude/TABRIX_V2_4_0_PLAN.md` §V24-02.
+     * replay tool itself.
      */
     SCORE_STEP: 'experience_score_step',
   },
   /**
-   * MKEP context selector (Stage 3h, B-018 v1 minimal slice).
+   * MKEP context selector.
    * Native-handled. See `app/native-server/src/mcp/choose-context.ts`
    * and `docs/B_018_CONTEXT_SELECTOR_V1.md` for the SoT.
    */
   CONTEXT: {
     CHOOSE: 'tabrix_choose_context',
     /**
-     * V23-04 / B-018 v1.5 outcome write-back. Pure-INSERT P0 tool that
+     * Outcome write-back. Pure-INSERT P0 tool that
      * lets the upstream caller close the loop on "did the strategy
      * `tabrix_choose_context` returned actually save us a `read_page`?".
      */
