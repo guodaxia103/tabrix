@@ -45,15 +45,14 @@ type PrimaryRegionConfidence = ReadPagePrimaryRegionConfidence;
 interface ReadPageParams {
   filter?: 'interactive'; // when omitted, return all visible elements
   mode?: ReadPageMode; // output verbosity mode, default compact
-  render?: ReadPageRenderMode; // V23-03/B-015 render mode, default 'json'
+  render?: ReadPageRenderMode; // render mode, default 'json'
   depth?: number; // maximum DOM depth to traverse (0 = root only)
   refId?: string; // focus on subtree rooted at this refId
   tabId?: number; // target existing tab id
   windowId?: number; // when no tabId, pick active tab from this window
-  // V25-02 layer envelope. When omitted preserves the legacy full
-  // L0+L1+L2 payload. The stable HVO targetRef registry is ALWAYS
-  // written (even at 'L0') so chrome_click_element resolution stays
-  // deterministic — see V25-04 click-resolution-l0 contract.
+  // Layer envelope. When omitted preserves the legacy full L0+L1+L2 payload.
+  // The stable HVO targetRef registry is ALWAYS written (even at 'L0') so
+  // chrome_click_element resolution stays deterministic.
   requestedLayer?: ReadPageRequestedLayer;
 }
 
@@ -582,7 +581,7 @@ function buildExtensionLayer(params: {
   interactiveElements: SnapshotInteractiveElement[];
   pageContext: ReadPagePageContext;
   visibleRegionRows: VisibleRegionRowsResult;
-  /** V25-02 — when 'L0' or 'L0+L1', strip detail layers below the requested envelope. */
+  /** When 'L0' or 'L0+L1', strip detail layers below the requested envelope. */
   requestedLayer: ReadPageRequestedLayer;
 }): ReadPageExtensionFields {
   const markdownArtifact = params.artifactRefs.find((item) => item.kind === MARKDOWN_ARTIFACT_KIND);
@@ -601,25 +600,24 @@ function buildExtensionLayer(params: {
     markdownArtifactRef: markdownArtifact?.ref ?? null,
   });
 
-  // B-011: populate `historyRef` with a compact snapshot identifier so
-  // upstream callers can correlate stable HVO `targetRef`s back to the
-  // snapshot they were first seen in. The seed mixes URL host + path,
-  // pageRole and a tiny content fingerprint so two reads of the same
-  // page yield the same historyRef when content is unchanged but
-  // distinct refs after a real navigation. Pure helper, no I/O.
+  // Populate `historyRef` with a compact snapshot identifier so upstream
+  // callers can correlate stable HVO `targetRef`s back to the snapshot they
+  // were first seen in. The seed mixes URL host + path, pageRole and a tiny
+  // content fingerprint so two reads of the same page yield the same
+  // historyRef when content is unchanged but distinct refs after a real
+  // navigation. Pure helper, no I/O.
   const historyRef = buildHistoryRef({
     url: params.currentUrl,
     pageRole: params.pageRole,
     contentSeed: `${params.contentSummary.normalizedLength}|${taskProtocol.highValueObjects.length}`,
   });
 
-  // V23-03 / B-015: when the caller explicitly requested
-  // render='markdown', generate a Markdown projection from the *final*
-  // ranked HVO + interactive lists (so it stays consistent with the JSON
-  // payload the same response carries). The projection is intentionally
-  // ref-free (see read-page-markdown.ts) so it cannot be misused as a
-  // click locator. Empty result -> emit `null` to signal "Markdown
-  // unavailable" rather than "page is empty".
+  // When the caller explicitly requested render='markdown', generate a
+  // Markdown projection from the *final* ranked HVO + interactive lists (so
+  // it stays consistent with the JSON payload the same response carries).
+  // The projection is intentionally ref-free (see read-page-markdown.ts) so
+  // it cannot be misused as a click locator. Empty result -> emit `null` to
+  // signal "Markdown unavailable" rather than "page is empty".
   let markdown: string | null = null;
   if (params.renderMode === 'markdown') {
     const projected = buildMarkdownProjection({
@@ -633,12 +631,11 @@ function buildExtensionLayer(params: {
     markdown = projected || null;
   }
 
-  // V25-02 layer envelope — strip detail layers per `requestedLayer`.
+  // Layer envelope: strip detail layers per `requestedLayer`.
   // Stable HVO `targetRef` registry stays untouched (registered in
   // buildModeOutput) so `chrome_click_element` keeps resolving via the
   // same `tgt_*` even at `'L0'`. Markdown stays available because it
-  // is a separate render contract (B-015) and is intentionally
-  // ref-free.
+  // is a separate render contract and is intentionally ref-free.
   const includeL1 = params.requestedLayer !== 'L0';
   const includeL2 = params.requestedLayer === 'L0+L1+L2';
   const hasVisibleRows = params.visibleRegionRows.visibleRegionRowsUsed;
@@ -730,7 +727,7 @@ function buildModeOutput(params: {
   refMap: any[];
   candidateActions: CandidateActionSeed[];
   visibleRegionRows: VisibleRegionRowsResult;
-  /** V25-02 — layer envelope; defaults to 'L0+L1+L2' for legacy callers. */
+  /** Layer envelope; defaults to 'L0+L1+L2' for legacy callers. */
   requestedLayer: ReadPageRequestedLayer;
 }): ReadPageCompactSnapshot | ReadPageNormalSnapshot | ReadPageFullSnapshot {
   const interactiveLimit = params.mode === 'compact' ? 24 : 80;
@@ -788,8 +785,8 @@ function buildModeOutput(params: {
     requestedLayer: params.requestedLayer,
   });
 
-  // B-011: feed the per-tab stable-targetRef registry so the click bridge
-  // can translate `tgt_*` from prior turns back into the live per-snapshot
+  // Feed the per-tab stable-targetRef registry so the click bridge can
+  // translate `tgt_*` from prior turns back into the live per-snapshot
   // `ref_*` for this exact tab. We do this exactly once per snapshot, after
   // the extension layer is built but before serializing the response, so
   // every successful read replaces the previous mapping atomically.
@@ -911,12 +908,11 @@ class ReadPageTool extends BaseBrowserToolExecutor {
     }
     const selectedMode = selectedModeRaw as ReadPageMode;
 
-    // V23-03 / B-015: validate render mode. Default 'json' so legacy
-    // callers see no behavior change. We deliberately fail closed on
-    // unknown values rather than silently coerce — an unknown render
-    // mode usually means the upstream client speaks a newer contract
-    // than this extension can satisfy, and silent coercion would hide
-    // that drift.
+    // Validate render mode. Default 'json' so legacy callers see no behavior
+    // change. We deliberately fail closed on unknown values rather than
+    // silently coerce: an unknown render mode usually means the upstream
+    // client speaks a newer contract than this extension can satisfy, and
+    // silent coercion would hide that drift.
     const selectedRenderRaw = render || 'json';
     if (!['json', 'markdown'].includes(selectedRenderRaw)) {
       return createErrorResponse(
@@ -925,11 +921,10 @@ class ReadPageTool extends BaseBrowserToolExecutor {
     }
     const selectedRender = selectedRenderRaw as ReadPageRenderMode;
 
-    // V25-02 — validate requestedLayer. Default to the legacy
-    // `'L0+L1+L2'` envelope so older callers see byte-identical
-    // payloads. Unknown values fail closed for the same reason
-    // `render` does: the upstream client almost certainly speaks a
-    // newer contract than this extension can satisfy.
+    // Validate requestedLayer. Default to the legacy `'L0+L1+L2'` envelope
+    // so older callers see byte-identical payloads. Unknown values fail
+    // closed for the same reason `render` does: the upstream client almost
+    // certainly speaks a newer contract than this extension can satisfy.
     let selectedLayer: ReadPageRequestedLayer = 'L0+L1+L2';
     if (requestedLayer !== undefined) {
       if (

@@ -50,10 +50,10 @@ interface TaskProtocolParams {
     quality: string;
   };
   /**
-   * V23-03 / B-015: optional artifact-ref pointing at the Markdown
-   * projection of this snapshot. When present, `L2.markdownRef` will
-   * surface it so upstream planners can route reading traffic to
-   * Markdown without disturbing the JSON execution path.
+   * Optional artifact-ref pointing at the Markdown projection of this
+   * snapshot. When present, `L2.markdownRef` will surface it so upstream
+   * planners can route reading traffic to Markdown without disturbing the
+   * JSON execution path.
    *
    * Optional and defaults to `null`. The protocol layer never *creates*
    * the Markdown artifact; that is `read-page.ts`'s responsibility.
@@ -433,7 +433,7 @@ function buildHighValueObjects(
     .slice(0, MAX_HIGH_VALUE_OBJECTS)
     .map((item) => toHighValueObject(item, params));
 
-  // B-011: annotate stable targetRefs after ranking + dedup so ordinals are
+  // Annotate stable targetRefs after ranking + dedup so ordinals are
   // computed against the *final* HVO order (visible to upstream callers).
   // This must happen after `rankScoredObjects` and the slice cap so two
   // reads of the same page produce the same ordinals per identity tuple.
@@ -492,13 +492,13 @@ function buildLevel1(
 
 function buildLevel2(params: TaskProtocolParams): ReadPageTaskLevel2 {
   const inlineFullSnapshot = params.mode === 'full';
-  // V23-03 §11.5 source routing: pick the first DOM snapshot artifact as
-  // the canonical execution-truth pointer. We deliberately ignore the
-  // 'normal' / 'full' suffix here because both belong to the same DOM
-  // semantic source family; downstream planners do not need to choose
-  // between them. `markdownRef` is only populated when read-page.ts
-  // actually generated the Markdown projection (renderMode='markdown').
-  // `knowledgeRef` stays `null` until B-017 lands a runtime call surface.
+  // Source routing: pick the first DOM snapshot artifact as the canonical
+  // execution-truth pointer. We deliberately ignore the 'normal' / 'full'
+  // suffix here because both belong to the same DOM semantic source family;
+  // downstream planners do not need to choose between them. `markdownRef`
+  // is only populated when read-page.ts actually generated the Markdown
+  // projection (renderMode='markdown'). `knowledgeRef` stays `null` until a
+  // runtime knowledge-artifact surface exists.
   const domJsonArtifact = params.artifactRefs.find((item) => item.kind === 'dom_snapshot');
   const domJsonRef = domJsonArtifact?.ref ?? null;
   const markdownRef =

@@ -1,7 +1,7 @@
 import type { ReadPageHighValueObject, ReadPageInteractiveElement } from '@tabrix/shared';
 
 /**
- * V23-03 / B-015 Markdown projection of a `read_page` snapshot.
+ * Markdown projection of a `read_page` snapshot.
  *
  * Why this exists as a separate file:
  *   - keeps `read-page.ts` focused on the DOM/accessibility-tree path
@@ -137,10 +137,9 @@ export function buildMarkdownProjection(params: BuildMarkdownProjectionParams): 
 }
 
 /**
- * V23-03 artifact-ref kind for the Markdown projection. Pure constant so
- * the click bridge / L2 routing can deterministically distinguish DOM
- * snapshot artifacts from Markdown projection artifacts without parsing
- * the URL.
+ * Artifact-ref kind for the Markdown projection. Pure constant so the click
+ * bridge / L2 routing can deterministically distinguish DOM snapshot
+ * artifacts from Markdown projection artifacts without parsing the URL.
  */
 export const MARKDOWN_ARTIFACT_KIND = 'dom_markdown' as const;
 
