@@ -1,5 +1,5 @@
 /**
- * `tabrix_choose_context` v1 (B-018) — pure input/output helpers.
+ * `tabrix_choose_context` pure input/output helpers.
  *
  * Mirrors the contract in `docs/B_018_CONTEXT_SELECTOR_V1.md`. Stays
  * deliberately small:
@@ -11,12 +11,11 @@
  *    is easy to wire from `native-tool-handlers.ts` without crowding
  *    the dispatcher with chooser logic.
  *
- * Side-effect surface (V23-04 / B-018 v1.5): the only IO this module
- * does is the optional telemetry write-back through
- * `ChooseContextTelemetryRepository`. The chooser still never calls
- * the bridge and never reads `process.env` directly; tests inject the
- * telemetry repo plus every other dependency via `chooseContextStrategy`
- * or the runner's `deps` argument.
+ * Side-effect surface: the only IO this module does is the optional
+ * telemetry write-back through `ChooseContextTelemetryRepository`. The
+ * chooser still never calls the bridge and never reads `process.env`
+ * directly; tests inject the telemetry repo plus every other dependency
+ * via `chooseContextStrategy` or the runner's `deps` argument.
  *
  * `runTabrixChooseContextRecordOutcome` is the matching write-back
  * runner used by `tabrix_choose_context_record_outcome`. It validates
@@ -276,8 +275,8 @@ export interface ChooseContextFacts {
     successCount: number;
     failureCount: number;
     /**
-     * V24-01 / B-EXP-REPLAY-V1: when true the chooser routes the
-     * experience hit through the new `experience_replay` strategy
+     * When true the chooser routes the experience hit through the
+     * `experience_replay` strategy
      * instead of `experience_reuse`. Eligibility is the AND of:
      *   - the `experience_replay` capability is enabled,
      *   - the row's `pageRole` is in
@@ -286,27 +285,25 @@ export interface ChooseContextFacts {
      *     `TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS`,
      *   - the row's `successRate >= EXPERIENCE_HIT_MIN_SUCCESS_RATE`
      *     (already true if `experienceHit` exists).
-     * V24-03 widens the AND set with the stricter
-     * `EXPERIENCE_REPLAY_MIN_SUCCESS_RATE` /
-     * `EXPERIENCE_REPLAY_MIN_SUCCESS_COUNT` thresholds; the legacy
-     * `experience_reuse` gate (`EXPERIENCE_HIT_MIN_SUCCESS_RATE`) is
-     * unchanged.
+     * Replay also uses stricter success-rate and success-count
+     * thresholds; the legacy `experience_reuse` gate
+     * (`EXPERIENCE_HIT_MIN_SUCCESS_RATE`) is unchanged.
      */
     replayEligible?: boolean;
   };
   /**
-   * V24-03 — ranked replay candidates surfaced as a single
-   * `experience_ranked` artifact. Populated whenever the chooser
-   * has Experience rows in scope (regardless of which strategy it
-   * ultimately picks); empty when no rows came back. The ordering
-   * is the deterministic ranking from `rankExperienceCandidates`.
+   * Ranked replay candidates surfaced as a single `experience_ranked`
+   * artifact. Populated whenever the chooser has Experience rows in
+   * scope (regardless of which strategy it ultimately picks); empty
+   * when no rows came back. The ordering is the deterministic ranking
+   * from `rankExperienceCandidates`.
    */
   rankedReplayCandidates?: TabrixChooseContextRankedCandidate[];
   /**
-   * V24-03 — first reason the top-1 ranked candidate was refused
-   * routing to `experience_replay`. `'none'` when the chooser
-   * actually picked `experience_replay`; absent when the chooser
-   * never had a candidate to consider.
+   * First reason the top-1 ranked candidate was refused routing to
+   * `experience_replay`. `'none'` when the chooser actually picked
+   * `experience_replay`; absent when the chooser never had a candidate
+   * to consider.
    */
   rankedTopBlockedBy?: ReplayEligibilityBlockReason;
   /**
@@ -327,11 +324,11 @@ interface StrategyDecision {
   fallbackStrategy?: ContextStrategyName;
   reasoning: string;
   artifacts: TabrixChooseContextArtifact[];
-  /** V24-03 — first eligibility blocker for the top-1 candidate (if any). */
+  /** First eligibility blocker for the top-1 candidate (if any). */
   replayEligibleBlockedBy?: ReplayEligibilityBlockReason;
-  /** V24-03 — chooser-side fallback depth (`0` when a candidate surfaced; `'cold'` otherwise). */
+  /** Chooser-side fallback depth (`0` when a candidate surfaced; `'cold'` otherwise). */
   replayFallbackDepth: 0 | 'cold';
-  /** V24-03 — number of candidates in the ranked artifact. */
+  /** Number of candidates in the ranked artifact. */
   rankedCandidateCount: number;
 }
 
@@ -341,25 +338,25 @@ interface StrategyDecision {
  * without updating the doc + the strategy-set guard test.
  */
 export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecision {
-  // V24-03: when the chooser has ranked replay candidates available we
-  // ALWAYS surface them as a single `experience_ranked` artifact, even
-  // on the `experience_reuse` downgrade branch. This keeps post-mortem
+  // When the chooser has ranked replay candidates available we ALWAYS
+  // surface them as a single `experience_ranked` artifact, even on the
+  // `experience_reuse` downgrade branch. This keeps post-mortem
   // analysis grouped by `rankedCandidateCount` regardless of which
   // strategy we pick. `rankedCandidateCount === 0` when no candidates
-  // surfaced (no Experience rows OR the legacy `experienceHit` path
-  // was taken with no ranking input).
+  // surfaced (no Experience rows OR the legacy `experienceHit` path was
+  // taken with no ranking input).
   const rankedCandidates = facts.rankedReplayCandidates ?? [];
   const rankedCandidateCount = rankedCandidates.length;
   const replayFallbackDepth: 0 | 'cold' = rankedCandidateCount > 0 ? 0 : 'cold';
 
   if (facts.experienceHit) {
     const hit = facts.experienceHit;
-    // V24-01: route the hit to `experience_replay` only when the
-    // capability + step-kind allowlist + GitHub pageRole gates all
-    // pass. The fallback chain is `experience_reuse → read_page_required`
-    // (NOT directly to `read_page_required`); replay's failure mode is
-    // a per-step abort, after which the reusing branch can still try
-    // the recorded plan as plain advice instead of dispatched steps.
+    // Route the hit to `experience_replay` only when the capability,
+    // step-kind allowlist, and GitHub pageRole gates all pass. The
+    // fallback chain is `experience_reuse → read_page_required` (NOT
+    // directly to `read_page_required`); replay's failure mode is a
+    // per-step abort, after which the reusing branch can still try the
+    // recorded plan as plain advice instead of dispatched steps.
     if (hit.replayEligible) {
       const top = rankedCandidates[0];
       const topScoreLabel = top !== undefined ? ` topScore=${top.score.toFixed(3)}` : '';
@@ -465,16 +462,15 @@ export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecisi
     };
   }
 
-  // V23-04 / B-018 v1.5: text-heavy GitHub reading branch.
+  // Text-heavy GitHub reading branch.
   //
   // When (a) no experience hit, (b) no usable api_knowledge match,
   // (c) the resolved siteFamily is `'github'`, and (d) the pageRole
   // is on the hand-curated `MARKDOWN_FRIENDLY_PAGE_ROLES` whitelist,
-  // we route to `read_page_markdown` (B-015 / V23-03). This is a
-  // *reading* surface — the JSON HVOs / candidateActions /
-  // `targetRef` stay the execution truth. The chooser only signals
-  // that the markdown projection is the cheaper way to read this
-  // page; the caller is still expected to fall back to
+  // we route to `read_page_markdown`. This is a *reading* surface — the
+  // JSON HVOs / candidateActions / `targetRef` stay the execution truth.
+  // The chooser only signals that the markdown projection is the cheaper
+  // way to read this page; the caller is still expected to fall back to
   // `read_page_required` if it has to act on the result.
   //
   // We deliberately gate on `siteFamily === 'github'` rather than on
@@ -518,14 +514,14 @@ export function chooseContextStrategy(facts: ChooseContextFacts): StrategyDecisi
 }
 
 // ---------------------------------------------------------------------------
-// V25-02 — pure intent classifier for layer dispatch
+// Pure intent classifier for layer dispatch
 // ---------------------------------------------------------------------------
 
 /**
- * V25-02: bucket the free-text `intent` into the closed
+ * Bucket the free-text `intent` into the closed
  * {@link LayerDispatchUserIntentHint} enum. Pure function — uses
  * regex/keyword scans only, no Memory / Knowledge / network. Order
- * mirrors the V25-02 Strategy Table priority-2 row block; a hit on a
+ * mirrors the layer dispatch strategy priority block; a hit on a
  * higher-priority bucket short-circuits.
  *
  * `'unknown'` means the dispatcher should fall through to task type /
@@ -570,9 +566,9 @@ export function classifyIntentForLayerDispatch(intent: string): LayerDispatchUse
 }
 
 /**
- * V25-02: derive task-type bucket from the user intent classification.
- * Exposed as a separate helper so unit tests can pin the matrix
- * without re-running the classifier. Pure function.
+ * Derive task-type bucket from the user intent classification. Exposed
+ * as a separate helper so unit tests can pin the matrix without
+ * re-running the classifier. Pure function.
  */
 export function deriveTaskTypeForLayerDispatch(
   hint: LayerDispatchUserIntentHint,
@@ -593,11 +589,11 @@ export function deriveTaskTypeForLayerDispatch(
 }
 
 /**
- * V24-03: pick the legacy `experienceHit` shape from the top-1 ranked
- * candidate, applying the legacy `EXPERIENCE_HIT_MIN_SUCCESS_RATE`
- * gate so the existing `experience_reuse` branch keeps its v1.5
- * threshold behaviour. Replay eligibility is the strict V24-03 AND
- * (the row's eligibility result is already in `topReplayEligible`).
+ * Pick the legacy `experienceHit` shape from the top-1 ranked
+ * candidate, applying the legacy `EXPERIENCE_HIT_MIN_SUCCESS_RATE` gate
+ * so the existing `experience_reuse` branch keeps its threshold
+ * behaviour. Replay eligibility is the stricter AND gate already
+ * reflected in `topReplayEligible`.
  *
  * Returns `undefined` when no row is above the legacy threshold; the
  * chooser then falls through to `knowledge_light` / markdown / read.
@@ -627,33 +623,31 @@ export interface RunTabrixChooseContextDeps {
     | null;
   capabilityEnv: CapabilityEnv;
   /**
-   * V23-04 / B-018 v1.5 — telemetry write-back. `null` means
-   * "telemetry disabled" (persistence off, or the wiring opted out
-   * for a particular caller). The chooser still returns a usable
-   * result; it just omits `decisionId` so the caller knows there is
-   * no row to point `tabrix_choose_context_record_outcome` at.
+   * Telemetry write-back. `null` means "telemetry disabled"
+   * (persistence off, or the wiring opted out for a particular caller).
+   * The chooser still returns a usable result; it just omits
+   * `decisionId` so the caller knows there is no row to point
+   * `tabrix_choose_context_record_outcome` at.
    */
   telemetry?: ChooseContextTelemetryRepository | null;
   /**
-   * V26-04 (B-027) — honest dispatcher inputs. When provided, the
-   * chooser asks the provider for `{candidateActionsCount, hvoCount,
-   * fullReadByteLength, pageRole}` instead of feeding the dispatcher
-   * literal zeros. When `undefined` or `null`, behaviour is
-   * bit-identical to v2.5: zeros in, `dispatcher_input_source` and
-   * `fallback_cause_v26` left `null` in telemetry. This is the
-   * fail-soft adoption path the V4.1 plan §11 requires.
+   * Honest dispatcher inputs. When provided, the chooser asks the
+   * provider for `{candidateActionsCount, hvoCount, fullReadByteLength,
+   * pageRole}` instead of feeding the dispatcher literal zeros. When
+   * `undefined` or `null`, behaviour is bit-identical to the legacy
+   * zero-input path: zeros in, `dispatcher_input_source` and
+   * `fallback_cause_v26` left `null` in telemetry.
    */
   pageContext?: PageContextProvider | null;
   /**
-   * V27-P0-REAL closeout — visible DOM/AX rows already extracted for
-   * this task. Kept native-server-internal; public MCP schemas stay
-   * unchanged.
+   * Visible DOM/AX rows already extracted for this task. Kept
+   * native-server-internal; public MCP schemas stay unchanged.
    */
   domRegionRowsEvidence?: RouterDomRegionRowsEvidence | null;
   /**
-   * V26-FIX-02 — opt-in flag the upstream caller MAY set (typically
-   * derived from `process.env.TABRIX_LEARNING_MODE`) to mark this run
-   * as a "learning pass". When `true` the chooser emits
+   * Opt-in flag the upstream caller MAY set (typically derived from
+   * `process.env.TABRIX_LEARNING_MODE`) to mark this run as a "learning
+   * pass". When `true` the chooser emits
    * `observeMode='foreground'` / `observeReason='learning_requested'`
    * regardless of the Knowledge state, so the upstream loop drives
    * `chrome_network_capture_start/stop` foreground and the resulting
@@ -662,7 +656,7 @@ export interface RunTabrixChooseContextDeps {
    *
    * Closed boolean on purpose: a multi-valued enum here would
    * double-spend with `TabrixObserveReason`. Adding more learning
-   * sub-modes is a v2 design call.
+   * sub-modes is a separate product decision.
    */
   learningModeRequested?: boolean;
   /**
@@ -704,12 +698,12 @@ export function runTabrixChooseContext(
   const { input, intentSignature } = parsed;
   const siteFamily = resolveSiteFamily(input);
 
-  // V24-03: chooser-side ranking. We always do the single
+  // Chooser-side ranking. We always do the single
   // `experience.suggestActionPaths` read (the Memory-not-read invariant
   // applies to per-step Memory tables, NOT to this aggregator-only
-  // query). The ranked list, eligibility blocker and top-1 row all
-  // come from the pure ranking module so tests can pin the matrix
-  // without standing up the full IO orchestrator.
+  // query). The ranked list, eligibility blocker and top-1 row all come
+  // from the pure ranking module so tests can pin the matrix without
+  // standing up the full IO orchestrator.
   const nowIso = (deps.now ?? (() => new Date().toISOString()))();
   let experienceHit: ChooseContextFacts['experienceHit'];
   let rankedReplayCandidates: TabrixChooseContextRankedCandidate[] | undefined;
@@ -748,9 +742,9 @@ export function runTabrixChooseContext(
   // failure mode of the v1 surface, not a paranoia check.
   if (!experienceHit && siteFamily === 'github' && deps.knowledgeApi) {
     if (isCapabilityEnabled('api_knowledge', deps.capabilityEnv)) {
-      // v1 site-family → site mapping is exact: the only GitHub host
-      // we capture under B-017 is `api.github.com`. Widening this
-      // requires touching the capture seed in lockstep — see
+      // Site-family → site mapping is exact: the GitHub capture seed
+      // uses `api.github.com`. Widening this requires touching the
+      // capture seed in lockstep — see
       // `app/native-server/src/memory/knowledge/api-knowledge-capture.ts`.
       const site = 'api.github.com';
       const rows =
@@ -760,12 +754,11 @@ export function runTabrixChooseContext(
               .filter((row) => row.usableForTask)
           : deps.knowledgeApi.listBySite(site, KNOWLEDGE_LIGHT_SAMPLE_LIMIT);
       if (rows.length > 0) {
-        // We intentionally use the row count of `listBySite` (capped
-        // by `KNOWLEDGE_LIGHT_SAMPLE_LIMIT`) as `totalEndpoints` for
-        // v1. A precise total would require either a dedicated SELECT
-        // COUNT or another method on the repo; the cap-bounded number
-        // is good enough to prove the catalog is non-empty without
-        // adding a new repository surface.
+        // We intentionally use the capped `listBySite` result count as
+        // `totalEndpoints`. A precise total would require either a
+        // dedicated SELECT COUNT or another method on the repo; the
+        // cap-bounded number is enough to prove the catalog is non-empty
+        // without adding a new repository surface.
         knowledgeCatalog = {
           site,
           totalEndpoints: rows.length,
@@ -792,21 +785,21 @@ export function runTabrixChooseContext(
     rankedTopBlockedBy,
   });
 
-  // V25-02: layer dispatcher — runs once per chooser decision after
-  // the strategy is picked. The dispatcher is pure (no IO) so this
-  // adds zero hot-path Memory traffic. We feed it the same facts the
+  // Layer dispatcher — runs once per chooser decision after the
+  // strategy is picked. The dispatcher is pure (no IO) so this adds
+  // zero hot-path Memory traffic. We feed it the same facts the
   // strategy used so rule alignment is auditable from telemetry.
   //
-  // V26-04 (B-027): honest dispatcher inputs. When the caller wired
-  // a `PageContextProvider`, the dispatcher receives real
+  // Honest dispatcher inputs. When the caller wired a
+  // `PageContextProvider`, the dispatcher receives real
   // candidateActions / HVO counts + fullReadByteLength drawn from the
   // most recent matching `memory_page_snapshots` row instead of
-  // hard-coded zeros. The provider call itself is read-only and
-  // never throws (it returns a `fallback_zero` shape on any error)
-  // so the chooser hot-path stays safe. When the provider is absent
-  // (test stubs / persistence off / pre-V26-04 callers) we keep the
-  // historical zero-input behaviour bit-for-bit and leave
-  // `dispatcherInputSource` / `fallbackCauseV26` `null` in telemetry.
+  // hard-coded zeros. The provider call itself is read-only and never
+  // throws (it returns a `fallback_zero` shape on any error) so the
+  // chooser hot-path stays safe. When the provider is absent (test stubs
+  // / persistence off / legacy callers) we keep the historical
+  // zero-input behaviour bit-for-bit and leave `dispatcherInputSource` /
+  // `fallbackCauseV26` `null` in telemetry.
   const intentHint = classifyIntentForLayerDispatch(input.intent);
   const dispatcherInputs = deps.pageContext
     ? deps.pageContext.getContext({
@@ -848,9 +841,9 @@ export function runTabrixChooseContext(
   const knowledgeEndpointFamily =
     siteFamily === 'github' && knowledgeCatalog ? 'github.api.github.com' : null;
 
-  // V26-FIX-02 — observe-mode advisory. Derived from the same Knowledge
-  // signals the layer dispatcher already saw, so the chooser surface
-  // stays a single source of truth. Order matters:
+  // Observe-mode advisory. Derived from the same Knowledge signals the
+  // layer dispatcher already saw, so the chooser surface stays a single
+  // source of truth. Order matters:
   //   1. `learning_requested` ALWAYS wins. The operator explicitly
   //      asked for a learning pass; we honour that even when Knowledge
   //      would have answered, because the point of the run is to grow
@@ -866,8 +859,8 @@ export function runTabrixChooseContext(
   //      `foreground` / `knowledge_missing`. Foreground capture is
   //      the only way to seed the catalog for a new site.
   //
-  // The advisory is closed-enum and additive on the wire; pre-FIX-02
-  // callers that ignore the field stay bit-identical.
+  // The advisory is closed-enum and additive on the wire; callers that
+  // ignore the field stay bit-identical.
   let observeMode: TabrixObserveMode;
   let observeReason: TabrixObserveReason;
   if (deps.learningModeRequested === true) {
@@ -884,18 +877,17 @@ export function runTabrixChooseContext(
     observeReason = 'knowledge_missing';
   }
 
-  // V23-04 / B-018 v1.5 — telemetry write-back. We attempt to record
-  // the decision ONLY when telemetry is wired and we have a usable
-  // result to record. Failures here MUST NOT poison the chooser
-  // result: a SQLite write that throws (disk full, locked DB, …)
-  // becomes a missing `decisionId` field, not a tool error. The
-  // caller treats "no decisionId" the same as "telemetry off".
+  // Telemetry write-back. We attempt to record the decision ONLY when
+  // telemetry is wired and we have a usable result to record. Failures
+  // here MUST NOT poison the chooser result: a SQLite write that throws
+  // (disk full, locked DB, …) becomes a missing `decisionId` field, not
+  // a tool error. The caller treats "no decisionId" the same as
+  // "telemetry off".
   //
-  // V24-03 closeout: the new ranked / blocker / fallback-depth fields
-  // are intentionally NOT persisted to `tabrix_choose_context_decisions`
-  // in v2.4. The v2.3 telemetry table schema stays frozen so the
-  // existing release gate cannot regress; long-term ranked-depth
-  // statistics are deferred to v2.5 (see plan §2.3 telemetry note).
+  // The ranked / blocker / fallback-depth fields are intentionally NOT
+  // persisted to `tabrix_choose_context_decisions` here. The telemetry
+  // table schema stays frozen for compatibility; long-term ranked-depth
+  // statistics belong in a dedicated migration.
   let decisionId: string | undefined;
   if (deps.telemetry) {
     const newId = deps.newDecisionId ?? randomUUID;
@@ -909,7 +901,7 @@ export function runTabrixChooseContext(
         strategy: decision.strategy,
         fallbackStrategy: decision.fallbackStrategy ?? null,
         createdAt: nowIso,
-        // V25-02 layer-dispatch telemetry
+        // Layer-dispatch telemetry
         chosenLayer: layerDispatch.chosenLayer,
         layerDispatchReason: layerDispatch.reason,
         sourceRoute: layerDispatch.sourceRoute,
@@ -918,16 +910,15 @@ export function runTabrixChooseContext(
         tokenEstimateFullRead: layerDispatch.fullReadTokenEstimate,
         tokensSavedEstimate,
         knowledgeEndpointFamily,
-        // V25-02 (M2 binding) — V24-03 ranked-replay audit fields
+        // Ranked-replay audit fields
         rankedCandidateCount: decision.rankedCandidateCount ?? null,
         replayEligibleBlockedBy: decision.replayEligibleBlockedBy ?? null,
         replayFallbackDepth: decision.replayFallbackDepth ?? null,
-        // V26-04 (B-027): honest dispatcher input source. `null` when
-        // no `pageContext` provider was wired (preserves the v25
-        // null-everywhere telemetry shape for legacy callers and
-        // tests). Otherwise records the closed-enum source the
-        // provider returned plus its `fallbackCause` only on the
-        // `fallback_zero` branch.
+        // Honest dispatcher input source. `null` when no `pageContext`
+        // provider was wired (preserves the legacy null-everywhere
+        // telemetry shape for callers and tests). Otherwise records the
+        // closed-enum source the provider returned plus its
+        // `fallbackCause` only on the `fallback_zero` branch.
         dispatcherInputSource: dispatcherInputs?.source ?? null,
         fallbackCauseV26:
           dispatcherInputs && dispatcherInputs.source === 'fallback_zero'
@@ -960,8 +951,8 @@ export function runTabrixChooseContext(
     rankedCandidateCount: decision.rankedCandidateCount,
     replayEligibleBlockedBy: decision.replayEligibleBlockedBy,
     replayFallbackDepth: decision.replayFallbackDepth,
-    // V25-02 layer-dispatch fields. Always present; safe defaults so
-    // callers built before V25-02 still type-check.
+    // Layer-dispatch fields. Always present; safe defaults so older
+    // callers still type-check.
     chosenLayer: layerDispatch.chosenLayer,
     layerDispatchReason: layerDispatch.reason,
     sourceRoute: layerDispatch.sourceRoute,
@@ -970,8 +961,8 @@ export function runTabrixChooseContext(
     tokenEstimateFullRead: layerDispatch.fullReadTokenEstimate,
     tokensSavedEstimate,
     readPageAvoided: layerDispatch.sourceRoute === 'experience_replay_skip_read',
-    // V26-FIX-02 — observe-mode advisory (closed enum). Always present
-    // on `status: 'ok'` so post-mortems can tally
+    // Observe-mode advisory (closed enum). Always present on
+    // `status: 'ok'` so post-mortems can tally
     // `foregroundNetworkCaptureCount` deterministically.
     observeMode,
     observeReason,
@@ -1005,7 +996,7 @@ function mapIntentHintToRouterTaskIntent(
 }
 
 // ---------------------------------------------------------------------------
-// V23-04 / B-018 v1.5 — `tabrix_choose_context_record_outcome`
+// `tabrix_choose_context_record_outcome`
 // ---------------------------------------------------------------------------
 
 const OUTCOME_VALUES: readonly TabrixChooseContextOutcome[] = [
@@ -1152,22 +1143,20 @@ export function runTabrixChooseContextRecordOutcome(
 }
 
 // ---------------------------------------------------------------------------
-// V26-FIX-01 — API Direct Execution Path wrapper
+// API Direct Execution Path wrapper
 // ---------------------------------------------------------------------------
 
 export interface RunTabrixChooseContextWithDirectApiDeps extends RunTabrixChooseContextDeps {
   /**
-   * V26-FIX-01 — optional fetch override forwarded to the
-   * direct-api-executor. When omitted the executor falls through to
-   * the underlying default in `readApiKnowledgeRows`. Tests inject a
-   * stub fetch.
+   * Optional fetch override forwarded to the direct-api-executor. When
+   * omitted the executor falls through to the underlying default in
+   * `readApiKnowledgeRows`. Tests inject a stub fetch.
    */
   directApiFetchFn?: ApiKnowledgeFetch;
   /**
-   * V26-FIX-01 — capability gate. When `false`, direct execution
-   * never fires — the wrapper returns the synchronous chooser result
-   * unchanged so the v2.5 pre-V26-FIX-01 happy path is bit-identical.
-   * Default: enabled.
+   * Capability gate. When `false`, direct execution never fires — the
+   * wrapper returns the synchronous chooser result unchanged so the
+   * legacy happy path is bit-identical. Default: enabled.
    */
   directApiEnabled?: boolean;
   /**
@@ -1177,9 +1166,9 @@ export interface RunTabrixChooseContextWithDirectApiDeps extends RunTabrixChoose
 }
 
 /**
- * V26-FIX-01 — async wrapper that delegates to {@link runTabrixChooseContext}
- * for policy + telemetry, and then optionally executes the chosen
- * read-only API endpoint inline. The compact rows (or the
+ * Async wrapper that delegates to {@link runTabrixChooseContext} for
+ * policy + telemetry, and then optionally executes the chosen read-only
+ * API endpoint inline. The compact rows (or the
  * `'fallback_required'` / `'skipped_*'` advisory) land on
  * `result.directApiExecution`. Upstream MCP callers may then skip the
  * subsequent `chrome_navigate` + `chrome_read_page` round-trip when
@@ -1189,7 +1178,7 @@ export interface RunTabrixChooseContextWithDirectApiDeps extends RunTabrixChoose
  *   1. Invariant for every non-`knowledge_supported_read` route AND
  *      every `directApiEnabled === false` invocation: the returned
  *      result is the exact value `runTabrixChooseContext` would have
- *      returned, with NO `directApiExecution` field. The legacy v2.5
+ *      returned, with NO `directApiExecution` field. The legacy
  *      contract is preserved bit-identical.
  *   2. The wrapper NEVER throws on direct-execute failure. A failed
  *      API call collapses to `executionMode === 'fallback_required'`
@@ -1229,9 +1218,9 @@ export async function runTabrixChooseContextWithDirectApi(
       })
     : null;
 
-  // V26-FIX-01 — derive the read-only gate from the layer-dispatch
-  // outcome rather than re-classifying the raw user intent. Rationale:
-  //   * The V25-02 rule table routes "搜索/list" intents to
+  // Derive the read-only gate from the layer-dispatch outcome rather
+  // than re-classifying the raw user intent. Rationale:
+  //   * The layer rule table routes "搜索/list" intents to
   //     `chosenLayer='L0' / sourceRoute='knowledge_supported_read'`
   //     even when `userIntent === 'form_or_submit'` (search is a
   //     DOM-land form, but an API-land read).
@@ -1241,15 +1230,14 @@ export async function runTabrixChooseContextWithDirectApi(
   //     surface — the candidate's `method='GET'` is the second gate.
   // Falling back through the keyword classifier here would
   // over-suppress legitimate API search intents, which is the
-  // mistake V26-FIX-01 is correcting.
+  // mistake this direct-execution gate is correcting.
   const intentClass: DirectApiIntentClass = result.chosenLayer === 'L0' ? 'read_only' : 'action';
 
-  // V26-FIX-04 — the executor's knowledge-driven branch is only
-  // exercised when both `dataNeed` and `knowledgeRepo` are present.
-  // We only wire `knowledgeRepo` through when the repository actually
-  // implements `listScoredBySite` (older test seams may inject only
-  // `listBySite`), which keeps the v2.5 candidate-only path
-  // bit-identical for those callers.
+  // The executor's knowledge-driven branch is only exercised when both
+  // `dataNeed` and `knowledgeRepo` are present. We only wire
+  // `knowledgeRepo` through when the repository actually implements
+  // `listScoredBySite` (older test seams may inject only `listBySite`),
+  // which keeps the candidate-only path bit-identical for those callers.
   const knowledgeRepo: EndpointKnowledgeReader | undefined =
     isCapabilityEnabled('api_knowledge', deps.capabilityEnv) &&
     deps.knowledgeApi &&
@@ -1260,7 +1248,7 @@ export async function runTabrixChooseContextWithDirectApi(
     ? {
         intent: parsed.input.intent.toLowerCase(),
         intentClass,
-        // V26-FIX-04 — leave the closed-enum hint at `null` for now.
+        // Leave the closed-enum hint at `null` for now.
         // The lookup falls through to "any usable read" semantics,
         // which is the behaviour the FIX-04 minimum success criteria
         // require. A future FIX may map intent keywords (`search` /
@@ -1299,32 +1287,30 @@ export async function runTabrixChooseContextWithDirectApi(
       fallbackEntryLayer: exec.fallbackEntryLayer,
       rows: exec.rows?.rows ?? null,
       rowCount: exec.rows?.rowCount ?? null,
-      // V26-PGB-01 — surface the closed empty-result envelope so the
-      // shim and the operation log can distinguish a "verified empty"
-      // API answer from a 0-row miss without re-deriving it from
-      // rowCount===0. Stays `null` on every non-`direct_api` branch
-      // (no reader was reached).
+      // Surface the closed empty-result envelope so the shim and the
+      // operation log can distinguish a "verified empty" API answer
+      // from a 0-row miss without re-deriving it from rowCount===0.
+      // Stays `null` on every non-`direct_api` branch (no reader was
+      // reached).
       emptyResult: exec.rows?.emptyResult ?? null,
       emptyReason: exec.rows?.emptyReason ?? null,
       emptyMessage: exec.rows?.emptyMessage ?? null,
       apiTelemetry: exec.apiTelemetry,
-      // V26-PGB-04 — surface the closed-enum endpoint lineage marker
-      // so the operation log (PGB-05) and the Gate B benchmark
-      // transformer can attribute every direct-API call into the
-      // `observed` / `seed_adapter` / `manual_seed` / `unknown`
-      // bucket without re-deriving it from the endpoint family
-      // string. `null` on every short-circuit branch (the executor
-      // never reached a reader).
+      // Surface the closed-enum endpoint lineage marker so operation
+      // logs and benchmark transformers can attribute every direct-API
+      // call into the `observed` / `seed_adapter` / `manual_seed` /
+      // `unknown` bucket without re-deriving it from the endpoint family
+      // string. `null` on every short-circuit branch (the executor never
+      // reached a reader).
       endpointSource: exec.endpointSource ?? null,
-      // V26-FIX-04 — `readerMode / knowledgeEndpointId / endpointPattern /
+      // `readerMode / knowledgeEndpointId / endpointPattern /
       // endpointSemanticType / requestShapeUsed / semanticValidation`
       // exist on the executor's internal result but are intentionally
       // NOT surfaced on `TabrixDirectApiExecution` (a cross-process
-      // wire type in `packages/shared/src/choose-context.ts`). FIX-07
-      // is the package that wires them into the operation-memory-log
-      // evidence contract; widening the public chooser schema here
-      // would require a `packages/shared` change which is out-of-scope
-      // for FIX-04 per the plan's "Out of scope" list.
+      // wire type in `packages/shared/src/choose-context.ts`). Those
+      // details belong in the operation-memory-log evidence contract;
+      // widening the public chooser schema here would require a
+      // `packages/shared` compatibility change.
     },
   };
 }
