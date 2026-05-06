@@ -70,7 +70,10 @@ import {
   type ApiReadFallbackEvidence,
 } from './read-page-api-fallback';
 import { buildKnowledgeApiRowsSuccessResult } from './read-page-api-rows-result';
-import { buildLiveObservedApiRowsSuccessResult } from './read-page-live-observed-result';
+import {
+  buildLiveObservedApiRowsSuccessResult,
+  buildLiveObservedRejectedLogHint,
+} from './read-page-live-observed-result';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { getDefaultPrimaryTabController } from '../runtime/primary-tab-controller';
@@ -819,40 +822,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       }
       const liveObservedEvidence = taskContext.peekLiveObservedApiEvidence();
       if (liveObservedEvidence.length > 0) {
-        operationLogHint = {
-          requestedLayer: 'L0+L1',
-          selectedDataSource: 'dom_json',
-          sourceRoute: 'knowledge_supported_read',
-          decisionReason: liveObservedEvidence[0]?.fallbackCause ?? 'live_observed_api_unusable',
-          resultKind: 'read_page_fallback',
-          fallbackUsed: 'dom_compact',
-          tabHygiene: {
-            liveObservedDataUsed: false,
-            candidateEvidence: liveObservedEvidence,
-          },
-          metadata: {
-            apiTelemetry: 'live_observed_api_rows',
-            endpointSource: liveObservedEvidence[0]?.endpointSource ?? 'not_applicable',
-            fallbackPlan: liveObservedEvidence[0]?.fallbackCause ?? 'live_observed_api_unusable',
-            fallbackEntryLayer: 'L0+L1',
-            privacyCheck: liveObservedEvidence[0]?.privacyCheck ?? 'not_applicable',
-            relevanceCheck:
-              liveObservedEvidence[0]?.privacyCheck === 'failed' ? 'not_applicable' : 'failed',
-            responseSummarySource:
-              liveObservedEvidence[0]?.responseSummarySource ?? 'not_applicable',
-            observationMode: liveObservedEvidence[0]?.observationMode ?? 'not_applicable',
-            cdpUsed: liveObservedEvidence[0]?.cdpUsed === true ? 'true' : 'false',
-            cdpReason: liveObservedEvidence[0]?.cdpReason ?? 'not_applicable',
-            cdpAttachDurationMs:
-              typeof liveObservedEvidence[0]?.cdpAttachDurationMs === 'number'
-                ? String(liveObservedEvidence[0]?.cdpAttachDurationMs)
-                : 'not_applicable',
-            cdpDetachSuccess: liveObservedEvidence[0]?.cdpDetachSuccess === true ? 'true' : 'false',
-            debuggerConflict: liveObservedEvidence[0]?.debuggerConflict === true ? 'true' : 'false',
-            responseBodySource: liveObservedEvidence[0]?.responseBodySource ?? 'not_applicable',
-            bodyCompacted: liveObservedEvidence[0]?.bodyCompacted === true ? 'true' : 'false',
-          },
-        };
+        operationLogHint = buildLiveObservedRejectedLogHint(liveObservedEvidence);
       }
       // Skip-read orchestrator hook. We consult it BEFORE the existing
       // budget gate because a `'skip'` plan means we never round-trip

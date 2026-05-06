@@ -1,6 +1,10 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { LiveObservedApiData } from '../api-knowledge/live-observed-data';
+import type {
+  LiveObservedApiData,
+  LiveObservedApiEvidence,
+} from '../api-knowledge/live-observed-data';
 import { mapDataSourceToLayerContract } from '../execution/layer-contract';
+import type { ReadPageOperationLogHint } from './read-page-dom-region-rows-result';
 
 export function buildLiveObservedApiRowsSuccessResult(args: {
   liveObserved: LiveObservedApiData;
@@ -164,6 +168,45 @@ export function buildLiveObservedApiRowsSuccessResult(args: {
         responseBodySource: liveObserved.responseBodySource,
         bodyCompacted: liveObserved.bodyCompacted ? 'true' : 'false',
       },
+    },
+  };
+}
+
+export function buildLiveObservedRejectedLogHint(
+  evidence: readonly LiveObservedApiEvidence[],
+): ReadPageOperationLogHint {
+  const first = evidence[0];
+
+  return {
+    requestedLayer: 'L0+L1',
+    selectedDataSource: 'dom_json',
+    sourceRoute: 'knowledge_supported_read',
+    decisionReason: first?.fallbackCause ?? 'live_observed_api_unusable',
+    resultKind: 'read_page_fallback',
+    fallbackUsed: 'dom_compact',
+    tabHygiene: {
+      liveObservedDataUsed: false,
+      candidateEvidence: evidence,
+    },
+    metadata: {
+      apiTelemetry: 'live_observed_api_rows',
+      endpointSource: first?.endpointSource ?? 'not_applicable',
+      fallbackPlan: first?.fallbackCause ?? 'live_observed_api_unusable',
+      fallbackEntryLayer: 'L0+L1',
+      privacyCheck: first?.privacyCheck ?? 'not_applicable',
+      relevanceCheck: first?.privacyCheck === 'failed' ? 'not_applicable' : 'failed',
+      responseSummarySource: first?.responseSummarySource ?? 'not_applicable',
+      observationMode: first?.observationMode ?? 'not_applicable',
+      cdpUsed: first?.cdpUsed === true ? 'true' : 'false',
+      cdpReason: first?.cdpReason ?? 'not_applicable',
+      cdpAttachDurationMs:
+        typeof first?.cdpAttachDurationMs === 'number'
+          ? String(first?.cdpAttachDurationMs)
+          : 'not_applicable',
+      cdpDetachSuccess: first?.cdpDetachSuccess === true ? 'true' : 'false',
+      debuggerConflict: first?.debuggerConflict === true ? 'true' : 'false',
+      responseBodySource: first?.responseBodySource ?? 'not_applicable',
+      bodyCompacted: first?.bodyCompacted === true ? 'true' : 'false',
     },
   };
 }
