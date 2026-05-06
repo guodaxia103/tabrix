@@ -10,10 +10,10 @@
  */
 import type { ContextInvalidationReason, ObservationKind } from '@tabrix/shared';
 
-export type V27ObservationDiagnosticSource = 'runtime_ingest' | 'none' | 'unknown';
+export type ObservationDiagnosticSource = 'runtime_ingest' | 'none' | 'unknown';
 
-export interface V27ObservationDiagnosticsSnapshot {
-  observationDiagnosticSource: V27ObservationDiagnosticSource;
+export interface ObservationDiagnosticsSnapshot {
+  observationDiagnosticSource: ObservationDiagnosticSource;
   observationIngestedCount: number;
   lifecycleEventIngestedCount: number;
   factSnapshotFreshCount: number;
@@ -70,7 +70,7 @@ function markSeen(kind: ObservationKind, observedAt: number | null): void {
   diagnostics.lastObservedAt = Number.isFinite(observedAt) ? Number(observedAt) : Date.now();
 }
 
-export function recordV27ObservationLifecycle(
+export function recordObservationLifecycle(
   input: {
     observedAt?: number | null;
     contextVersionBumped?: boolean;
@@ -82,7 +82,7 @@ export function recordV27ObservationLifecycle(
   recordContextBump(input.contextVersionBumped, input.lastContextInvalidationReason);
 }
 
-export function recordV27ObservationFactSnapshot(
+export function recordObservationFactSnapshot(
   input: {
     observedAt?: number | null;
     factSnapshotId?: string | null;
@@ -97,7 +97,7 @@ export function recordV27ObservationFactSnapshot(
       : diagnostics.lastFactSnapshotId;
 }
 
-export function recordV27ObservationActionOutcome(
+export function recordObservationActionOutcome(
   input: {
     observedAt?: number | null;
     outcome?: string | null;
@@ -114,7 +114,7 @@ export function recordV27ObservationActionOutcome(
   recordContextBump(input.contextVersionBumped, input.lastContextInvalidationReason);
 }
 
-export function recordV27ObservationTabEvent(
+export function recordObservationTabEvent(
   input: {
     observedAt?: number | null;
     contextVersionBumped?: boolean;
@@ -126,7 +126,7 @@ export function recordV27ObservationTabEvent(
   recordContextBump(input.contextVersionBumped, input.lastContextInvalidationReason);
 }
 
-export function recordV27ObservationUnknown(kind: ObservationKind | string | null): void {
+export function recordObservationUnknown(kind: ObservationKind | string | null): void {
   if (kind === 'unknown') {
     diagnostics.unknownObservationDroppedCount += 1;
     diagnostics.lastObservationKind = 'unknown';
@@ -145,12 +145,12 @@ function recordContextBump(
   if (reason) diagnostics.lastContextInvalidationReason = reason;
 }
 
-export function getV27ObservationDiagnosticsSnapshot(
+export function getObservationDiagnosticsSnapshot(
   input: {
     factSnapshotCount?: number;
     trackedContextCount?: number;
   } = {},
-): V27ObservationDiagnosticsSnapshot {
+): ObservationDiagnosticsSnapshot {
   return {
     observationDiagnosticSource:
       diagnostics.observationIngestedCount > 0 ? 'runtime_ingest' : 'none',
@@ -175,7 +175,7 @@ export function getV27ObservationDiagnosticsSnapshot(
   };
 }
 
-export function resetV27ObservationDiagnostics(): void {
+export function resetObservationDiagnostics(): void {
   diagnostics.observationIngestedCount = 0;
   diagnostics.lifecycleEventIngestedCount = 0;
   diagnostics.factSnapshotFreshCount = 0;

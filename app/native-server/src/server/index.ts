@@ -45,8 +45,8 @@ import { getCapabilityDiagnostics, type CapabilitySourceKind } from '../policy/c
 import { getDefaultContextManager } from '../runtime/browser-context-manager';
 import { getDefaultFactCollector } from '../runtime/browser-fact-collector';
 import {
-  getV27ObservationDiagnosticsSnapshot,
-  type V27ObservationDiagnosticsSnapshot,
+  getObservationDiagnosticsSnapshot,
+  type ObservationDiagnosticsSnapshot,
 } from '../runtime/observation-diagnostics';
 
 // Compatibility guard:
@@ -152,7 +152,7 @@ interface ServerStatusSnapshot {
     enabled: string[];
     unknown: string[];
   };
-  v27Observation: V27ObservationDiagnosticsSnapshot;
+  v27Observation: ObservationDiagnosticsSnapshot;
 }
 
 export type { ConnectedClient };
@@ -930,7 +930,7 @@ export class Server {
     this.bridgeState.setNativeHostAttached(this.nativeHost !== null);
     const bridge = this.bridgeState.getSnapshot();
     const capabilities = getCapabilityDiagnostics();
-    const v27Observation = getV27ObservationDiagnosticsSnapshot({
+    const v27Observation = getObservationDiagnosticsSnapshot({
       factSnapshotCount: getDefaultFactCollector().size(),
       trackedContextCount: getDefaultContextManager().size(),
     });

@@ -5,8 +5,8 @@ import { resetDefaultFactCollector } from './browser-fact-collector';
 import { resetDefaultLifecycleStateMachine } from './lifecycle-state-machine';
 import { ingestBridgeObservation } from './observation-ingest';
 import {
-  getV27ObservationDiagnosticsSnapshot,
-  resetV27ObservationDiagnostics,
+  getObservationDiagnosticsSnapshot,
+  resetObservationDiagnostics,
 } from './observation-diagnostics';
 
 describe('V27-05R observation diagnostics', () => {
@@ -14,11 +14,11 @@ describe('V27-05R observation diagnostics', () => {
     resetDefaultLifecycleStateMachine();
     resetDefaultFactCollector();
     resetDefaultContextManager();
-    resetV27ObservationDiagnostics();
+    resetObservationDiagnostics();
   });
 
   test('starts with an explicit none source and zero sensitive persistence', () => {
-    expect(getV27ObservationDiagnosticsSnapshot()).toMatchObject({
+    expect(getObservationDiagnosticsSnapshot()).toMatchObject({
       observationDiagnosticSource: 'none',
       observationIngestedCount: 0,
       sensitivePersistedCount: 0,
@@ -122,7 +122,7 @@ describe('V27-05R observation diagnostics', () => {
     } satisfies BridgeObservationMessage);
 
     expect(
-      getV27ObservationDiagnosticsSnapshot({
+      getObservationDiagnosticsSnapshot({
         factSnapshotCount: 1,
         trackedContextCount: 1,
       }),
@@ -163,7 +163,7 @@ describe('V27-05R observation diagnostics', () => {
       payload: { kind: 'lifecycle_event', data: null as never },
     } satisfies BridgeObservationMessage);
 
-    expect(getV27ObservationDiagnosticsSnapshot()).toMatchObject({
+    expect(getObservationDiagnosticsSnapshot()).toMatchObject({
       observationDiagnosticSource: 'none',
       observationIngestedCount: 0,
       unknownObservationDroppedCount: 1,

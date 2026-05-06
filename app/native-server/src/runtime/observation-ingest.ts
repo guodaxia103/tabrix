@@ -32,11 +32,11 @@ import {
   type LifecycleStateMachine,
 } from './lifecycle-state-machine';
 import {
-  recordV27ObservationActionOutcome,
-  recordV27ObservationFactSnapshot,
-  recordV27ObservationLifecycle,
-  recordV27ObservationTabEvent,
-  recordV27ObservationUnknown,
+  recordObservationActionOutcome,
+  recordObservationFactSnapshot,
+  recordObservationLifecycle,
+  recordObservationTabEvent,
+  recordObservationUnknown,
 } from './observation-diagnostics';
 
 interface IngestDeps {
@@ -67,7 +67,7 @@ export function ingestBridgeObservation(
 ): void {
   const payload = message?.payload;
   if (!payload || typeof payload !== 'object' || typeof payload.kind !== 'string') {
-    recordV27ObservationUnknown(null);
+    recordObservationUnknown(null);
     return;
   }
 
@@ -76,7 +76,7 @@ export function ingestBridgeObservation(
       try {
         const data = payload.data;
         if (!data || typeof data !== 'object') {
-          recordV27ObservationUnknown(payload.kind);
+          recordObservationUnknown(payload.kind);
           return;
         }
         const tabId = typeof data.tabId === 'number' ? data.tabId : null;
@@ -85,7 +85,7 @@ export function ingestBridgeObservation(
         // The context manager owns the version bump policy; it accepts
         // a `tabId: null` snapshot and returns an "ambient" tombstone.
         const after = deps.contextManager.applyLifecycleSnapshot(snap);
-        recordV27ObservationLifecycle({
+        recordObservationLifecycle({
           observedAt: snap.producedAtMs,
           contextVersionBumped:
             after.version > 0 &&
@@ -98,7 +98,7 @@ export function ingestBridgeObservation(
       } catch {
         // Producer schema drift in one branch must not poison the
         // websocket. Best-effort.
-        recordV27ObservationUnknown(payload.kind);
+        recordObservationUnknown(payload.kind);
       }
       return;
     }
@@ -106,11 +106,11 @@ export function ingestBridgeObservation(
       try {
         const data = payload.data;
         if (!data || typeof data !== 'object') {
-          recordV27ObservationUnknown(payload.kind);
+          recordObservationUnknown(payload.kind);
           return;
         }
         const snap = deps.factCollector.ingestFactObservation(data);
-        recordV27ObservationFactSnapshot({
+        recordObservationFactSnapshot({
           observedAt: snap.producedAtMs,
           factSnapshotId: snap.factSnapshotId,
           fresh: true,
@@ -118,7 +118,7 @@ export function ingestBridgeObservation(
       } catch {
         // Best-effort — fact_snapshot is an observation feed, not a
         // command. Drop on shape error.
-        recordV27ObservationUnknown(payload.kind);
+        recordObservationUnknown(payload.kind);
       }
       return;
     }
@@ -126,7 +126,7 @@ export function ingestBridgeObservation(
       try {
         const data = payload.data;
         if (!data || typeof data !== 'object') {
-          recordV27ObservationUnknown(payload.kind);
+          recordObservationUnknown(payload.kind);
           return;
         }
         const tabId = typeof data.tabId === 'number' ? data.tabId : null;
@@ -134,7 +134,7 @@ export function ingestBridgeObservation(
         const snapshot = classifyActionOutcome(data);
         const after =
           tabId !== null ? deps.contextManager.applyActionOutcome(snapshot, tabId) : null;
-        recordV27ObservationActionOutcome({
+        recordObservationActionOutcome({
           observedAt: snapshot.producedAtMs,
           outcome: snapshot.outcome,
           contextVersionBumped:
@@ -147,7 +147,7 @@ export function ingestBridgeObservation(
         });
       } catch {
         // Best-effort.
-        recordV27ObservationUnknown(payload.kind);
+        recordObservationUnknown(payload.kind);
       }
       return;
     }
@@ -155,13 +155,13 @@ export function ingestBridgeObservation(
       try {
         const data = payload.data;
         if (!data || typeof data !== 'object') {
-          recordV27ObservationUnknown(payload.kind);
+          recordObservationUnknown(payload.kind);
           return;
         }
         const tabId = typeof data.tabId === 'number' ? data.tabId : null;
         const before = tabId !== null ? deps.contextManager.getContext(tabId) : null;
         const after = deps.contextManager.applyTabEvent(data);
-        recordV27ObservationTabEvent({
+        recordObservationTabEvent({
           observedAt: data.observedAtMs,
           contextVersionBumped:
             !!after &&
@@ -173,7 +173,7 @@ export function ingestBridgeObservation(
         });
       } catch {
         // Best-effort.
-        recordV27ObservationUnknown(payload.kind);
+        recordObservationUnknown(payload.kind);
       }
       return;
     }
@@ -182,7 +182,7 @@ export function ingestBridgeObservation(
       // Forward-compat: unknown observation kinds are intentionally
       // dropped without error so a newer extension paired with this
       // native server does not crash ingestion.
-      recordV27ObservationUnknown(payload.kind);
+      recordObservationUnknown(payload.kind);
       return;
   }
 }
