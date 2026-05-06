@@ -1,21 +1,14 @@
 /**
- * V27-00 — Tabrix v2.7 Latency / Budget constants.
+ * Tabrix latency / budget constants.
  *
  * SoT: `.claude/strategy/TABRIX_V2_7_CONTRACT_V1_zh.md` §5.
  *
  * The constants in this module are pinned by `latency-budget.test.ts`
  * as a snapshot. Bumping any value MUST happen in the same commit as
- * the v2.7 task that justifies it (commit body MUST cite the v2.7 task
- * id, e.g. `V27-04`).
+ * the product task that justifies it.
  *
- * v2.7 Batch A only declares these constants. Wiring them onto the
- * production execution path lands in:
- *   - V27-02 (`OBSERVER_OVERHEAD_BUDGET_MS_PER_EVENT`) — synthetic
- *     micro-bench; not a runtime gate yet.
- *   - V27-15 (`WAIT_MS_BUDGET_DEFAULT`, `RETRY_COUNT_BUDGET_DEFAULT`,
- *     `HEAVY_PATH_SEQUENCES`) — executable budget loop.
- *   - Owner-lane Gate B (`READ_PAGE_AVOIDANCE_TARGET`) — real-browser
- *     evidence only; this batch does not self-certify.
+ * Some constants are reported by deterministic tests, while the
+ * real-browser gates consume the same values as acceptance evidence.
  */
 
 /**
@@ -33,10 +26,10 @@ export const OBSERVER_OVERHEAD_BUDGET_MS_PER_EVENT = 5 as const;
  */
 export const READ_PAGE_AVOIDANCE_TARGET = 0.3 as const;
 
-/** Default total wait budget per executable budget (V27-15). */
+/** Default total wait budget per executable budget. */
 export const WAIT_MS_BUDGET_DEFAULT = 8000 as const;
 
-/** Default total retry budget per executable budget (V27-15). */
+/** Default total retry budget per executable budget. */
 export const RETRY_COUNT_BUDGET_DEFAULT = 2 as const;
 
 /**
@@ -45,11 +38,11 @@ export const RETRY_COUNT_BUDGET_DEFAULT = 2 as const;
  * the alternate fallback chain instead of retrying the same path).
  *
  * Each tuple is `[fromComplexityKind, toComplexityKind]`. The list is
- * pinned by the snapshot test; adding a tuple MUST cite the v2.7 task
- * id in the commit body so a "heavy" reclassification has a paper trail.
+ * pinned by the snapshot test; adding a tuple MUST cite the product
+ * reason in the commit body so a "heavy" reclassification has a paper trail.
  *
- * v2.7 Batch A does NOT consult this list on the production path; it is
- * declared so V27-15 can pull it without re-defining the contract.
+ * The list is declared centrally so runtime and benchmark code do not
+ * re-define the contract.
  */
 export const HEAVY_PATH_SEQUENCES = [
   ['document', 'transactional'],

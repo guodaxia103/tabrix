@@ -14,7 +14,7 @@
  *   does NOT decide policy — it only owns lifecycle/version/invalidation
  *   /cleanup. "Should the AI follow a freshly opened tab?" or "is the
  *   primary tab the new tab?" are explicitly deferred to Router/Policy
- *   and to the v2.6 `primary-tab-controller.ts` (V25-05 lineage).
+ *   and to `primary-tab-controller.ts`.
  *
  * What this module is NOT:
  * - It does not own the bridge. The native-server `bridge-command-channel`
