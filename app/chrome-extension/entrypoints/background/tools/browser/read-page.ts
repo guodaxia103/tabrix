@@ -33,6 +33,7 @@ import {
   MARKDOWN_ARTIFACT_KIND,
 } from './read-page-markdown';
 import { inferSchemeGuard } from './read-page-scheme-guard';
+import { hasMeaningfulReadPageText, summarizePageContent } from './read-page-content-summary';
 import { extractVisibleRegionRows, type VisibleRegionRowsResult } from './visible-region-rows';
 
 interface ReadPageStats {
@@ -65,21 +66,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function summarizePageContent(pageContent: string) {
-  const normalized = (pageContent || '').replace(/\s+/g, ' ').trim();
-  const lineCount = (pageContent || '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean).length;
-
-  return {
-    charCount: pageContent.length,
-    normalizedLength: normalized.length,
-    lineCount,
-    quality: normalized.length < 120 || lineCount < 10 ? 'sparse' : 'usable',
-  };
-}
-
 function reconcilePageUnderstandingWithVisibleRows(payload: Record<string, any>): void {
   const rows = payload.visibleRegionRows as VisibleRegionRowsResult | undefined;
   if (payload.pageRole !== 'login_required' || !rows?.visibleRegionRowsUsed) {
@@ -98,13 +84,6 @@ function reconcilePageUnderstandingWithVisibleRows(payload: Record<string, any>)
       sourceRegion: 'visible_results',
     })),
   };
-}
-
-function hasMeaningfulReadPageText(contentSummary: {
-  normalizedLength: number;
-  lineCount: number;
-}): boolean {
-  return contentSummary.normalizedLength >= 80 || contentSummary.lineCount >= 2;
 }
 
 interface SnapshotNode {
