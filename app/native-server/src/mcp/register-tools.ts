@@ -35,7 +35,6 @@ import {
 } from './tool-call-results';
 import {
   extractRequestedLayer,
-  extractTabIdFromCallToolResult,
   READ_PAGE_DEFAULT_LAYER,
   resolveTaskContextKey,
 } from './task-context-key';
@@ -71,6 +70,10 @@ import {
 } from './tool-registry-filters';
 import { listDynamicFlowTools } from './dynamic-flow-tools';
 import { proxyDynamicFlowTool } from './dynamic-flow-proxy';
+import {
+  recordPrimaryTabNavigationOutcome,
+  resolvePrimaryTabOutgoingArgs,
+} from './primary-tab-outgoing-args';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { getDefaultPrimaryTabController } from '../runtime/primary-tab-controller';
@@ -439,17 +442,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     // `args.tabId` caller-provided value always wins so allowlisted
     // scenarios that explicitly want a fresh tab still get it.
     const primaryTabController = getDefaultPrimaryTabController();
-    let outgoingArgs: any = args;
-    if (name === 'chrome_navigate') {
-      const callerSuppliedTabId =
-        args && typeof args === 'object' && Number.isInteger((args as any).tabId);
-      if (!callerSuppliedTabId) {
-        const injected = primaryTabController.getInjectedTabId();
-        if (injected !== null) {
-          outgoingArgs = { ...args, tabId: injected };
-        }
-      }
-    }
+    let outgoingArgs: any = resolvePrimaryTabOutgoingArgs(name, args, primaryTabController);
     // Task Session Context read-budget gate. Only the `chrome_read_page`
     // hot path is gated; everything else passes through. The gate is
     // fail-soft: when no task context is attached (persistence off, or
@@ -800,26 +793,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
     // that benchmark transformers and any operator UI can read.
     // Defensive: tolerate missing / malformed `tabId` in the response
     // without throwing.
-    if (name === 'chrome_navigate') {
-      const responseTabId =
-        response &&
-        response.status === 'success' &&
-        response.data &&
-        typeof response.data === 'object'
-          ? extractTabIdFromCallToolResult(response.data)
-          : null;
-      const url =
-        args && typeof args === 'object' && typeof (args as any).url === 'string'
-          ? ((args as any).url as string)
-          : null;
-      primaryTabController.recordNavigation({ returnedTabId: responseTabId, url });
-      const ptSnapshot = primaryTabController.getSnapshot();
-      bridgeRuntimeState.setPrimaryTabSnapshot({
-        primaryTabId: ptSnapshot.primaryTabId,
-        primaryTabReuseRate: ptSnapshot.primaryTabReuseRate,
-        benchmarkOwnedTabCount: ptSnapshot.benchmarkOwnedTabCount,
-      });
-    }
+    recordPrimaryTabNavigationOutcome({ name, args, response, primaryTabController });
     if (response.status === 'success') {
       const postResult = runPostProcessor({
         toolName: name,
