@@ -70,6 +70,7 @@ import {
   isToolAllowed,
 } from './tool-registry-filters';
 import { listDynamicFlowTools } from './dynamic-flow-tools';
+import { proxyDynamicFlowTool } from './dynamic-flow-proxy';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { getDefaultPrimaryTabController } from '../runtime/primary-tab-controller';
@@ -421,79 +422,13 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
 
     // If calling a dynamic flow tool (name starts with flow.), proxy to common flow-run tool
     if (name && name.startsWith('flow.')) {
-      // We need to resolve flow by slug to ID
-      try {
-        const resp = await invokeExtensionCommand('list_published_flows', {}, 20000);
-        const items = (resp && resp.items) || [];
-        const slug = name.slice('flow.'.length);
-        const match = items.find((it: any) => it.slug === slug);
-        if (!match) throw new Error(`Flow not found for tool ${name}`);
-        const flowArgs = { flowId: match.id, args };
-        const { response: proxyRes, bridgeFailure } = await callWithBridgeRecovery(
-          () =>
-            invokeExtensionCommand(
-              'call_tool',
-              { name: 'record_replay_flow_run', args: flowArgs },
-              120000,
-            ),
-          `flow:${name}`,
-        );
-        if (proxyRes.status === 'success') {
-          const postResult = runPostProcessor({
-            toolName: name,
-            rawResult: proxyRes.data,
-            stepId: step.stepId,
-            sessionId: session.sessionId,
-            sessionManager,
-            args,
-          });
-          const normalized = normalizeToolCallResult(name, postResult.rawResult);
-          sessionManager.completeStep(session.sessionId, step.stepId, {
-            status: 'completed',
-            resultSummary: normalized.stepSummary,
-            artifactRefs:
-              postResult.extraArtifactRefs.length > 0 ? postResult.extraArtifactRefs : undefined,
-          });
-          sessionManager.finishSession(session.sessionId, {
-            status: 'completed',
-            summary: normalized.executionResult.summary,
-          });
-          return postResult.rawResult;
-        }
-        const result = createErrorResult(
-          bridgeFailure
-            ? JSON.stringify(bridgeFailure)
-            : `Error calling dynamic flow tool: ${proxyRes.error}`,
-        );
-        sessionManager.completeStep(session.sessionId, step.stepId, {
-          status: 'failed',
-          errorCode: bridgeFailure ? bridgeFailure.code.toLowerCase() : 'dynamic_flow_error',
-          errorSummary: bridgeFailure
-            ? bridgeFailure.message
-            : String(proxyRes.error || 'Unknown dynamic flow error'),
-          resultSummary: `Dynamic flow ${name} failed`,
-        });
-        sessionManager.finishSession(session.sessionId, {
-          status: 'failed',
-          summary: `Dynamic flow ${name} failed`,
-        });
-        return result;
-      } catch (err: any) {
-        const result = createErrorResult(
-          `Error resolving dynamic flow tool: ${err?.message || String(err)}`,
-        );
-        sessionManager.completeStep(session.sessionId, step.stepId, {
-          status: 'failed',
-          errorCode: 'dynamic_flow_resolution_error',
-          errorSummary: err?.message || String(err),
-          resultSummary: `Dynamic flow ${name} could not be resolved`,
-        });
-        sessionManager.finishSession(session.sessionId, {
-          status: 'failed',
-          summary: `Dynamic flow ${name} resolution failed`,
-        });
-        return result;
-      }
+      return await proxyDynamicFlowTool({
+        name,
+        args,
+        sessionId: session.sessionId,
+        stepId: step.stepId,
+        invokeExtensionCommand,
+      });
     }
     // Primary Tab Controller hook. When
     // `TABRIX_PRIMARY_TAB_ENFORCE=true`, inject `tabId: primaryTabId`
