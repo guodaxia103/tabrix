@@ -27,6 +27,7 @@ import { buildCandidateActions, type CandidateActionSeed } from './read-page-can
 import { buildArtifactRefs } from './read-page-artifact-refs';
 import { buildFallbackRefMap, formatElementsAsPageContent } from './read-page-fallback-format';
 import { buildExtensionLayer, buildStableSnapshotLayer } from './read-page-snapshot-builders';
+import { buildReadPageModeResult } from './read-page-mode-result';
 import { extractVisibleRegionRows, type VisibleRegionRowsResult } from './visible-region-rows';
 
 interface ReadPageStats {
@@ -194,48 +195,22 @@ function buildModeOutput(params: {
     ...extensionLayer,
   };
 
-  if (params.mode === 'compact') {
-    return sharedPayload;
-  }
-
-  if (params.mode === 'normal') {
-    return {
-      ...sharedPayload,
-      summary: {
-        ...sharedPayload.summary,
-        primaryRegionConfidence: params.primaryRegionConfidence,
-        footerOnly: params.footerOnly,
-        anchorTexts: params.anchorTexts,
-      },
-      diagnostics: {
-        stats: params.stats,
-        contentSummary: params.contentSummary,
-        tips: params.tips,
-        reason: params.reason,
-      },
-    };
-  }
-
-  return {
-    ...sharedPayload,
-    summary: {
-      ...sharedPayload.summary,
-      primaryRegionConfidence: params.primaryRegionConfidence,
-      footerOnly: params.footerOnly,
-      anchorTexts: params.anchorTexts,
-    },
-    fullSnapshot: {
-      pageContent: params.pageContent,
-      refMap: params.refMap,
-      fallbackElements: params.elements,
-      fallbackCount: params.count,
-      markedElements: params.markedElements,
-      stats: params.stats,
-      contentSummary: params.contentSummary,
-      tips: params.tips,
-      reason: params.reason,
-    },
-  };
+  return buildReadPageModeResult({
+    sharedPayload,
+    mode: params.mode,
+    primaryRegionConfidence: params.primaryRegionConfidence,
+    footerOnly: params.footerOnly,
+    anchorTexts: params.anchorTexts,
+    pageContent: params.pageContent,
+    contentSummary: params.contentSummary,
+    stats: params.stats,
+    elements: params.elements,
+    count: params.count,
+    markedElements: params.markedElements,
+    refMap: params.refMap,
+    reason: params.reason,
+    tips: params.tips,
+  });
 }
 
 class ReadPageTool extends BaseBrowserToolExecutor {
