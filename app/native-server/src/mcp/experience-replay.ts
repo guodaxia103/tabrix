@@ -1,5 +1,5 @@
 /**
- * Tabrix MKEP Experience write/execute (V24-01) — `experience_replay` v1.
+ * Tabrix MKEP Experience write/execute — `experience_replay`.
  *
  * Bridged tool: re-runs a NAMED `experience_action_paths` row by
  * dispatching its recorded `step_sequence` through the existing
@@ -7,8 +7,6 @@
  * `chrome_fill_or_select`). Does NOT plan, does NOT invent steps,
  * does NOT call back into the upstream LLM mid-replay. Bounded,
  * fail-closed.
- *
- * SoT (owner-locked 2026-04-23): `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`.
  *
  * Module layout:
  *   - `parseExperienceReplayInput` — strict input parser, returns a
@@ -74,8 +72,8 @@ export type DispatchBridgedFn = (
  * rows on the wrapper-owned session. Production binding maps to
  * `SessionManager.startStep` / `completeStep`; tests inject a spy.
  *
- * The engine never opens a session — that is the wrapper's job
- * (brief §7: one Memory session per replay, prefixed task intent).
+ * The engine never opens a session — that is the wrapper's job. Each
+ * replay gets one Memory session with a prefixed task intent.
  */
 export interface ReplayStepRecorder {
   /** Record the start of a replayed step. Returns the implementation-defined step id. */
@@ -112,8 +110,7 @@ export class ExperienceReplayInputError extends Error {
 /**
  * Strict input parser. Every branch maps to a stable
  * {@link TabrixReplayInvalidInputCode}. The MCP layer surfaces the
- * thrown error as `status: 'invalid_input'` (no Memory session opened
- * — see brief §6 / §8.2).
+ * thrown error as `status: 'invalid_input'` (no Memory session opened).
  */
 export function parseExperienceReplayInput(raw: unknown): ParsedExperienceReplayInput {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -220,14 +217,13 @@ export function parseExperienceReplayInput(raw: unknown): ParsedExperienceReplay
 }
 
 /**
- * V24-02 — per-step write-back hook. Invoked AFTER `recorder.startStep`
- * + dispatch, regardless of outcome. The engine maps the step's
- * `(success | failure + failureCode)` into a {@link ClickObservedOutcome}
- * using the same projection the chooser-side ranking already trusts.
+ * Per-step write-back hook. Invoked AFTER `recorder.startStep` +
+ * dispatch, regardless of outcome. The engine maps the step's `(success
+ * | failure + failureCode)` into a {@link ClickObservedOutcome} using
+ * the same projection the chooser-side ranking already trusts.
  *
- * Failure isolation: implementations MUST NOT throw — by V24-02
- * policy a write-back I/O failure cannot stall the user's replay path.
- * The production wiring binds this to
+ * Failure isolation: implementations MUST NOT throw — a write-back I/O
+ * failure cannot stall the user's replay path. The production wiring binds this to
  * `ExperienceQueryService.recordReplayStepOutcome` wrapped in a
  * try/catch that emits an `experience_writeback_warnings` row instead.
  */
@@ -244,9 +240,9 @@ interface ReplayEngineDeps {
   dispatch: DispatchBridgedFn;
   recorder: ReplayStepRecorder;
   /**
-   * Optional V24-02 hook. Existing tests pass `ReplayEngineDeps`
-   * without this field and continue to compile / pass; production
-   * wires it to the V24-02 write-back path.
+   * Optional write-back hook. Existing tests pass `ReplayEngineDeps`
+   * without this field and continue to compile / pass; production wires
+   * it to the replay write-back path.
    */
   outcomeWriter?: ReplayOutcomeWriter;
 }
@@ -278,11 +274,11 @@ export class ReplayEngine {
   constructor(private readonly deps: ReplayEngineDeps) {}
 
   /**
-   * V24-02 — guarded per-step write-back. Returns void; never throws.
-   * The production `outcomeWriter` binding (in `register-tools.ts`)
-   * already wraps the write in try/catch + warning-row, so this
-   * second `try` is defense-in-depth: even if a future binding
-   * forgets to isolate, the replay user path still survives.
+   * Guarded per-step write-back. Returns void; never throws. The
+   * production `outcomeWriter` binding (in `register-tools.ts`) already
+   * wraps the write in try/catch + warning-row, so this second `try` is
+   * defense-in-depth: even if a future binding forgets to isolate, the
+   * replay user path still survives.
    */
   private tryWriteOutcome(
     actionPathId: string,
@@ -317,17 +313,17 @@ export class ReplayEngine {
       return preconditionCheck;
     }
 
-    // V24-01 P1 (replay-args portability): the chooser already refuses
-    // rows whose persisted `args` are non-portable (the shared check
-    // lives in `experience-replay-args.ts::extractPortableReplayArgs`),
-    // but direct callers of `experience_replay` (operator opt-in path)
-    // can still hand us an `actionPathId` whose row carries
-    // session-local handles (`tabId`, `ref`, `windowId`, legacy
-    // `ref_*` `targetRef`, `type=ref` `locatorChain`, ...). Without
-    // this defense-in-depth gate those handles would be re-dispatched
-    // verbatim to the bridge - either silently clicking the wrong
-    // element or hitting a dead handle. Per brief §2 item 3 we
-    // fail-closed BEFORE any `recorder.startStep` / `dispatch`.
+    // Replay-args portability: the chooser already refuses rows whose
+    // persisted `args` are non-portable (the shared check lives in
+    // `experience-replay-args.ts::extractPortableReplayArgs`), but
+    // direct callers of `experience_replay` (operator opt-in path) can
+    // still hand us an `actionPathId` whose row carries session-local
+    // handles (`tabId`, `ref`, `windowId`, legacy `ref_*` `targetRef`,
+    // `type=ref` `locatorChain`, ...). Without this defense-in-depth
+    // gate those handles would be re-dispatched verbatim to the bridge -
+    // either silently clicking the wrong element or hitting a dead
+    // handle. We fail-closed BEFORE any `recorder.startStep` /
+    // `dispatch`.
     const sanitized = sanitizePortableSteps(row.stepSequence);
     if (sanitized.kind === 'precondition_error') {
       return failedPrecondition('unsupported_step_kind', sanitized.message);
@@ -375,15 +371,15 @@ export class ReplayEngine {
           historyRef: null,
           failureCode: 'step_target_not_found',
         });
-        // V24-02: per-step write-back. Isolation: never throw out of
-        // the writer (the production binding wraps it in try/catch +
-        // structured warning row); we still defensively swallow here.
+        // Per-step write-back. Isolation: never throw out of the writer
+        // (the production binding wraps it in try/catch + structured
+        // warning row); we still defensively swallow here.
         this.tryWriteOutcome(
           row.actionPathId,
           stepIndex,
           mapFailureToOutcome('step_target_not_found'),
         );
-        // Terminal: brief §6 forbids retry / re-locator / re-plan.
+        // Terminal: replay forbids retry / re-locator / re-plan.
         return {
           status: stepIndex === 0 ? 'failed' : 'partial',
           replayId: undefined,
@@ -405,7 +401,7 @@ export class ReplayEngine {
           historyRef: null,
           failureCode,
         });
-        // V24-02: per-step write-back (failure path).
+        // Per-step write-back (failure path).
         this.tryWriteOutcome(row.actionPathId, stepIndex, mapFailureToOutcome(failureCode));
         return {
           status: stepIndex === 0 ? 'failed' : 'partial',
@@ -426,12 +422,12 @@ export class ReplayEngine {
         status: 'ok',
         historyRef,
       });
-      // V24-02: per-step write-back (success path). The engine has
-      // no fine-grained ClickObservedOutcome signal to forward — the
+      // Per-step write-back (success path). The engine has no
+      // fine-grained ClickObservedOutcome signal to forward — the
       // bridged tool's response shape is generic — so we use the
-      // success-like generic `state_toggled`. The chooser-side
-      // ranking (V24-03) only branches on
-      // `isClickSuccessOutcome(outcome)`, so this loses no fidelity.
+      // success-like generic `state_toggled`. The chooser-side ranking
+      // only branches on `isClickSuccessOutcome(outcome)`, so this loses
+      // no fidelity.
       this.tryWriteOutcome(row.actionPathId, stepIndex, 'state_toggled');
     }
 
@@ -448,7 +444,7 @@ function checkRowPreconditions(
   row: ExperienceActionPathRow,
   ctx: ReplayEngineExecutionContext,
 ): TabrixExperienceReplayResult | null {
-  // GitHub-only page role. Brief §2 item 6.
+  // GitHub-only page role.
   if (!TABRIX_EXPERIENCE_REPLAY_GITHUB_PAGE_ROLES.has(row.pageRole)) {
     return failedPrecondition(
       'non_github_pageRole',
@@ -456,7 +452,7 @@ function checkRowPreconditions(
     );
   }
 
-  // Step budget. Brief §3.1 / §6.
+  // Step budget.
   if (row.stepSequence.length > ctx.input.maxSteps) {
     return failedPrecondition(
       'step_budget_exceeded',
@@ -471,7 +467,7 @@ function checkRowPreconditions(
     );
   }
 
-  // Supported step kinds only. Brief §2 item 2.
+  // Supported step kinds only.
   for (const step of row.stepSequence) {
     if (!TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS.has(step.toolName)) {
       return failedPrecondition(
@@ -485,18 +481,18 @@ function checkRowPreconditions(
 }
 
 /**
- * Pre-flight portable-args sanitizer (V24-01 P1). Drops every step
- * down to the per-tool portable allowlist via the shared
+ * Pre-flight portable-args sanitizer. Drops every step down to the
+ * per-tool portable allowlist via the shared
  * {@link extractPortableReplayArgs}; returns a precondition error on
  * the first non-portable step. The returned step list is what the
  * dispatch loop must use - subsequent `applySubstitutions` /
  * `withTargetTab` / `dispatch` MUST NOT see the original
  * `step.args`, so non-portable keys cannot leak to the bridge.
  *
- * Why pre-flight (vs per-step in the loop): brief §6 reserves
- * `failed-precondition` for "we never even tried"; having the gate
- * fire before `recorder.startStep` keeps that contract clean for
- * direct callers too.
+ * Why pre-flight (vs per-step in the loop): `failed-precondition`
+ * means "we never even tried"; having the gate fire before
+ * `recorder.startStep` keeps that contract clean for direct callers
+ * too.
  */
 function sanitizePortableSteps(
   steps: ReadonlyArray<ExperienceActionPathStep>,
@@ -542,15 +538,15 @@ function applySubstitutions(
   //     same shared portability check
   //     (`experience-replay-args.ts::extractPortableReplayArgs`)
   //     against direct callers BEFORE we walk the loop.
-  // We still fail-closed here rather than asserting - brief §2 item 3.
+  // We still fail-closed here rather than asserting.
   //
-  // V24-01 closeout: the aggregator populates `args` for the v1
-  // supported step kinds via the same per-tool portable allowlist
+  // The aggregator populates `args` for the supported step kinds via
+  // the same per-tool portable allowlist
   // (see `experience-aggregator.ts::extractReplayArgs` which
   // delegates to `extractPortableReplayArgs`). `templateFields`
-  // capture-side write path remains deferred to V24-02+, so until
-  // then `templates.length === 0` always holds and this engine just
-  // re-dispatches the recorded args verbatim.
+  // capture-side write path is separate, so until template capture is
+  // wired `templates.length === 0` and this engine just re-dispatches
+  // the recorded args verbatim.
   if (!step.args) {
     return {
       kind: 'precondition_error',
@@ -561,7 +557,7 @@ function applySubstitutions(
     };
   }
 
-  // Without templateFields → verbatim. Brief §5.
+  // Without templateFields → verbatim.
   const templates = step.templateFields ?? [];
   if (templates.length === 0) {
     return { kind: 'ok', args: { ...step.args }, appliedKeys: [] };
@@ -596,12 +592,12 @@ function withTargetTab(
   targetTabId: number | undefined,
 ): Record<string, unknown> {
   if (targetTabId === undefined) return args;
-  // V24-01 P1: the portable allowlist (see `sanitizePortableSteps`)
-  // strips `tabId` from recorded args, so in steady state the
-  // operator-supplied `targetTabId` always wins. The
-  // already-pinned check stays as defense-in-depth - if a future
-  // capture path ever surfaces a portable `tabId` we still respect
-  // the recorder's intent over the operator's hint.
+  // The portable allowlist (see `sanitizePortableSteps`) strips `tabId`
+  // from recorded args, so in steady state the operator-supplied
+  // `targetTabId` always wins. The already-pinned check stays as
+  // defense-in-depth - if a future capture path ever surfaces a portable
+  // `tabId` we still respect the recorder's intent over the operator's
+  // hint.
   if (Object.prototype.hasOwnProperty.call(args, 'tabId')) return args;
   return { ...args, tabId: targetTabId };
 }
@@ -688,15 +684,15 @@ function extractHistoryRef(result: CallToolResult): string | null {
  * unknown failure defaults to `step_target_not_found` (the most
  * common cause in production), so the closed enum is honoured.
  *
- * V24-03 will refine this per-tool with the verifier-red /
- * dialog-intercepted / navigation-drift signals once the underlying
- * tools surface them in the response payload.
+ * This can be refined per-tool with verifier-red / dialog-intercepted /
+ * navigation-drift signals once the underlying tools surface them in
+ * the response payload.
  */
 /**
- * V24-02 — coarse projection from {@link TabrixReplayFailureCode} to a
+ * Coarse projection from {@link TabrixReplayFailureCode} to a
  * {@link ClickObservedOutcome}. v1 keeps it conservative: every
  * failure projects to a non-success outcome, so the chooser-side
- * ranking (V24-03) sees a clean failure delta.
+ * ranking sees a clean failure delta.
  *
  * `verification_unavailable` is reserved for "we never observed
  * anything"; for actual failures we use `no_observed_change` because
@@ -705,9 +701,9 @@ function extractHistoryRef(result: CallToolResult): string | null {
  */
 function mapFailureToOutcome(_failureCode: TabrixReplayFailureCode): ClickObservedOutcome {
   // v1 collapses every failure to the same "no observable change"
-  // outcome. V24-03 will refine this once the bridged tools surface
-  // tighter signals (verifier-red vs dialog-intercepted vs
-  // navigation-drift) into their CallToolResult payload.
+  // outcome. This can be refined once the bridged tools surface tighter
+  // signals (verifier-red vs dialog-intercepted vs navigation-drift)
+  // into their CallToolResult payload.
   return 'no_observed_change';
 }
 
@@ -737,10 +733,9 @@ function inferStepFailureCode(result: CallToolResult): TabrixReplayFailureCode {
 
 /**
  * Tags the wrapper-owned session as a replay session. The aggregator
- * special-case keys off the `'experience_replay:'` task-intent prefix
- * (brief §7 / plan §"Aggregator special-case"); without this hook the
- * delta would be projected to a brand-new bucket instead of compounded
- * onto the original {@link ExperienceActionPathRow}.
+ * special-case keys off the `'experience_replay:'` task-intent prefix;
+ * without this hook the delta would be projected to a brand-new bucket
+ * instead of compounded onto the original {@link ExperienceActionPathRow}.
  */
 export type UpdateTaskIntentFn = (intent: string) => void;
 
@@ -763,14 +758,14 @@ export interface ExperienceReplayHandlerDeps {
   /** Memory persistence mode; replay refuses to run when `'off'` (no audit trail possible). */
   persistenceMode?: 'disk' | 'memory' | 'off';
   /**
-   * V24-02 — optional per-step write-back hook. Production wires it to
+   * Optional per-step write-back hook. Production wires it to
    * `ExperienceQueryService.recordReplayStepOutcome`; tests inject a
-   * spy. Absent in pre-V24-02 unit tests, which still pass.
+   * spy.
    */
   outcomeWriter?: ReplayOutcomeWriter;
 }
 
-/** Brief §7 / aggregator-special-case prefix. Kept here as the single source. */
+/** Aggregator-special-case prefix. Kept here as the single source. */
 export const REPLAY_SESSION_TASK_INTENT_PREFIX = 'experience_replay:';
 /** Sentinel used when the input is rejected before we resolve a real id. */
 export const REPLAY_INVALID_INTENT_TAG = `${REPLAY_SESSION_TASK_INTENT_PREFIX}invalid`;
