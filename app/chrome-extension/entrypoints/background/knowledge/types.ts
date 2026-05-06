@@ -111,7 +111,7 @@ export interface KnowledgeObjectClassifier {
 }
 
 /**
- * Stage 3a — authored UI Map rule (Locator Hints layer).
+ * Authored UI Map rule (Locator Hints layer).
  *
  * Design rationale: `docs/MKEP_STAGE_3_PLUS_ROADMAP.md §4.1`, target schema in
  * `docs/MKEP_CURRENT_VS_TARGET.md §3.4`.
@@ -123,12 +123,11 @@ export interface KnowledgeObjectClassifier {
  * `candidate-action.ts` still decides which kind wins when both fire
  * (`ref > css > selector`-first today).
  *
- * B-010 intentionally stops at **schema + seed + read-only lookup**. It
- * does not:
- *   - emit `targetRef` into `read_page` HVOs (that is B-011);
- *   - rewrite `candidate-action.ts:48-94` to consult these hints (that is
- *     also B-011, dependent on `stable targetRef`);
- *   - feed the Experience Stage 3b aggregator (B-012 / B-013).
+ * This type intentionally stops at schema + seed + read-only lookup. It does
+ * not:
+ *   - emit `targetRef` into `read_page` HVOs;
+ *   - rewrite `candidate-action.ts:48-94` to consult these hints;
+ *   - feed the Experience aggregator.
  *
  * The hint kinds mirror `docs/MKEP_CURRENT_VS_TARGET.md:234-239`:
  *   - `aria_name` — exact accessible-name match (optionally scoped by

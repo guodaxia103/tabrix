@@ -3,19 +3,20 @@ import type { CompiledKnowledgeRegistry, CompiledKnowledgeUIMapRule } from '../t
 import { getCompiledKnowledgeRegistry, uiMapRuleKey } from '../registry/knowledge-registry';
 
 /**
- * Stage 3a · B-010 · read-only UI Map lookup.
+ * Read-only UI Map lookup.
  *
  * Turns a `(siteId, pageRole, purpose)` triple into a compiled UI Map
  * rule authored in `seeds/<site>.ts`. Designed as a plain index read —
  * no scoring, no DOM access, no fallback chain. Follow-up PRs wire the
  * returned `locatorHints` into:
  *
- *   - **B-011**: `read_page` HVO emits `targetRef` referencing this
- *     rule's `purpose`, so the locator hints are the stable handle.
- *   - **B-012/B-013**: Experience reads `(pageRole, purpose)` and
- *     reorders hints by historical success rate.
+ *   - `read_page` HVOs emit `targetRef` referencing this rule's `purpose`,
+ *     so the locator hints are the stable handle.
+ *   - Experience reads `(pageRole, purpose)` and reorders hints by
+ *     historical success rate.
  *
- * B-010 itself does not consume the rules; tests are the only caller.
+ * The lookup itself does not consume the rules; tests and downstream
+ * resolution paths are the callers.
  */
 
 export interface UIMapLookupParams {

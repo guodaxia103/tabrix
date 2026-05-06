@@ -480,31 +480,31 @@ function GITHUB_OBJECT_CLASSIFIERS(): readonly KnowledgeObjectClassifier[] {
 }
 
 /**
- * Stage 3a GitHub UI Map seed (B-010).
+ * GitHub UI Map seed.
  *
  * Scope — intentionally the smallest demonstrable set:
  *
  *   - `repo_home.open_issues_tab` / `repo_home.open_actions_tab`
  *     — the two hottest navigation jumps off `repo_home`; these are the
- *     purposes the upcoming B-012 action-path aggregator will see first
- *     when Memory is replayed from a fresh repo landing.
+ *     purposes the action-path aggregator sees first when Memory is replayed
+ *     from a fresh repo landing.
  *   - `issues_list.new_issue_cta` / `issues_list.search_input`
  *     — the two controls any meaningful issues-list intent touches (file
  *     a bug, or find an existing one). `search_input` is the only `fill`
  *     action in this seed, exercising that `actionType`.
- *   - `actions_list.filter_input` — the filter box on Actions; B-011 will
- *     need a stable `targetRef` here because the legacy label pattern
+ *   - `actions_list.filter_input` — the filter box on Actions; a stable
+ *     `targetRef` matters here because the legacy label pattern
  *     `filter workflow runs` is re-rendered across every run update.
  *
  * Everything else (`new pull request`, `fork`, branch picker, etc.) is
- * deferred to a follow-up seed PR. Keep the set small so B-011's
- * `targetRef` work can land against exactly these five purposes.
+ * deferred to a follow-up seed PR. Keep the set small so stable `targetRef`
+ * work can land against exactly these five purposes.
  *
  * Bit-compat note: the `label_regex` values here intentionally match the
  * `labelPatterns` already in `GITHUB_OBJECT_CLASSIFIERS` above. When
- * B-011 teaches `read_page` HVOs to emit `{ uiMapPurpose }` this equality
- * is what lets a single classifier hit promote directly into a stable
- * `purpose` ref without re-scanning the DOM.
+ * `read_page` HVOs emit `{ uiMapPurpose }`, this equality is what lets a
+ * single classifier hit promote directly into a stable `purpose` ref without
+ * re-scanning the DOM.
  */
 function GITHUB_UI_MAP_RULES(): readonly KnowledgeUIMapRule[] {
   return [
@@ -578,7 +578,7 @@ function GITHUB_UI_MAP_RULES(): readonly KnowledgeUIMapRule[] {
       actionType: 'fill',
       confidence: 'medium',
       notes:
-        'Filter box on Actions. Critical for B-011 because the label text re-renders on every workflow run update — a stable ref here removes the dominant retry cause for Actions intents.',
+        'Filter box on Actions. The label text re-renders on every workflow run update; a stable ref here removes the dominant retry cause for Actions intents.',
     },
   ];
 }
