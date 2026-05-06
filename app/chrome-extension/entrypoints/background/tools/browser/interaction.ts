@@ -22,12 +22,11 @@ import {
 } from './click-verifier';
 
 /**
- * V23-01: explicit lane label on every click response. The Tabrix
- * extension-first execution lane is `tabrix_owned`. If a future code
- * path ever introduces a CDP / debugger / external-controller fallback,
- * that path MUST set a different lane value on its response so silent
- * lane drift is visible to release-evidence consumers (lane-integrity
- * metrics in V23-06). This is observability, not enforcement.
+ * Explicit lane label on every click response. The Tabrix extension-first
+ * execution lane is `tabrix_owned`. If a future code path ever introduces
+ * a CDP / debugger / external-controller fallback, that path MUST set a
+ * different lane value on its response so silent lane drift is visible to
+ * release-evidence consumers. This is observability, not enforcement.
  */
 const TABRIX_OWNED_LANE = 'tabrix_owned';
 
@@ -58,11 +57,9 @@ interface ClickToolParams {
   allowDownloadClick?: boolean;
   tabId?: number; // target existing tab id
   windowId?: number; // when no tabId, pick active tab from this window
-  // B-024 (Click V2 · verifier hook v1): internal-only opt-in for
-  // family-aware post-click verification. Not exposed on the public MCP
-  // input schema in v1 (brief §6 "request-side shape can stay internal");
-  // intended to be wired from internal helpers / tests until a public
-  // contract is settled.
+  // Internal-only opt-in for family-aware post-click verification. Not
+  // exposed on the public MCP input schema; intended to be wired from
+  // internal helpers / tests until a public contract is settled.
   verifierContext?: ClickVerifierContext;
 }
 
@@ -611,7 +608,7 @@ class ClickTool extends BaseBrowserToolExecutor {
         return createUnsupportedTabResponse('click', tab, schemeGuard);
       }
 
-      // B-024: snapshot the pre-click URL so the verifier can report
+      // Snapshot the pre-click URL so the verifier can report
       // `postClickState.beforeUrl` without chasing tab.url after navigation.
       const beforeUrl = typeof tab.url === 'string' ? tab.url : null;
 
@@ -624,15 +621,15 @@ class ClickTool extends BaseBrowserToolExecutor {
         lookupStableTargetRef,
       });
 
-      // B-011: when a stable targetRef was supplied but the per-tab
-      // snapshot registry has no live mapping, fail closed with a clear
-      // remediation message. Falling back to the raw `tgt_*` would always
-      // miss in the content script and waste a click.
+      // When a stable targetRef was supplied but the per-tab snapshot
+      // registry has no live mapping, fail closed with a clear
+      // remediation message. Falling back to the raw `tgt_*` would
+      // always miss in the content script and waste a click.
       if (resolvedTarget.source === 'unresolved_stable_target_ref') {
         return createErrorResponse(
           `${ERROR_MESSAGES.INVALID_PARAMETERS}: candidateAction.targetRef "${
             resolvedTarget.unresolvedStableTargetRef
-          }" is a stable id (B-011) but no current snapshot of this tab has it. Call chrome_read_page on this tab first, then re-issue the click with the latest targetRef.`,
+          }" is a stable id, but no current snapshot of this tab has it. Call chrome_read_page on this tab first, then re-issue the click with the latest targetRef.`,
         );
       }
 
@@ -731,12 +728,11 @@ class ClickTool extends BaseBrowserToolExecutor {
         markNextDownloadAsInteractive(tab.id);
       }
 
-      // V27-03: arm the v2.7 action-outcome observer right before
-      // dispatch. Best-effort; the helper returns a no-op handle when
-      // the bridge socket is not yet up, so the click main path is
-      // untouched on failure. The dispatched envelope's `urlPattern`
-      // is the brand-neutral host+path form (no query/fragment) that
-      // the lifecycle/network observers already use.
+      // Arm the action-outcome observer right before dispatch. Best-effort;
+      // the helper returns a no-op handle when the bridge socket is not yet
+      // up, so the click main path is untouched on failure. The dispatched
+      // envelope's `urlPattern` is the brand-neutral host+path form (no
+      // query/fragment) that the lifecycle/network observers already use.
       const actionUrlPattern = (() => {
         if (typeof beforeUrl !== 'string') return null;
         try {
@@ -754,9 +750,9 @@ class ClickTool extends BaseBrowserToolExecutor {
         urlPattern: actionUrlPattern,
       });
 
-      // B-023: arm browser-level observation before dispatch, but keep it alive
-      // until the page-local helper has finished its own verification window.
-      // This prevents a slow `_blank` click from being downgraded to
+      // Arm browser-level observation before dispatch, but keep it alive until
+      // the page-local helper has finished its own verification window. This
+      // prevents a slow `_blank` click from being downgraded to
       // `no_observed_change` just because the background observer stopped first.
       const resultPromise = this.sendMessageToTab(
         tab.id,
@@ -788,9 +784,9 @@ class ClickTool extends BaseBrowserToolExecutor {
       // Send click message to content script
       const result = await resultPromise;
 
-      // V27-03: surface page-local DOM-region change to the action
-      // outcome observer (best-effort). The observer also folds in
-      // background-derived signals (lifecycle/tab/network) on its own.
+      // Surface page-local DOM-region changes to the action-outcome observer
+      // (best-effort). The observer also folds in background-derived signals
+      // (lifecycle/tab/network) on its own.
       try {
         const pageSig = result && typeof result === 'object' ? (result as any).signals : null;
         // Real click-helper field names are `domChanged` / `domAddedDialog`
@@ -1022,14 +1018,14 @@ class FillTool extends BaseBrowserToolExecutor {
         lookupStableTargetRef,
       });
 
-      // B-011: same fail-closed rule as clickTool — if the caller passed
-      // a stable targetRef and the registry has nothing for this tab,
-      // tell them exactly how to recover instead of probing the DOM.
+      // Same fail-closed rule as clickTool: if the caller passed a stable
+      // targetRef and the registry has nothing for this tab, tell them
+      // exactly how to recover instead of probing the DOM.
       if (resolvedTarget.source === 'unresolved_stable_target_ref') {
         return createErrorResponse(
           `${ERROR_MESSAGES.INVALID_PARAMETERS}: candidateAction.targetRef "${
             resolvedTarget.unresolvedStableTargetRef
-          }" is a stable id (B-011) but no current snapshot of this tab has it. Call chrome_read_page on this tab first, then re-issue the fill with the latest targetRef.`,
+          }" is a stable id, but no current snapshot of this tab has it. Call chrome_read_page on this tab first, then re-issue the fill with the latest targetRef.`,
         );
       }
 
