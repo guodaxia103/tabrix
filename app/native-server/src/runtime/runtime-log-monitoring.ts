@@ -1,6 +1,6 @@
 import { findSensitivePaths } from './privacy-gate';
 
-export type V27RuntimeLogSource =
+export type RuntimeLogSource =
   | 'native_mcp'
   | 'extension_service_worker'
   | 'page_console'
@@ -8,15 +8,15 @@ export type V27RuntimeLogSource =
   | 'bridge_status'
   | 'operation_log';
 
-export type V27RuntimeLogGateStatus = 'pass' | 'blocked';
+export type RuntimeLogGateStatus = 'pass' | 'blocked';
 
-export interface V27RuntimeLogSample {
-  source: V27RuntimeLogSource;
+export interface RuntimeLogSample {
+  source: RuntimeLogSource;
   level: 'error' | 'warning' | 'info' | 'debug';
   message: string;
 }
 
-export interface V27RuntimeLogMonitoringInput {
+export interface RuntimeLogMonitoringInput {
   runtimeLogMonitoringEnabled?: boolean;
   nativeErrorCountDelta?: number | null;
   extensionErrorCountDelta?: number | null;
@@ -26,13 +26,13 @@ export interface V27RuntimeLogMonitoringInput {
   debuggerAttachErrorCount?: number | null;
   debuggerDetachErrorCount?: number | null;
   unhandledPromiseRejectionCount?: number | null;
-  logSourceUnavailable?: V27RuntimeLogSource[] | null;
-  samples?: V27RuntimeLogSample[] | null;
+  logSourceUnavailable?: RuntimeLogSource[] | null;
+  samples?: RuntimeLogSample[] | null;
   operationLogStepCount?: number | null;
   operationLogFailureSteps?: number | null;
 }
 
-export interface V27RuntimeLogMonitoringSummary {
+export interface RuntimeLogMonitoringSummary {
   runtimeLogMonitoringEnabled: boolean;
   nativeErrorCountDelta: number;
   extensionErrorCountDelta: number;
@@ -43,14 +43,14 @@ export interface V27RuntimeLogMonitoringSummary {
   debuggerDetachErrorCount: number;
   unhandledPromiseRejectionCount: number;
   sensitiveLogLeakCount: number;
-  logSourceUnavailable: V27RuntimeLogSource[];
+  logSourceUnavailable: RuntimeLogSource[];
   operationLogStepCount: number;
   operationLogFailureSteps: number;
-  status: V27RuntimeLogGateStatus;
+  status: RuntimeLogGateStatus;
   blockedReasons: string[];
 }
 
-const REQUIRED_SOURCES: V27RuntimeLogSource[] = [
+const REQUIRED_SOURCES: RuntimeLogSource[] = [
   'native_mcp',
   'extension_service_worker',
   'page_console',
@@ -65,12 +65,12 @@ const SENSITIVE_LOG_PATTERNS = [
   /https?:\/\/[^\s?#]+\?[^\s]+/i,
 ];
 
-export function summariseV27RuntimeLogMonitoring(
-  input: V27RuntimeLogMonitoringInput,
-): V27RuntimeLogMonitoringSummary {
+export function summariseRuntimeLogMonitoring(
+  input: RuntimeLogMonitoringInput,
+): RuntimeLogMonitoringSummary {
   const logSourceUnavailable = normalizeUnavailableSources(input.logSourceUnavailable);
   const sensitiveLogLeakCount = countSensitiveLogLeaks(input.samples ?? []);
-  const summary: V27RuntimeLogMonitoringSummary = {
+  const summary: RuntimeLogMonitoringSummary = {
     runtimeLogMonitoringEnabled: input.runtimeLogMonitoringEnabled === true,
     nativeErrorCountDelta: nonNegativeInteger(input.nativeErrorCountDelta),
     extensionErrorCountDelta: nonNegativeInteger(input.extensionErrorCountDelta),
@@ -96,9 +96,9 @@ export function summariseV27RuntimeLogMonitoring(
   };
 }
 
-export function toPublicSafeV27RuntimeLogMonitoringSummary(
-  summary: V27RuntimeLogMonitoringSummary,
-): V27RuntimeLogMonitoringSummary {
+export function toPublicSafeRuntimeLogMonitoringSummary(
+  summary: RuntimeLogMonitoringSummary,
+): RuntimeLogMonitoringSummary {
   return {
     runtimeLogMonitoringEnabled: summary.runtimeLogMonitoringEnabled,
     nativeErrorCountDelta: summary.nativeErrorCountDelta,
@@ -118,7 +118,7 @@ export function toPublicSafeV27RuntimeLogMonitoringSummary(
   };
 }
 
-function buildBlockedReasons(summary: V27RuntimeLogMonitoringSummary): string[] {
+function buildBlockedReasons(summary: RuntimeLogMonitoringSummary): string[] {
   const reasons: string[] = [];
   if (!summary.runtimeLogMonitoringEnabled) reasons.push('runtime_log_monitoring_disabled');
   for (const source of summary.logSourceUnavailable)
@@ -155,16 +155,16 @@ function buildBlockedReasons(summary: V27RuntimeLogMonitoringSummary): string[] 
 }
 
 function normalizeUnavailableSources(
-  sources: V27RuntimeLogMonitoringInput['logSourceUnavailable'],
-): V27RuntimeLogSource[] {
-  const set = new Set<V27RuntimeLogSource>();
+  sources: RuntimeLogMonitoringInput['logSourceUnavailable'],
+): RuntimeLogSource[] {
+  const set = new Set<RuntimeLogSource>();
   for (const source of sources ?? []) {
     if (REQUIRED_SOURCES.includes(source)) set.add(source);
   }
   return REQUIRED_SOURCES.filter((source) => set.has(source));
 }
 
-function countSensitiveLogLeaks(samples: readonly V27RuntimeLogSample[]): number {
+function countSensitiveLogLeaks(samples: readonly RuntimeLogSample[]): number {
   let count = 0;
   for (const sample of samples) {
     if (

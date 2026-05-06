@@ -1,14 +1,13 @@
 import { describe, expect, it } from '@jest/globals';
 
 import {
-  summariseV27RuntimeLogMonitoring,
-  toPublicSafeV27RuntimeLogMonitoringSummary,
+  summariseRuntimeLogMonitoring,
+  toPublicSafeRuntimeLogMonitoringSummary,
 } from './runtime-log-monitoring';
 
-/** V27-OBS-00 — runtime log monitoring gate for real/simulated browser acceptance. */
-describe('summariseV27RuntimeLogMonitoring — V27-OBS-00', () => {
+describe('summariseRuntimeLogMonitoring', () => {
   it('passes when all required runtime log sources are present and clean', () => {
-    const summary = summariseV27RuntimeLogMonitoring({
+    const summary = summariseRuntimeLogMonitoring({
       runtimeLogMonitoringEnabled: true,
       bridgeReady: true,
       operationLogStepCount: 3,
@@ -34,7 +33,7 @@ describe('summariseV27RuntimeLogMonitoring — V27-OBS-00', () => {
   });
 
   it('blocks product-grade pass when runtime log monitoring is missing or a source is unavailable', () => {
-    const summary = summariseV27RuntimeLogMonitoring({
+    const summary = summariseRuntimeLogMonitoring({
       runtimeLogMonitoringEnabled: false,
       bridgeReady: true,
       logSourceUnavailable: ['extension_service_worker', 'operation_log'],
@@ -49,7 +48,7 @@ describe('summariseV27RuntimeLogMonitoring — V27-OBS-00', () => {
   });
 
   it('blocks on new native, extension, page, bridge, debugger, promise, and operation-log errors', () => {
-    const summary = summariseV27RuntimeLogMonitoring({
+    const summary = summariseRuntimeLogMonitoring({
       runtimeLogMonitoringEnabled: true,
       nativeErrorCountDelta: 1,
       extensionErrorCountDelta: 2,
@@ -77,7 +76,7 @@ describe('summariseV27RuntimeLogMonitoring — V27-OBS-00', () => {
   });
 
   it('counts sensitive-looking log samples without exposing raw log text in the public-safe summary', () => {
-    const summary = summariseV27RuntimeLogMonitoring({
+    const summary = summariseRuntimeLogMonitoring({
       runtimeLogMonitoringEnabled: true,
       bridgeReady: true,
       samples: [
@@ -85,7 +84,7 @@ describe('summariseV27RuntimeLogMonitoring — V27-OBS-00', () => {
         { source: 'page_console', level: 'warning', message: 'ordinary warning' },
       ],
     });
-    const publicSafe = toPublicSafeV27RuntimeLogMonitoringSummary(summary);
+    const publicSafe = toPublicSafeRuntimeLogMonitoringSummary(summary);
 
     expect(publicSafe.sensitiveLogLeakCount).toBe(1);
     expect(publicSafe.status).toBe('blocked');
@@ -95,7 +94,7 @@ describe('summariseV27RuntimeLogMonitoring — V27-OBS-00', () => {
   });
 
   it('normalizes invalid counters and ignores unknown unavailable sources', () => {
-    const summary = summariseV27RuntimeLogMonitoring({
+    const summary = summariseRuntimeLogMonitoring({
       runtimeLogMonitoringEnabled: true,
       nativeErrorCountDelta: -1,
       extensionErrorCountDelta: Number.NaN,

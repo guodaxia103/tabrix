@@ -8,10 +8,10 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'crypto';
 import { getChromeMcpUrl } from '../constant';
 import {
-  summariseV27RuntimeLogMonitoring,
-  type V27RuntimeLogMonitoringSummary,
-  type V27RuntimeLogSample,
-  type V27RuntimeLogSource,
+  summariseRuntimeLogMonitoring,
+  type RuntimeLogMonitoringSummary,
+  type RuntimeLogSample,
+  type RuntimeLogSource,
 } from '../runtime/runtime-log-monitoring';
 import {
   assessClickOutcome,
@@ -58,7 +58,7 @@ interface SmokeResult {
   mcpUrl: string;
   mode: 'protocol' | 'local-browser' | 'all-tools';
   steps: SmokeStep[];
-  runtimeLogSummary?: V27RuntimeLogMonitoringSummary;
+  runtimeLogSummary?: RuntimeLogMonitoringSummary;
 }
 
 function emitSmokeResult(result: SmokeResult, json = false): void {
@@ -91,7 +91,7 @@ export interface SmokeRuntimeLogSummaryInput {
   pageConsoleResult?: unknown;
   operationLogStepCount?: number | null;
   operationLogFailureSteps?: number | null;
-  unavailableSources?: V27RuntimeLogSource[] | null;
+  unavailableSources?: RuntimeLogSource[] | null;
 }
 
 interface MpcCallResult {
@@ -547,12 +547,12 @@ function isBridgeReady(snapshot?: Record<string, unknown>): boolean {
 
 export function buildSmokeRuntimeLogSummary(
   input: SmokeRuntimeLogSummaryInput,
-): V27RuntimeLogMonitoringSummary {
+): RuntimeLogMonitoringSummary {
   const samples = extractConsoleSamples(input.pageConsoleResult);
-  const unavailableSources = new Set<V27RuntimeLogSource>(input.unavailableSources ?? []);
+  const unavailableSources = new Set<RuntimeLogSource>(input.unavailableSources ?? []);
   if (input.pageConsoleResult == null) unavailableSources.add('page_console');
   if (!input.statusSnapshot) unavailableSources.add('bridge_status');
-  return summariseV27RuntimeLogMonitoring({
+  return summariseRuntimeLogMonitoring({
     runtimeLogMonitoringEnabled: true,
     nativeErrorCountDelta: 0,
     extensionErrorCountDelta: 0,
@@ -569,13 +569,13 @@ export function buildSmokeRuntimeLogSummary(
   });
 }
 
-function extractConsoleSamples(value: unknown): V27RuntimeLogSample[] {
-  const samples: V27RuntimeLogSample[] = [];
+function extractConsoleSamples(value: unknown): RuntimeLogSample[] {
+  const samples: RuntimeLogSample[] = [];
   collectConsoleSamples(value, samples);
   return samples;
 }
 
-function collectConsoleSamples(value: unknown, samples: V27RuntimeLogSample[]): void {
+function collectConsoleSamples(value: unknown, samples: RuntimeLogSample[]): void {
   if (samples.length >= 100 || value == null) return;
   if (typeof value === 'string') {
     if (value.trim()) {
@@ -608,13 +608,13 @@ function collectConsoleSamples(value: unknown, samples: V27RuntimeLogSample[]): 
   }
 }
 
-function normalizeLogLevel(value: unknown): V27RuntimeLogSample['level'] {
+function normalizeLogLevel(value: unknown): RuntimeLogSample['level'] {
   if (value === 'error' || value === 'warning' || value === 'info' || value === 'debug')
     return value;
   return typeof value === 'string' ? inferLogLevel(value) : 'info';
 }
 
-function inferLogLevel(message: string): V27RuntimeLogSample['level'] {
+function inferLogLevel(message: string): RuntimeLogSample['level'] {
   const lower = message.toLowerCase();
   if (lower.includes('error') || lower.includes('exception')) return 'error';
   if (lower.includes('warn')) return 'warning';
@@ -628,7 +628,7 @@ function buildSmokeResult(input: {
   mcpUrl: string;
   mode: SmokeResult['mode'];
   steps: SmokeStep[];
-  runtimeLogSummary?: V27RuntimeLogMonitoringSummary;
+  runtimeLogSummary?: RuntimeLogMonitoringSummary;
 }): SmokeResult {
   return {
     ok: input.ok && (input.runtimeLogSummary ? input.runtimeLogSummary.status === 'pass' : true),
