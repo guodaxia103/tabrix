@@ -29,7 +29,7 @@ export interface OperationMemoryLogInsert {
   tokensSaved?: number | null;
   tabHygiene?: unknown;
   /**
-   * V26-FIX-07 — closed-shape "why" envelope persisted alongside
+   * Closed-shape "why" envelope persisted alongside
    * `tabHygiene` inside the existing `tab_hygiene_blob` column. The
    * repository fills in any missing field with the
    * `'not_applicable'` sentinel; callers MAY pass `undefined` for
@@ -61,8 +61,7 @@ export interface OperationMemoryLog {
   tokensSaved: number | null;
   tabHygiene: unknown | null;
   /**
-   * V26-FIX-07 — always non-null on read. Legacy rows (written
-   * before FIX-07) surface the `'not_applicable'` sentinel for
+   * Always non-null on read. Legacy rows surface the `'not_applicable'` sentinel for
    * every field so a downstream join never has to special-case
    * "old vs new" rows.
    */
@@ -161,7 +160,7 @@ export class OperationMemoryLogRepository {
   }
 
   public insert(input: OperationMemoryLogInsert): OperationMemoryLog {
-    // V26-FIX-07 — always serialise to the schema-v2 wrapper so a
+    // Always serialise to the schema-v2 wrapper so a
     // downstream `taskSessionId` join never has to branch on
     // "legacy vs structured". Even when the caller passes neither
     // `tabHygiene` nor `metadata`, we still emit a wrapper carrying

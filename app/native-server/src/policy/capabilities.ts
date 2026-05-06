@@ -1,5 +1,5 @@
 /**
- * Tabrix MKEP Policy — capability gate (B-016).
+ * Tabrix MKEP Policy — capability gate.
  *
  * Native-side parser / lookup for the `TABRIX_POLICY_CAPABILITIES`
  * env var. Pure functions, no IO. See `packages/shared/src/capabilities.ts`

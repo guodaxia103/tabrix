@@ -10,8 +10,8 @@ import { daemonStatus, getDaemonRuntimePaths } from './daemon';
 export type RuntimeConsistencyVerdict = 'consistent' | 'inconsistent' | 'unknown';
 
 /**
- * V26-FIX-09 — flat closed-enum marker that maps {@link RuntimeConsistencyVerdict}
- * onto the vocabulary the v2.6 evidence contract uses
+ * Flat closed-enum marker that maps {@link RuntimeConsistencyVerdict}
+ * onto the runtime evidence vocabulary
  * (`consistent | stale | unknown`). The original `verdict` enum is
  * retained for backward compatibility with existing doctor / status
  * consumers; `marker` is the field a Gate B consumer should grep for
@@ -26,7 +26,7 @@ export type RuntimeConsistencyMarker = 'consistent' | 'stale' | 'unknown';
 
 export interface RuntimeConsistencySnapshot {
   verdict: RuntimeConsistencyVerdict;
-  /** V26-FIX-09 — flat alias of {@link verdict} using the v2.6 evidence vocabulary. */
+  /** Flat alias of {@link verdict} using the runtime evidence vocabulary. */
   marker: RuntimeConsistencyMarker;
   summary: string;
   reasons: string[];

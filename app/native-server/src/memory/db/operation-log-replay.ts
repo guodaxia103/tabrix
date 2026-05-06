@@ -1,19 +1,19 @@
 /**
- * V26-PGB-05 — read-only operation-log replay helper.
+ * Read-only operation-log replay helper.
  *
  * Goal: a downstream tool (test fixture, CLI, dashboard) can pass a
  * `taskSessionId` (the value the caller stored as
  * `operation_memory_logs.session_id`) and get back a closed-shape
  * per-step summary that explains *why* every step took the path it
- * did. This is the public companion to V26-FIX-07 ("metadata block
- * proves the write was structured") — FIX-07 made the data
- * available; PGB-05 makes it actually readable for replay/post-mortem
- * without re-deriving anything from raw column strings.
+ * did. This is the public companion to the structured metadata block:
+ * the write path made the data available, and this helper makes it
+ * readable for replay/post-mortem without re-deriving anything from raw
+ * column strings.
  *
  * Privacy boundary (unchanged):
  * - The helper is read-only. It MUST NOT mutate the repository or
  *   write into Experience.
- * - It reads only the closed-vocabulary fields that V26-FIX-07
+ * - It reads only the closed-vocabulary fields that the metadata wrapper
  *   guarantees are pre-summarised; it does not surface any raw HTTP
  *   body, cookie, Authorization header, or full URL.
  *
@@ -119,7 +119,7 @@ export interface OperationLogReplayStep {
   sourceRoute: string | null;
   decisionReason: string | null;
   /**
-   * V26-PGB-05 — closed-vocab cause for the fallback. Pulled from
+   * Closed-vocab cause for the fallback. Pulled from
    * `metadata.fallbackPlan` when explicit; otherwise derived from
    * the `fallbackUsed` column. `null` when the step did not fall
    * back. Surfaced separately from `decisionReason` so a replay
@@ -128,9 +128,9 @@ export interface OperationLogReplayStep {
    */
   fallbackCause: string | null;
   /**
-   * V26-PGB-05 — closed-vocab outcome marker. `null` when the step
+   * Closed-vocab outcome marker. `null` when the step
    * was not an API read (DOM read, navigate, capture, …). Mirrors
-   * the V26-PGB-01 closed marker.
+   * the empty-result closed marker.
    */
   emptyResult: 'true' | 'false' | null;
   durationMs: number | null;
@@ -297,7 +297,7 @@ function classifyCoverage(
  * an empty summary (`stepCount=0`, every distribution bucket at 0)
  * when the reader has no rows for `sessionId`. Never throws on
  * malformed metadata — the reader contract guarantees a fully-formed
- * `OperationLogMetadata` thanks to V26-FIX-07's wrapper.
+ * `OperationLogMetadata` through the wrapper parser.
  */
 export function summariseOperationChain(
   reader: OperationLogReplayReader,
