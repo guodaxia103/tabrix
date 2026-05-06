@@ -1,12 +1,10 @@
 /**
- * Tabrix MKEP Experience write-back layer (V24-02) — `experience_score_step`
+ * Tabrix MKEP Experience write-back layer — `experience_score_step`
  * native MCP handler.
  *
- * SoT: `.claude/TABRIX_V2_4_0_PLAN.md` §V24-02.
- *
  * Module shape mirrors {@link ../mcp/experience-replay} so the
- * write/execute (V24-01) and write-back (V24-02) sides of the
- * Experience pipeline read the same way:
+ * replay execution and write-back sides of the Experience pipeline read
+ * the same way:
  *
  *   - `parseExperienceScoreStepInput` — strict input parser, returns a
  *     normalized {@link ParsedExperienceScoreStepInput} or throws
@@ -16,12 +14,12 @@
  *     Wraps capability gate + persistence gate + parsing + write-back
  *     dispatch.
  *
- * Failure mode is "isolation + structured warning" per the
- * V24-02 policy: SQLite write-back exceptions never propagate out of
- * the handler — they are absorbed into a row in
+ * Failure mode is "isolation + structured warning": SQLite write-back
+ * exceptions never propagate out of the handler — they are absorbed into
+ * a row in
  * `experience_writeback_warnings` and the call returns
- * `status: 'isolated'`. The replay user path (V24-01) MUST never be
- * stalled by a write-back I/O failure.
+ * `status: 'isolated'`. The replay user path MUST never be stalled by a
+ * write-back I/O failure.
  *
  * Capability gating: this tool re-uses the `experience_replay`
  * capability key (registered as such in
@@ -65,7 +63,7 @@ import type { NativeToolHandler } from './native-tool-handlers';
  */
 const CLICK_OBSERVED_OUTCOMES_SET = new Set<ClickObservedOutcome>(CLICK_OBSERVED_OUTCOMES);
 
-/** Brief §V24-02 §parser. Stable parser-error codes. */
+/** Stable parser-error codes for the score-step input contract. */
 export class ExperienceScoreStepInputError extends Error {
   constructor(
     public readonly code: TabrixExperienceScoreStepInvalidInputCode,

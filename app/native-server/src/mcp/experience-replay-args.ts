@@ -1,10 +1,10 @@
 /**
- * V24-01 closeout (replay-args portability): single source of truth for
- * "what makes an Experience step's `args` actually replayable across
- * sessions". The aggregator (`experience-aggregator.ts`) and the
- * chooser (`choose-context.ts::isReplayEligible`) BOTH route through
- * `extractPortableReplayArgs` so the persisted contract and the
- * routing gate cannot drift.
+ * Single source of truth for "what makes an Experience step's `args`
+ * actually replayable across sessions". The aggregator
+ * (`experience-aggregator.ts`) and the chooser
+ * (`choose-context.ts::isReplayEligible`) BOTH route through
+ * `extractPortableReplayArgs` so the persisted contract and the routing
+ * gate cannot drift.
  *
  * Why a per-tool allowlist (instead of "parse JSON, strip a denylist
  * of session keys"):
@@ -41,10 +41,9 @@
  * refuses to route the row to `experience_replay` and falls back to
  * `experience_reuse`.
  *
- * v1 explicitly DOES NOT introduce `templateFields` capture - that
- * substitution-side expansion is V24-02+'s job and is deliberately
- * out of scope for this PR (`templateFields` stays absent on
- * aggregator-written rows).
+ * This helper explicitly DOES NOT introduce `templateFields` capture:
+ * substitution-side expansion belongs to write-back/capture-side
+ * enrichment and stays outside the portable-args extractor.
  */
 
 import { STABLE_TARGET_REF_PREFIX } from '@tabrix/shared';
@@ -124,10 +123,10 @@ function extractPortableCandidateAction(raw: unknown): Record<string, unknown> |
   const candidateAction = raw as Record<string, unknown>;
   const portableCandidateAction: Record<string, unknown> = {};
 
-  // B-011 stable targetRef survives across snapshots and is the
-  // explicitly portable form. Legacy `ref_xyz` accessibility-tree
-  // refs are per-snapshot session-local handles; refusing them here
-  // is the entire point of this PR.
+  // Stable targetRef survives across snapshots and is the explicitly
+  // portable form. Legacy `ref_xyz` accessibility-tree refs are
+  // per-snapshot session-local handles; refusing them here is the
+  // portability boundary.
   if (
     typeof candidateAction.targetRef === 'string' &&
     candidateAction.targetRef.startsWith(STABLE_TARGET_REF_PREFIX)
