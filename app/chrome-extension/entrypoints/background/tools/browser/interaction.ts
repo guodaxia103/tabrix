@@ -163,7 +163,7 @@ function createUnsupportedTabResponse(
 }
 
 /**
- * B-023: raw page-local signals collected by `inject-scripts/click-helper.js`.
+ * Raw page-local signals collected by `inject-scripts/click-helper.js`.
  * These are facts, not verdicts. The verdict is computed in
  * `mergeClickSignals()` by combining these with browser-level signals
  * observed in the background layer (e.g. a new tab being created).
@@ -185,8 +185,8 @@ export interface ClickPageSignals {
 }
 
 /**
- * B-023: browser-level signals gathered in the background layer for the
- * origin tab during the verification window.
+ * Browser-level signals gathered in the background layer for the origin tab
+ * during the verification window.
  */
 export interface ClickBrowserSignals {
   newTabOpened: boolean;
@@ -206,7 +206,7 @@ export interface ClickBrowserSignals {
 }
 
 /**
- * B-023: pure function — given the raw signals from page-local + browser-level
+ * Pure function: given the raw signals from page-local + browser-level
  * sources, produce the public click contract fields.
  *
  * Ordering of the outcome checks matters: it encodes Tabrix's preference
@@ -312,10 +312,10 @@ function stripHash(url: string): string {
 }
 
 /**
- * B-023: observe new-tab creation for the lifetime of a single click
- * interaction, then keep the listener alive for a tiny drain window so we do
- * not miss a late-delivered `chrome.tabs.onCreated` event right after the page
- * helper returns.
+ * Observe new-tab creation for the lifetime of a single click interaction,
+ * then keep the listener alive for a tiny drain window so we do not miss a
+ * late-delivered `chrome.tabs.onCreated` event right after the page helper
+ * returns.
  *
  * We deliberately avoid a long-lived `chrome.webNavigation` subscriber here —
  * one-shot listener + explicit removal keeps the blast radius tiny.
@@ -858,9 +858,9 @@ class ClickTool extends BaseBrowserToolExecutor {
         clickMethod = 'unknown';
       }
 
-      // B-023: if the helper returned an explicit error, propagate it
-      // verbatim with the contract fields zeroed out (no dispatch, no
-      // observed outcome to merge).
+      // If the helper returned an explicit error, propagate it verbatim with
+      // the contract fields zeroed out (no dispatch, no observed outcome to
+      // merge).
       if (result && typeof result === 'object' && 'error' in result && result.error) {
         return createErrorResponse(String(result.error));
       }
@@ -877,10 +877,9 @@ class ClickTool extends BaseBrowserToolExecutor {
 
       const merged = mergeClickSignals(dispatchSucceeded, pageSignals, browserSignals);
 
-      // B-024: optional family-aware verifier. Runs at most one compact
-      // readback. `success` collapses to false if the verifier was
-      // requested and did not pass — otherwise the generic contract from
-      // B-023 is preserved as-is.
+      // Optional family-aware verifier. Runs at most one compact readback.
+      // `success` collapses to false if the verifier was requested and did
+      // not pass; otherwise the generic click contract is preserved as-is.
       let postClickState: {
         beforeUrl: string | null;
         afterUrl: string | null;
@@ -930,11 +929,10 @@ class ClickTool extends BaseBrowserToolExecutor {
               verification: merged.verification,
               // One-release compat field; equals verification.navigationOccurred.
               navigationOccurred: merged.verification.navigationOccurred,
-              // V23-01: explicit lane label. Always `tabrix_owned` for
-              // the extension-first execution path. If a future fallback
-              // route is added, that route MUST emit a different lane
-              // value so silent lane drift is visible to lane-integrity
-              // metrics in V23-06 release evidence.
+              // Explicit lane label. Always `tabrix_owned` for the
+              // extension-first execution path. If a future fallback route is
+              // added, that route MUST emit a different lane value so silent
+              // lane drift is visible to lane-integrity metrics.
               lane: TABRIX_OWNED_LANE,
               message: finalSuccess
                 ? `Click observed outcome: ${merged.observedOutcome}`
