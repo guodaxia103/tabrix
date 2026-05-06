@@ -1,7 +1,7 @@
 /**
  * Tabrix schema/boundary contract module.
  *
- * SoT for the per-key semantics is the maintainer-private contract doc.
+ * Per-key semantics are owned by the producers listed below.
  * This module is the machine-readable companion: it freezes the legacy metadata-key set so any
  * accidental rename/drop is caught by `schema-boundary-contract.test.ts`, and it
  * declares the additive metadata-key surface + the "every new closed enum MUST
@@ -47,7 +47,7 @@ export type FrozenMetadataKey = (typeof FROZEN_METADATA_KEYS)[number];
  * The first additive metadata keys introduced after the frozen baseline. Every key is
  * `string | NotApplicable` at rest (the operation-log writer trims empty
  * values to `'not_applicable'` uniformly). Producers ship with the tasks
- * that own them — see the SoT doc table for the producer.
+ * that own them — see the producer table in the owning runtime modules.
  *
  * NOTE: this list is reflected into the runtime allowlist via
  * `app/native-server/src/memory/db/operation-log-metadata.ts`. The two

@@ -58,7 +58,7 @@ const MAX_REPLAY_ARGS_INPUT_SUMMARY_BYTES = 8 * 1024;
  * Experience row so `experience_replay` can re-dispatch them in a fresh
  * session.
  *
- * The earlier closeout used a "parse JSON, strip a denylist of
+ * An earlier implementation used a "parse JSON, strip a denylist of
  * session keys (today: `tabId`)" strategy. Codex's follow-up review
  * called that out as unsound: a denylist that misses any
  * per-snapshot accessibility ref (`ref`, `candidateAction.targetRef`
@@ -121,8 +121,7 @@ function toStepSequence(
  * `experience_action_paths` row we would seed bogus
  * `(pageRole='unknown', intent='run mcp tool <internal-tool>')`
  * buckets every time an upstream agent invoked them — corrupting the
- * very dataset the chooser/suggester reads from. This is the v2.4.0
- * closeout review finding "Experience self-pollution".
+ * very dataset the chooser/suggester reads from.
  *
  * Sessions whose entire step list belongs to this set are marked
  * `aggregated_at` (so the pending-aggregation scan does not keep
@@ -135,8 +134,8 @@ function toStepSequence(
  * future tool additions a deliberate choice (touch this list in the
  * same PR that adds the tool, document why) rather than an emergent
  * silent skip when someone names a new tool unfortunately. The set
- * mirrors `packages/shared/src/tools.ts` `EXPERIENCE_TOOL_NAMES` and
- * `CHOOSER_TOOL_NAMES`; if a future tool joins those, it must also
+ * mirrors the shared Experience and chooser tool-name groups; if a
+ * future tool joins those groups, it must also
  * join this list (or an Experience-pollution test will catch it).
  */
 const EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS: ReadonlySet<string> = new Set([
@@ -266,7 +265,7 @@ export class ExperienceAggregator {
       // a new `(pageRole=…, intent='replay')` bucket. The original
       // `step_sequence` is preserved verbatim — the replayed steps
       // already live as their own `memory_steps` rows under this
-      // session for audit purposes (brief §7 last paragraph), but the
+      // session for audit purposes, but the
       // canonical `step_sequence` on the row stays the recorder-side
       // truth (otherwise replay would slowly drift the row away from
       // its original shape).

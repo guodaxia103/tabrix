@@ -1,31 +1,28 @@
 /**
- * Tabrix MKEP Experience write/execute layer — `experience_replay` v1
+ * Tabrix MKEP Experience write/execute layer — `experience_replay`
  * shared contracts.
- *
- * SoT: [`docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`](../../../docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md)
- * (owner-locked 2026-04-23).
  *
  * Conventions:
  * - Pure types + constants. No IO, no runtime branches.
- * - Mirrors the brief §3 input/output and §6 closed failure-code enum.
+ * - Mirrors the public input/output and closed failure-code enum.
  * - Lives in `@tabrix/shared` so the native-server (canonical emitter)
  *   and any future consumer (sidepanel, downstream tooling, e2e tests)
  *   read the same contract.
  *
- * Scope discipline (brief §1 / §2):
+ * Scope discipline:
  * - Replay re-runs a NAMED existing `actionPathId`. It does not plan,
  *   does not invent steps, does not call back into the upstream LLM
  *   mid-replay.
  * - Fails closed (no autonomous retry, no autonomous re-locator, no
  *   autonomous read-page-and-re-plan).
- * - v1 step-kind allowlist is `chrome_click_element` + `chrome_fill_or_select`.
- * - v1 substitution whitelist is `'queryText' | 'targetLabel'`.
+ * - Current step-kind allowlist is `chrome_click_element` + `chrome_fill_or_select`.
+ * - Current substitution whitelist is `'queryText' | 'targetLabel'`.
  */
 
 /**
- * Whitelist of legal substitution keys (brief §10 item 4).
+ * Whitelist of legal substitution keys.
  *
- * v1 is intentionally tiny; v2 grows it only after telemetry shows real
+ * The whitelist is intentionally tiny; it grows only after telemetry shows real
  * callers blocked on a specific missing key.
  */
 export type TabrixReplayPlaceholder =
@@ -42,7 +39,7 @@ export const TABRIX_REPLAY_PLACEHOLDERS: ReadonlySet<TabrixReplayPlaceholder> =
 export const TABRIX_EXPERIENCE_REPLAY_ACTION_PATH_ID_PATTERN = /^action_path_[0-9a-f]{64}$/;
 
 /**
- * Maximum chars accepted for `actionPathId`. Brief §3.1.
+ * Maximum chars accepted for `actionPathId`.
  *
  * The strict regex above already implies a 64-hex-char body; the cap
  * is a defensive ceiling so the input parser can fail fast on garbage
@@ -52,7 +49,7 @@ export const MAX_TABRIX_EXPERIENCE_REPLAY_PATH_ID_CHARS = 256;
 
 /**
  * Maximum number of steps the replay engine will execute under a
- * single MCP call (brief §3.1, §10 item — `MAX_STEP_BUDGET = 16`).
+ * single MCP call.
  *
  * A row whose `step_sequence.length` exceeds this cap is
  * `failed-precondition`, NOT "execute the first 16".
@@ -69,10 +66,9 @@ export const MAX_TABRIX_EXPERIENCE_REPLAY_STEP_BUDGET = 16;
 export const MAX_TABRIX_EXPERIENCE_REPLAY_SUBSTITUTION_VALUE_CHARS = 4096;
 
 /**
- * Tool names allowed inside a replayed `step_sequence` (brief §2 item 2,
- * §6 `unsupported_step_kind`).
+ * Tool names allowed inside a replayed `step_sequence`.
  *
- * Adding a value here is a deliberate v2 design decision; the engine
+ * Adding a value here is a deliberate contract decision; the engine
  * carries a strategy-set guard test that fails the build on an
  * unannounced addition.
  */
@@ -82,8 +78,7 @@ export const TABRIX_EXPERIENCE_REPLAY_SUPPORTED_STEP_KINDS: ReadonlySet<string> 
 ]);
 
 /**
- * `pageRole` values v1 will accept on the row being replayed (brief §2
- * item 6 — GitHub-first). A row whose `pageRole` is not in this set
+ * `pageRole` values accepted on the row being replayed. A row whose `pageRole` is not in this set
  * resolves to `non_github_pageRole` `failed-precondition`.
  *
  * Forward-compatible additions are deliberately conservative: we list
@@ -104,11 +99,11 @@ export const TABRIX_EXPERIENCE_REPLAY_GITHUB_PAGE_ROLES: ReadonlySet<string> = n
 ]);
 
 /**
- * Closed failure-code enum (brief §6).
+ * Closed failure-code enum.
  *
  * The "Where it appears" column maps to either the top-level `result.error`
  * or per-step `evidenceRefs[i].failureCode`. `replay_aborted_by_caller`
- * is reserved for v2's `cancel` channel and is never emitted by v1.
+ * is reserved for a future `cancel` channel and is not emitted today.
  */
 export type TabrixReplayFailureCode =
   // failed-precondition (top-level)
@@ -124,7 +119,7 @@ export type TabrixReplayFailureCode =
   | 'step_verifier_red'
   | 'step_dialog_intercepted'
   | 'step_navigation_drift'
-  // reserved for v2
+  // reserved for future cancellation support
   | 'replay_aborted_by_caller'
   // denied
   | 'policy_denied'
@@ -150,7 +145,7 @@ export const TABRIX_REPLAY_FAILURE_CODES: ReadonlySet<TabrixReplayFailureCode> =
   ]);
 
 /**
- * Public input for `experience_replay` (brief §3.1).
+ * Public input for `experience_replay`.
  *
  * `variableSubstitutions` keys are constrained to
  * {@link TabrixReplayPlaceholder} at the type level; values are typed
@@ -213,7 +208,7 @@ export interface TabrixExperienceReplayResolved {
 }
 
 /**
- * Top-level error envelope (brief §3.2). Present iff `status` is one
+ * Top-level error envelope. Present iff `status` is one
  * of `'invalid_input' | 'denied' | 'failed-precondition'`.
  */
 export interface TabrixExperienceReplayErrorBody {
@@ -223,9 +218,9 @@ export interface TabrixExperienceReplayErrorBody {
 }
 
 /**
- * Public result for `experience_replay` (brief §3.2).
+ * Public result for `experience_replay`.
  *
- * `partial` is a TERMINAL state in v1 — there is no resume channel.
+ * `partial` is a TERMINAL state — there is no resume channel.
  */
 export interface TabrixExperienceReplayResult {
   status: 'ok' | 'partial' | 'failed' | 'failed-precondition' | 'invalid_input' | 'denied';
@@ -262,7 +257,7 @@ export type TabrixReplayInvalidInputCode =
 
 /**
  * Optional templatable-field annotation an aggregator may attach to a
- * step inside `step_sequence` JSON (brief §5).
+ * step inside `step_sequence` JSON.
  *
  * v1 only carries the keys; the per-tool input validator on each
  * field decides whether the substituted value is acceptable.

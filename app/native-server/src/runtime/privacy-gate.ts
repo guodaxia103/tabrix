@@ -20,9 +20,8 @@
  * - `assertNoSensitive` is the test-side companion: it throws so a unit
  *   test reproduces the exact key path that leaked.
  *
- * Cross-ref:
- * - SoT: `.claude/strategy/TABRIX_V2_7_CONTRACT_V1_zh.md` §4.
- * - Allowlist source: `app/native-server/src/memory/db/operation-log-metadata.ts`.
+ * Allowlist source:
+ * - `app/native-server/src/memory/db/operation-log-metadata.ts`.
  */
 
 const REDACTED = '[redacted]' as const;

@@ -151,10 +151,10 @@ export interface ApiKnowledgeTelemetry {
   readAllowed: boolean;
   fallbackEntryLayer: 'L0+L1' | 'none';
   /**
-   * V26 release closeout — true only when a read-only public GET is
-   * served from the short-lived in-process compact-result cache. This
-   * is not persisted Knowledge/Experience data; it only avoids
-   * repeating identical public API calls within a short runtime window.
+   * True only when a read-only public GET is served from the
+   * short-lived in-process compact-result cache. This is not persisted
+   * Knowledge/Experience data; it only avoids repeating identical
+   * public API calls within a short runtime window.
    */
   cacheHit?: boolean;
   cacheTtlMs?: number;

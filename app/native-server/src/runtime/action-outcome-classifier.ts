@@ -29,9 +29,8 @@
  *   `RequireUnknownFallback` invariant pins `'unknown'` as a member of
  *   each.
  *
- * Confidence model (calibrated against the SoT V2 acceptance scenarios
- * for action-outcome classification, not against real-browser Gate
- * evidence — that stays owner-lane):
+ * Confidence model (calibrated against deterministic action-outcome
+ * acceptance scenarios, not against real-browser Gate evidence):
  *
  *   - A single corroborating signal in the closed allowlist scores
  *     0.85.

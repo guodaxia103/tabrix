@@ -45,9 +45,8 @@ const DEFAULT_NAVIGATION_INTENT: NavigationIntent = 'unknown';
  * Confidence values per state. Tuned conservatively: a transition that
  * had only one corroborating signal sits below 0.85; a transition that
  * was confirmed by both `committed` and `document_complete` reaches
- * `>= 0.9`. The exact numbers are SoT-pinned (see
- * `.claude/strategy/TABRIX_V2_7_CONTRACT_V1_zh.md` §5) so any future
- * tweak shows up in the snapshot test for `lifecycle-state-machine.test.ts`.
+ * `>= 0.9`. The exact numbers are pinned by the snapshot test for
+ * `lifecycle-state-machine.test.ts`.
  */
 const STATE_CONFIDENCE: Readonly<Record<LifecycleState, number>> = Object.freeze({
   idle: 0.5,

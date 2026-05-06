@@ -283,7 +283,6 @@ export class ExperienceRepository {
     //      `experience_replay:` task intent.
     //   2. The `experience_replay` MCP handler — locates the row to
     //      replay before opening the Memory session.
-    // SoT: `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §7.
     this.findByIdStmt = db.prepare(
       `SELECT action_path_id,
               page_role,

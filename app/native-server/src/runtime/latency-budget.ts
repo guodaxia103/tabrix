@@ -1,8 +1,6 @@
 /**
  * Tabrix latency / budget constants.
  *
- * SoT: maintainer-private runtime contract doc.
- *
  * The constants in this module are pinned by `latency-budget.test.ts`
  * as a snapshot. Bumping any value MUST happen in the same commit as
  * the product task that justifies it.

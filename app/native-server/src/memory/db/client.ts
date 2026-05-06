@@ -286,7 +286,7 @@ function ensureKnowledgeApiEndpointsLineageColumns(db: SqliteDatabase): void {
     ['source_lineage_blob', 'TEXT'],
     ['schema_version', 'INTEGER'],
     // Additive column for the endpoint evidence contract
-    // (`lastFailureReason`). Pre-closeout DBs have a NULL value
+    // (`lastFailureReason`). Older DBs have a NULL value
     // and are treated as "no failure evidence on file".
     ['last_failure_reason', 'TEXT'],
   ];

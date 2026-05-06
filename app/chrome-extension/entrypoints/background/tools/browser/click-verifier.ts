@@ -54,7 +54,7 @@ export interface ClickPostClickReadback {
  * This is the pure-function output. `interaction.ts` projects a subset of
  * it into the public `postClickState` field. Keeping `pageRoleBefore`
  * here makes the unit tests readable even though we do not currently
- * expose it in the public contract (brief §5 only requires five fields).
+ * expose it in the public contract.
  */
 export interface ClickVerifierResult {
   passed: boolean;
@@ -85,7 +85,7 @@ interface VerifierRule {
    * Used only for `pull_requests`, because the GitHub family adapter
    * does not currently emit a stable `pull_requests_list` role
    * (see `read-page-understanding-github.ts` — there is no `/pulls`
-   * branch). The brief §7 "URL + 'left repo_home'" compromise is
+   * branch). The "URL + 'left repo_home'" compromise is
    * intentionally interpreted strictly: a `null` OR `'unknown'`
    * `pageRoleAfter` is degraded readback, not "left repo_home", and
    * must fail-closed. As soon as a stable PR role lands, switch this

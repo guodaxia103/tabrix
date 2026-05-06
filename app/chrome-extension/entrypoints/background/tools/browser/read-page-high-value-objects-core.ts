@@ -340,7 +340,6 @@ export function classifyCandidateObject(
 
 /**
  * Neutral noise patterns — site-agnostic signals that a label is low-value.
- * Per SoT `T5.4 高价值对象提取 正式产品级规格`, section "明确的低价值对象降权规则":
  *   - commit hash / commit headlines
  *   - duration / timing wording (e.g. `15s`, `3m`, `2h`)
  *   - commitlint prefixes (`fix(...)`, `feat(...)`, ...)

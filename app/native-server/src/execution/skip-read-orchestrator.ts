@@ -6,7 +6,7 @@
  * `choose_context`) into an explicit skip-or-fallback execution plan for the
  * `chrome_read_page` hot path.
  *
- * Hard contracts (per session corrections #2/#3/#4):
+ * Hard contracts:
  *
  *   1. The orchestrator NEVER manufactures a synthetic
  *      `chrome_read_page` compact payload. A `skip` result returns an
@@ -32,7 +32,7 @@
  *
  *   5. The fallback layer is ALWAYS `'L0' | 'L0+L1'` — never
  *      `'L0+L1+L2'`. This holds even when the upstream dispatcher
- *      asked for full layers. V4.1 §0.1 + §6: a skipped read must
+ *      asked for full layers. A skipped read must
  *      not silently widen back to a full DOM read on failure.
  *
  *   6. The orchestrator is fail-soft. Any unrecognised or absent

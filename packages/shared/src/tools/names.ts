@@ -68,8 +68,7 @@ export const TOOL_NAMES = {
   },
   /**
    * MKEP context selector.
-   * Native-handled. See `app/native-server/src/mcp/choose-context.ts`
-   * and `docs/B_018_CONTEXT_SELECTOR_V1.md` for the SoT.
+   * Native-handled. See `app/native-server/src/mcp/choose-context.ts`.
    */
   CONTEXT: {
     CHOOSE: 'tabrix_choose_context',

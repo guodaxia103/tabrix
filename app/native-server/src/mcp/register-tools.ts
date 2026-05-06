@@ -361,7 +361,7 @@ function filterToolsByCapability(tools: Tool[], env: CapabilityEnv): Tool[] {
  *   - `recorder` to `sessionManager.startStep` / `completeStep`
  *     against the wrapper-owned session, so each replayed sub-step
  *     gets its own `memory_steps` row carrying the underlying
- *     tool name (brief §7).
+ *     tool name.
  *   - `updateTaskIntent` to `sessionManager.updateTaskIntent` so the
  *     wrapper-owned session is re-tagged with
  *     `experience_replay:<actionPathId>`.
@@ -2035,7 +2035,7 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
       // the bridge AND never spend the budget on a read we proved we
       // could avoid.
       //
-      // Hard rules (session corrections #2/#3/#4):
+      // Hard rules:
       //   * The orchestrator only fires when `choose_context` has
       //     ALREADY recorded a decision into this task context. Any
       //     in-flight read without a recorded decision keeps the

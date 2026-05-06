@@ -9,7 +9,7 @@ import { TOOL_NAMES } from './names';
  * The map's value is the {@link import('../capabilities').TabrixCapability}
  * the tool requires. The native-server's `register-tools.ts`:
  *   1. drops the tool from `listTools` when its capability is not enabled, and
- *   2. denies `callTool` with `code: 'capability_off'` (brief §6) when its
+ *   2. denies `callTool` with `code: 'capability_off'` when its
  *      capability is not enabled — without opening a Memory session.
  *
  * Why a separate map (rather than reusing `P3_EXPLICIT_OPT_IN_TOOLS`):

@@ -26,7 +26,7 @@ export class TaskRepository {
     // Re-tag a task's intent. Used by the `experience_replay`
     // MCP handler so the wrapper-owned Memory session carries the
     // `experience_replay:<actionPathId>` prefix the aggregator's
-    // special-case (brief §7) keys off. Narrow on purpose: only
+    // replay-session path keys off. Narrow on purpose: only
     // mutates `intent` + `updated_at`, never `task_type` / `title`.
     this.updateIntentStmt = db.prepare(
       `UPDATE memory_tasks

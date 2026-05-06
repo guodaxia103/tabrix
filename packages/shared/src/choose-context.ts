@@ -7,10 +7,7 @@ import type {
 /**
  * Tabrix MKEP `tabrix_choose_context` public contract.
  *
- * SoT for the public input/output contract is
- * [`docs/B_018_CONTEXT_SELECTOR_V1.md`](../../../docs/B_018_CONTEXT_SELECTOR_V1.md).
- *
- * v1 is intentionally tiny:
+ * Current public contract:
  *  - 3 strategies (no `api_only`, no `experience_replay`, no `read_page_markdown`).
  *  - No `tokenEstimate` (we have no calibration data; an invented number
  *    would mislead upstream planners).

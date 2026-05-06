@@ -303,7 +303,7 @@ function classifyByGithubUrl(href: string, currentUrl: string): GithubUrlClassif
 }
 
 /**
- * GitHub-specific noise patterns per SoT section "明确的低价值对象降权规则".
+ * GitHub-specific noise patterns.
  * These are shell / site-chrome wording that would otherwise rank high simply
  * because they are everywhere on GitHub. They stay in the GitHub adapter
  * (not core) because they are GitHub vocabulary.

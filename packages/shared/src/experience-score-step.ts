@@ -1,9 +1,6 @@
 /**
  * Tabrix MKEP Experience write-back layer — `experience_score_step`
  * shared contracts.
- *
- * SoT: `.claude/TABRIX_MKEP_FRAMEWORK_V2.md`.
- *
  * Conventions (mirrors `experience-replay.ts`):
  *   - Pure types + constants. No IO, no runtime branches.
  *   - Lives in `@tabrix/shared` so the native-server (canonical
@@ -15,8 +12,7 @@
  *     `click.ts`; we deliberately do NOT introduce a parallel outcome
  *     taxonomy.
  *   - The tool re-uses the `experience_replay` capability gate (one
- *     capability governs the whole replay/score-step write-back family
- *     — see `.claude/TABRIX_V2_4_0_PLAN.md` §1.1).
+ *     capability governs the whole replay/score-step write-back family).
  *   - Failure mode is "isolation + structured warning" (handler maps
  *     write-back I/O failures to the new `experience_writeback_warnings`
  *     table, never to a thrown error that breaks the replay user

@@ -817,7 +817,7 @@ export async function handleExperienceReplay(
   } catch (err) {
     if (err instanceof ExperienceReplayInputError) {
       // Tag the wrapper-owned session as an invalid replay so the
-      // aggregator's special-case (brief §7) treats it as a stale id
+      // aggregator's replay-session path treats it as a stale id
       // and skips bucketing — instead of seeding a `intent='run mcp
       // tool experience_replay'` row.
       try {

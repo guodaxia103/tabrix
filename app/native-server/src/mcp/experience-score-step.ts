@@ -23,8 +23,8 @@
  *
  * Capability gating: this tool re-uses the `experience_replay`
  * capability key (registered as such in
- * `@tabrix/shared::CAPABILITY_GATED_TOOLS`). The plan §1.1 mandates
- * one capability for the whole replay/score-step write-back family.
+ * `@tabrix/shared::CAPABILITY_GATED_TOOLS`) so one capability governs
+ * the whole replay/score-step write-back family.
  */
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
