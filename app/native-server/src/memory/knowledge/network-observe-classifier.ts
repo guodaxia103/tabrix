@@ -1,20 +1,20 @@
 /**
- * V26-FIX-03 — Generic browser-network observe classifier.
+ * Generic browser-network observe classifier.
  *
  * Produces a closed-enum `semantic type` + `usableForTask` + (when
  * not usable) `noiseReason` from the *metadata* of a captured
  * request. Pure module: no IO, no `Date.now()`, no env reads.
  *
- * Design contract (per V3 SoT V26-FIX-03):
+ * Design contract:
  *
  *   - The classifier is **family-agnostic**. GitHub / npmjs URLs go
  *     through the same code path as any other host. Family hints
  *     (e.g. `family: 'github'`) may be passed in to *break ties* but
  *     MUST NOT be the deciding signal. Two reasons:
- *       (a) v2.6's main line is "browser observe → endpoint
+ *       (a) Tabrix's main line is "browser observe → endpoint
  *           knowledge → on-demand reader". Hardcoding the classifier
- *           on family names re-creates the v2.5 mistake we are
- *           explicitly walking back.
+ *           on family names re-creates the adapter-first path this
+ *           module is meant to avoid.
  *       (b) Future MKEP rows from arbitrary sites (HN, Wikipedia,
  *           internal dashboards) need a usable classification before
  *           anyone curates a family adapter.
@@ -99,7 +99,7 @@ const SEARCH_QUERY_KEYS: ReadonlySet<string> = new Set(['q', 'query', 'search', 
  * Permissive substring sniff for query keys. Catches MediaWiki's
  * `srsearch`, Algolia's `searchQuery`, etc. Intentionally loose:
  * a false positive only inflates the search bucket, which is the
- * *most* useful Knowledge bucket for v2.6 lookups.
+ * *most* useful Knowledge bucket for lookups.
  */
 const SEARCH_QUERY_KEY_RE = /(search|query|keyword|term)/;
 
@@ -172,7 +172,7 @@ function extractQueryKeysFromUrl(parsed: URL): string[] {
 }
 
 /**
- * V26-FIX-03 — main entry. Returns one of the 12 closed-enum
+ * Main entry. Returns one of the 12 closed-enum
  * semantic types plus a derived `usableForTask` boolean.
  *
  * Decision order (first match wins):
@@ -351,14 +351,14 @@ export function classifyNetworkObserveEndpoint(
 }
 
 // ---------------------------------------------------------------------
-// V27-06 — Endpoint Candidate Classifier v2
+// Endpoint Candidate Classifier
 // ---------------------------------------------------------------------
 //
 // The v1 `classifyNetworkObserveEndpoint` above is the persisted-row
 // classifier — its closed enum is wired through SQLite (see
 // `EndpointSemanticType` in `knowledge-api-repository.ts`) and is
-// frozen by the v2.6 schema. V27-06 needs a **higher-level candidate
-// classification** that adds:
+// frozen by the persisted schema. The higher-level candidate
+// classification adds:
 //
 //   - `error`             — 4xx/5xx response status
 //   - `empty`             — successful response but rowCount=0 / empty
@@ -375,13 +375,13 @@ export function classifyNetworkObserveEndpoint(
 // The v2 classifier is a pure wrapper. It does NOT mutate the v1 row
 // classification, does NOT add columns to the repository, and does
 // NOT bypass v1 noise rules. It composes the v1 verdict with an
-// optional `EndpointShapeSummary` (provided by V27-06 capture-side
+// optional `EndpointShapeSummary` (provided by capture-side
 // summariser) and the HTTP status code, then folds the result into
 // the brief's closed enum.
 
 /**
- * V27-06 closed-enum candidate semantic type. Always include
- * `'unknown_candidate'` so a downstream V27-07 correlator never has
+ * Closed-enum candidate semantic type. Always include
+ * `'unknown_candidate'` so a downstream correlator never has
  * to infer "we have no opinion".
  */
 export type EndpointCandidateSemanticType =
@@ -410,34 +410,34 @@ export const ENDPOINT_CANDIDATE_SEMANTIC_TYPES = [
 ] as const satisfies ReadonlyArray<EndpointCandidateSemanticType>;
 
 /**
- * V27-06 — coarse content-type bucket. Closed enum so the candidate
+ * Coarse content-type bucket. Closed enum so the candidate
  * classifier can decide `document` vs `error` vs `noise` from a
  * brand-neutral string.
  */
 export type EndpointContentTypeBucket = 'json' | 'xml' | 'html' | 'text' | 'binary' | 'unknown';
 
 /**
- * V27-06 — closed-enum response-size bucket. Mirrors the v2.7 fact
+ * Closed-enum response-size bucket. Mirrors the fact
  * collector's `NetworkFactSizeClass` so the two can be cross-checked
  * during owner-lane Gate B.
  */
 export type EndpointShapeSizeClass = 'empty' | 'small' | 'medium' | 'large' | 'unknown';
 
 /**
- * V27-06 — closed-enum response-shape kind. Same vocabulary as the v1
+ * Closed-enum response-shape kind. Same vocabulary as the row
  * `KnowledgeApiResponseShape` so persistence can keep its existing
  * column without a migration.
  */
 export type EndpointShapeKind = 'object' | 'array' | 'scalar' | 'unknown';
 
 /**
- * V27-06 — closed-enum field types the shape summariser is allowed to
+ * Closed-enum field types the shape summariser is allowed to
  * record. Strictly types only — never values.
  */
 export type EndpointShapeFieldType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null';
 
 /**
- * V27-06 — privacy-safe response-shape descriptor. Carries:
+ * Privacy-safe response-shape descriptor. Carries:
  *   - top-level keys (names only, no values)
  *   - array `rowCount` and a sample of item-keys (names only)
  *   - per-key `fieldTypes` (closed enum, never values)
@@ -465,7 +465,7 @@ export interface EndpointShapeSummary {
 }
 
 /**
- * V27-06 — input bag for the v2 candidate classifier. Every field is
+ * Input bag for the candidate classifier. Every field is
  * either a closed-enum bucket, a brand-neutral path/host, a count, or
  * a key list. No raw values, no header values, no body.
  */
@@ -478,17 +478,17 @@ export interface EndpointCandidateClassifierInput {
   mimeType?: string;
   /** HTTP status code, when known. `null` for fetch errors. */
   status?: number | null;
-  /** V27-06 shape summary, when the producer could see the body. */
+  /** Shape summary, when the producer could see the body. */
   shape?: EndpointShapeSummary | null;
   /** Optional pre-extracted query keys. */
   queryKeys?: readonly string[];
 }
 
 /**
- * Closeout — SoT V3 evidence-contract closed enum for the kinds of
- * evidence the V27-06 classifier consulted to reach a verdict.
+ * Evidence-contract closed enum for the kinds of evidence the
+ * classifier consulted to reach a verdict.
  *
- * Adding a new kind is a v2.7 schema-cite event. The value
+ * Adding a new kind is a schema-cite event. The value
  * `'metadata_only'` is the *fallback bucket*: a candidate whose
  * verdict was reached without seeing a response body emits a list
  * containing only `'metadata_only'`.
@@ -506,7 +506,7 @@ export interface EndpointCandidateClassifierInput {
  *                         empty-shape detection or JSON read-shape
  *                         confirmation).
  *   - `'timing'`       — wall-clock timing was consulted. Reserved for
- *                         V27-07 correlator handoff; V27-06 itself
+ *                         correlator handoff; this classifier itself
  *                         does not emit this value today.
  *   - `'metadata_only'` — fallback when no response body was available
  *                         and only URL/method/status/mime were used.
@@ -531,14 +531,14 @@ export const ENDPOINT_CANDIDATE_EVIDENCE_KINDS = [
 ] as const satisfies ReadonlyArray<EndpointCandidateEvidenceKind>;
 
 /**
- * V27-06 — output of the v2 candidate classifier. The
- * `evidenceLevel` field lets V27-07 / V27-08 reason about whether the
+ * Output of the candidate classifier. The `evidenceLevel` field lets
+ * downstream correlation / repository code reason about whether the
  * candidate was shape-evidenced (response body was available and
  * summarised) or only metadata-evidenced (URL + method + status + mime
- * only). V27-08 uses this to refuse high confidence on metadata-only
+ * only). Knowledge promotion uses this to refuse high confidence on metadata-only
  * candidates.
  *
- * Closeout — SoT V3 evidence-contract additions:
+ * Evidence-contract additions:
  *
  *   - `evidenceKinds`           — closed-enum list of evidence kinds
  *                                  the verdict cited. Always at least
@@ -569,17 +569,17 @@ export interface EndpointCandidate {
    *  available AND the verdict actually depended on shape evidence.
    *  Otherwise `'metadata_only'`. */
   evidenceLevel: 'shape_evidenced' | 'metadata_only';
-  /** Echoes back the input shape so consumers (V27-07 correlator,
-   *  V27-08 repository) do not have to re-summarise. `null` only when
+  /** Echoes back the input shape so consumers do not have to
+   *  re-summarise. `null` only when
    *  the producer did not supply one. */
   shape: EndpointShapeSummary | null;
   /** Sorted, deduped query keys actually considered in the verdict. */
   queryKeysSorted: readonly string[];
-  /** Underlying v1 row-classifier verdict. Carried so V27-08 lineage
+  /** Underlying row-classifier verdict. Carried so lineage
    *  can still cite the existing `EndpointSemanticType` column. */
   rowClassification: NetworkObserveClassification;
   // -------------------------------------------------------------------
-  // Closeout — SoT V3 evidence-contract fields. See `EndpointCandidateEvidenceKind`.
+  // Evidence-contract fields. See `EndpointCandidateEvidenceKind`.
   // -------------------------------------------------------------------
   evidenceKinds: readonly EndpointCandidateEvidenceKind[];
   shapeSummaryAvailable: boolean;
@@ -587,12 +587,11 @@ export interface EndpointCandidate {
 }
 
 /**
- * Closeout — SoT V3 diagnostics aggregator. Producers (V27-06b /
- * V27-06c capture-side, downstream report writers) call this with the
+ * Diagnostics aggregator. Producers and downstream report writers call this with the
  * full batch of candidates emitted for one observation window to
  * surface the `endpointCandidateCount` evidence field. Pure: counts
  * everything in the batch, including `noise` / `error` /
- * `unknown_candidate` candidates, because the SoT V3 contract treats
+ * `unknown_candidate` candidates, because the contract treats
  * "we considered N requests and walked away from M" as evidence in
  * its own right.
  */
@@ -634,8 +633,8 @@ export function summarizeEndpointCandidates(
 }
 
 /**
- * V27-06 — additive noise patterns the v2 classifier rejects on top of
- * the v1 rules. `favicon.ico`, `*.map` (source maps), and the
+ * Additive noise patterns the candidate classifier rejects on top of
+ * the row-classifier rules. `favicon.ico`, `*.map` (source maps), and the
  * platform-specific `_private/browser/stats` shape that we already
  * filter at v1 are all collapsed into the `noise` bucket here.
  */
@@ -687,7 +686,7 @@ function classifyContentTypeBucket(mimeType: string | null | undefined): Endpoin
 }
 
 /**
- * V27-06 — entry point. Pure: returns one of the 10 closed-enum
+ * Candidate entry point. Pure: returns one of the 10 closed-enum
  * candidate types from URL/method/status/shape (shape optional).
  *
  * Decision order (first match wins):
@@ -704,8 +703,8 @@ function classifyContentTypeBucket(mimeType: string | null | undefined): Endpoin
  *                              shape confirms a non-empty body.
  *   8. Otherwise            → `unknown_candidate` / v1's noiseReason.
  *
- * The classifier never assigns `> 0.85` confidence — V27-08 is the
- * authority on whether a candidate becomes a high-confidence row.
+ * The classifier never assigns `> 0.85` confidence — Knowledge
+ * promotion is the authority on whether a candidate becomes high-confidence.
  */
 export function classifyEndpointCandidate(
   input: EndpointCandidateClassifierInput,
@@ -724,7 +723,7 @@ export function classifyEndpointCandidate(
   const evidenceLevel: EndpointCandidate['evidenceLevel'] = shapeSummaryAvailable
     ? 'shape_evidenced'
     : 'metadata_only';
-  // Closeout — short-hand for the SoT V3 evidence-kind list builder.
+  // Short-hand for the evidence-kind list builder.
   // We always include `metadata_only` when no shape is available so
   // the evidence-kind list is never empty.
   const ek = (
@@ -896,7 +895,7 @@ export function classifyEndpointCandidate(
   if (v1.usableForTask) {
     const baseConfidence =
       evidenceLevel === 'shape_evidenced' && shape && !isEmptyShape(shape) ? 0.8 : 0.65;
-    // Closeout — derive the evidence-kinds list from the v1 signals
+    // Derive the evidence-kinds list from the row-classifier signals
     // that actually fired. Path + query are always cited (v1's
     // bucketing logic runs them on every read-shaped verdict);
     // content_type is added when a mime hint pinned the verdict;
@@ -918,9 +917,9 @@ export function classifyEndpointCandidate(
   }
 
   // 8. Default — v1 walked away with `unknown`. We surface it as
-  //    `unknown_candidate` with v1's reason so V27-07 / V27-08 can
+  //    `unknown_candidate` with the row-classifier reason so downstream can
   //    still cite the underlying signal.
-  // Closeout — even an `unknown_candidate` cites the inputs we
+  // Even an `unknown_candidate` cites the inputs we
   // examined: path is always inspected; query was inspected when at
   // least one query key was present; content_type was inspected when
   // a mime hint was supplied. The evidenceKinds list is never empty
@@ -942,7 +941,7 @@ export function classifyEndpointCandidate(
 }
 
 /**
- * V27-06 — `true` when the shape descriptor describes a response that
+ * `true` when the shape descriptor describes a response that
  * carries no usable rows.
  */
 function isEmptyShape(shape: EndpointShapeSummary): boolean {
