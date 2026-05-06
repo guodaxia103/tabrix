@@ -1,6 +1,5 @@
 /**
- * `useMemoryTimeline` — Sidepanel Memory tab data source
- * (Stage 3e · B-002 list · B-003 drill-down).
+ * `useMemoryTimeline` — Sidepanel Memory tab data source.
  *
  * Wraps `fetchRecentSessions` and `fetchSessionSteps` with reactive
  * state so the Memory tab can render a recent-sessions list **and**
@@ -63,10 +62,10 @@ export type MemoryTimelineStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type MemoryStepsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 /**
- * Status-filter chips shown on the Memory tab (B-006). "running" is a
- * UX-level group that matches both raw DB statuses `running` and
- * `starting` (starting is transient and users don't distinguish). The
- * other three chips map 1:1 to the underlying `MemorySessionStatus`.
+ * Status-filter chips shown on the Memory tab. "running" is a UX-level group
+ * that matches both raw DB statuses `running` and `starting` (starting is
+ * transient and users don't distinguish). The other three chips map 1:1 to
+ * the underlying `MemorySessionStatus`.
  */
 export type MemoryStatusChip = 'running' | 'completed' | 'failed' | 'aborted';
 
@@ -122,9 +121,9 @@ export interface UseMemoryTimelineApi {
   readonly expandedSessionId: Ref<string | null>;
   readonly stepsBySession: Readonly<Record<string, MemoryStepsSlot>>;
   /**
-   * Active status-chip selections (B-006). Empty set is interpreted as
-   * "all". Mutating `.value` directly is fine; prefer `toggleStatusChip`
-   * / `clearFilters` for chip-row UX.
+   * Active status-chip selections. Empty set is interpreted as "all".
+   * Mutating `.value` directly is fine; prefer `toggleStatusChip` /
+   * `clearFilters` for chip-row UX.
    */
   readonly statusFilter: Ref<Set<MemoryStatusChip>>;
   /** Trimmed + lowercased search token; empty string means no search. */

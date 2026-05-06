@@ -20,7 +20,7 @@
       </p>
     </header>
 
-    <!-- Filter chips + search + jump-to-last-failure (B-006) -->
+    <!-- Filter chips + search + jump-to-last-failure -->
     <div
       v-if="timeline.sessions.value.length > 0 || timeline.hasActiveFilters.value"
       class="memory-filters"
