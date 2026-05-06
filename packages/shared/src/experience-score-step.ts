@@ -1,8 +1,8 @@
 /**
- * Tabrix MKEP Experience write-back layer (V24-02) — `experience_score_step`
+ * Tabrix MKEP Experience write-back layer — `experience_score_step`
  * shared contracts.
  *
- * SoT: `.claude/TABRIX_V2_4_0_PLAN.md` §V24-02 + `.claude/TABRIX_MKEP_FRAMEWORK_V2.md`.
+ * SoT: `.claude/TABRIX_MKEP_FRAMEWORK_V2.md`.
  *
  * Conventions (mirrors `experience-replay.ts`):
  *   - Pure types + constants. No IO, no runtime branches.
@@ -176,7 +176,7 @@ export interface TabrixTaskWeights {
 }
 
 /**
- * V24-02 baseline / fallback weights. Used when no GitHub-seeded
+ * Baseline / fallback weights. Used when no GitHub-seeded
  * task weight matches (or `siteFamily !== 'github'`). Numbers are
  * the MKEP §3.2 default mix; do NOT tweak without updating MKEP +
  * `composite-score.test.ts` fixtures together.
@@ -231,7 +231,7 @@ export type TabrixTaskWeightsSiteFamily = 'github';
  * v1 keying is `pageRole` exact-match within the site family — not a
  * per-intent template — because MKEP §3.2 explicitly bounds v1 to
  * "pageRole grain". The helper deliberately keeps the unknown-key
- * path silent so the chooser hot path (V24-03) does not pay a log
+ * path silent so the chooser hot path does not pay a log
  * cost for every miss.
  */
 export function getTaskWeightsFor(

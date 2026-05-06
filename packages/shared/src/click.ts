@@ -1,12 +1,12 @@
 /**
- * Shared click contract (B-023).
+ * Shared click contract.
  *
  * `chrome_click_element` emits these fields as part of its tool response.
  * The shape is versioned informally via the `observedOutcome` enum below —
  * adding a new value is a minor compatible change, removing one is not.
  *
  * See `docs/CLICK_CONTRACT_REPAIR_V1.md` for the design and
- * `docs/PRODUCT_BACKLOG.md` §B-023 for the schema-cite rationale.
+ * `docs/PRODUCT_BACKLOG.md` for the schema-cite rationale.
  */
 
 /**
@@ -37,7 +37,7 @@ export type ClickObservedOutcome =
   | 'verification_unavailable';
 
 /**
- * The full closed enum as a runtime tuple. Consumers (e.g. the V24-02
+ * The full closed enum as a runtime tuple. Consumers (e.g. the
  * `experience_score_step` parser) build a Set from this for O(1)
  * membership checks. Keep in lockstep with {@link ClickObservedOutcome}
  * — the unit test in `click.test.ts` enforces parity.
@@ -81,14 +81,14 @@ export interface ClickVerification {
 }
 
 /**
- * The JSON shape returned by `chrome_click_element` after B-023.
+ * The JSON shape returned by `chrome_click_element`.
  *
  * Callers MUST prefer `success` + `observedOutcome` over `navigationOccurred`.
  * `navigationOccurred` is kept as a one-release compat field; it equals
  * `verification.navigationOccurred`.
  *
  * The `intercepted-download` fast-path has a different shape and is
- * intentionally not unified into this type in v1 (see B-023 "Must not do").
+ * intentionally not unified into this type in v1.
  */
 export interface ClickToolResult {
   /** `true` iff `observedOutcome` is a success-like outcome. */

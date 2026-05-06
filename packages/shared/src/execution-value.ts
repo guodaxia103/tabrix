@@ -1,19 +1,19 @@
 /**
- * V25-03 — Sidepanel "Execution" tab DTOs.
+ * Sidepanel "Execution" tab DTOs.
  *
  * These types describe the response bodies of four read-only HTTP routes
  * exposed by the native server under `/execution/**` and consumed by the
- * Sidepanel `Execution` tab. They surface what V25-02 layer-dispatch and
- * V24 ranked-replay telemetry produced, without ever exposing
+ * Sidepanel `Execution` tab. They surface layer-dispatch and
+ * ranked-replay telemetry, without ever exposing
  * user-supplied free text.
  *
- * Privacy contract (M4 binding):
+ * Privacy contract:
  *   - response bodies MUST NOT echo full URLs (no query strings, no fragments)
  *   - response bodies MUST NOT include any field from
  *     `memory_sessions.user_input`
  *   - response bodies MUST NOT include cookie or auth header values
  *   - intent is exposed only as the structural `intent_signature`
- *     (already lower-cased + redacted upstream by B-013)
+ *     (already lower-cased + redacted upstream)
  *
  * Stable shapes are required because the Sidepanel ships across
  * multiple native-server versions; new fields must be optional.
@@ -33,7 +33,7 @@ export interface ExecutionRecentDecisionSummary {
   /** ISO 8601 UTC. Used for sort + relative-time rendering. */
   createdAt: string;
   /**
-   * Structural intent fingerprint (B-013 normalized form). Already
+   * Structural intent fingerprint. Already
    * lower-cased and redacted, so safe to display as a small chip. We
    * intentionally do NOT expose the raw `intent` text.
    */
@@ -46,11 +46,11 @@ export interface ExecutionRecentDecisionSummary {
   strategy: ContextStrategyName;
   /** Optional fallback strategy. */
   fallbackStrategy: ContextStrategyName | null;
-  /** Chosen layer envelope from V25-02. `null` when telemetry pre-dates V25-02. */
+  /** Chosen layer envelope. `null` when telemetry pre-dates layer dispatch. */
   chosenLayer: ReadPageRequestedLayer | null;
-  /** V25-02 dispatch reason; `null` for legacy rows. */
+  /** Layer dispatch reason; `null` for legacy rows. */
   layerDispatchReason: LayerDispatchReason | null;
-  /** V25-02 source route; `null` for legacy rows. */
+  /** Layer source route; `null` for legacy rows. */
   sourceRoute: LayerSourceRoute | null;
   /** Free-text fail-safe reason; only set when dispatcher fell back. */
   fallbackCause: string | null;
@@ -76,7 +76,7 @@ export interface ExecutionSavingsSummary {
   /**
    * Per-layer counts. Keys cover the closed `ReadPageRequestedLayer`
    * union plus `'unknown'` for rows without `chosen_layer` (legacy /
-   * pre-V25-02). Values are non-negative integers.
+   * legacy rows. Values are non-negative integers.
    */
   layerCounts: Record<ReadPageRequestedLayer | 'unknown', number>;
   /**
@@ -121,9 +121,9 @@ export interface ExecutionTopActionPathsResponseData {
 }
 
 /**
- * Reliability signals derived from the V25-02 telemetry. These are
+ * Reliability signals derived from layer-dispatch telemetry. These are
  * coarse "did the dispatcher have to escape hatch?" counters; they
- * are NOT a substitute for the V25-04 benchmark stability metrics.
+ * are NOT a substitute for benchmark stability metrics.
  */
 export interface ExecutionReliabilitySignalSummary {
   /** Total decision rows considered for the signal computation. */
@@ -145,7 +145,7 @@ export interface ExecutionReliabilitySignalSummary {
   sourceRouteCounts: Record<LayerSourceRoute | 'unknown', number>;
   /**
    * How many `experience_replay`-eligible decisions ended up blocked,
-   * grouped by reason. Empty object when no V24-03 telemetry exists.
+   * grouped by reason. Empty object when no replay telemetry exists.
    */
   replayBlockedByCounts: Record<string, number>;
   persistenceMode: 'disk' | 'memory' | 'off';

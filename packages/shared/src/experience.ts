@@ -9,7 +9,7 @@
  * Conventions:
  * - All timestamps are ISO-8601 strings in UTC.
  * - `intentSignature` is the normalized bucket key produced by
- *   `normalizeIntentSignature` in the native-server aggregator (B-012).
+ *   `normalizeIntentSignature` in the native-server aggregator.
  *   Never used as a display label.
  * - `historyRef` is a stable cross-table pointer minted by Memory; opaque
  *   to MCP clients.
@@ -21,7 +21,7 @@ import type { MemoryPersistenceMode } from './memory';
 
 /**
  * One step inside a stored Experience action path. Mirrors the
- * `step_sequence` JSON column written by B-012.
+ * `step_sequence` JSON column written by the Experience aggregator.
  */
 export interface ExperienceActionPathStep {
   toolName: string;
@@ -82,7 +82,7 @@ export const MAX_EXPERIENCE_SUGGEST_PLAN_PAGE_ROLE_CHARS = 128;
 export interface ExperienceSuggestPlanInput {
   /** Raw caller intent, post-trim. Empty string is rejected upstream. */
   intent: string;
-  /** Normalized lookup key. Same algorithm as the B-012 aggregator. */
+  /** Normalized lookup key. Same algorithm as the Experience aggregator. */
   intentSignature: string;
   /** Optional `pageRole` filter, or `undefined` when not provided. */
   pageRole?: string;

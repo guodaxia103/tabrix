@@ -1,5 +1,5 @@
 /**
- * Tabrix MKEP Policy — capability opt-in (B-016).
+ * Tabrix MKEP Policy — capability opt-in.
  *
  * Capabilities are *feature-domain* opt-ins, orthogonal to the existing
  * P3 per-tool opt-in (`TABRIX_POLICY_ALLOW_P3`). Where the per-tool gate
@@ -16,9 +16,8 @@
  *    metadata of a user's network traffic, even after redaction".
  *
  * Scope of v1 (intentionally minimal):
- *  - `api_knowledge` (B-016/B-017): unblocks GitHub-first API Knowledge
- *    capture v1.
- *  - `experience_replay` (V24-01): unblocks the autonomous replay of a
+ *  - `api_knowledge`: unblocks API Knowledge capture.
+ *  - `experience_replay`: unblocks the autonomous replay of a
  *    named historical `experience_action_paths` row. This is the FIRST
  *    use of a capability gate as the operational opt-in for a non-P3
  *    tool — see `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §4.1 / §10.

@@ -1,5 +1,5 @@
 /**
- * Tabrix MKEP Experience write/execute layer (V24-01) — `experience_replay` v1
+ * Tabrix MKEP Experience write/execute layer — `experience_replay` v1
  * shared contracts.
  *
  * SoT: [`docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`](../../../docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md)
