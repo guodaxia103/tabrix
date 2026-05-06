@@ -552,8 +552,8 @@ export const ENDPOINT_CANDIDATE_EVIDENCE_KINDS = [
  *   - `responseBodyUnavailable` — `true` when the producer could NOT
  *                                  see the response body (no shape,
  *                                  or shape with `available=false`).
- *                                  This is the SoT V3 spelling of the
- *                                  privacy/CORS-opaque case; consumers
+ *                                  This is the evidence-contract spelling of
+ *                                  the privacy/CORS-opaque case; consumers
  *                                  must still emit a candidate.
  */
 export interface EndpointCandidate {
