@@ -1,24 +1,25 @@
 /**
- * V27-01 — Tabrix v2.7 browser-observation public types.
+ * Tabrix browser-observation shared types.
  *
- * Scope of this file (Batch A): closed-enum type bag shared between the
- * Chrome extension observers (producers) and the native-server runtime
- * modules (consumers). The runtime payloads themselves (snapshot blobs,
- * fact-collector ring entries) live behind these types so a v2.7 enum
- * can never drift between extension and server.
+ * Scope of this file: closed-enum type bag shared between the Chrome
+ * extension observers (producers) and the native-server runtime modules
+ * (consumers). The runtime payloads themselves (snapshot blobs,
+ * fact-collector ring entries) live behind these types so browser
+ * observation enums cannot drift between extension and server.
  *
  * Boundary:
  * - This module defines TYPES + CONSTANTS only. No I/O, no bridge calls.
  * - Every closed-enum string union here MUST include `'unknown'` per
- *   the V27-00 contract invariant (`RequireUnknownFallback<T>`).
+ *   the shared contract invariant (`RequireUnknownFallback<T>`).
  * - The types travel over the bridge inside the additive `observation`
  *   union member declared in `bridge-ws.ts`. They are **internal bridge
  *   protocol**, NOT public MCP tool schema — public MCP tools
- *   (`packages/shared/src/tools.ts`) are not modified by Batch A.
+ *   (`packages/shared/src/tools.ts`) are not modified by observation
+ *   type changes.
  */
 
 // ---------------------------------------------------------------------------
-// V27-01 — Lifecycle state machine (Batch A)
+// Lifecycle state machine
 // ---------------------------------------------------------------------------
 
 /**
@@ -33,7 +34,7 @@
  * - `unloading`         — page is unloading (back/forward navigation
  *                         start, beforeunload).
  * - `closed`            — tab/frame removed.
- * - `unknown`           — V27-00 invariant fallback. Default for a
+ * - `unknown`           — invariant fallback. Default for a
  *                         freshly-created snapshot before any event.
  */
 export type LifecycleState =
@@ -64,7 +65,7 @@ export const LIFECYCLE_STATES = [
  * field — the snapshot pairs `lifecycleState` (where) with one of
  * these flags (how-we-got-here).
  *
- * Always includes `'unknown'` per V27-00 invariant.
+ * Always includes `'unknown'` per the shared invariant.
  */
 export type LifecycleFlag =
   | 'cold_load'
@@ -113,9 +114,9 @@ export const NAVIGATION_INTENTS = [
 ] as const satisfies ReadonlyArray<NavigationIntent>;
 
 /**
- * Snapshot of the v2.7 lifecycle state machine. Producer: V27-01
- * `lifecycle-state-machine.ts`. Consumer: `browser-context-manager.ts` (next
- * batch task) + the operation-log writer.
+ * Snapshot of the lifecycle state machine. Producer:
+ * `lifecycle-state-machine.ts`. Consumers: `browser-context-manager.ts`
+ * and the operation-log writer.
  *
  * Privacy: this snapshot carries NO raw URL. The `urlPattern` field is
  * the path-only, query-stripped, brand-neutral form already used by
@@ -142,12 +143,12 @@ export interface LifecycleStateSnapshot {
   /** Producer wallclock for the snapshot (ms). */
   producedAtMs: number;
   /** Tab/frame this snapshot describes. Stays inside the runtime; the
-   *  operation-log writer never persists this — see V27-00 PrivacyGate. */
+   *  operation-log writer never persists this. */
   tabId: number | null;
 }
 
 // ---------------------------------------------------------------------------
-// V27-01 — Lifecycle bridge events (extension -> native server)
+// Lifecycle bridge events (extension -> native server)
 // ---------------------------------------------------------------------------
 
 /**
@@ -191,7 +192,7 @@ export interface LifecycleEventPayload {
 }
 
 // ---------------------------------------------------------------------------
-// V27-02 — Browser Fact Collector (Batch A)
+// Browser Fact Collector
 // ---------------------------------------------------------------------------
 
 /**
@@ -254,13 +255,12 @@ export const NETWORK_FACT_NOISE_CLASSES = [
 ] as const satisfies ReadonlyArray<NetworkFactNoiseClass>;
 
 /**
- * V27-02 — pre-summarised network request metadata. Carries NO header
+ * Pre-summarised network request metadata. Carries NO header
  * values, NO request/response body, NO raw URL — only the closed-enum
  * shape needed for endpoint candidacy reasoning. The producer (the
  * extension `observers/network-fact.ts` listener) is responsible for
  * stripping query strings into key-only form before emit; the runtime
- * V27-00 PrivacyGate is the persistence-side belt alongside this
- * suspenders.
+ * PrivacyGate is the persistence-side belt alongside this suspenders.
  */
 export interface NetworkRequestFact {
   /** Method bucket (closed enum). */
@@ -288,7 +288,7 @@ export interface NetworkRequestFact {
 }
 
 /**
- * V27-02 — DOM region fingerprint. Carries NO raw HTML, NO innerText.
+ * DOM region fingerprint. Carries NO raw HTML, NO innerText.
  * Producer normalises a small allowlist of region signals (e.g.
  * `header.title`, `list.itemCount`, `form.fieldNames`) into stable
  * deterministic strings, then the helper hashes them into
@@ -309,8 +309,8 @@ export interface DomRegionFingerprint {
 }
 
 /**
- * V27-02 — readiness signal panel. Each signal is `true | false |
- * unknown` (closed enum, V27-00 invariant). The runtime composes these
+ * Readiness signal panel. Each signal is `true | false | unknown`
+ * (closed enum invariant). The runtime composes these
  * with the lifecycle snapshot when answering "is this page ready for
  * a list-shaped read?".
  */
@@ -324,8 +324,8 @@ export interface ReadinessSignals {
 }
 
 /**
- * V27-02 — top-level fact snapshot. The fact collector hands these out
- * by `factSnapshotId` to V27-04 / V27-05 consumers.
+ * Top-level fact snapshot. The fact collector hands these out by
+ * `factSnapshotId` to readiness, complexity, and context consumers.
  *
  * Privacy posture: every field is either a closed-enum bucket, a
  * brand-neutral path-only string, a deterministic hash, or a count.
@@ -350,7 +350,7 @@ export interface BrowserFactSnapshot {
    *  fragment). */
   urlPattern: string | null;
   /** Tab id is producer-side state. The runtime keeps it for
-   *  bookkeeping but the V27-00 PrivacyGate strips it before
+   *  bookkeeping but the PrivacyGate strips it before
    *  persistence. */
   tabId: number | null;
   /** Producer wallclock (ms). */
@@ -367,7 +367,7 @@ export interface BrowserFactSnapshot {
 }
 
 /**
- * V27-02 — wire envelope the extension `observers/network-fact.ts` /
+ * Wire envelope the extension `observers/network-fact.ts` /
  * `observers/dom-fact.ts` / `observers/readiness.ts` push over the
  * bridge. The native fact collector ingests these and folds them into
  * a single `BrowserFactSnapshot`.
@@ -415,7 +415,7 @@ export type FactObservationPayload =
       observedAtMs: number;
     };
 
-/** Bridge envelope outer type for the V27-02 fact arm. */
+/** Bridge envelope outer type for the fact arm. */
 export interface BrowserFactSnapshotEnvelope {
   factSnapshotId: string;
   observedAtMs: number;
@@ -423,15 +423,15 @@ export interface BrowserFactSnapshotEnvelope {
 }
 
 // ---------------------------------------------------------------------------
-// V27-03 — Action outcome classifier (Batch A)
+// Action outcome classifier
 // ---------------------------------------------------------------------------
 
 /**
  * Closed-enum kind of action being classified. The runtime keeps the
- * set narrow on purpose: the v2.7 outcome classifier only cares whether
+ * set narrow on purpose: the outcome classifier only cares whether
  * something likely-mutating happened, not the exact UI affordance.
  *
- * Always includes `'unknown'` per V27-00 invariant.
+ * Always includes `'unknown'` per the shared invariant.
  */
 export type ActionKind = 'click' | 'fill' | 'submit' | 'navigate' | 'keyboard' | 'unknown';
 
@@ -445,7 +445,7 @@ export const ACTION_KINDS = [
 ] as const satisfies ReadonlyArray<ActionKind>;
 
 /**
- * Closed-enum signal kinds the V27-03 race observer emits during the
+ * Closed-enum signal kinds the race observer emits during the
  * post-action settle window. Each signal is small, brand-neutral, and
  * pre-classified — the runtime never re-derives a signal kind from a
  * raw URL or DOM string.
@@ -470,10 +470,10 @@ export const ACTION_SIGNAL_KINDS = [
 ] as const satisfies ReadonlyArray<ActionSignalKind>;
 
 /**
- * V27-03 — single signal in the post-action timeline. Carries closed-enum
+ * Single signal in the post-action timeline. Carries closed-enum
  * descriptors only; the producer is responsible for stripping URL
  * query/fragment, raw HTML, and header values before emit. The
- * persistence-side V27-00 PrivacyGate is the belt-and-suspenders defence.
+ * persistence-side PrivacyGate is the belt-and-suspenders defence.
  */
 export interface ActionSignal {
   kind: ActionSignalKind;
@@ -494,7 +494,7 @@ export interface ActionSignal {
  * `'multiple_signals'` (several non-overlapping signals fired, e.g.
  * navigation + new-tab) and `'ambiguous'` (signals fired but the
  * confidence is too low to commit to a verdict). Always includes
- * `'unknown'` per V27-00 invariant.
+ * `'unknown'` per the shared invariant.
  */
 export type ActionOutcome =
   | 'navigated_same_tab'
@@ -518,7 +518,7 @@ export const ACTION_OUTCOMES = [
 ] as const satisfies ReadonlyArray<ActionOutcome>;
 
 /**
- * V27-03 — wire envelope the extension `observers/action-outcome.ts`
+ * Wire envelope the extension `observers/action-outcome.ts`
  * emits over the bridge. Carries the action descriptor + the closed-enum
  * signal timeline. The native classifier is pure: given this envelope,
  * it returns `ActionOutcomeSnapshot` deterministically.
@@ -542,7 +542,7 @@ export interface ActionOutcomeEventEnvelope {
  * Output of `action-outcome-classifier.ts`. Lives inside the
  * runtime; the operation-log writer copies `outcome` and the
  * formatted confidence into `actionOutcome` / `outcomeConfidence`
- * metadata keys (already declared by V27-00).
+ * metadata keys.
  */
 export interface ActionOutcomeSnapshot {
   actionId: string;
@@ -557,11 +557,11 @@ export interface ActionOutcomeSnapshot {
 }
 
 // ---------------------------------------------------------------------------
-// V27-04 — Readiness + Complexity profilers (Batch A)
+// Readiness + Complexity profilers
 // ---------------------------------------------------------------------------
 
 /**
- * Closed-enum readiness state the V27-04 readiness profiler emits. The
+ * Closed-enum readiness state the readiness profiler emits. The
  * states are deliberately orthogonal to complexity — the profiler asks
  * "is the page in a state where a list-shaped read would be wasted?",
  * not "what kind of page is this?".
@@ -570,7 +570,7 @@ export interface ActionOutcomeSnapshot {
  * terminal-style states the runtime should treat as "do not bother
  * reading"; `route_stable` is the strongest "yes, ready" signal.
  *
- * Always includes `'unknown'` per V27-00 invariant.
+ * Always includes `'unknown'` per the shared invariant.
  */
 export type ReadinessState =
   | 'error'
@@ -592,9 +592,9 @@ export const READINESS_STATES = [
 ] as const satisfies ReadonlyArray<ReadinessState>;
 
 /**
- * V27-04 — output of the readiness profiler. Lives inside the runtime;
+ * Output of the readiness profiler. Lives inside the runtime;
  * the operation-log writer copies `state` into the existing
- * `readinessState` metadata key (already declared by V27-00).
+ * `readinessState` metadata key.
  */
 export interface ReadinessProfile {
   /** Closed-enum readiness state (always includes `'unknown'`). */
@@ -611,12 +611,12 @@ export interface ReadinessProfile {
 }
 
 /**
- * Closed-enum complexity classification. The V27-04 complexity
+ * Closed-enum complexity classification. The complexity
  * profiler categorises a page by its dominant "shape", not by site
  * brand. Ordering goes from cheapest read to most expensive, which is
  * helpful for tests and for the layer-budget composer.
  *
- * Always includes `'unknown'` per V27-00 invariant.
+ * Always includes `'unknown'` per the shared invariant.
  */
 export type ComplexityKind =
   | 'simple'
@@ -640,7 +640,7 @@ export const COMPLEXITY_KINDS = [
 ] as const satisfies ReadonlyArray<ComplexityKind>;
 
 /**
- * V27-04 — output of the complexity profiler. Like the readiness arm,
+ * Output of the complexity profiler. Like the readiness arm,
  * this snapshot is orthogonal: complexity does NOT consume readiness
  * signals, and readiness does NOT consume complexity. They compose only
  * inside `RecommendedLayerBudget`.
@@ -660,7 +660,7 @@ export interface ComplexityProfile {
  * the Router consumes it together with privacy/risk policy, the active
  * task intent, and the latency budget before committing.
  *
- * Always includes `'unknown'` per V27-00 invariant.
+ * Always includes `'unknown'` per the shared invariant.
  */
 export type RecommendedLayer = 'L0' | 'L1' | 'L2' | 'unknown';
 
@@ -700,7 +700,7 @@ export const RECOMMENDED_LAYER_REASONS = [
 ] as const satisfies ReadonlyArray<RecommendedLayerReason>;
 
 /**
- * V27-04 — composed advisory output. Pairs the readiness profile with
+ * Composed advisory output. Pairs the readiness profile with
  * the complexity profile and the resulting `RecommendedLayer`. The
  * Router/Policy is the only consumer; this batch declares the type but
  * does not yet wire it onto the production decision path.
@@ -729,16 +729,16 @@ export interface RecommendedLayerBudget {
 }
 
 // ---------------------------------------------------------------------------
-// V27-05 — Tab/window context manager + invalidation (Batch A)
+// Tab/window context manager + invalidation
 // ---------------------------------------------------------------------------
 
 /**
- * Closed-enum kind of tab/window event the V27-05 observer emits over
+ * Closed-enum kind of tab/window event the observer emits over
  * the bridge. The runtime ContextManager folds these into per-tab
  * versioned context records; the events carry no raw URLs and no
  * frame ids.
  *
- * Always includes `'unknown'` per V27-00 invariant.
+ * Always includes `'unknown'` per the shared invariant.
  *
  * - `tab_created`         — new tab opened in this browser session.
  * - `tab_removed`         — `chrome.tabs.onRemoved`. The manager uses
@@ -772,12 +772,12 @@ export const TAB_WINDOW_EVENT_KINDS = [
 ] as const satisfies ReadonlyArray<TabWindowEventKind>;
 
 /**
- * Closed-enum reason the V27-05 ContextManager bumps a tab's context
+ * Closed-enum reason the ContextManager bumps a tab's context
  * version. Mirrors `OperationLogMetadata.contextInvalidationReason`
- * (already declared by V27-00 — do not bump the metadata-key allowlist
+ * (already declared in operation-log metadata — do not bump that allowlist
  * here; this enum just pins the wire-side closed set).
  *
- * Always includes `'unknown'` per V27-00 invariant.
+ * Always includes `'unknown'` per the shared invariant.
  */
 export type ContextInvalidationReason =
   | 'navigation'
@@ -806,7 +806,7 @@ export const CONTEXT_INVALIDATION_REASONS = [
  * cascade (e.g. site -> page -> region -> action) needs a complete
  * re-read or only a localised refresh.
  *
- * Always includes `'unknown'` per V27-00 invariant.
+ * Always includes `'unknown'` per the shared invariant.
  */
 export type ContextLevel = 'site' | 'page' | 'region' | 'action' | 'unknown';
 
@@ -825,7 +825,7 @@ export const CONTEXT_LEVELS = [
  * dead). Producer is the extension `observers/tab-window-context.ts`;
  * consumer is the runtime `browser-context-manager.ts`.
  *
- * Always includes `'unknown'` per V27-00 invariant.
+ * Always includes `'unknown'` per the shared invariant.
  *
  * - `live`     — registry still has entries for the tab AND a
  *                non-empty live count. Refs may be reused.
@@ -863,7 +863,7 @@ export interface StableRefRevalidationResult {
 }
 
 /**
- * V27-05 — wire envelope the extension `observers/tab-window-context.ts`
+ * Wire envelope the extension `observers/tab-window-context.ts`
  * emits over the bridge. Lives inside the v2.7 additive `observation`
  * bridge union member; see `bridge-ws.ts`.
  *
@@ -897,7 +897,7 @@ export interface TabWindowContextEventEnvelope {
 }
 
 /**
- * V27-05 — versioned context record per tab. The Router/Policy
+ * Versioned context record per tab. The Router/Policy
  * consults the `version` (a monotonic counter) to detect "the page
  * the AI thought it was looking at has changed" without having to
  * snapshot the entire lifecycle/fact bag.

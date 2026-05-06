@@ -54,21 +54,20 @@ export interface BridgeResultMessage {
 }
 
 /**
- * V27-01 — Additive bridge message member for v2.7 browser observations.
+ * Additive bridge message member for browser observations.
  *
- * Goal: ship the extension-side observer signal stream (lifecycle
- * events first, action outcomes / fact snapshots / tab events later in
- * V27-02..V27-05) over the existing bridge socket without minting a
- * new public MCP tool. This member is **internal bridge protocol** —
- * it is consumed by `app/native-server/src/runtime/v27-*.ts` and is
- * NOT surfaced through `packages/shared/src/tools.ts`.
+ * Goal: ship the extension-side observer signal stream over the
+ * existing bridge socket without minting a new public MCP tool. This
+ * member is **internal bridge protocol** — it is consumed by the
+ * native-server runtime and is NOT surfaced through
+ * `packages/shared/src/tools.ts`.
  *
- * Backward compatibility: a v2.6 native server that receives this
+ * Backward compatibility: an older native server that receives this
  * `type: 'observation'` message ignores it (the existing message
  * dispatcher in `app/native-server/src/server/bridge-command-channel.ts`
  * only handles `hello / heartbeat / result`; unknown types are silently
- * dropped). Adding more `kind` values in V27-02..V27-05 is therefore
- * also additive and does not break a partial-rollout extension.
+ * dropped). Adding more `kind` values is therefore also additive and
+ * does not break a partial-rollout extension.
  */
 export interface BridgeObservationMessage {
   type: 'observation';
