@@ -76,6 +76,7 @@ import {
   buildLiveObservedRejectedLogHint,
 } from './read-page-live-observed-result';
 import { buildReadPageWarningResult } from './read-page-warning-result';
+import { buildReadPageSkipResult } from './read-page-skip-result';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { getDefaultPrimaryTabController } from '../runtime/primary-tab-controller';
@@ -898,48 +899,15 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
               apiFamily: recordedDecision.apiCapability?.family ?? null,
             });
             const totals = taskContext.getTaskTotals();
-            const skipPayload = {
-              kind: 'read_page_skipped',
-              readPageAvoided: skipPlan.readPageAvoided,
-              sourceKind: skipPlan.sourceKind,
-              sourceRoute: skipPlan.sourceRoute,
-              chosenSource: recordedDecision.chosenSource ?? skipPlan.sourceKind,
-              dataSource: recordedDecision.dataSource ?? skipPlan.sourceKind,
-              decisionReason: recordedDecision.decisionReason ?? skipPlan.diagnostic,
-              dispatcherInputSource: recordedDecision.dispatcherInputSource ?? null,
-              fallbackPlan:
-                recordedDecision.fallbackPlan ??
-                ({
-                  dataSource: 'dom_json',
-                  entryLayer: skipPlan.fallbackEntryLayer,
-                  reason: skipPlan.diagnostic,
-                } as const),
-              tokensSavedEstimate: skipPlan.tokensSavedEstimate,
-              fallbackUsed: skipPlan.fallbackUsed,
-              fallbackEntryLayer: skipPlan.fallbackEntryLayer,
-              requiresApiCall: skipPlan.requiresApiCall,
-              requiresExperienceReplay: skipPlan.requiresExperienceReplay,
-              actionPathId: recordedDecision.replayCandidate?.actionPathId ?? null,
-              apiFamily: recordedDecision.apiCapability?.family ?? null,
-              diagnostic: skipPlan.diagnostic,
+            const { result: skipResult, operationLog } = buildReadPageSkipResult({
+              recordedDecision,
+              skipPlan,
               taskTotals: totals,
-            };
-            const skipResult: CallToolResult = {
-              content: [{ type: 'text', text: JSON.stringify(skipPayload) }],
-            };
+            });
             sessionManager.completeStep(session.sessionId, step.stepId, {
               status: 'completed',
               resultSummary: `chrome_read_page skipped via ${skipPlan.sourceKind} (saved ~${skipPlan.tokensSavedEstimate} tok)`,
-              operationLog: {
-                requestedLayer: recordedDecision.chosenLayer,
-                selectedDataSource: skipPlan.sourceKind,
-                sourceRoute: skipPlan.sourceRoute,
-                decisionReason: recordedDecision.decisionReason ?? skipPlan.diagnostic,
-                resultKind: 'read_page_skipped',
-                fallbackUsed: skipPlan.fallbackUsed,
-                readCount: totals.readPageAvoidedCount,
-                tokensSaved: skipPlan.tokensSavedEstimate,
-              },
+              operationLog,
             });
             sessionManager.finishSession(session.sessionId, {
               status: 'completed',
