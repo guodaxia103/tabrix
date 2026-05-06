@@ -1,5 +1,5 @@
 /**
- * V27-00 — invariants for the v2.7 schema/boundary contract.
+ * Invariants for the schema/boundary contract.
  *
  * What this pins:
  * 1. The v2.6 frozen metadata-key set is still present on
@@ -27,9 +27,9 @@ import {
   V27_CONTRACT_GENERATION,
   V27_UNKNOWN,
   type RequireUnknownFallback,
-} from './v27-contract';
+} from './schema-boundary-contract';
 
-describe('V27-00 contract invariants', () => {
+describe('schema-boundary contract invariants', () => {
   it('keeps every v2.6 metadata key on the OperationLogMetadata shape', () => {
     const sample: OperationLogMetadata = {
       externalTaskKey: 'not_applicable',

@@ -1,10 +1,10 @@
 /**
- * V27-00 — Tabrix v2.7 schema/boundary contract module.
+ * Tabrix schema/boundary contract module.
  *
  * SoT for the per-key semantics is the maintainer-private doc
  * `.claude/strategy/TABRIX_V2_7_CONTRACT_V1_zh.md`. This module is the
  * machine-readable companion: it freezes the v2.6 metadata-key set so any
- * accidental rename/drop is caught by `v27-contract.test.ts`, and it
+ * accidental rename/drop is caught by `schema-boundary-contract.test.ts`, and it
  * declares the v2.7 metadata-key surface + the "every new closed enum MUST
  * include `'unknown'`" rule.
  *
@@ -21,7 +21,7 @@ import {
 
 /**
  * The exact v2.6 metadata-key set that V27-00 freezes. The invariant
- * test in `v27-contract.test.ts` asserts every value in this tuple is
+ * test in `schema-boundary-contract.test.ts` asserts every value in this tuple is
  * still present on `OperationLogMetadata` so a future v2.7 batch cannot
  * drop or rename a v2.6 key without a deliberate contract bump.
  *
