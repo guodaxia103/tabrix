@@ -146,7 +146,7 @@ export const DIRECT_API_COLD_START_BUDGET_MS_DEFAULT = 5_000;
  * deterministic upstream condition that retrying would not flip.
  *
  * Keeping this set narrow is intentional: a wider retry loop would
- * mask 5xx waves on a real outage and inflate Gate B latency
+ * mask 5xx waves on a real outage and inflate scenario latency
  * silently. The two reasons in the set are empirically tied to
  * Chrome/native-server cold-start sequences (DNS warm-up + first TLS
  * handshake).
