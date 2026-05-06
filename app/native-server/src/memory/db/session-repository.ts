@@ -10,7 +10,7 @@ export interface SessionUpdate {
 }
 
 /**
- * Read-only projection used by the Memory UI (Stage 3e, B-001).
+ * Read-only projection used by the Memory UI.
  *
  * Joins the owning Task's title + intent and pre-computes the
  * per-session step count in SQL so the sidepanel can render a recent

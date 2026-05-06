@@ -412,7 +412,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
         }
       }
 
-      // B-023 verification window. Length depends on the caller's intent:
+      // Verification window. Length depends on the caller's intent:
       //   - waitForNavigation === true  →  full `timeout` (legacy behaviour).
       //   - waitForNavigation === false →  short ~400ms window so fast-click
       //     callers still get signal without long blocking.
@@ -428,7 +428,7 @@ if (window.__CLICK_HELPER_INITIALIZED__) {
       const focusBefore = document.activeElement;
       const stateBefore = snapshotTargetState(element);
 
-      // B-023: raw signals, no verdict.
+      // Raw signals, no verdict.
       let beforeUnloadFired = false;
       let domChanged = false;
       let domAddedDialog = false;

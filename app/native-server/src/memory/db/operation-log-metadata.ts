@@ -243,7 +243,7 @@ export const METADATA_KEYS = [
  * inside the `tab_hygiene_blob` column. Legacy rows omit the
  * marker; the repository read path uses its presence to decide
  * whether to parse a structured envelope or to treat the blob as a
- * pre-FIX-07 `tabHygiene` value.
+ * legacy `tabHygiene` value.
  */
 export const OPERATION_LOG_BLOB_SCHEMA_VERSION = 2 as const;
 export type OperationLogBlobSchemaVersion = typeof OPERATION_LOG_BLOB_SCHEMA_VERSION;

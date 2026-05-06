@@ -23,7 +23,7 @@ export class TaskRepository {
          SET status = @status, updated_at = @updated_at
        WHERE task_id = @task_id`,
     );
-    // V24-01: re-tag a task's intent. Used by the `experience_replay`
+    // Re-tag a task's intent. Used by the `experience_replay`
     // MCP handler so the wrapper-owned Memory session carries the
     // `experience_replay:<actionPathId>` prefix the aggregator's
     // special-case (brief §7) keys off. Narrow on purpose: only
@@ -58,7 +58,7 @@ export class TaskRepository {
   }
 
   /**
-   * V24-01: update the task's `intent` column. The narrow shape (no
+   * Update the task's `intent` column. The narrow shape (no
    * status / type changes) keeps callers from accidentally widening
    * this into a generic "patch task" surface.
    */

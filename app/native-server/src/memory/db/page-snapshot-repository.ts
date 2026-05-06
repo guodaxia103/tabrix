@@ -180,8 +180,8 @@ export class PageSnapshotRepository {
         ORDER BY s.captured_at DESC, s.snapshot_id DESC
         LIMIT 1`,
     );
-    // V26-04 (B-027): live page context provider lookups. Three
-    // newest-first finders feed `LivePageContextProvider`. They are
+    // Live page context provider lookups. Three newest-first finders feed
+    // `LivePageContextProvider`. They are
     // pure reads — no joins, no writes — and rely on the
     // `captured_at_idx` ordering already in `MEMORY_CREATE_TABLES_SQL`.
     this.findLatestForUrlStmt = db.prepare(
@@ -248,7 +248,7 @@ export class PageSnapshotRepository {
   }
 
   /**
-   * V26-04 (B-027): newest snapshot whose `url` exactly matches.
+   * Newest snapshot whose `url` exactly matches.
    * `undefined` when no row matches. Caller must treat `undefined`
    * as "no live signal — degrade to memory_snapshot or fallback".
    */
@@ -258,7 +258,7 @@ export class PageSnapshotRepository {
   }
 
   /**
-   * V26-04 (B-027): newest snapshot whose `page_role` matches.
+   * Newest snapshot whose `page_role` matches.
    * `undefined` when no row matches.
    */
   public findLatestForPageRole(pageRole: string): PageSnapshot | undefined {
@@ -267,7 +267,7 @@ export class PageSnapshotRepository {
   }
 
   /**
-   * V26-04 (B-027): newest snapshot in the table, regardless of
+   * Newest snapshot in the table, regardless of
    * URL or pageRole. Used as the last-resort `memory_snapshot`
    * fallback before the provider returns `fallback_zero`.
    */
