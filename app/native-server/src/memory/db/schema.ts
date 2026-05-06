@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS memory_sessions (
   started_at          TEXT NOT NULL,
   ended_at            TEXT,
   aggregated_at       TEXT,
-  -- V24-02: deterministic session-end composite score (raw, before
+  -- Deterministic session-end composite score (raw, before
   -- recency decay) and the JSON breakdown of its component values
   -- ({accuracy, speed, token, stability}). Both nullable because
   -- the aggregator only fills them on replay sessions; non-replay
@@ -165,7 +165,7 @@ CREATE INDEX IF NOT EXISTS memory_actions_captured_at_idx ON memory_actions(capt
 `;
 
 /**
- * V26-14A operation memory log.
+ * Operation memory log.
  *
  * This is a factual operation trail, not Experience. It records the
  * tool-level decision/outcome metadata needed to explain routing,
@@ -209,7 +209,7 @@ CREATE INDEX IF NOT EXISTS operation_memory_logs_created_at_idx   ON operation_m
 `;
 
 /**
- * Stage 3b Experience schema (seeded in B-005, first writer in B-012).
+ * Experience schema.
  *
  * Co-located in the same `memory.db` file as Memory: Experience is a
  * derived view of Memory data, and keeping them in one DB keeps
@@ -226,7 +226,7 @@ CREATE TABLE IF NOT EXISTS experience_action_paths (
   success_count            INTEGER NOT NULL DEFAULT 0,
   failure_count            INTEGER NOT NULL DEFAULT 0,
   last_used_at             TEXT,
-  -- V24-02 replay-outcome write-back fields. All nullable because
+  -- Replay-outcome write-back fields. All nullable because
   -- they are only populated once a replay (or a direct
   -- experience_score_step call) has run against the row.
   --   last_replay_at        : ISO 8601 timestamp the writer used.
@@ -248,7 +248,7 @@ CREATE INDEX IF NOT EXISTS experience_action_paths_role_intent_idx
   ON experience_action_paths(page_role, intent_signature);
 CREATE INDEX IF NOT EXISTS experience_action_paths_last_used_at_idx
   ON experience_action_paths(last_used_at);
--- V24-02: lets the chooser (V24-03) ORDER BY composite_score_decayed
+-- Lets the chooser ORDER BY composite_score_decayed
 -- without a full table scan. Partial index condition is safe under
 -- SQLite; rows that have not been scored yet drop out of the index.
 CREATE INDEX IF NOT EXISTS experience_action_paths_composite_score_idx
@@ -274,13 +274,13 @@ CREATE INDEX IF NOT EXISTS experience_locator_prefs_last_hit_at_idx
 `;
 
 /**
- * Knowledge schema (B-017, opt-in via TABRIX_POLICY_CAPABILITIES=api_knowledge).
+ * Knowledge schema (opt-in via TABRIX_POLICY_CAPABILITIES=api_knowledge).
  *
  * `knowledge_api_endpoints` is the storage side of "API Knowledge capture
  * v1": a deduplicated, redaction-only-metadata view of API endpoints that
  * Tabrix has observed traversing the user's browser tabs while a
  * `chrome_network_capture` session was active. It exists to power future
- * "skip the page, ask the API" decisions (B-018+) — never to replay or
+ * "skip the page, ask the API" decisions — never to replay or
  * call user APIs from the agent side.
  *
  * Hard rules baked into the schema:
@@ -297,7 +297,7 @@ CREATE INDEX IF NOT EXISTS experience_locator_prefs_last_hit_at_idx
  *    are nullable on purpose so older rows survive Memory rotation.
  *
  * Idempotent CREATE: same pattern as `MEMORY_CREATE_TABLES_SQL` and
- * `EXPERIENCE_CREATE_TABLES_SQL`. Old DBs that pre-date B-017 simply
+ * `EXPERIENCE_CREATE_TABLES_SQL`. Old DBs that pre-date this table simply
  * pick up the new table on next `openMemoryDb()`; no ALTER needed.
  */
 export const KNOWLEDGE_CREATE_TABLES_SQL = `
@@ -318,9 +318,9 @@ CREATE TABLE IF NOT EXISTS knowledge_api_endpoints (
   sample_count           INTEGER NOT NULL DEFAULT 1,
   first_seen_at          TEXT NOT NULL,
   last_seen_at           TEXT NOT NULL,
-  -- V26-FIX-03 generic classifier outputs persisted alongside the
-  -- pre-FIX-03 GitHub-derived semantic_tag. NULLABLE so legacy
-  -- DBs and pre-FIX-03 callers stay valid; the classifier writer
+  -- Generic classifier outputs persisted alongside the
+  -- seed-derived semantic_tag. NULLABLE so legacy
+  -- DBs and older callers stay valid; the classifier writer
   -- always populates them on new upserts.
   --   semantic_type: closed enum (search/list/detail/pagination/
   --     filter/mutation/asset/analytics/auth/private/telemetry/unknown).
@@ -339,8 +339,8 @@ CREATE TABLE IF NOT EXISTS knowledge_api_endpoints (
   response_shape_summary   TEXT,
   usable_for_task          INTEGER,
   noise_reason             TEXT,
-  -- V27-08 additive lineage columns. NULLABLE so legacy DBs (pre-V27)
-  -- and pre-V27-08 callers stay valid; the V27-08 writer sets them on
+  -- Additive lineage columns. NULLABLE so legacy DBs
+  -- and older callers stay valid; the lineage writer sets them on
   -- new upserts. The migration helper
   -- ensureKnowledgeApiEndpointsLineageColumns() in client.ts stays in
   -- lockstep with this list 1:1.
@@ -351,20 +351,20 @@ CREATE TABLE IF NOT EXISTS knowledge_api_endpoints (
   --     a back-compat value from the family column so legacy rows
   --     written with family='github' surface as seed_adapter and rows
   --     written with family='observed' surface as observed. The
-  --     'deprecated_seed' value is the V27-08 retirement-state writer's
+  --     'deprecated_seed' value is the retirement-state writer's
   --     explicit way to express "this seed_adapter row has been
   --     superseded by an observed peer"; the seed row is NEVER deleted.
   --
   --   correlation_confidence: closed enum
   --     unknown_candidate | low_confidence | high_confidence
-  --     V27-07 single-session correlator never writes high_confidence;
-  --     V27-08 multi-session escalation is the only writer that may.
+  --     the single-session correlator never writes high_confidence;
+  --     multi-session escalation is the only writer that may.
   --
   --   correlated_region_id: brand-neutral region tag (e.g. main_list)
-  --     when V27-07 attributed the endpoint to a single DOM region.
+  --     when the correlator attributed the endpoint to a single DOM region.
   --
   --   confidence_reason: closed-enum-ish reason populated when the
-  --     V27-08 lookup downgrades / promotes a row.
+  --     lookup downgrades / promotes a row.
   --
   --   retirement_candidate: 0/1. Set to 1 when an observed peer
   --     stably outperforms a seed_adapter peer for the same site +
@@ -374,12 +374,12 @@ CREATE TABLE IF NOT EXISTS knowledge_api_endpoints (
   --     lineage breadcrumb (e.g. semantic source: capture | classifier |
   --     correlator). NULL when the writer has no lineage to record.
   --
-  --   schema_version: 1 = legacy (pre-V27-08). 2 = V27-08-aware row.
+  --   schema_version: 1 = legacy row. 2 = lineage-aware row.
   --     Reader collapses NULL to 1 so legacy rows still report a
   --     concrete number.
   --
   --   last_failure_reason: closed-enum-ish reason recorded by the
-  --     V27-08 writer when the most recent upsert evidence carried
+  --     writer when the most recent upsert evidence carried
   --     a failure signal (timeout, 4xx/5xx status, semantic
   --     mismatch, shape drift, empty response, etc.). NULL when the
   --     writer has no failure evidence to record. The reader never
@@ -404,7 +404,7 @@ CREATE INDEX IF NOT EXISTS knowledge_api_endpoints_last_seen_at_idx
 `;
 
 /**
- * V23-04 / B-018 v1.5 telemetry schema for `tabrix_choose_context`.
+ * Telemetry schema for `tabrix_choose_context`.
  *
  * Two tables, both append-only:
  *  - `tabrix_choose_context_decisions` — one row per chooser invocation
@@ -423,9 +423,9 @@ CREATE INDEX IF NOT EXISTS knowledge_api_endpoints_last_seen_at_idx
  * tables still exist (idempotent CREATE) but the chooser writer is a
  * no-op so we never silently grow the file in tests.
  *
- * No personally identifying info: `intent_signature` is the same
- * normalized form as B-013 (already pre-redacted), `page_role` is a
- * structural label, `site_family` is the closed B-018 enum. We do NOT
+ * No personally identifying info: `intent_signature` is normalized
+ * and already pre-redacted, `page_role` is a structural label, and
+ * `site_family` is a closed enum. We do NOT
  * store the raw `intent` string to avoid leaking session content into
  * a long-horizon table.
  */
@@ -438,11 +438,11 @@ CREATE TABLE IF NOT EXISTS tabrix_choose_context_decisions (
   strategy                 TEXT NOT NULL,
   fallback_strategy        TEXT,
   created_at               TEXT NOT NULL,
-  -- V25-02 layer-dispatch telemetry. All NULLABLE so legacy DBs and
-  -- pre-V25 callers stay valid. See
+  -- Layer-dispatch telemetry. All NULLABLE so legacy DBs and
+  -- older callers stay valid. See
   -- docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md section 11 and the
-  -- V25-02 Strategy Table for value semantics. knowledge_endpoint_family
-  -- is a derived telemetry-only label and MUST NOT drive any v2.5 route.
+  -- strategy table for value semantics. knowledge_endpoint_family
+  -- is a derived telemetry-only label and MUST NOT drive any route.
   chosen_layer             TEXT,
   layer_dispatch_reason    TEXT,
   source_route             TEXT,
@@ -451,12 +451,11 @@ CREATE TABLE IF NOT EXISTS tabrix_choose_context_decisions (
   token_estimate_full_read INTEGER,
   tokens_saved_estimate    INTEGER,
   knowledge_endpoint_family TEXT,
-  -- V24-03 ranked-replay audit fields persisted in V25-02 (per V3.1 M2
-  -- binding). Append-only; nullable for legacy rows.
+  -- Ranked-replay audit fields. Append-only; nullable for legacy rows.
   ranked_candidate_count       INTEGER,
   replay_eligible_blocked_by   TEXT,
   replay_fallback_depth        INTEGER,
-  -- V26-04 (B-027): honest dispatcher inputs.
+  -- Honest dispatcher inputs.
   --   dispatcher_input_source is a closed enum:
   --     'live_snapshot' | 'memory_snapshot' | 'fallback_zero'
   --   fallback_cause_v26 is the structured reason for the
@@ -464,9 +463,9 @@ CREATE TABLE IF NOT EXISTS tabrix_choose_context_decisions (
   --     'persistence_off' | 'no_session_snapshots' |
   --     'no_task_snapshots' | 'provider_error'
   -- Intentionally distinct from the existing fallback_cause column
-  -- (V25-02 layer-dispatcher reason) so audits can replay both
-  -- layers independently. Both NULLABLE so legacy rows + tests that
-  -- pre-date V26-04 stay valid.
+  -- (layer-dispatcher reason) so audits can replay both layers
+  -- independently. Both NULLABLE so legacy rows + tests that
+  -- pre-date these inputs stay valid.
   dispatcher_input_source      TEXT,
   fallback_cause_v26           TEXT
 );
@@ -490,11 +489,10 @@ CREATE INDEX IF NOT EXISTS tabrix_choose_context_outcomes_recorded_at_idx
 `;
 
 /**
- * V24-02 isolation telemetry — `experience_score_step` write-back warnings.
+ * Isolation telemetry — `experience_score_step` write-back warnings.
  *
  * Every row represents one Experience write-back attempt that the
- * runtime caught and isolated (see `.claude/TABRIX_V2_4_0_PLAN.md`
- * §V24-02 — failure handling). Two callers write here:
+ * runtime caught and isolated. Two callers write here:
  *  - per-step `experience_score_step` MCP handler (when the per-step
  *    counter delta SQL throws),
  *  - session-end `SessionCompositeScoreWriter` (when the composite

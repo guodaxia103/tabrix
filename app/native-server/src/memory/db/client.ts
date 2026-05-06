@@ -144,8 +144,8 @@ function execMigration(
 }
 
 /**
- * Guarded migration for B-012:
- * old DBs created before Sprint 3 lack `memory_sessions.aggregated_at`.
+ * Guarded migration for legacy session aggregation:
+ * old DBs created before session aggregation existed lack `memory_sessions.aggregated_at`.
  * SQLite does not support `ADD COLUMN IF NOT EXISTS`, so we probe first.
  */
 function ensureSessionAggregatedAtColumn(db: SqliteDatabase): void {
@@ -159,13 +159,13 @@ function ensureSessionAggregatedAtColumn(db: SqliteDatabase): void {
 }
 
 /**
- * V24-02 additive migration for legacy DBs that pre-date the
+ * Additive migration for legacy DBs that pre-date the
  * replay-outcome write-back columns. Each ALTER is guarded by a
  * `hasColumn` probe so re-opening a fresh DB (where the columns are
  * already present from `EXPERIENCE_CREATE_TABLES_SQL`) is a no-op.
  *
  * Splitting per-column keeps the migration shape uniform with the
- * B-012 helper above; it also means a partial-failure mid-migration
+ * session aggregation helper above; it also means a partial-failure mid-migration
  * (e.g. disk full between two ALTERs) leaves the DB in a recoverable
  * state — the next `openMemoryDb()` resumes from where it stopped.
  */
@@ -199,7 +199,7 @@ function ensureExperienceReplayWritebackColumns(db: SqliteDatabase): void {
       sql: 'ALTER TABLE experience_action_paths ADD COLUMN composite_score_decayed REAL',
     });
   }
-  // V24-02 partial index — created idempotently so legacy DBs pick it
+  // Replay scoring partial index — created idempotently so legacy DBs pick it
   // up after the column exists.
   execMigration(db, {
     table: 'experience_action_paths',
@@ -224,24 +224,24 @@ function ensureExperienceReplayWritebackColumns(db: SqliteDatabase): void {
 }
 
 /**
- * V25-02 additive migration for legacy DBs that pre-date the
+ * Additive migration for legacy DBs that pre-date the
  * layer-dispatch telemetry columns on `tabrix_choose_context_decisions`.
  * Each ALTER is guarded by a `hasColumn` probe so a virgin DB (where
  * the columns are already present from `CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL`)
  * is a no-op. Same partial-failure recovery contract as
  * `ensureExperienceReplayWritebackColumns`.
  *
- * Audit reference for V24-03 ranked-replay fields not yet persisted
+ * Audit reference for ranked-replay fields not yet persisted
  * before this migration:
  *   - `ranked_candidate_count` — top-K size after rank
  *   - `replay_eligible_blocked_by` — comma-joined block reasons
  *   - `replay_fallback_depth` — 0=top-1 reuse, ≥1=ranked fallback
  *
- * `knowledge_endpoint_family` is **telemetry-only** per V25-02
- * binding; it MUST NOT drive any v2.5 routing.
+ * `knowledge_endpoint_family` is **telemetry-only**; it MUST NOT
+ * drive routing.
  */
 /**
- * V26-FIX-03 additive migration for legacy DBs that pre-date the
+ * Additive migration for legacy DBs that pre-date the
  * generic-classifier columns on `knowledge_api_endpoints`. Each
  * ALTER is guarded by a `hasColumn` probe so a virgin DB (where
  * the columns are already present from `KNOWLEDGE_CREATE_TABLES_SQL`)
@@ -264,17 +264,17 @@ function ensureKnowledgeApiEndpointsClassifierColumns(db: SqliteDatabase): void 
 }
 
 /**
- * V27-08 additive migration for legacy DBs that pre-date Endpoint
- * Knowledge v2 lineage columns on `knowledge_api_endpoints`. Each
+ * Additive migration for legacy DBs that pre-date Endpoint
+ * Knowledge lineage columns on `knowledge_api_endpoints`. Each
  * ALTER is guarded by a `hasColumn` probe so a virgin DB (where the
  * columns are already present from `KNOWLEDGE_CREATE_TABLES_SQL`) is
  * a no-op. Same partial-failure recovery contract as
  * `ensureKnowledgeApiEndpointsClassifierColumns`.
  *
- * Schema-cite (V27-08): the columns added here mirror the inline
+ * Schema-cite: the columns added here mirror the inline
  * docstring inside `KNOWLEDGE_CREATE_TABLES_SQL` 1:1. If the
  * docstring drifts the migration must be updated in the same commit
- * or v2.7 reads will trip on a missing column.
+ * or reads will trip on a missing column.
  */
 function ensureKnowledgeApiEndpointsLineageColumns(db: SqliteDatabase): void {
   const additions: Array<[string, string]> = [
@@ -285,7 +285,7 @@ function ensureKnowledgeApiEndpointsLineageColumns(db: SqliteDatabase): void {
     ['retirement_candidate', 'INTEGER'],
     ['source_lineage_blob', 'TEXT'],
     ['schema_version', 'INTEGER'],
-    // Closeout — additive column for V27-08 evidence contract
+    // Additive column for the endpoint evidence contract
     // (`lastFailureReason`). Pre-closeout DBs have a NULL value
     // and are treated as "no failure evidence on file".
     ['last_failure_reason', 'TEXT'],
@@ -310,8 +310,8 @@ function ensureChooseContextDecisionLayerColumns(db: SqliteDatabase): void {
     ['ranked_candidate_count', 'INTEGER'],
     ['replay_eligible_blocked_by', 'TEXT'],
     ['replay_fallback_depth', 'INTEGER'],
-    // V26-04 (B-027) honest dispatcher inputs. Same idempotent
-    // additive pattern. Legacy DBs from before V26-04 pick these
+    // Honest dispatcher inputs. Same idempotent
+    // additive pattern. Legacy DBs from before these inputs pick these
     // columns up on next `openMemoryDb`. Virgin DBs see them from
     // the CREATE in `CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL`.
     ['dispatcher_input_source', 'TEXT'],
@@ -343,44 +343,44 @@ export function openMemoryDb(options?: MemoryDbOptions): OpenMemoryDbResult {
   db.exec(OPERATION_MEMORY_LOG_CREATE_TABLES_SQL);
   ensureSessionAggregatedAtColumn(db);
   // Legacy DBs may already have `experience_action_paths` without the
-  // V24-02 scoring columns. Add them before running the current schema,
+  // replay scoring columns. Add them before running the current schema,
   // because the schema includes an index on `composite_score_decayed`.
   ensureExperienceReplayWritebackColumns(db);
   db.exec(EXPERIENCE_CREATE_TABLES_SQL);
-  // V24-02: legacy-DB additive migration for replay-outcome write-back
+  // Legacy-DB additive migration for replay-outcome write-back
   // columns. Runs after `EXPERIENCE_CREATE_TABLES_SQL` so a virgin DB
   // sees the columns from the CREATE statement and the helper is a
   // pure no-op; legacy DBs pick up the columns via the guarded ALTERs.
   ensureExperienceReplayWritebackColumns(db);
-  // B-017: Knowledge tables. Idempotent CREATE IF NOT EXISTS — same
+  // Knowledge tables. Idempotent CREATE IF NOT EXISTS — same
   // contract as Memory / Experience. The table exists regardless of
   // capability state so writes from a freshly-enabled capability do
   // not race a missing table; gating happens at the writer.
   db.exec(KNOWLEDGE_CREATE_TABLES_SQL);
-  // V26-FIX-03: legacy-DB additive migration for the generic
+  // Legacy-DB additive migration for the generic
   // network-observe classifier columns. Runs after the CREATE so
   // virgin DBs see the columns from the CREATE statement and the
-  // helper is a pure no-op; legacy DBs from before V26-FIX-03 pick
+  // helper is a pure no-op; legacy DBs from before the classifier columns pick
   // up the columns via the guarded ALTERs.
   ensureKnowledgeApiEndpointsClassifierColumns(db);
-  // V27-08: legacy-DB additive migration for Endpoint Knowledge v2
+  // Legacy-DB additive migration for Endpoint Knowledge
   // lineage columns (endpoint_source / correlation_confidence /
   // correlated_region_id / confidence_reason / retirement_candidate /
   // source_lineage_blob / schema_version). Same idempotent guarded-
-  // ALTER contract as the V26-FIX-03 helper above.
+  // ALTER contract as the classifier helper above.
   ensureKnowledgeApiEndpointsLineageColumns(db);
-  // V23-04 / B-018 v1.5: Telemetry tables for the chooser. Same idempotent
-  // CREATE IF NOT EXISTS pattern; old DBs from before V23-04 pick up the
+  // Telemetry tables for the chooser. Same idempotent
+  // CREATE IF NOT EXISTS pattern; old DBs from before the telemetry tables pick up the
   // tables on next open without a migration. Writers respect the same
   // Memory persistence gate the rest of the native server uses, so a DB
   // running with persistence='off' will not accumulate telemetry rows.
   db.exec(CHOOSE_CONTEXT_TELEMETRY_CREATE_TABLES_SQL);
-  // V25-02: legacy-DB additive migration for layer-dispatch telemetry
+  // Legacy-DB additive migration for layer-dispatch telemetry
   // columns. Runs after the CHOOSE_CONTEXT CREATE so virgin DBs see
   // the columns from the CREATE statement and the helper is a pure
   // no-op; legacy DBs pick up the columns via the guarded ALTERs.
   ensureChooseContextDecisionLayerColumns(db);
-  // V24-02: isolation telemetry table. Same idempotent CREATE IF NOT
+  // Isolation telemetry table. Same idempotent CREATE IF NOT
   // EXISTS pattern. Lives outside `EXPERIENCE_CREATE_TABLES_SQL` so
   // the legacy-migration probe order stays stable (Experience first,
   // then warnings — a warning row that references `action_path_id`
