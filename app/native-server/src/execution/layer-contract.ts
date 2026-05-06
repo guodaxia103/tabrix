@@ -9,12 +9,11 @@ export type LayerContractDataSource =
   | 'cdp_enhanced_api_rows';
 
 /**
- * V26-FIX-06 — closed enum of intended uses that downstream
- * consumers (router / orchestrator / reader) declare when they
- * assert the contract. The contract layer is the GA mechanism that
- * stops a list-class data source (api_rows / markdown) from being
- * passed back to a click/action site, and stops API detail reads
- * from being reused as locator authority.
+ * Closed enum of intended uses that downstream consumers (router /
+ * orchestrator / reader) declare when they assert the contract. The contract
+ * layer stops a list-class data source (api_rows / markdown) from being
+ * passed back to a click/action site, and stops API detail reads from being
+ * reused as locator authority.
  *
  * - `list_read`: bulk row enumeration (search/list/pagination).
  * - `detail_read`: per-record deep read (issue body, package detail).
@@ -44,22 +43,22 @@ export interface LayerContractEnvelope {
   fallbackEntryLayer: 'L0' | 'L0+L1';
   reason: string;
   /**
-   * V26-FIX-06 — closed list of intended uses this envelope authorises.
-   * Sorted ascending for determinism. Read-only at the boundary; do NOT
-   * mutate after the envelope is constructed.
+   * Closed list of intended uses this envelope authorises. Sorted ascending
+   * for determinism. Read-only at the boundary; do NOT mutate after the
+   * envelope is constructed.
    */
   allowedUses: ReadonlyArray<LayerContractIntendedUse>;
   /**
-   * V26-FIX-06 — closed list of intended uses the envelope explicitly
-   * rejects (i.e. consumers MUST escalate to dom_json before doing any
-   * of these). Sorted ascending for determinism.
+   * Closed list of intended uses the envelope explicitly rejects (i.e.
+   * consumers MUST escalate to dom_json before doing any of these). Sorted
+   * ascending for determinism.
    */
   disallowedUses: ReadonlyArray<LayerContractIntendedUse>;
   /**
-   * V26-FIX-06 — fixed-vocabulary diagnostic the envelope returns when
-   * a consumer passed a `disallowedUses` operation. Populated for every
-   * envelope shape (not just on rejection) so the operation log can
-   * record a constant-time why-we-clamped marker.
+   * Fixed-vocabulary diagnostic the envelope returns when a consumer passed
+   * a `disallowedUses` operation. Populated for every envelope shape (not just
+   * on rejection) so the operation log can record a constant-time
+   * why-we-clamped marker.
    */
   escalationReason: string;
 }
@@ -191,16 +190,16 @@ export function buildAiFacingLayerEnvelope(
       ),
     }),
     detailRefs: Object.freeze(stableStringList(input.detailRefs)),
-    // V27-10 invariant: page complexity is advisory. A complex page
-    // alone must not widen the AI-facing envelope to L2; only the
-    // existing requestedLayer/taskRequiresDetail contract can do so.
+    // Page complexity is advisory. A complex page alone must not widen the
+    // AI-facing envelope to L2; only the requestedLayer/taskRequiresDetail
+    // contract can do so.
     complexPageDefaultedToL2: false as const,
   });
 }
 
 /**
- * V26-FIX-06 — closed-result of asserting the contract envelope
- * against an intended downstream use.
+ * Closed result of asserting the contract envelope against an intended
+ * downstream use.
  *
  * `ok = true` means the envelope authorises this use without any
  * widening or fallback. `ok = false` means the consumer MUST stop
@@ -217,11 +216,11 @@ export interface LayerContractAssertion {
 }
 
 /**
- * V26-FIX-06 — assert a contract envelope against a single intended
- * use. Pure function. The router/orchestrator/reader call this on
- * the way out of their respective decision branches; the operation
- * log pulls `envelope.allowedUses / disallowedUses / escalationReason`
- * directly from the envelope.
+ * Assert a contract envelope against a single intended use. Pure function.
+ * The router/orchestrator/reader call this on the way out of their respective
+ * decision branches; the operation log pulls
+ * `envelope.allowedUses / disallowedUses / escalationReason` directly from
+ * the envelope.
  */
 export function assertLayerContract(
   envelope: LayerContractEnvelope,
