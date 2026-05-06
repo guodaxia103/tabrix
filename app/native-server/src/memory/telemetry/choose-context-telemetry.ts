@@ -1,5 +1,5 @@
 /**
- * V23-04 / B-018 v1.5 — `tabrix_choose_context` telemetry repository.
+ * `tabrix_choose_context` telemetry repository.
  *
  * Single-purpose append-only writer for two SQLite tables:
  *
@@ -24,9 +24,9 @@
  * stay in one place.
  *
  * Privacy: we never store the raw `intent` string. `intent_signature`
- * is the same B-013 normalized form that already drives experience
+ * is the same normalized form that already drives experience
  * lookups (lower-cased, redacted). `page_role` is structural,
- * `site_family` is the closed B-018 enum.
+ * `site_family` is a closed enum.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -55,12 +55,12 @@ export interface RecordChooseContextDecisionInput {
   /** ISO timestamp. Caller-supplied so tests stay deterministic. */
   createdAt: string;
   // ---------------------------------------------------------------
-  // V25-02 layer-dispatch telemetry. All optional so callers that
-  // pre-date V25-02 (and ad-hoc tests) keep working unchanged.
+  // Layer-dispatch telemetry. All optional so older callers and ad-hoc tests
+  // keep working unchanged.
   // ---------------------------------------------------------------
   /** Selected layer envelope. Mirrors `read_page.requestedLayer`. */
   chosenLayer?: ReadPageRequestedLayer | null;
-  /** Closed reason key from the V25-02 Strategy Table. */
+  /** Closed reason key from the strategy table. */
   layerDispatchReason?: LayerDispatchReason | null;
   /** Locked 4-value source route. */
   sourceRoute?: LayerSourceRoute | null;
@@ -75,14 +75,14 @@ export interface RecordChooseContextDecisionInput {
   /** Telemetry-only knowledge family hint. MUST NOT drive routing. */
   knowledgeEndpointFamily?: string | null;
   // ---------------------------------------------------------------
-  // V24-03 ranked-replay audit fields persisted in V25-02 (M2 binding).
+  // Ranked-replay audit fields persisted for release analysis.
   // ---------------------------------------------------------------
   rankedCandidateCount?: number | null;
   replayEligibleBlockedBy?: ReplayEligibilityBlockReason | null;
   replayFallbackDepth?: number | 'cold' | null;
   // ---------------------------------------------------------------
-  // V26-04 (B-027) honest dispatcher inputs. Both optional — callers
-  // that pre-date V26-04 (and tests) keep working unchanged. The
+  // Honest dispatcher inputs. Both optional — older callers and tests keep
+  // working unchanged. The
   // `dispatcher_input_source` column is closed-enum at the SQL
   // boundary too, but the writer accepts a free string so it does
   // not have to import `DispatcherInputSource` from the chooser
@@ -172,7 +172,7 @@ export class ChooseContextTelemetryRepository {
       input.replayFallbackDepth === undefined || input.replayFallbackDepth === null
         ? null
         : input.replayFallbackDepth === 'cold'
-          ? -1 // sentinel for "no candidates surfaced"; chosen so positive depths stay 1:1 with V24-05 K7
+          ? -1 // sentinel for "no candidates surfaced"; positive depths stay 1:1 with candidate count
           : input.replayFallbackDepth;
     this.db
       .prepare(
@@ -313,7 +313,7 @@ export class ChooseContextTelemetryRepository {
   }
 
   // ============================================================
-  // V25-03 — Sidepanel "Execution" tab read helpers.
+  // Sidepanel "Execution" tab read helpers.
   //
   // All methods below return UI-shaped DTOs that the
   // `/execution/**` HTTP routes echo verbatim. They are pure reads
@@ -321,7 +321,7 @@ export class ChooseContextTelemetryRepository {
   // `tabrix_choose_context_outcomes` tables — no joins to
   // `memory_sessions`, no pulls from `memory_steps.tool_input`,
   // and no exposure of raw `intent` text. The intent_signature is
-  // already structurally normalized (B-013) before persistence so
+  // already structurally normalized before persistence so
   // it is safe to expose as a UI chip.
   // ============================================================
 
