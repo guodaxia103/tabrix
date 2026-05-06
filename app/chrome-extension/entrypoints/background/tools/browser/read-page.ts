@@ -32,6 +32,7 @@ import {
   buildMarkdownProjection,
   MARKDOWN_ARTIFACT_KIND,
 } from './read-page-markdown';
+import { inferSchemeGuard } from './read-page-scheme-guard';
 import { extractVisibleRegionRows, type VisibleRegionRowsResult } from './visible-region-rows';
 
 interface ReadPageStats {
@@ -56,78 +57,12 @@ interface ReadPageParams {
   requestedLayer?: ReadPageRequestedLayer;
 }
 
-interface SchemeGuardSummary {
-  scheme: string;
-  pageType: PageType;
-  supportedForContentScript: boolean;
-  unsupportedPageType: string | null;
-  recommendedAction: string | null;
-}
-
 const READ_PAGE_SPARSE_RETRY_DELAY_MS = 450;
 const INTERACTIVE_ELEMENTS_HELPER_FILE = 'inject-scripts/interactive-elements-helper.js';
 const INTERACTIVE_ELEMENTS_HELPER_PING_TIMEOUT_MS = 300;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function inferSchemeGuard(url: string): SchemeGuardSummary {
-  const raw = String(url || '');
-  const lower = raw.toLowerCase();
-
-  if (lower.startsWith('http://') || lower.startsWith('https://')) {
-    return {
-      scheme: lower.startsWith('https://') ? 'https' : 'http',
-      pageType: 'web_page',
-      supportedForContentScript: true,
-      unsupportedPageType: null,
-      recommendedAction: null,
-    };
-  }
-
-  if (lower.startsWith('chrome-extension://')) {
-    return {
-      scheme: 'chrome-extension',
-      pageType: 'extension_page',
-      supportedForContentScript: false,
-      unsupportedPageType: 'non_web_tab',
-      recommendedAction: 'switch_to_http_tab',
-    };
-  }
-
-  if (lower.startsWith('chrome://') || lower.startsWith('edge://') || lower.startsWith('about:')) {
-    return {
-      scheme: lower.startsWith('edge://')
-        ? 'edge'
-        : lower.startsWith('about:')
-          ? 'about'
-          : 'chrome',
-      pageType: 'browser_internal_page',
-      supportedForContentScript: false,
-      unsupportedPageType: 'non_web_tab',
-      recommendedAction: 'switch_to_http_tab',
-    };
-  }
-
-  if (lower.startsWith('devtools://')) {
-    return {
-      scheme: 'devtools',
-      pageType: 'devtools_page',
-      supportedForContentScript: false,
-      unsupportedPageType: 'non_web_tab',
-      recommendedAction: 'switch_to_http_tab',
-    };
-  }
-
-  const scheme = raw.includes(':') ? raw.slice(0, raw.indexOf(':')).toLowerCase() : 'unknown';
-  return {
-    scheme,
-    pageType: 'unsupported_page',
-    supportedForContentScript: false,
-    unsupportedPageType: 'non_web_tab',
-    recommendedAction: 'switch_to_http_tab',
-  };
 }
 
 function summarizePageContent(pageContent: string) {
