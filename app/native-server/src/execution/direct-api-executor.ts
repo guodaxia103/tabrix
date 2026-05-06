@@ -1,5 +1,5 @@
 /**
- * V26-FIX-01 — API Direct Execution Path.
+ * API Direct Execution Path.
  *
  * Pure async module. Lets `tabrix_choose_context` execute the chosen
  * read-only API endpoint inline when (a) the chooser routed to
@@ -15,8 +15,7 @@
  *      `chrome_read_page` shim. Failure / low-confidence / non-read-only
  *      intent collapses to `'fallback_required'` (or one of the
  *      `'skipped_*'` branches) and the upstream caller falls back to
- *      the legacy chrome_navigate → chrome_read_page → API-shim chain
- *      that is bit-identical pre-V26-FIX-01.
+ *      the legacy chrome_navigate → chrome_read_page → API-shim chain.
  *   2. `executionMode='direct_api'` is set ONLY when the API call
  *      actually returned ok. `browserNavigationSkipped=true` is the
  *      same gate. Telemetry never claims a savings we did not deliver.
@@ -29,11 +28,10 @@
  *      same scrubbed shape the existing `chrome_read_page` API shim
  *      already returns, so no privacy boundary moves.
  *
- * V26-FIX-04 will replace the `endpointFamily` literal entry point
- * with a knowledge-driven `lookupEndpointFamily` lookup; this file is
- * the surface that flip lands behind. V26-FIX-05 will then label the
- * underlying `api-knowledge.ts` adapters as `seed_adapter` so this
- * module is the only mainline reader.
+ * The knowledge-driven `lookupEndpointFamily` path is the preferred entry
+ * point. The underlying `api-knowledge.ts` adapters are labelled as
+ * `seed_adapter` so reports can distinguish compatibility fallback from
+ * observed endpoint reuse.
  */
 
 import type {
@@ -64,9 +62,9 @@ import type {
 import { mapDataSourceToLayerContract, type LayerContractEnvelope } from './layer-contract';
 
 /**
- * Closed enum the chooser surfaces back to telemetry / operation-log
- * (V26-FIX-07). Adding values requires extending the V3 evidence
- * contract in lockstep, so the union is intentionally narrow.
+ * Closed enum the chooser surfaces back to telemetry / operation-log. Adding
+ * values requires extending the evidence contract in lockstep, so the union
+ * is intentionally narrow.
  */
 export type DirectApiExecutionMode =
   | 'direct_api'
@@ -77,10 +75,9 @@ export type DirectApiExecutionMode =
   | 'skipped_route_mismatch';
 
 /**
- * Closed-enum decision reason (mirrors the V3 §V26-FIX-01 evidence
- * contract). Each branch in `tryDirectApiExecute` writes exactly one
- * of these values so a post-mortem can group by reason without parsing
- * free-form strings.
+ * Closed-enum decision reason. Each branch in `tryDirectApiExecute` writes
+ * exactly one of these values so a post-mortem can group by reason without
+ * parsing free-form strings.
  */
 export type DirectApiDecisionReason =
   | 'endpoint_knowledge_high_confidence'
@@ -91,23 +88,21 @@ export type DirectApiDecisionReason =
   | `api_call_failed_${ApiKnowledgeFallbackReason}`;
 
 /**
- * Closed enum the chooser writes onto the legacy `via_read_page`
- * snapshot. Defaults to `'via_read_page'` for every existing call site
- * so the v2.5 happy path is bit-identical pre V26-FIX-01.
+ * Closed enum the chooser writes onto the legacy `via_read_page` snapshot.
+ * Defaults to `'via_read_page'` for every existing call site.
  */
 export type ExecutionMode = 'direct_api' | 'via_read_page';
 
 /**
- * Read-only intent classification re-used from the V25-02 layer
- * dispatcher hint. Keeping the input enum closed (rather than relying
- * on raw user intent text) makes the gate auditable: a future intent
- * classifier change cannot accidentally widen the direct-execution
- * surface without flipping this hint.
+ * Read-only intent classification re-used from the layer dispatcher hint.
+ * Keeping the input enum closed (rather than relying on raw user intent text)
+ * makes the gate auditable: a future intent classifier change cannot
+ * accidentally widen the direct-execution surface without flipping this hint.
  */
 export type DirectApiIntentClass = 'read_only' | 'action' | 'unknown';
 
 /**
- * V26-FIX-01 confidence threshold. Calibrated from the existing
+ * Confidence threshold. Calibrated from the existing
  * candidates in `resolveApiKnowledgeCandidate`:
  *   - `github_issues_list`           = 0.86
  *   - `github_search_repositories`   = 0.82
@@ -120,22 +115,22 @@ export type DirectApiIntentClass = 'read_only' | 'action' | 'unknown';
 export const DIRECT_API_HIGH_CONFIDENCE_THRESHOLD = 0.7;
 
 /**
- * V26-FIX-09 — closed enum naming the cold-start guard mode. When
+ * Closed enum naming the cold-start guard mode. When
  * `'enabled'` the executor wraps each reader call in a single bounded
  * retry on transient network failures (see
  * {@link COLD_START_TRANSIENT_REASONS}); when `'disabled'` the
- * executor performs exactly one attempt per branch (legacy V26-FIX-04
- * behaviour). The guard is `'enabled'` by default so a real Gate B
- * cold-start does not flap, but tests / fast-lane runners can pin
- * `'disabled'` for deterministic single-attempt semantics.
+ * executor performs exactly one attempt per branch. The guard is `'enabled'`
+ * by default so a real acceptance cold-start does not flap, but tests /
+ * fast-lane runners can pin `'disabled'` for deterministic single-attempt
+ * semantics.
  */
 export type DirectApiColdStartGuard = 'enabled' | 'disabled';
 type DirectApiEndpointSource = 'observed' | 'seed_adapter' | 'manual_seed';
 
 /**
- * V26-FIX-09 default total budget across the first attempt + the
+ * Default total budget across the first attempt + the
  * (single) retry. Calibrated to keep the executor well under the
- * Gate B per-scenario latency budget (median ~1500–3000 ms). When
+ * per-scenario latency budget (median ~1500–3000 ms). When
  * the first attempt already consumes more than the budget, the
  * retry is skipped — `apiFinalReason` then reports the original
  * failure cause so a post-mortem can distinguish "no budget" from
@@ -144,7 +139,7 @@ type DirectApiEndpointSource = 'observed' | 'seed_adapter' | 'manual_seed';
 export const DIRECT_API_COLD_START_BUDGET_MS_DEFAULT = 5_000;
 
 /**
- * V26-FIX-09 — closed set of {@link ApiKnowledgeFallbackReason}
+ * Closed set of {@link ApiKnowledgeFallbackReason}
  * values the cold-start guard treats as "transient enough to retry
  * once". Anything else (rate_limited / http_forbidden /
  * unsupported_family / decode_error / semantic_mismatch / …) is a
@@ -152,16 +147,15 @@ export const DIRECT_API_COLD_START_BUDGET_MS_DEFAULT = 5_000;
  *
  * Keeping this set narrow is intentional: a wider retry loop would
  * mask 5xx waves on a real outage and inflate Gate B latency
- * silently. The two reasons in the set are the ones empirically tied
- * to Chrome/native-server cold-start sequences (DNS warm-up + first
- * TLS handshake), which is exactly what FIX-09 calls "release-
- * blocking polish".
+ * silently. The two reasons in the set are empirically tied to
+ * Chrome/native-server cold-start sequences (DNS warm-up + first TLS
+ * handshake).
  */
 export const COLD_START_TRANSIENT_REASONS: ReadonlySet<ApiKnowledgeFallbackReason> =
   new Set<ApiKnowledgeFallbackReason>(['network_timeout', 'network_error']);
 
 /**
- * V26-FIX-06 — singleton layer-contract envelope every direct-API
+ * Singleton layer-contract envelope every direct-API
  * branch surfaces. The executor only emits row-shape data
  * (`api_rows`); the constant lives here so every branch quotes the
  * same frozen object instead of re-deriving the envelope on each
@@ -192,24 +186,22 @@ export interface DirectApiExecutorInput {
   /** Optional confidence threshold override (defaults to {@link DIRECT_API_HIGH_CONFIDENCE_THRESHOLD}). */
   confidenceThreshold?: number;
   /**
-   * V26-FIX-04 — when both `dataNeed` and `knowledgeRepo` are
-   * supplied, the executor first tries a Knowledge-driven lookup
-   * (`lookupEndpointFamily` + `buildSafeRequest`) before falling
-   * back to the legacy `candidate` path. When either is missing
-   * (e.g. the caller did not load Memory yet) the executor behaves
-   * exactly like pre-FIX-04. This is the FIX-04 entry point.
+   * When both `dataNeed` and `knowledgeRepo` are supplied, the executor first
+   * tries a Knowledge-driven lookup (`lookupEndpointFamily` +
+   * `buildSafeRequest`) before falling back to the legacy `candidate` path.
+   * When either is missing (e.g. the caller did not load Memory yet), the
+   * executor preserves the legacy candidate behavior.
    */
   dataNeed?: DataNeed | null;
   knowledgeRepo?: EndpointKnowledgeReader | null;
   /**
-   * V26-FIX-09 — cold-start guard mode. Defaults to `'enabled'` so
-   * a single bounded retry kicks in on transient network failures.
-   * Pass `'disabled'` (or omit entirely from a deterministic test)
-   * to keep pre-FIX-09 single-attempt behaviour.
+   * Cold-start guard mode. Defaults to `'enabled'` so a single bounded retry
+   * kicks in on transient network failures. Pass `'disabled'` to keep
+   * deterministic single-attempt behaviour.
    */
   coldStartGuard?: DirectApiColdStartGuard;
   /**
-   * V26-FIX-09 — total budget (ms) covering both attempts. Defaults
+   * Total budget (ms) covering both attempts. Defaults
    * to {@link DIRECT_API_COLD_START_BUDGET_MS_DEFAULT}. The retry is
    * skipped when the first attempt already exceeds the budget.
    */
@@ -235,32 +227,31 @@ export interface DirectApiExecutionTelemetry {
   /** Suggested entry layer when `fallback_required`; null otherwise. */
   fallbackEntryLayer: 'L0+L1' | null;
   /**
-   * V26-FIX-04 — closed enum identifying which entry path the
-   * executor actually took. `'knowledge_driven'` when the
-   * lookup-first path produced the result; `'legacy_candidate'` when
-   * the executor fell through to the V25 hardcoded candidate; `null`
-   * for short-circuit branches that never reached either.
+   * Closed enum identifying which entry path the executor actually took.
+   * `'knowledge_driven'` when the lookup-first path produced the result;
+   * `'legacy_candidate'` when the executor fell through to the hardcoded seed
+   * candidate; `null` for short-circuit branches that never reached either.
    */
   readerMode: ReaderMode | null;
-  /** V26-FIX-04 — Knowledge endpoint id of the looked-up row; null when not knowledge-driven. */
+  /** Knowledge endpoint id of the looked-up row; null when not knowledge-driven. */
   knowledgeEndpointId: string | null;
-  /** V26-FIX-04 — `<host><path>` pattern of the looked-up endpoint; null when not knowledge-driven. */
+  /** `<host><path>` pattern of the looked-up endpoint; null when not knowledge-driven. */
   endpointPattern: string | null;
-  /** V26-FIX-04 — closed-enum semantic type of the looked-up endpoint; null when not knowledge-driven. */
+  /** Closed-enum semantic type of the looked-up endpoint; null when not knowledge-driven. */
   endpointSemanticType: string | null;
-  /** V26-FIX-04 — sorted list of query keys the safe builder emitted; null when not knowledge-driven. */
+  /** Sorted list of query keys the safe builder emitted; null when not knowledge-driven. */
   requestShapeUsed: ReadonlyArray<string> | null;
-  /** V26-FIX-04 — `'pass' | 'fail'` semantic-validation outcome; null when not knowledge-driven. */
+  /** `'pass' | 'fail'` semantic-validation outcome; null when not knowledge-driven. */
   semanticValidation: 'pass' | 'fail' | null;
   /**
-   * V26-FIX-05 — closed-enum lineage marker that distinguishes how the
+   * Closed-enum lineage marker that distinguishes how the
    * endpoint we ended up calling was sourced:
    *   - `'observed'`     — the row came from `chrome_network_capture`
    *                        (`family='observed'`); the safe-builder used
    *                        the persisted `urlPattern` + observed query
    *                        keys. This is the new mainline path.
    *   - `'seed_adapter'` — the row came from (or was equivalent to) the
-   *                        V25 hardcoded GitHub/npmjs adapter. Includes
+   *                        hardcoded GitHub/npmjs adapter. Includes
    *                        the legacy candidate path that has not yet
    *                        gone through Knowledge lookup.
    *   - `'manual_seed'`  — reserved for an operator-curated seed
@@ -272,34 +263,31 @@ export interface DirectApiExecutionTelemetry {
    *                        ever attempted).
    */
   endpointSource: DirectApiEndpointSource | null;
-  /** V27-12 — lookup ranking reason for knowledge-driven rows; null outside lookup-first path. */
+  /** Lookup ranking reason for knowledge-driven rows; null outside lookup-first path. */
   lookupChosenReason: EndpointLookupChosenReason | null;
-  /** V27-12 — capped DOM/API correlation confidence from the selected Knowledge row. */
+  /** Capped DOM/API correlation confidence from the selected Knowledge row. */
   correlationConfidence: CorrelationConfidenceLevel | null;
-  /** V27-12 — lineage of a de-prioritised peer, usually the retired seed_adapter row. */
+  /** Lineage of a de-prioritised peer, usually the retired seed_adapter row. */
   retiredEndpointSource: DirectApiEndpointSource | null;
   /**
-   * V26-FIX-05 — invariant marker. After FIX-04 + FIX-05 the executor
-   * always tries `lookupEndpointFamily` first when given a Knowledge
-   * repo; falling through to the legacy candidate is a *fallback*, not
-   * a bypass. We therefore hard-code `false` here and surface the field
-   * so the operation log (FIX-07) and Gate B transformer (FIX-08) can
-   * cite "no adapter bypass observed" as evidence rather than re-deriving
-   * the negative.
+   * Invariant marker. The executor always tries `lookupEndpointFamily` first
+   * when given a Knowledge repo; falling through to the legacy candidate is a
+   * fallback, not a bypass. We therefore hard-code `false` here and surface
+   * the field so operation logs and reports can cite "no adapter bypass
+   * observed" as evidence rather than re-deriving the negative.
    */
   adapterBypass: false;
   /**
-   * V26-FIX-05 — companion marker to `adapterBypass`. Always `true`
-   * starting with FIX-05; the executor now treats Knowledge lookup as
-   * the required entry point, with the seed adapter only filling in
-   * when the lookup misses.
+   * Companion marker to `adapterBypass`. The executor treats Knowledge lookup
+   * as the required entry point, with the seed adapter only filling in when
+   * the lookup misses.
    */
   knowledgeLookupRequired: true;
   /**
-   * V26-FIX-06 — frozen layer-contract envelope describing what the
+   * Frozen layer-contract envelope describing what the
    * downstream reader/orchestrator may do with the rows the executor
    * surfaces. Always present (even on fallback / short-circuit
-   * branches) so the operation log + Gate B transformer can quote a
+   * branches) so operation logs and reports can quote a
    * stable shape regardless of which executor branch fired. The
    * envelope is the `api_rows` shape on every direct-API attempt
    * (including the fallback_required branch — the rows we *would*
@@ -310,18 +298,18 @@ export interface DirectApiExecutionTelemetry {
    */
   layerContract: LayerContractEnvelope;
   /**
-   * V26-FIX-09 — wall-clock duration (ms) of the first reader
+   * Wall-clock duration (ms) of the first reader
    * attempt, including the retry candidate's first attempt. Always
    * `null` for short-circuit branches that never reached a reader.
    */
   apiFirstAttemptMs: number | null;
   /**
-   * V26-FIX-09 — number of retries the cold-start guard performed
+   * Number of retries the cold-start guard performed
    * (always `0` or `1`). Short-circuit branches stay at `0`.
    */
   apiRetryCount: 0 | 1;
   /**
-   * V26-FIX-09 — final fallback reason after all attempts. `null`
+   * Final fallback reason after all attempts. `null`
    * when the executor produced rows or never reached a reader. Use
    * this rather than the legacy `fallbackCause` when you want to
    * group telemetry by post-retry outcome (e.g. "retry succeeded
@@ -329,7 +317,7 @@ export interface DirectApiExecutionTelemetry {
    */
   apiFinalReason: ApiKnowledgeFallbackReason | null;
   /**
-   * V26-FIX-09 — closed enum showing whether the guard was active
+   * Closed enum showing whether the guard was active
    * for this call. The chooser fills this in even on short-circuit
    * branches so the operation log can cite the configured posture
    * without reaching into the input.
@@ -344,21 +332,21 @@ export interface DirectApiExecutionRows {
   rawBodyStored: false;
   dataPurpose: string;
   /**
-   * V26-PGB-01 — `true` iff the upstream reader returned ok but with
-   * an empty row list. Mirrors {@link ApiKnowledgeReadOk.emptyResult}
-   * so a downstream consumer can grep one stable boolean rather than
-   * re-deriving it from `rowCount === 0`.
+   * `true` iff the upstream reader returned ok but with an empty row list.
+   * Mirrors {@link ApiKnowledgeReadOk.emptyResult} so a downstream consumer
+   * can grep one stable boolean rather than re-deriving it from
+   * `rowCount === 0`.
    */
   emptyResult: boolean;
   /**
-   * V26-PGB-01 — closed-enum reason for the empty result; `null`
-   * whenever `emptyResult === false`.
+   * Closed-enum reason for the empty result; `null` whenever
+   * `emptyResult === false`.
    */
   emptyReason: 'no_matching_records' | null;
   /**
-   * V26-PGB-01 — human-readable message for the empty result, or
-   * `null` whenever `emptyResult === false`. Surfaces verbatim into
-   * the chrome_read_page `kind:'api_rows'` envelope.
+   * Human-readable message for the empty result, or `null` whenever
+   * `emptyResult === false`. Surfaces verbatim into the chrome_read_page
+   * `kind:'api_rows'` envelope.
    */
   emptyMessage: string | null;
 }
@@ -371,8 +359,8 @@ export interface DirectApiExecutionResult extends DirectApiExecutionTelemetry {
 /**
  * Map a user-intent hint into the read-only / action / unknown bucket
  * the executor accepts. Mirrors `deriveTaskTypeForLayerDispatch`
- * (`reading_only` ↔ `read_only`) so the gate aligns with the V25-02
- * Strategy Table without re-implementing the keyword scan.
+ * (`reading_only` ↔ `read_only`) so the gate aligns with the layer-dispatch
+ * strategy without re-implementing the keyword scan.
  */
 export function classifyDirectApiIntent(taskTypeHint: string | undefined): DirectApiIntentClass {
   switch (taskTypeHint) {
@@ -425,12 +413,11 @@ export async function tryDirectApiExecute(
     });
   }
 
-  // V26-FIX-04 — try the lookup-first knowledge-driven path before
-  // falling through to the legacy candidate path. The knowledge path
-  // returns `null` whenever it cannot produce a result (no urlHint /
-  // no Knowledge row / build refused / low confidence) so the legacy
-  // path remains the safety net for the V25 GitHub/npmjs Gate B
-  // fixtures.
+  // Try the lookup-first knowledge-driven path before falling through to the
+  // legacy candidate path. The knowledge path returns `null` whenever it
+  // cannot produce a result (no urlHint / no Knowledge row / build refused /
+  // low confidence) so the legacy path remains the safety net for GitHub/npmjs
+  // seed fixtures.
   if (input.dataNeed && input.knowledgeRepo) {
     const knowledgeResult = await tryKnowledgeDrivenPath(input, {
       coldStartGuard,
@@ -492,11 +479,10 @@ export async function tryDirectApiExecute(
       endpointSemanticType: null,
       requestShapeUsed: null,
       semanticValidation: null,
-      // V26-FIX-05 — the legacy candidate path consumes
-      // `resolveApiKnowledgeCandidate`, which is the V25 hardcoded
-      // GitHub/npmjs seed adapter. Label every result we get from this
-      // path as `seed_adapter` so the FIX-08 transformer can split the
-      // mix of `observed` vs `seed_adapter` reads in Gate B reports.
+      // The legacy candidate path consumes `resolveApiKnowledgeCandidate`,
+      // which is the hardcoded GitHub/npmjs seed adapter. Label every result
+      // from this path as `seed_adapter` so reports can split the mix of
+      // `observed` vs `seed_adapter` reads.
       endpointSource: 'seed_adapter',
       lookupChosenReason: null,
       correlationConfidence: null,
@@ -553,14 +539,13 @@ export async function tryDirectApiExecute(
 }
 
 /**
- * V26-FIX-04 — knowledge-driven entry path. Returns `null` when the
- * caller's {@link DataNeed} cannot be resolved against the
- * Knowledge repository; the executor then falls through to the
- * pre-FIX-04 legacy candidate path. Returns a fully-formed
- * `DirectApiExecutionResult` whenever the lookup hits with high
- * confidence — even when the underlying fetch fails (in which case
- * the result is `executionMode='fallback_required'` with the
- * knowledge-driven evidence still attached).
+ * Knowledge-driven entry path. Returns `null` when the caller's
+ * {@link DataNeed} cannot be resolved against the Knowledge repository; the
+ * executor then falls through to the legacy candidate path. Returns a
+ * fully-formed `DirectApiExecutionResult` whenever the lookup hits with high
+ * confidence — even when the underlying fetch fails (in which case the result
+ * is `executionMode='fallback_required'` with the knowledge-driven evidence
+ * still attached).
  */
 async function tryKnowledgeDrivenPath(
   input: DirectApiExecutorInput,
@@ -713,7 +698,7 @@ function normalizeDirectApiEndpointSource(
 }
 
 /**
- * V26-FIX-09 — bounded retry / cold-start guard helper.
+ * Bounded retry / cold-start guard helper.
  *
  * Calls `attempt()` once and:
  *   - returns immediately on `status === 'ok'`,
