@@ -23,7 +23,8 @@ import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { COMMAND_NAME } from '../scripts/constant';
 import { sessionManager } from '../execution/session-manager';
-import { __bridgeLaunchInternals, handleToolCall } from './register-tools';
+import { __bridgeLaunchInternals } from './bridge-recovery';
+import { handleToolCall } from './register-tools';
 
 function mockTasklist(browserRunning: boolean) {
   (spawnSync as jest.Mock).mockImplementation(() => ({

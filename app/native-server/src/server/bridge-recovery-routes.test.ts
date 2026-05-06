@@ -2,7 +2,7 @@ import { afterEach, beforeAll, describe, expect, jest, test } from '@jest/global
 import supertest from 'supertest';
 import Server from './index';
 import { bridgeRuntimeState } from './bridge-state';
-import { __bridgeLaunchInternals } from '../mcp/register-tools';
+import { __bridgeLaunchInternals } from '../mcp/bridge-recovery';
 import { __bridgeCommandChannelInternals } from './bridge-command-channel';
 
 describe('bridge recovery routes', () => {

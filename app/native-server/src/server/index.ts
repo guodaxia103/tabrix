@@ -25,7 +25,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { randomUUID } from 'node:crypto';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { createMcpServer } from '../mcp/mcp-server';
-import { __bridgeLaunchInternals } from '../mcp/register-tools';
+import { __bridgeLaunchInternals } from '../mcp/bridge-recovery';
 import { sessionManager } from '../execution/session-manager';
 import { SessionRegistry, type ConnectedClient, type TransportsSnapshot } from './session-registry';
 import { bridgeRuntimeState, type BridgeRuntimeSnapshot } from './bridge-state';
