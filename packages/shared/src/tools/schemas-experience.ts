@@ -44,7 +44,7 @@ export const EXPERIENCE_SCHEMAS: Tool[] = [
       'Tabrix MKEP Experience write/execute: replay a NAMED `actionPathId` previously surfaced by `experience_suggest_plan`. Re-runs the recorded `step_sequence` step-by-step against the named tab. Bounded, fail-closed: if any step fails, the replay halts at that step (no autonomous retry, no autonomous re-locator, no autonomous re-plan). Supports recorded `chrome_click_element` / `chrome_fill_or_select` steps, constrained pageRole matching, and the substitution whitelist `{queryText,targetLabel}`. Capability-gated by `TABRIX_POLICY_CAPABILITIES=experience_replay` (default-deny).',
     annotations: {
       // `requiresExplicitOptIn: true` is injected at listTools time by
-      // `register-tools.ts::filterToolsByPolicy` (alongside `riskTier`)
+      // `tool-registry-filters.ts::filterToolsByPolicy` (alongside `riskTier`)
       // so the static schema stays compatible with the upstream
       // MCP SDK `Tool['annotations']` shape. The capability gate
       // (CAPABILITY_GATED_TOOLS) drives both visibility and dispatch
