@@ -1,20 +1,19 @@
 /**
- * V25-02 — pure layer dispatcher.
+ * Pure layer dispatcher.
  *
- * Translates the V25-02 Layer Dispatch Strategy Table from
- * `.claude/strategy/TABRIX_V2_5_P0_CHAIN_V3_1.md` §V25-02 into a
- * deterministic priority-1→6 linear scan. Returns the first row that
- * matches; never throws to the caller (an unrecognized input or an
- * internal error becomes the fail-safe row instead, so downstream
- * tools always have a valid `chosenLayer`).
+ * Translates the layer dispatch strategy table into a deterministic
+ * priority-ordered linear scan. Returns the first row that matches;
+ * never throws to the caller (an unrecognized input or an internal
+ * error becomes the fail-safe row instead, so downstream tools always
+ * have a valid `chosenLayer`).
  *
  * Design constraints baked in:
  * - **Pure** — no IO, no clock, no Memory read. Tests pin the matrix
  *   without standing up SQLite or the chooser orchestrator.
  * - **Deterministic** — same input → same output across runs.
  * - **Closed enums** — `chosenLayer` / `reason` / `sourceRoute` come
- *   from `@tabrix/shared`; the v25 release gate compares against the
- *   same enum lists.
+ *   from `@tabrix/shared`; release gates compare against the same enum
+ *   lists.
  * - **Stability outranks tokens** — the safety override (priority 1)
  *   forces `L0+L1+L2` whenever the caller explicitly says replay /
  *   click verifier / portable-args needs full layers. Tokens never
@@ -89,7 +88,8 @@ export interface LayerDispatchInput {
    */
   knowledgeAvailable?: boolean;
   /**
-   * True when V26-07 resolved a read-only search/list API candidate.
+   * True when the API Knowledge layer resolved a read-only search/list
+   * candidate.
    * This lets API-backed reading tasks beat the generic "search form"
    * bucket without adding a new public source-route enum.
    */
@@ -162,13 +162,12 @@ export interface LayerDispatchResult {
  * Per-layer compression factor used to estimate `tokenEstimateChosen`.
  * The numbers are deliberately conservative ceilings against the
  * full-read byte length; tests rely on the SAME factors so a
- * regression in the dispatcher is visible in the V25-05 release gate.
+ * regression in the dispatcher is visible in the release gate.
  *
- * Source: V3.1 §V25-05 step 2 (L0 ≤ 35% of full read; L0+L1 ≤ 60%).
- * The dispatcher uses the upper bound from those gate thresholds so
- * an L0 result whose ACTUAL token count comes in lower will simply
- * widen the gap; an L0 result that comes in higher is a transformer
- * bug surfaced by the gate, not by the dispatcher.
+ * The dispatcher uses conservative upper bounds for L0 and L0+L1 so a
+ * result whose ACTUAL token count comes in lower simply widens the
+ * savings gap; a result that comes in higher is a transformer bug
+ * surfaced by the gate, not by the dispatcher.
  */
 function layerByteFraction(layer: ReadPageRequestedLayer): number {
   switch (layer) {
@@ -207,10 +206,10 @@ const SAFE_LAYER_FALLBACK: ReadPageRequestedLayer = 'L0+L1+L2';
 const SAFE_ROUTE_FALLBACK: LayerSourceRoute = 'dispatcher_fallback_safe';
 
 /**
- * Strategy table, one entry per row of V3.1 §V25-02. Order MATTERS —
- * the dispatcher walks the list top-to-bottom and returns the first
- * match. New rules MUST be inserted at the priority position they
- * belong to (the comment block above each block declares the priority).
+ * Strategy table, one entry per routing row. Order MATTERS — the
+ * dispatcher walks the list top-to-bottom and returns the first match.
+ * New rules MUST be inserted at the priority position they belong to
+ * (the comment block above each block declares the priority).
  */
 const RULES: readonly DispatchRule[] = Object.freeze([
   // ---------- priority 1 — safety override ----------
@@ -288,14 +287,14 @@ const RULES: readonly DispatchRule[] = Object.freeze([
   },
 
   // ---------- priority 5 — MKEP support ----------
-  // Strategy Table row 8 (V3.1) — kickoff binding:
+  // Replay kickoff binding:
   //   `experience_replay` available + safe → chosenLayer='L0',
   //   sourceRoute='experience_replay_skip_read'. The caller decides
   //   whether to skip `chrome_read_page` based on `sourceRoute`.
   // NOTE: this rule is intentionally placed AFTER user-intent and
   // task-type so an explicit "details" override is honoured even
-  // when replay is technically available — V25-04 stability
-  // contract.
+  // when replay is technically available — the stability contract takes
+  // precedence over token savings.
   {
     layer: 'L0',
     reason: 'experience_replay_executable',
@@ -378,7 +377,7 @@ function ensureClosedEnumsAreInSync(): void {
   // Asserts at module load that every reason / route / layer used by
   // RULES is present in the shared closed-enum constant arrays. A
   // mistyped reason in this file would otherwise silently bypass the
-  // V25-05 release gate.
+  // release gate.
   for (const rule of RULES) {
     if (!READ_PAGE_REQUESTED_LAYER_VALUES.includes(rule.layer)) {
       throw new Error(`layer-dispatch: unknown chosenLayer '${rule.layer}' in rule table`);
