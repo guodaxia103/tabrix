@@ -1,15 +1,12 @@
 /**
- * V26-04 (B-027) — Page Context Provider.
+ * Page Context Provider.
  *
- * Replaces the hard-coded `candidateActionsCount: 0, hvoCount: 0`
- * inputs that the V25-02 dispatcher previously fed to
- * `dispatchLayer(...)` with real counters drawn from the most recent
- * `memory_page_snapshots` row that matches the chooser call. The
- * chooser still runs as a pure function over already-resolved facts;
- * this provider is the only IO-touching adapter that surfaces those
- * facts.
+ * Replaces hard-coded dispatcher counters with real counters drawn from the
+ * most recent `memory_page_snapshots` row that matches the chooser call. The
+ * chooser still runs as a pure function over already-resolved facts; this
+ * provider is the only IO-touching adapter that surfaces those facts.
  *
- * Lookup order (per V4.1 §11, tightened by v2.6 S1 review):
+ * Lookup order:
  *   1. `live_snapshot` — newest snapshot whose `url` exactly matches
  *      the caller-supplied `url`. Strongest signal: the page the
  *      agent is asking about is the page we have telemetry for.
@@ -24,14 +21,12 @@
  *      `provider_error`) so chooser telemetry can answer "did we
  *      honestly not know, or did we lie with zeros?".
  *
- * v2.6 S1 review fix (P2): the previous implementation also tried a
- * global "newest snapshot anywhere" fallback when both URL and
- * pageRole missed, and labelled it `memory_snapshot`. That violated
- * the V4.1 §11 "honest input" contract — feeding an unrelated
- * page's complexity counters to the dispatcher is the same shape
- * of dishonesty as the hard-coded zeros V26-04 was created to
- * eliminate. The global lookup was removed; when no URL/pageRole
- * match exists we surface `fallback_zero` with the precise cause
+ * The previous implementation tried a global "newest snapshot anywhere"
+ * fallback when both URL and pageRole missed, and labelled it
+ * `memory_snapshot`. That violated the "honest input" contract: feeding an
+ * unrelated page's complexity counters to the dispatcher is the same shape of
+ * dishonesty as hard-coded zeros. The global lookup was removed; when no
+ * URL/pageRole match exists we surface `fallback_zero` with the precise cause
  * so telemetry stays trustworthy.
  *
  * Hard rules:
@@ -80,9 +75,8 @@ export interface PageContextProvider {
 /**
  * Narrow read surface the live provider needs from
  * `PageSnapshotRepository`. Intentionally does NOT include
- * `findLatestGlobal`: the v2.6 S1 review (P2) showed that an
- * unrelated newest snapshot is not honest dispatcher input. The
- * repository still exposes the global accessor for other callers
+ * `findLatestGlobal`: an unrelated newest snapshot is not honest dispatcher
+ * input. The repository still exposes the global accessor for other callers
  * (e.g. operator tooling), but the provider must not consume it.
  */
 export interface PageSnapshotReader {
@@ -177,11 +171,11 @@ export class LivePageContextProvider implements PageContextProvider {
         const byRole = this.reader.findLatestForPageRole(requestedPageRole);
         if (byRole) return projectSnapshot(byRole, 'memory_snapshot');
       }
-      // v2.6 S1 P2 fix: NO global "newest snapshot anywhere" fallback —
-      // an unrelated page's complexity is not honest dispatcher input.
-      // Surface a precise cause so chooser telemetry remains
-      // diagnosable (operator can tell URL miss apart from "we never
-      // had a hint" apart from "we had a hint but no row matched").
+      // NO global "newest snapshot anywhere" fallback: an unrelated page's
+      // complexity is not honest dispatcher input. Surface a precise cause so
+      // chooser telemetry remains diagnosable (operator can tell URL miss
+      // apart from "we never had a hint" apart from "we had a hint but no row
+      // matched").
       let cause: DispatcherInputFallbackCauseV26;
       if (url) {
         cause = 'no_session_snapshots';

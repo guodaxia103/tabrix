@@ -343,7 +343,7 @@ export const chromeActionPostProcessor: ToolPostProcessor = (ctx) => {
 };
 
 /**
- * B-017 — chrome_network_capture post-processor.
+ * chrome_network_capture post-processor.
  *
  * Runs only when:
  *   1. The `api_knowledge` capability is enabled
@@ -458,9 +458,9 @@ export const TOOL_POST_PROCESSORS: Partial<Record<string, ToolPostProcessor>> = 
   ...Object.fromEntries(
     Object.keys(ACTION_KIND_BY_TOOL).map((toolName) => [toolName, chromeActionPostProcessor]),
   ),
-  // B-017: API Knowledge capture (capability-gated, no MCP surface
-  // change). Keyed off the canonical tool name so legacy aliases
-  // (`chrome_network_capture_stop`) are intentionally not hooked.
+  // API Knowledge capture (capability-gated, no MCP surface change). Keyed off
+  // the canonical tool name so legacy aliases (`chrome_network_capture_stop`)
+  // are intentionally not hooked.
   [TOOL_NAMES.BROWSER.NETWORK_CAPTURE]: chromeNetworkCapturePostProcessor,
 };
 
