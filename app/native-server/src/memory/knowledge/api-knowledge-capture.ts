@@ -1,5 +1,5 @@
 /**
- * API Knowledge capture v1 — GitHub-first (B-017).
+ * API Knowledge capture.
  *
  * Pure transformation layer between a `chrome_network_capture` (action="stop")
  * result blob and zero or more `UpsertKnowledgeApiEndpointInput` rows.
@@ -18,13 +18,13 @@
  *    keys / array length + sample item keys / scalar type). The largest
  *    string we keep is a short content-type, never the body text.
  *
- * Scope (v1):
+ * Scope:
  *  - Only `api.github.com` URLs (host-prefix match). Same-origin
  *    `github.com/<owner>/<repo>/...` HTML/AJAX is intentionally out: it
  *    overlaps with page-snapshot logic and adds noise without unlocking
  *    new structured data.
  *  - Semantic tagging covers the representative endpoint families
- *    that drive the highest-value B-018 decisions: issues list +
+ *    that drive the highest-value structured reading decisions: issues list +
  *    detail, pulls list + detail, actions runs list + detail,
  *    actions workflows list, search/issues, search/repositories, and
  *    repo metadata. Anything else under api.github.com is captured as
@@ -251,7 +251,7 @@ export function deriveKnowledgeFromRequest(
   if (classifyCapturedRequestNoise(req) !== 'usable') return null;
 
   const method = normalizeMethod(req.method);
-  // V26-FIX-03 — first try the family-aware GitHub classifier; if it
+  // First try the family-aware GitHub classifier; if it
   // doesn't apply, fall back to a generic host-and-path normalizer
   // so non-platform URLs (HN, Wikipedia, …) can still seed Knowledge.
   const githubClassification = classifyGitHubFamily(req.url, method);
@@ -276,7 +276,7 @@ export function deriveKnowledgeFromRequest(
       base64Encoded: req.base64Encoded === true,
     });
 
-  // V26-FIX-03 — generic semantic classifier. Family-agnostic; runs
+  // Generic semantic classifier. Family-agnostic; runs
   // for GitHub rows too so the persisted `semantic_type` stays
   // consistent across families.
   const observed = classifyNetworkObserveEndpoint({
@@ -287,10 +287,10 @@ export function deriveKnowledgeFromRequest(
     queryKeys: requestSummary.queryKeys,
   });
 
-  // V27-08 — derive `endpointSource` from the V26-FIX-03 family
+  // Derive `endpointSource` from the family
   // hint. `family='observed'` (any non-GitHub host) -> 'observed';
   // `family='github'` -> 'seed_adapter' (the GitHub family adapter
-  // is the V25 hardcoded adapter we are gradually retiring); any
+  // is the seed adapter we are gradually retiring); any
   // other / future family -> 'unknown'. The repository performs
   // the same back-derivation on read for legacy NULL rows, so this
   // path stays in lockstep with `deriveEndpointSource()`.
@@ -320,9 +320,9 @@ export function deriveKnowledgeFromRequest(
     responseShapeSummary: summarizeResponseShape(responseSummary.shape),
     usableForTask: observed.usableForTask,
     noiseReason: observed.noiseReason,
-    // V27-08 — additive lineage. Single-session capture never
+    // Additive lineage. Single-session capture never
     // produces correlation evidence, so `correlationConfidence` and
-    // `correlatedRegionId` stay null here. The V27-07 correlator
+    // `correlatedRegionId` stay null here. The DOM-endpoint correlator
     // path is the only writer that bumps them. The lineage breadcrumb
     // explicitly records that this row came from `api-knowledge-capture`
     // (semanticSource='capture').
@@ -341,7 +341,7 @@ export function deriveKnowledgeFromRequest(
 }
 
 /**
- * V26-FIX-03 — short, deterministic stringification of the redacted
+ * Short, deterministic stringification of the redacted
  * response shape descriptor. Stays well under any reasonable column
  * size and never includes raw values; only counts and key-counts.
  */
@@ -359,7 +359,7 @@ function summarizeResponseShape(shape: KnowledgeApiResponseShape): string {
 }
 
 /**
- * V26-FIX-03 — generic, non-GitHub URL→pattern collapser. Produces a
+ * Generic, non-GitHub URL→pattern collapser. Produces a
  * deterministic `urlPattern` / `endpointSignature` for any host so
  * dedup still works without a curated family adapter. Reuses the
  * same identity-prefix and id/slug rules as `collapseUnknownPath`.
@@ -446,7 +446,7 @@ function createEmptyFilteredCounts(): Record<CaptureKnowledgeNoiseClass, number>
 interface ClassifiedEndpoint {
   site: string;
   /**
-   * V26-FIX-03 — was `'github'` literal pre-FIX-03. Widened to a
+   * Widened from the original GitHub-only literal to a
    * string so the generic, non-platform branch can write `'observed'`
    * (or any future family adapter the chooser learns) without a
    * second classifier interface.
@@ -568,7 +568,7 @@ function classifyGitHubFamily(rawUrl: string, method: string): ClassifiedEndpoin
  *     `endpointSignature`. These are cross-user / cross-tenant
  *     identifiers that would (a) bloat the dedup space and
  *     (b) leak per-user identity into a table that other accounts
- *     might later import (Stage 4a `experience_export`). We collapse
+ *     might later import through experience flows. We collapse
  *     the known identity-bearing prefixes:
  *       /users/<name>/...      → /users/:user/...
  *       /orgs/<name>/...       → /orgs/:org/...
@@ -838,25 +838,24 @@ function deriveStatusClass(req: CapturedNetworkRequest): string | null {
 }
 
 // ---------------------------------------------------------------------
-// V27-06 — Endpoint Candidate derivation
+// Endpoint Candidate derivation
 // ---------------------------------------------------------------------
 //
 // These helpers are pure-additive readers over the same captured
-// network bundle that v2.6's persistence path already consumes. They
+// network bundle that the persistence path already consumes. They
 // produce an `EndpointCandidate` view (closed-enum
 // search/list/detail/pagination/filter/document/empty/error/noise/unknown_candidate)
-// that V27-07 (DOM-Endpoint correlator) and V27-08 (Endpoint Knowledge
-// v2 lineage) will consume. V27-06 itself does NOT change the
-// persistence path, the repository schema, or any public MCP tool —
-// per Batch B hard boundary.
+// that the DOM-Endpoint correlator and Endpoint Knowledge lineage
+// will consume. This view does NOT change the
+// persistence path, the repository schema, or any public MCP tool.
 //
 // Privacy invariant: every field exposed in `EndpointShapeSummary` is
 // either a *closed-enum bucket* (sizeClass, contentTypeBucket, kind,
 // fieldType) or a *name list* (top-level keys, sample item keys). No
 // raw values, no header values, no body, no query *values*. The
 // existing `RESPONSE_OBJECT_KEY_LIMIT` / `RESPONSE_ARRAY_SAMPLE_KEY_LIMIT`
-// caps remain authoritative — the v2 summariser composes them, never
-// raises them.
+// caps remain authoritative — the endpoint candidate summariser composes
+// them, never raises them.
 
 const SHAPE_SIZE_SMALL_BYTES = 4 * 1024; // 4 KiB
 const SHAPE_SIZE_MEDIUM_BYTES = 64 * 1024; // 64 KiB
@@ -905,17 +904,17 @@ function fieldTypeOf(value: unknown): EndpointShapeFieldType {
 }
 
 /**
- * V27-06 — produce an `EndpointShapeSummary` from a single captured
+ * Produce an `EndpointShapeSummary` from a single captured
  * request. Reuses the existing `computeResponseShape` for the
- * structural sniff (so the v1 row classifier and v2 candidate
- * classifier can never disagree on `kind` for the same body) and
+ * structural sniff (so row persistence and candidate classification
+ * can never disagree on `kind` for the same body) and
  * adds:
  *   - bounded per-key field types (names → closed enum)
  *   - bucketed size class
  *   - closed-enum content-type bucket
  *   - `available=false` when the body could not be summarised
  *
- * `available=false` is the metadata-only signal that V27-06's
+ * `available=false` is the metadata-only signal that the
  * classifier reads — body absence MUST NOT be treated as
  * "endpoint unusable".
  */
@@ -965,7 +964,7 @@ export function summarizeEndpointShapeFromCapturedRequest(
   const body = typeof req.responseBody === 'string' ? req.responseBody : null;
   // Size measurement is independent of availability: an explicit
   // empty-string body still measures 0 bytes, even though we cannot
-  // summarise its shape. This lets V27-08 distinguish "0 bytes seen"
+  // summarise its shape. This lets lineage distinguish "0 bytes seen"
   // from "we never saw a body".
   const sizeClass = classifySizeClass(body === null ? null : body.length);
 
@@ -985,18 +984,18 @@ export function summarizeEndpointShapeFromCapturedRequest(
     };
   }
 
-  // Reuse the v1 structural sniff so kind never disagrees across
-  // classifiers. v1 already enforces JSON-only structural parsing;
+  // Reuse the shared structural sniff so kind never disagrees across
+  // classifiers. The shared sniff already enforces JSON-only structural parsing;
   // for non-JSON bodies it returns `kind: 'unknown'` and we surface
   // that as an `available` summary with no rowCount/keys.
   // The early-return above already eliminates `base64Encoded === true`.
-  const v1Shape = computeResponseShape({
+  const responseShape = computeResponseShape({
     contentType,
     body,
     base64Encoded: false,
   });
 
-  if (v1Shape.kind === 'unknown') {
+  if (responseShape.kind === 'unknown') {
     return {
       kind: 'unknown',
       topLevelKeys: [],
@@ -1008,7 +1007,7 @@ export function summarizeEndpointShapeFromCapturedRequest(
       available: true,
     };
   }
-  if (v1Shape.kind === 'scalar') {
+  if (responseShape.kind === 'scalar') {
     return {
       kind: 'scalar',
       topLevelKeys: [],
@@ -1022,16 +1021,16 @@ export function summarizeEndpointShapeFromCapturedRequest(
   }
 
   // Re-parse for fieldType extraction. We already paid the JSON.parse
-  // cost in v1Shape — the alternative is widening the v1 return type,
-  // which would need a v1 schema migration. Cheaper to re-parse: this
+  // cost in `responseShape`; widening the persistence-facing return type
+  // would force a schema migration. Cheaper to re-parse: this
   // path only runs from chrome_network_capture stop, never per-tab.
   let parsed: unknown;
   try {
     parsed = JSON.parse(body);
   } catch {
-    // v1 sniffed it OK; if we lose the race it is metadata-only.
+    // The shared sniff succeeded; if we lose the race it is metadata-only.
     return {
-      kind: v1Shape.kind,
+      kind: responseShape.kind,
       topLevelKeys: [],
       rowCount: null,
       sampleItemKeys: [],
@@ -1042,15 +1041,15 @@ export function summarizeEndpointShapeFromCapturedRequest(
     };
   }
 
-  if (v1Shape.kind === 'array' && Array.isArray(parsed)) {
-    // Array body → v1 already sampled item keys (capped). Field types
+  if (responseShape.kind === 'array' && Array.isArray(parsed)) {
+    // Array body: the shared sniff already sampled item keys (capped). Field types
     // for arrays are recorded only against the *sample* keys. We do
     // NOT record per-item field types — that would risk schema
     // explosion for heterogeneous arrays.
     const fieldTypes: Record<string, EndpointShapeFieldType> = {};
     for (const item of parsed.slice(0, 5)) {
       if (item && typeof item === 'object' && !Array.isArray(item)) {
-        for (const k of v1Shape.sampleItemKeys) {
+        for (const k of responseShape.sampleItemKeys) {
           if (fieldTypes[k]) continue;
           const v = (item as Record<string, unknown>)[k];
           if (v !== undefined) fieldTypes[k] = fieldTypeOf(v);
@@ -1061,7 +1060,7 @@ export function summarizeEndpointShapeFromCapturedRequest(
       kind: 'array',
       topLevelKeys: [],
       rowCount: parsed.length,
-      sampleItemKeys: v1Shape.sampleItemKeys,
+      sampleItemKeys: responseShape.sampleItemKeys,
       fieldTypes,
       sizeClass,
       contentTypeBucket,
@@ -1069,10 +1068,15 @@ export function summarizeEndpointShapeFromCapturedRequest(
     };
   }
 
-  if (v1Shape.kind === 'object' && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+  if (
+    responseShape.kind === 'object' &&
+    parsed &&
+    typeof parsed === 'object' &&
+    !Array.isArray(parsed)
+  ) {
     const parsedObject = parsed as Record<string, unknown>;
     const fieldTypes: Record<string, EndpointShapeFieldType> = {};
-    for (const k of v1Shape.topLevelKeys) {
+    for (const k of responseShape.topLevelKeys) {
       const v = parsedObject[k];
       if (v !== undefined) fieldTypes[k] = fieldTypeOf(v);
     }
@@ -1081,12 +1085,12 @@ export function summarizeEndpointShapeFromCapturedRequest(
     // length of the canonical inner array (preferred over total_count
     // because total_count can lie about the actual page size).
     let rowCount: number | null = null;
-    const arrayKey = v1Shape.topLevelKeys.find((k) => fieldTypes[k] === 'array');
+    const arrayKey = responseShape.topLevelKeys.find((k) => fieldTypes[k] === 'array');
     if (arrayKey) {
       const arr = parsedObject[arrayKey];
       if (Array.isArray(arr)) rowCount = arr.length;
     } else {
-      const totalKey = v1Shape.topLevelKeys.find(
+      const totalKey = responseShape.topLevelKeys.find(
         (k) => fieldTypes[k] === 'number' && /^(total_?count|count|total)$/i.test(k),
       );
       if (totalKey) {
@@ -1096,7 +1100,7 @@ export function summarizeEndpointShapeFromCapturedRequest(
     }
     return {
       kind: 'object',
-      topLevelKeys: v1Shape.topLevelKeys,
+      topLevelKeys: responseShape.topLevelKeys,
       rowCount,
       sampleItemKeys: [],
       fieldTypes,
@@ -1107,7 +1111,7 @@ export function summarizeEndpointShapeFromCapturedRequest(
   }
 
   return {
-    kind: v1Shape.kind,
+    kind: responseShape.kind,
     topLevelKeys: [],
     rowCount: null,
     sampleItemKeys: [],
@@ -1119,12 +1123,12 @@ export function summarizeEndpointShapeFromCapturedRequest(
 }
 
 /**
- * V27-06 — produce an `EndpointCandidate[]` view of the captured
+ * Produce an `EndpointCandidate[]` view of the captured
  * bundle. Pure: no IO, no `Date.now()`, no env reads.
  *
  * Capped at `KNOWLEDGE_CAPTURE_PER_BATCH_LIMIT` to mirror the
  * persistence path. The two paths share the same cap on purpose so
- * V27-08 lineage rows and V27-07 correlation candidates always agree
+ * lineage rows and correlation candidates always agree
  * on which requests were "in scope" for a given capture.
  */
 export function deriveEndpointCandidatesFromBundle(
@@ -1143,7 +1147,7 @@ export function deriveEndpointCandidatesFromBundle(
 }
 
 /**
- * V27-06 — single-request variant. Useful for V27-07 correlator
+ * Single-request variant. Useful for correlator
  * flows that already have one captured request and want the
  * candidate verdict without rebuilding a bundle.
  */
