@@ -1,5 +1,5 @@
 /**
- * V26-FIX-07 — structured "why" envelope for `operation_memory_logs`.
+ * Structured "why" envelope for `operation_memory_logs`.
  *
  * The repository persists this envelope inside the existing
  * `tab_hygiene_blob` column (no `ALTER TABLE`, no schema migration —
@@ -7,7 +7,7 @@
  *
  *   `{ schemaVersion: 2, tabHygiene, metadata }`
  *
- * Legacy rows written before V26-FIX-07 carry only the raw
+ * Legacy rows written before the metadata envelope carry only the raw
  * `tabHygiene` object (no wrapper). The repository's read path
  * detects the presence of `schemaVersion === 2` and falls back to
  * `tabHygiene = legacyBlob, metadata = makeOperationLogMetadataDefaults()`
@@ -18,7 +18,7 @@
  * the literal string `'not_applicable'` (or the typed
  * {@link NOT_APPLICABLE} constant). This guarantees a single
  * `taskSessionId` join surfaces every step with a non-null why
- * field — exactly the FIX-07 minimum success condition.
+ * field.
  *
  * Privacy boundary (unchanged from the existing `operation_memory_logs`
  * contract): no raw HTTP body, no cookie / authorization header,
@@ -41,7 +41,7 @@ export type NotApplicable = typeof NOT_APPLICABLE;
  * Closed structural envelope for every per-step metadata write.
  *
  * Field semantics (kept short on purpose — long descriptions live
- * in the FIX-07 plan, not in code comments):
+ * in the operation-memory design notes, not in code comments):
  *   - `externalTaskKey`  — caller-supplied task key (e.g. CI run id).
  *   - `runId`            — Tabrix benchmark / replay run id.
  *   - `scenarioId`       — bench/scenario id when applicable.
@@ -49,7 +49,7 @@ export type NotApplicable = typeof NOT_APPLICABLE;
  *   - `routerDecision`   — the DataSourceRouter `dataSource` selected.
  *   - `confidence`       — string-formatted confidence (or `'not_applicable'`).
  *   - `navigateSettleReason` — why a navigation settled (or `'not_applicable'`).
- *   - `observeReason`    — FIX-02 observeReason or `'not_applicable'`.
+ *   - `observeReason`    — observeReason or `'not_applicable'`.
  *   - `fallbackPlan`     — short code for the fallback plan reason.
  *   - `apiTelemetry`     — short status code from the API reader.
  */
@@ -65,7 +65,7 @@ export interface OperationLogMetadata {
   fallbackPlan: string | NotApplicable;
   apiTelemetry: string | NotApplicable;
   /**
-   * V26-PGB-01 — closed-vocab marker that the API call answered ok
+   * Closed-vocab marker that the API call answered ok
    * but with zero rows. Callers MUST pass the literal string
    * `'true'` or `'false'`; `'not_applicable'` is the default for
    * steps that did not reach a reader (DOM-only reads, replay
@@ -76,110 +76,107 @@ export interface OperationLogMetadata {
    */
   emptyResult: string | NotApplicable;
   /**
-   * V27-00 — closed-enum lifecycle state observed at this step.
-   * Producer: V27-01 LifecycleStateMachine. Stored as the string form
+   * Closed-enum lifecycle state observed at this step.
+   * Producer: LifecycleStateMachine. Stored as the string form
    * of `LifecycleState` (always includes `'unknown'`).
    */
   lifecycleState: string | NotApplicable;
   /**
-   * V27-00 — confidence in the lifecycle state, formatted as
-   * `'0.00'..'1.00'`. Producer: V27-01.
+   * Confidence in the lifecycle state, formatted as
+   * `'0.00'..'1.00'`.
    */
   lifecycleConfidence: string | NotApplicable;
   /**
-   * V27-00 — closed-enum action outcome. Producer: V27-03
+   * Closed-enum action outcome. Producer:
    * ActionOutcomeClassifier.
    */
   actionOutcome: string | NotApplicable;
-  /** V27-00 — confidence in the action outcome (`'0.00'..'1.00'`). */
+  /** Confidence in the action outcome (`'0.00'..'1.00'`). */
   outcomeConfidence: string | NotApplicable;
   /**
-   * V27-00 — closed-enum reason the v2.7 context tree was invalidated
-   * before this step. Producer: V27-05 ContextManager.
+   * Closed-enum reason the context tree was invalidated before this step.
+   * Producer: ContextManager.
    */
   contextInvalidationReason: string | NotApplicable;
-  /** V27-00 — closed-enum readiness state. Producer: V27-04. */
+  /** Closed-enum readiness state. */
   readinessState: string | NotApplicable;
-  /** V27-00 — closed-enum page-complexity kind. Producer: V27-04. */
+  /** Closed-enum page-complexity kind. */
   complexityKind: string | NotApplicable;
   /**
-   * V27-00 — opaque short id pointing at the in-memory fact-collector
-   * snapshot that backed this step. Producer: V27-02. Never persists
-   * the snapshot itself.
+   * Opaque short id pointing at the in-memory fact-collector snapshot that
+   * backed this step. Never persists the snapshot itself.
    */
   factSnapshotId: string | NotApplicable;
   /**
-   * V27-00 — synthetic per-event observer overhead recorded by V27-02
-   * (`'<N>ms'`). Evidence-only; the production path does not block on
-   * this value.
+   * Synthetic per-event observer overhead (`'<N>ms'`). Evidence-only; the
+   * production path does not block on this value.
    */
   observerOverhead: string | NotApplicable;
   /**
-   * V27-00 — opaque short id of the executable-budget rule that
-   * produced this step. Reserved for V27-15.
+   * Opaque short id of the executable-budget rule that produced this step.
    */
   decisionRuleId: string | NotApplicable;
-  /** V27-10R2 — source of same-task response summary evidence. */
+  /** Source of same-task response summary evidence. */
   responseSummarySource: string | NotApplicable;
-  /** V27-10R2 — whether the summary came from a request after sampler arm ack. */
+  /** Whether the summary came from a request after sampler arm ack. */
   capturedAfterArm: string | NotApplicable;
-  /** V27-10R2 — closed bridge path for the browser-context sampler. */
+  /** Closed bridge path for the browser-context sampler. */
   bridgePath: string | NotApplicable;
-  /** V27-13 — direct execution mode that produced the step. */
+  /** Direct execution mode that produced the step. */
   executionMode: string | NotApplicable;
-  /** V27-13 — reader path used by the step (`knowledge_driven`, legacy candidate, etc.). */
+  /** Reader path used by the step (`knowledge_driven`, legacy candidate, etc.). */
   readerMode: string | NotApplicable;
-  /** V27-13 — endpoint lineage selected by lookup / live observed reuse. */
+  /** Endpoint lineage selected by lookup / live observed reuse. */
   endpointSource: string | NotApplicable;
-  /** V27-13 — lookup ranking reason for the selected endpoint. */
+  /** Lookup ranking reason for the selected endpoint. */
   lookupChosenReason: string | NotApplicable;
-  /** V27-13 — capped DOM/API correlation confidence. */
+  /** Capped DOM/API correlation confidence. */
   correlationConfidence: string | NotApplicable;
-  /** V27-13 — lineage of the peer de-prioritised by observed reuse. */
+  /** Lineage of the peer de-prioritised by observed reuse. */
   retiredEndpointSource: string | NotApplicable;
-  /** V27-13 — semantic validation outcome for the selected endpoint. */
+  /** Semantic validation outcome for the selected endpoint. */
   semanticValidation: string | NotApplicable;
-  /** V27-13 — layer-contract reason attached to the selected data source. */
+  /** Layer-contract reason attached to the selected data source. */
   layerContractReason: string | NotApplicable;
-  /** V27-13 — clamped fallback entry layer, or `none` on success. */
+  /** Clamped fallback entry layer, or `none` on success. */
   fallbackEntryLayer: string | NotApplicable;
-  /** V27-13 — post-retry API reason, or `none` on success. */
+  /** Post-retry API reason, or `none` on success. */
   apiFinalReason: string | NotApplicable;
-  /** V27-13 — privacy gate result before AI output / persistence. */
+  /** Privacy gate result before AI output / persistence. */
   privacyCheck: string | NotApplicable;
-  /** V27-13 — task relevance gate result before AI output. */
+  /** Task relevance gate result before AI output. */
   relevanceCheck: string | NotApplicable;
-  /** V27-CDP-01 — network observation mode used by this step. */
+  /** Network observation mode used by this step. */
   observationMode: string | NotApplicable;
-  /** V27-CDP-01 — whether controlled CDP/debugger capture backed this step. */
+  /** Whether controlled CDP/debugger capture backed this step. */
   cdpUsed: string | NotApplicable;
-  /** V27-CDP-01 — closed reason for enabling CDP, or not_applicable. */
+  /** Closed reason for enabling CDP, or not_applicable. */
   cdpReason: string | NotApplicable;
-  /** V27-CDP-01 — CDP attach duration in milliseconds, stringified integer. */
+  /** CDP attach duration in milliseconds, stringified integer. */
   cdpAttachDurationMs: string | NotApplicable;
-  /** V27-CDP-01 — whether CDP detach completed cleanly. */
+  /** Whether CDP detach completed cleanly. */
   cdpDetachSuccess: string | NotApplicable;
-  /** V27-CDP-01 — whether an existing debugger attachment forced fallback. */
+  /** Whether an existing debugger attachment forced fallback. */
   debuggerConflict: string | NotApplicable;
-  /** V27-CDP-01 — response body evidence source, never the body itself. */
+  /** Response body evidence source, never the body itself. */
   responseBodySource: string | NotApplicable;
-  /** V27-CDP-01 — whether response body data was compacted before output. */
+  /** Whether response body data was compacted before output. */
   bodyCompacted: string | NotApplicable;
-  /** V27-P0-REAL-04 — whether visible DOM/AX rows were selected for this step. */
+  /** Whether visible DOM/AX rows were selected for this step. */
   visibleRegionRowsUsed: string | NotApplicable;
-  /** V27-P0-REAL-04 — visible DOM/AX row count, stringified integer. */
+  /** Visible DOM/AX row count, stringified integer. */
   visibleRegionRowCount: string | NotApplicable;
-  /** V27-P0-REAL-04 — why visible DOM/AX rows were rejected, or `none`. */
+  /** Why visible DOM/AX rows were rejected, or `none`. */
   visibleRegionRowsRejectedReason: string | NotApplicable;
-  /** V27-P0-REAL-04 — why API rows were unavailable before DOM fallback. */
+  /** Why API rows were unavailable before DOM fallback. */
   apiRowsUnavailableReason: string | NotApplicable;
-  /** V27-P0-REAL-04 — closed reason for the final data-source decision. */
+  /** Closed reason for the final data-source decision. */
   dataSourceDecisionReason: string | NotApplicable;
-  /** V27-P0-REAL-04 — selected visible row target-ref coverage, or unknown. */
+  /** Selected visible row target-ref coverage, or unknown. */
   targetRefCoverageRate: string | NotApplicable;
-  /** V27-P0-REAL-04 — visible DOM/card region quality score, or unknown. */
+  /** Visible DOM/card region quality score, or unknown. */
   regionQualityScore: string | NotApplicable;
-  /** V27-P0-REAL-04 — compact closed-enum rejection distribution JSON. */
+  /** Compact closed-enum rejection distribution JSON. */
   rejectedRegionReasonDistribution: string | NotApplicable;
 }
 
@@ -195,10 +192,9 @@ export const METADATA_KEYS = [
   'fallbackPlan',
   'apiTelemetry',
   'emptyResult',
-  // V27-00 additive keys (producers in V27-01..V27-15). All default to
-  // `not_applicable` so v2.6 rows replay with these as sentinel-filled
-  // metadata, and v2.7 rows can stamp the concrete value as it becomes
-  // available.
+  // Additive keys. All default to `not_applicable` so older rows replay with
+  // these as sentinel-filled metadata, and newer rows can stamp concrete values
+  // as they become available.
   'lifecycleState',
   'lifecycleConfidence',
   'actionOutcome',
