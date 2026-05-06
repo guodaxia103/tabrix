@@ -2,9 +2,8 @@
  * Task Session Context + Read Budget.
  *
  * Per-task in-process state for the `chrome_read_page` hot path. The
- * goal (V4.1 §0.1 / §6 / §11) is to stop redundant DOM reads from
- * accumulating cost while keeping the v2.5 happy path bit-identical
- * for the very first read of a page.
+ * goal is to stop redundant DOM reads from accumulating cost while
+ * keeping the first read of a page on the legacy bridge path.
  *
  * Hard rules implemented here:
  *
@@ -13,7 +12,7 @@
  *    they earn the L2 budget only after L0+L1 produced a verifier or
  *    target-evidence signal that demands it.
  * 2. Read budget is configurable via `TABRIX_READ_BUDGET_PER_TASK`
- *    (positive integer; falls back to 6 — the V4.1 §6 default).
+ *    (positive integer; falls back to 6).
  * 3. URL OR pageRole change invalidates `lastReadLayer` and
  *    `targetRefsSeen` so a fresh page on the same task starts clean.
  * 4. Layer demotion (e.g. `L0+L1+L2 → L0`) is allowed but flagged via
@@ -22,8 +21,8 @@
  * Pure module: no IO, no SQLite, no React/Vue. State lives only in
  * the parent `SessionManager` instance and is reset on
  * `finishSession`. Process restart resets cleanly because nothing is
- * persisted (V4.1 §0.1: "task session context is a runtime cap, not
- * a persisted budget").
+ * persisted; task session context is a runtime cap, not a persisted
+ * budget.
  */
 
 import type { ReadPageRequestedLayer } from '@tabrix/shared';
@@ -37,7 +36,7 @@ import type { ChooseContextDecisionSnapshot, SkipReadSourceKind } from './skip-r
 /**
  * Default read budget per task. Sized to "a small handful of fresh
  * reads is fine, more than that is almost certainly a runaway loop"
- * — the V4.1 §6 baseline. Override via `TABRIX_READ_BUDGET_PER_TASK`.
+ * baseline. Override via `TABRIX_READ_BUDGET_PER_TASK`.
  */
 export const DEFAULT_READ_BUDGET_PER_TASK = 6;
 
@@ -49,7 +48,7 @@ export const DEFAULT_READ_BUDGET_PER_TASK = 6;
  * the bridge by accident.
  */
 const READ_BUDGET_HARD_CAP = 100;
-const LIVE_OBSERVED_CONTEXT_CAP = 10;
+const MAX_LIVE_OBSERVED_CONTEXT_ENTRIES = 10;
 
 /**
  * Closed enum for `chosenSource` on a `chrome_read_page` outcome we
@@ -113,7 +112,7 @@ export interface TaskVisibleRegionRowsData extends RouterDomRegionRowsEvidence {
 
 /**
  * `shouldAllowReadPage` answer. Always returns a `suggestedLayer` so
- * callers do not need to re-derive the V4.1 §0.1 default (`L0+L1`).
+ * callers do not need to re-derive the first-read default (`L0+L1`).
  */
 export interface ShouldAllowReadPageResult {
   /**
@@ -212,7 +211,7 @@ export interface ShouldAllowReadPageInput {
  * map. Pure — accepts the env so tests do not have to mutate the
  * real `process.env`. Invalid values fall back to the default
  * silently (no warning spam — env mistypes are common and the gate
- * must keep the v2.5 happy path running).
+ * must keep the legacy happy path running).
  */
 export function resolveReadBudgetFromEnv(
   env: NodeJS.ProcessEnv | Record<string, string | undefined>,
@@ -412,11 +411,11 @@ export class TaskSessionContext {
     for (const item of evidence) {
       this.liveObservedApiEvidence.unshift({ ...item });
     }
-    if (this.liveObservedApiData.length > LIVE_OBSERVED_CONTEXT_CAP) {
-      this.liveObservedApiData.length = LIVE_OBSERVED_CONTEXT_CAP;
+    if (this.liveObservedApiData.length > MAX_LIVE_OBSERVED_CONTEXT_ENTRIES) {
+      this.liveObservedApiData.length = MAX_LIVE_OBSERVED_CONTEXT_ENTRIES;
     }
-    if (this.liveObservedApiEvidence.length > LIVE_OBSERVED_CONTEXT_CAP) {
-      this.liveObservedApiEvidence.length = LIVE_OBSERVED_CONTEXT_CAP;
+    if (this.liveObservedApiEvidence.length > MAX_LIVE_OBSERVED_CONTEXT_ENTRIES) {
+      this.liveObservedApiEvidence.length = MAX_LIVE_OBSERVED_CONTEXT_ENTRIES;
     }
   }
 
@@ -483,7 +482,7 @@ export class TaskSessionContext {
    * Record a successful `chrome_read_page` outcome. Increments
    * `readPageCount` exactly once per call. The caller is responsible
    * for invoking this AFTER the bridge returns success — failed
-   * reads do not consume the budget (V4.1 §6 — "honest budget").
+   * reads do not consume the budget.
    */
   public noteReadPage(input: NoteReadPageInput): void {
     this.readPageCount += 1;
@@ -518,7 +517,7 @@ export class TaskSessionContext {
    *   4. Otherwise → allowed cleanly.
    *
    * Suggested layer is always `'L0+L1'` for the very first read on
-   * the current page (V4.1 §0.1 hard rule); otherwise echoes back
+   * the current page; otherwise echoes back
    * the requested layer.
    */
   public shouldAllowReadPage(input: ShouldAllowReadPageInput): ShouldAllowReadPageResult {
