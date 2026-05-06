@@ -41,14 +41,14 @@ export const EXPERIENCE_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.EXPERIENCE.REPLAY,
     description:
-      'Tabrix MKEP Experience write/execute (V24-01): replay a NAMED `actionPathId` previously surfaced by `experience_suggest_plan`. Re-runs the recorded `step_sequence` step-by-step against the named tab. Bounded, fail-closed: if any step fails, the replay halts at that step (no autonomous retry, no autonomous re-locator, no autonomous re-plan). v1 only knows two step kinds (`chrome_click_element`, `chrome_fill_or_select`); GitHub-only `pageRole` set; substitution whitelist is `{queryText,targetLabel}`. Capability-gated by `TABRIX_POLICY_CAPABILITIES=experience_replay` (default-deny). See `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md`.',
+      'Tabrix MKEP Experience write/execute: replay a NAMED `actionPathId` previously surfaced by `experience_suggest_plan`. Re-runs the recorded `step_sequence` step-by-step against the named tab. Bounded, fail-closed: if any step fails, the replay halts at that step (no autonomous retry, no autonomous re-locator, no autonomous re-plan). Supports recorded `chrome_click_element` / `chrome_fill_or_select` steps, constrained pageRole matching, and the substitution whitelist `{queryText,targetLabel}`. Capability-gated by `TABRIX_POLICY_CAPABILITIES=experience_replay` (default-deny).',
     annotations: {
       // `requiresExplicitOptIn: true` is injected at listTools time by
       // `register-tools.ts::filterToolsByPolicy` (alongside `riskTier`)
       // so the static schema stays compatible with the upstream
       // MCP SDK `Tool['annotations']` shape. The capability gate
       // (CAPABILITY_GATED_TOOLS) drives both visibility and dispatch
-      // — see `docs/B_EXPERIENCE_REPLAY_BRIEF_V1.md` §4.1 / §4.3.
+      // for this tool family.
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
@@ -67,7 +67,7 @@ export const EXPERIENCE_SCHEMAS: Tool[] = [
         variableSubstitutions: {
           type: 'object',
           description:
-            "Optional substitution map. Keys are restricted to the v1 whitelist: 'queryText' (search/filter text) and 'targetLabel' (label/tag/state selector). Values are runtime strings to substitute into the per-step `templateFields` declared at capture time. A key not present in a step's `templateFields` is rejected (`failed-precondition`). Empty / omitted = replay verbatim.",
+            "Optional substitution map. Keys are restricted to the current whitelist: 'queryText' (search/filter text) and 'targetLabel' (label/tag/state selector). Values are runtime strings to substitute into the per-step `templateFields` declared at capture time. A key not present in a step's `templateFields` is rejected (`failed-precondition`). Empty / omitted = replay verbatim.",
           properties: {
             queryText: {
               type: 'string',
@@ -103,7 +103,7 @@ export const EXPERIENCE_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.EXPERIENCE.SCORE_STEP,
     description:
-      'Tabrix MKEP Experience write-back (V24-02): record one replay step outcome (success or failure) against a NAMED `actionPathId` and `stepIndex`. Re-uses the `ClickObservedOutcome` taxonomy (no parallel outcome enum). Native-handled, capability-gated by `experience_replay` (same gate as `experience_replay`). The replay engine calls this automatically per step; upstream callers normally do NOT need to invoke it. Failure of the underlying SQLite write is isolated and surfaced via a structured `experience_writeback_warnings` row instead of being thrown back to the caller — `status: "isolated"` indicates that path. See `.claude/TABRIX_V2_4_0_PLAN.md` §V24-02.',
+      'Tabrix MKEP Experience write-back: record one replay step outcome (success or failure) against a NAMED `actionPathId` and `stepIndex`. Re-uses the `ClickObservedOutcome` taxonomy (no parallel outcome enum). Native-handled, capability-gated by `experience_replay` (same gate as `experience_replay`). The replay engine calls this automatically per step; upstream callers normally do NOT need to invoke it. Failure of the underlying SQLite write is isolated and surfaced via a structured `experience_writeback_warnings` row instead of being thrown back to the caller — `status: "isolated"` indicates that path.',
     annotations: {
       readOnlyHint: false,
       idempotentHint: false,

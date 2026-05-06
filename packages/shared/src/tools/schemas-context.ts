@@ -5,7 +5,7 @@ export const CONTEXT_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.CONTEXT.CHOOSE,
     description:
-      'Tabrix MKEP context selector (v1 minimal slice, B-018). Given an `intent` (free text) and optional `url` / `pageRole` / `siteId`, deterministically pick which existing native asset to use as context: `experience_reuse` (a previously-successful action path), `knowledge_light` (the captured site API catalog as shape evidence — Tabrix CANNOT call those endpoints in v1), or `read_page_required` (fallback: caller should issue `chrome_read_page`). Pure SELECT against local SQLite. GitHub-first; non-GitHub URLs always resolve to `read_page_required`. See `docs/B_018_CONTEXT_SELECTOR_V1.md` for the contract and the v2 deferrals.',
+      'Tabrix MKEP context selector. Given an `intent` (free text) and optional `url` / `pageRole` / `siteId`, deterministically pick which existing native asset to use as context: `experience_reuse` (a previously-successful action path), `knowledge_light` (captured site API catalog / endpoint evidence), or `read_page_required` (fallback: caller should issue `chrome_read_page`). Pure SELECT against local SQLite. Unsupported or uncertain inputs resolve to `read_page_required`.',
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
@@ -34,7 +34,7 @@ export const CONTEXT_SCHEMAS: Tool[] = [
         siteId: {
           type: 'string',
           description:
-            'Optional explicit site-family override. v1 only honours `"github"`; other values are ignored (URL-derived family is used instead).',
+            'Optional explicit site-family override. Currently only honours `"github"`; other values are ignored (URL-derived family is used instead).',
           enum: ['github'],
         },
       },
@@ -44,7 +44,7 @@ export const CONTEXT_SCHEMAS: Tool[] = [
   {
     name: TOOL_NAMES.CONTEXT.RECORD_OUTCOME,
     description:
-      "V23-04 / B-018 v1.5 outcome write-back for `tabrix_choose_context`. Closes the loop on whether the suggested strategy actually saved a `chrome_read_page` round-trip. Pure-INSERT P0: appends one telemetry row keyed by `decisionId` and never reads, mutates, or replays anything else. `outcome` is one of `'reuse'` (acted on the suggestion), `'fallback'` (had to fall back to `chrome_read_page` anyway), `'completed'` (the whole task completed on top of the suggestion), `'retried'` (re-issued `tabrix_choose_context`). Returns `{ status: 'unknown_decision' }` when the id has no matching row so the caller can distinguish a lost decision from a permission / transport error.",
+      "Outcome write-back for `tabrix_choose_context`. Closes the loop on whether the suggested strategy actually saved a `chrome_read_page` round-trip. Pure-INSERT P0: appends one telemetry row keyed by `decisionId` and never reads, mutates, or replays anything else. `outcome` is one of `'reuse'` (acted on the suggestion), `'fallback'` (had to fall back to `chrome_read_page` anyway), `'completed'` (the whole task completed on top of the suggestion), `'retried'` (re-issued `tabrix_choose_context`). Returns `{ status: 'unknown_decision' }` when the id has no matching row so the caller can distinguish a lost decision from a permission / transport error.",
     annotations: {
       readOnlyHint: false,
       idempotentHint: false,
