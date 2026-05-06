@@ -1,12 +1,12 @@
 /**
- * V26-FIX-05 — seed-adapter classification.
+ * Seed-adapter classification.
  *
- * Every symbol in this file is part of the V25 GitHub/npmjs *seed
+ * Every symbol in this file is part of the GitHub/npmjs *seed
  * adapter*: a hardcoded family table the v2.5 codebase used as the
- * sole API entry point. Starting with v2.6 the mainline reader is the
+ * sole API entry point. The mainline reader is the
  * Knowledge-driven on-demand path (`api-knowledge/endpoint-lookup` +
  * `api-knowledge/safe-request-builder` + `api-knowledge/knowledge-driven-reader`),
- * which is fed by the generic `network-observe-classifier` (FIX-03).
+ * which is fed by the generic `network-observe-classifier`.
  *
  * This file is therefore a *compatibility surface*, not the mainline:
  *   - `direct-api-executor.tryDirectApiExecute` ALWAYS tries
@@ -15,15 +15,14 @@
  *     when the lookup misses.
  *   - Every result that this adapter feeds to the executor is labelled
  *     `endpointSource='seed_adapter'` in
- *     `DirectApiExecutionTelemetry` so the FIX-08 Gate B transformer
- *     can split the run mix into `observed` (mainline) vs
+ *     `DirectApiExecutionTelemetry` so reports can split the run mix into
+ *     `observed` (mainline) vs
  *     `seed_adapter` (compatibility) vs `manual_seed` (reserved).
  *
  * Do NOT add new platform `*Family` entries here. Any new endpoint a
- * v2.6 contributor wants to teach the reader about must go through
- * the network-observe classifier so it lands in the Memory DB as an
- * `observed` row first; the executor will then pick it up via the
- * lookup path.
+ * contributor wants to teach the reader about must go through the
+ * network-observe classifier so it lands in the Memory DB as an `observed`
+ * row first; the executor will then pick it up via the lookup path.
  *
  * The `seed_adapter` lineage is the only kind this file emits; the
  * other two members of the `endpointSource` closed enum are produced

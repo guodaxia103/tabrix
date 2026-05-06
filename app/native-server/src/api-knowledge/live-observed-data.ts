@@ -1,5 +1,5 @@
 /**
- * V27-10R — current-task live observed API data selector.
+ * Current-task live observed API data selector.
  *
  * This module converts a just-stopped `chrome_network_capture` bundle
  * into safe compact rows for the same task. It never persists or

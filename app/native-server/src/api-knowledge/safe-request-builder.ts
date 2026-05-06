@@ -1,6 +1,5 @@
 /**
- * V26-FIX-04 — generic safe-request builder for the knowledge-driven
- * on-demand reader.
+ * Generic safe-request builder for the knowledge-driven on-demand reader.
  *
  * Pure function module. Given an `EndpointMatch` (output of
  * `endpoint-lookup.ts`) and the caller's `DataNeed`, produces a
@@ -8,15 +7,14 @@
  * fetcher. Two builder branches:
  *
  *   1. `seed_adapter` — the looked-up `urlPattern` matches one of the
- *      V25 hardcoded GitHub/npmjs builders. We delegate to the
+ *      hardcoded GitHub/npmjs builders. We delegate to the
  *      existing `buildPublicRequest`-style helpers so the produced
- *      URL is bit-identical to the pre-FIX-04 path. This is
- *      intentional: V26-FIX-05 will then label these rows
- *      `endpointSource=seed_adapter` to make the lineage visible in
- *      Gate B reports without breaking any currently-green test.
+ *      URL is bit-identical to the legacy path. This is intentional:
+ *      `endpointSource=seed_adapter` makes the lineage visible in reports
+ *      without breaking compatibility.
  *
- *   2. `generic` — for `family='observed'` rows (FIX-03 capture
- *      output) and any future family the chooser learns. We assemble
+ *   2. `generic` — for `family='observed'` rows and any future family the
+ *      chooser learns. We assemble
  *      `https://${site}${pathPattern}?<param>=<value>` from the
  *      persisted `urlPattern` + `requestSummary.queryKeys`, mapping
  *      the caller's `dataNeed.params` onto whichever query key is the
@@ -39,19 +37,19 @@
 
 import type { EndpointMatch, DataNeed, SafeRequestPlan } from './types';
 
-/** Capacity hint mirrored from the V25 builder. */
+/** Capacity hint mirrored from the seed builder. */
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 10;
 const MAX_PARAM_VALUE_LENGTH = 160;
 
 /**
- * Map a `<host><path>` urlPattern back to the V25 seed family when
+ * Map a `<host><path>` urlPattern back to the seed family when
  * possible. `null` ⇒ we will use the generic builder branch.
  *
  * Pattern keys here MUST stay in lockstep with
  * `app/native-server/src/api/api-knowledge.ts` `classifySeedEndpoint`
- * — both modules are about the same physical endpoints; FIX-04 is
- * about reading them through Knowledge, not about adding new ones.
+ * — both modules are about the same physical endpoints. This builder reads
+ * them through Knowledge; it does not add new seed endpoints.
  */
 const SEED_PATTERN_MAP: ReadonlyMap<
   string,

@@ -1,8 +1,8 @@
 /**
- * V26-FIX-04 — internal DTOs for the knowledge-driven on-demand reader.
+ * Internal DTOs for the knowledge-driven on-demand reader.
  *
  * These types live in the new `api-knowledge/` namespace (not under
- * `api/api-knowledge.ts`, which is the V25 hardcoded seed adapter) and
+ * `api/api-knowledge.ts`, which is the hardcoded seed adapter) and
  * are shared by `endpoint-lookup.ts`, `safe-request-builder.ts`, and
  * the upgraded `direct-api-executor.ts`. They are explicitly NOT
  * exported from `packages/shared` — every type here is a process-local
@@ -26,7 +26,7 @@ import type {
 
 /**
  * Coarse "what does the caller want to read" descriptor. Mirrors the
- * V25-02 layer-dispatch hints but stays internal to the api-knowledge
+ * layer-dispatch hints but stays internal to the api-knowledge
  * layer so a future strategy-table change does not leak into the
  * public chooser schema.
  *
@@ -43,7 +43,7 @@ export interface DataNeed {
   semanticTypeWanted: 'search' | 'list' | 'detail' | 'pagination' | 'filter' | null;
   /** URL the user is already on. Used to derive the `site` for lookup. */
   urlHint: string | null;
-  /** Optional V25-02 page-role hint (`issues_list`, `package_detail`, …). */
+  /** Optional page-role hint (`issues_list`, `package_detail`, …). */
   pageRole: string | null;
   /**
    * Optional caller-supplied parameter map (e.g. `{ query: 'tabrix' }`).
@@ -54,7 +54,7 @@ export interface DataNeed {
 }
 
 /**
- * V26-FIX-04 — minimal subset of `KnowledgeApiRepository` the lookup
+ * Minimal subset of `KnowledgeApiRepository` the lookup
  * actually needs. Declared as a structural type so unit tests can
  * inject an in-memory fixture without spinning up SQLite.
  */
@@ -77,14 +77,14 @@ export interface EndpointKnowledgeReader {
  * the request builder (urlPattern, queryKeys, family) and the evidence
  * contract (semanticValidation, score).
  *
- * V27-08 additive surface:
+ * Additive lookup evidence surface:
  *   - `endpointSource` — closed enum lineage (`observed` |
  *     `seed_adapter` | `manual_seed` | `unknown`). The executor and
  *     telemetry layer surface this so a downstream report can tell
- *     "we hit an observed endpoint" from "we fell back to the V25
+ *     "we hit an observed endpoint" from "we fell back to the
  *     seed_adapter".
- *   - `correlationConfidence` — closed enum from V27-07. Single-
- *     session results are capped at `'low_confidence'`.
+ *   - `correlationConfidence` — closed enum from the DOM/API correlation
+ *     layer. Single-session results are capped at `'low_confidence'`.
  *   - `retiredPeer` — when the lookup deferred to an `observed` row
  *     instead of a same-site `seed_adapter` peer that *would* have
  *     matched, this carries the lineage of the de-prioritised
@@ -114,10 +114,9 @@ export interface EndpointMatch {
 }
 
 /**
- * V27-08 — closed-enum reason for why the lookup picked one row
- * over another. The values are stable; consumers (telemetry,
- * report dashboards, retirement counters) treat them as a closed
- * set.
+ * Closed-enum reason for why the lookup picked one row over another. The
+ * values are stable; consumers (telemetry, report dashboards, retirement
+ * counters) treat them as a closed set.
  *
  *   - `'observed_high_confidence'` — observed row matched all
  *     thresholds (confidence floor + sample_count ≥ 2 + same
@@ -143,7 +142,7 @@ export type EndpointLookupChosenReason =
 
 /**
  * Outcome of `buildSafeRequest`. `builderHint='seed_adapter'` means we
- * matched a known GitHub/npmjs urlPattern and reused the V25 seed
+ * matched a known GitHub/npmjs urlPattern and reused the seed
  * builder; `builderHint='generic'` means we built the URL purely from
  * the persisted `urlPattern` + `queryKeys`.
  */
@@ -151,7 +150,7 @@ export interface SafeRequestPlan {
   url: string;
   method: 'GET';
   /**
-   * V25 closed-enum `dataPurpose` when `builderHint='seed_adapter'`.
+   * Seed-adapter closed-enum `dataPurpose` when `builderHint='seed_adapter'`.
    * Free-form `'observed_<semanticType>'` for the generic branch — the
    * executor uses this only as evidence, never as a routing key.
    */
@@ -162,9 +161,8 @@ export interface SafeRequestPlan {
 }
 
 /**
- * V26-FIX-04 — closed-enum reader mode the executor surfaces back to
- * telemetry / the operation-log. `'knowledge_driven'` is the FIX-04
- * happy path; `'legacy_candidate'` is the existing V25 candidate path
- * that FIX-05 will deprecate.
+ * Closed-enum reader mode the executor surfaces back to telemetry / the
+ * operation-log. `'knowledge_driven'` is the lookup-first path;
+ * `'legacy_candidate'` is the existing candidate path.
  */
 export type ReaderMode = 'knowledge_driven' | 'legacy_candidate';

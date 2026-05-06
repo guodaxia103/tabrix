@@ -1,19 +1,18 @@
 /**
- * V26-FIX-04 — knowledge-driven on-demand reader.
+ * Knowledge-driven on-demand reader.
  *
  * Pure async module. Given a `SafeRequestPlan` (output of
  * `safe-request-builder.ts`) and the corresponding `EndpointMatch`,
  * issues exactly one GET request, decodes JSON, and compacts the
  * result into the same shape `readApiKnowledgeRows` already returns
- * for the V25 seed families.
+ * for the legacy seed families.
  *
  * Compactor strategy:
- *   1. When the row's `urlPattern` matches one of the V25 seed
- *      families, we delegate to the existing
+ *   1. When the row's `urlPattern` matches one of the seed families, we
+ *      delegate to the existing
  *      `readApiKnowledgeRows({ endpointFamily, params })` so the
- *      output is bit-identical to the legacy GitHub/npmjs Gate B
- *      path. This is the FIX-05 transition story: same wire
- *      behaviour today, with the lineage label flip coming next.
+ *      output is bit-identical to the legacy GitHub/npmjs path. This keeps
+ *      compatibility while endpoint lineage remains visible to reports.
  *   2. For `family='observed'` rows we use a small generic
  *      compactor that pulls the top-level array (or `data` /
  *      `items` / `results` / `objects` / `hits`), emits one row per
@@ -24,13 +23,12 @@
  *
  * Hard rules (mirroring `readApiKnowledgeRows`):
  *   - GET only.
- *   - Single attempt; no retry. (FIX-09 will add bounded retry on
- *     top of this — it is intentionally not in FIX-04.)
+ *   - Single attempt; bounded retry is handled by the executor wrapper.
  *   - 2.5 s timeout (`KNOWLEDGE_READ_TIMEOUT_MS`).
  *   - Never persists raw bodies; the only output is a redacted row
  *     array + telemetry.
  *   - Emits the same closed-enum `ApiKnowledgeFallbackReason` as
- *     the V25 reader so downstream telemetry stays aligned.
+ *     the seed reader so downstream telemetry stays aligned.
  */
 
 import type {
@@ -47,7 +45,7 @@ const GENERIC_ROW_LIMIT = 10;
 const GENERIC_KEYS_PER_ROW = 12;
 const GENERIC_STRING_VALUE_CAP = 240;
 
-/** Mirror of the V25 SEED_PATTERN_MAP; kept private to avoid coupling. */
+/** Mirror of the seed adapter pattern map; kept private to avoid coupling. */
 const SEED_PATTERN_FAMILY: ReadonlyMap<
   string,
   | 'github_search_repositories'
