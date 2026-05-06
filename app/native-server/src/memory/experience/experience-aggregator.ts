@@ -41,22 +41,22 @@ function pickFirstHistoryRef(artifactRefs: string[]): string | null {
 }
 
 /**
- * V24-01 closeout: strict bound on captured-args size, in bytes of
- * stringified JSON. The aggregator silently skips populating `args`
- * when a supported step kind's `inputSummary` is unexpectedly large -
- * better to fall back to "row aggregated, just not replay-eligible"
- * than to bloat the on-disk Experience JSON with multi-KB fixtures.
+ * Strict bound on captured-args size, in bytes of stringified JSON. The
+ * aggregator silently skips populating `args` when a supported step
+ * kind's `inputSummary` is unexpectedly large - better to fall back to
+ * "row aggregated, just not replay-eligible" than to bloat the on-disk
+ * Experience JSON with multi-KB fixtures.
  * 8 KB comfortably covers selector + candidateAction + value for
  * realistic GitHub interactions while bounding worst-case row size.
  */
 const MAX_REPLAY_ARGS_INPUT_SUMMARY_BYTES = 8 * 1024;
 
 /**
- * V24-01 closeout (replay-args portability): for the v1 supported step
- * kinds (`chrome_click_element` / `chrome_fill_or_select`) we lift the
+ * Replay-args portability: for supported step kinds
+ * (`chrome_click_element` / `chrome_fill_or_select`) we lift the
  * captured tool args from `memory_steps.input_summary` onto the
- * Experience row so `experience_replay` can re-dispatch them in a
- * fresh session.
+ * Experience row so `experience_replay` can re-dispatch them in a fresh
+ * session.
  *
  * The earlier closeout used a "parse JSON, strip a denylist of
  * session keys (today: `tabId`)" strategy. Codex's follow-up review
@@ -140,18 +140,18 @@ function toStepSequence(
  * join this list (or an Experience-pollution test will catch it).
  */
 const EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS: ReadonlySet<string> = new Set([
-  // Read-side Experience query tool (B-013).
+  // Read-side Experience query tool.
   'experience_suggest_plan',
-  // V24-02 write-back tool: records replay outcome onto an EXISTING
+  // Write-back tool: records replay outcome onto an EXISTING
   // experience_action_paths row. Aggregating its session would create
   // a parallel `(unknown, 'run mcp tool experience_score_step')` row
   // that has no relationship to the real action path being scored.
   'experience_score_step',
-  // V24-03 chooser entry-point: ranks Experience candidates for the
+  // Chooser entry-point: ranks Experience candidates for the
   // upstream agent. Each invocation is a read of Experience, not a
   // candidate to learn from.
   'tabrix_choose_context',
-  // V24-03 chooser outcome write-back: records which strategy the
+  // Chooser outcome write-back: records which strategy the
   // caller actually used. Same self-pollution concern as the chooser
   // itself — it touches the chooser telemetry table, not real page
   // actions.
@@ -159,12 +159,11 @@ const EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * V24-01 (brief §7): wrapper-owned sessions opened by `experience_replay`
- * tag their `task.intent` with this prefix followed by the original
- * `actionPathId` they replayed. The aggregator's special-case keys off
- * the prefix to compound the success/failure delta back onto the
- * original `experience_action_paths` row instead of seeding a new
- * bucket.
+ * Wrapper-owned sessions opened by `experience_replay` tag their
+ * `task.intent` with this prefix followed by the original `actionPathId`
+ * they replayed. The aggregator's special-case keys off the prefix to
+ * compound the success/failure delta back onto the original
+ * `experience_action_paths` row instead of seeding a new bucket.
  *
  * The sentinel suffix `'invalid'` (`experience_replay:invalid`) is
  * emitted by the handler when input parsing fails before a real id is
@@ -190,10 +189,10 @@ function toCounterDelta(status: PendingAggregationSession['status']): {
 
 export class ExperienceAggregator {
   private readonly upsertAndMarkTxn;
-  // V24-02 — session-end composite score writer. Isolation-aware:
+  // Session-end composite score writer. Isolation-aware:
   // a SQLite failure during composite write does NOT prevent
-  // `aggregated_at` from being marked (that lock belongs to B-012
-  // idempotent aggregation, not to V24-02 retry). The writer logs a
+  // `aggregated_at` from being marked (that lock belongs to idempotent
+  // aggregation, not to composite-score retry). The writer logs a
   // structured warning row instead.
   private readonly compositeScoreWriter: SessionCompositeScoreWriter;
 
@@ -246,8 +245,7 @@ export class ExperienceAggregator {
       const sessionSteps = this.steps.listBySession(session.sessionId);
       const markTime = nowIso ?? new Date().toISOString();
 
-      // B-013 P1 fix + v2.4.0 closeout review-fix: native/internal
-      // Experience- and chooser-facing MCP tools (see
+      // Native/internal Experience- and chooser-facing MCP tools (see
       // `EXPERIENCE_AGGREGATION_EXCLUDED_TOOLS` above) keep their
       // Memory session for audit purposes but must not feed back into
       // Experience itself. Sessions whose ENTIRE step list is in the
@@ -261,8 +259,8 @@ export class ExperienceAggregator {
         continue;
       }
 
-      // V24-01 (brief §7): replay-session special-case. Sessions whose
-      // task.intent carries the `experience_replay:` prefix re-run an
+      // Replay-session special-case. Sessions whose task.intent carries
+      // the `experience_replay:` prefix re-run an
       // existing `experience_action_paths` row; their success/failure
       // delta must compound onto the ORIGINAL row instead of seeding
       // a new `(pageRole=…, intent='replay')` bucket. The original
@@ -298,15 +296,15 @@ export class ExperienceAggregator {
           nowIso: markTime,
           sessionId: session.sessionId,
         });
-        // V24-02: session-end composite score for the replay
+        // Session-end composite score for the replay
         // session. Written OUTSIDE the upsertAndMarkTxn transaction
         // because failure here MUST NOT roll back `aggregated_at`
-        // (per the V24-02 isolation policy: aggregated_at belongs
-        // to B-012 idempotent aggregation, not to V24-02 retry).
+        // (per the isolation policy: aggregated_at belongs to
+        // idempotent aggregation, not to composite-score retry).
         // The writer swallows SQLite errors and logs a structured
         // warning row instead. Components are projected from session
         // step counts; a richer projection (token-saving, real
-        // benchmark elapsed) lands with V24-05's benchmark wiring.
+        // benchmark elapsed) lands with benchmark wiring.
         const replaySteps = sessionSteps;
         const successSteps = replaySteps.filter((step) => step.status === 'completed').length;
         const failureSteps = replaySteps.length - successSteps;

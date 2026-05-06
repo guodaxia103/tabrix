@@ -14,13 +14,13 @@
  * cannot accidentally bulk-mutate Experience by going through the
  * same pointer.
  *
- * V24-02: the surface is no longer strictly read-only. Two write-back
- * methods (`recordReplayStepOutcome`, `recordWritebackWarning`) land
- * here so the `experience_score_step` MCP handler can persist replay
- * outcomes through the same façade as `findActionPathById`. They are
+ * The surface is not strictly read-only: two write-back methods
+ * (`recordReplayStepOutcome`, `recordWritebackWarning`) land here so
+ * the `experience_score_step` MCP handler can persist replay outcomes
+ * through the same façade as `findActionPathById`. They are
  * intentionally narrow — they only touch counters / warning rows, not
- * `step_sequence` itself, so the aggregator remains the canonical
- * shape writer.
+ * `step_sequence` itself, so the aggregator remains the canonical shape
+ * writer.
  */
 
 import type { ExperienceSuggestPlanInput } from '@tabrix/shared';
@@ -50,7 +50,7 @@ export class ExperienceQueryService {
   }
 
   /**
-   * V24-01: targeted point-lookup by `actionPathId`. Used by the
+   * Targeted point-lookup by `actionPathId`. Used by the
    * `experience_replay` MCP handler before opening per-step Memory
    * rows. Read-only — see {@link ExperienceRepository.findActionPathById}
    * for stale-id semantics.
@@ -60,7 +60,7 @@ export class ExperienceQueryService {
   }
 
   /**
-   * V24-02: per-step write-back from `experience_score_step`. Pure
+   * Per-step write-back from `experience_score_step`. Pure
    * passthrough; isolation (catching SQLite errors) is the handler's
    * responsibility because only the handler knows whether to write a
    * structured warning row or to surface `'isolated'` to the upstream
@@ -73,7 +73,7 @@ export class ExperienceQueryService {
   }
 
   /**
-   * V24-02: append a structured isolation warning row. Used by the
+   * Append a structured isolation warning row. Used by the
    * `experience_score_step` handler when the per-step UPDATE throws
    * (e.g. SQLite lock or schema mismatch in legacy DBs); also used by
    * the aggregator's session-end composite-score writer for the same

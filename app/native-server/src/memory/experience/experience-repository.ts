@@ -11,7 +11,7 @@ export interface ExperienceActionPathStep {
   status: string;
   historyRef: string | null;
   /**
-   * V24-01: the captured tool-call args lifted from
+   * Captured tool-call args lifted from
    * `memory_steps.input_summary` for the v1 replay-supported step
    * kinds (`chrome_click_element` / `chrome_fill_or_select`).
    *
@@ -46,7 +46,7 @@ export interface ExperienceActionPathStep {
    */
   args?: Record<string, unknown>;
   /**
-   * V24-01 forward-compat: the {@link TabrixReplayPlaceholder} keys
+   * Forward-compatible {@link TabrixReplayPlaceholder} keys
    * the upstream caller is allowed to substitute into this step's
    * `args` at replay time. Brief §5 / §10 item 5.
    *
@@ -69,13 +69,13 @@ export interface ExperienceActionPathRow {
   successCount: number;
   failureCount: number;
   lastUsedAt?: string;
-  /** V24-02 — last replay write-back timestamp. */
+  /** Last replay write-back timestamp. */
   lastReplayAt?: string;
-  /** V24-02 — last `ClickObservedOutcome` recorded against this row. */
+  /** Last `ClickObservedOutcome` recorded against this row. */
   lastReplayOutcome?: ClickObservedOutcome;
-  /** V24-02 — projected status (success vs failure) for the last replay. */
+  /** Projected status (success vs failure) for the last replay. */
   lastReplayStatus?: TabrixExperienceScoreStepStatus;
-  /** V24-02 — recency-decayed composite score (chooser ranking input). */
+  /** Recency-decayed composite score (chooser ranking input). */
   compositeScoreDecayed?: number;
   createdAt: string;
   updatedAt: string;
@@ -131,7 +131,7 @@ function parseStepSequence(raw: string): ExperienceActionPathStep[] {
               ? stepRecord.historyRef
               : null,
         };
-        // V24-01 forward-compat: preserve `args` / `templateFields`
+        // Forward-compatible preservation of `args` / `templateFields`
         // when an existing row already carries them. Today the
         // aggregator does NOT write them; this read-side branch only
         // matters once a future capture-side PR starts populating them.
@@ -165,7 +165,7 @@ export interface SuggestActionPathsInput {
 }
 
 /**
- * V24-02 — per-step replay outcome write-back input. Counter delta
+ * Per-step replay outcome write-back input. Counter delta
  * is derived from {@link ClickObservedOutcome} via
  * `isClickSuccessOutcome`; the caller does NOT pre-compute it so
  * the projection rule lives in exactly one place.
@@ -185,7 +185,7 @@ export interface RecordReplayStepOutcomeResult {
   lastReplayStatus: TabrixExperienceScoreStepStatus;
 }
 
-/** V24-02 — composite-score writers. Pure data, no business logic. */
+/** Composite-score writers. Pure data, no business logic. */
 export interface UpdateActionPathCompositeScoreInput {
   actionPathId: string;
   compositeScoreDecayed: number;
@@ -198,7 +198,7 @@ export interface UpdateMemorySessionCompositeScoreInput {
   components: Record<string, number>;
 }
 
-/** V24-02 — isolation-warning writer (append-only). */
+/** Isolation-warning writer (append-only). */
 export interface RecordWritebackWarningInput {
   warningId: string;
   source: 'experience_score_step' | 'session_composite_score';
@@ -220,7 +220,7 @@ export class ExperienceRepository {
   private readonly suggestStmt;
   private readonly suggestForRoleStmt;
   private readonly clearStmt;
-  // V24-02 prepared statements. Each is single-purpose; isolation is
+  // Write-back prepared statements. Each is single-purpose; isolation is
   // intentional so a future refactor can re-target one without
   // touching the legacy aggregator path.
   private readonly recordReplayStepOutcomeStmt;
@@ -275,7 +275,7 @@ export class ExperienceRepository {
          FROM experience_action_paths
         ORDER BY page_role ASC, intent_signature ASC`,
     );
-    // V24-01: targeted point-lookup used by:
+    // Targeted point-lookup used by:
     //   1. The aggregator's replay-session special-case
     //      (`experience-aggregator.ts`) — projects success/failure
     //      deltas back to the ORIGINAL action-path row instead of
@@ -301,7 +301,7 @@ export class ExperienceRepository {
          FROM experience_action_paths
         WHERE action_path_id = ?`,
     );
-    // Read-only lookup for `experience_suggest_plan` (B-013).
+    // Read-only lookup for `experience_suggest_plan`.
     //
     // Sort key invariants:
     //   1. `success_count DESC` — pick the candidate with the most past wins first.
@@ -365,7 +365,7 @@ export class ExperienceRepository {
     );
     this.clearStmt = db.prepare('DELETE FROM experience_action_paths');
 
-    // V24-02 — replay outcome write-back. UPDATE-only so the row
+    // Replay outcome write-back. UPDATE-only so the row
     // must exist (caller distinguishes `'no_match'` via `changes`).
     // Counter delta is decided by the caller (`isClickSuccessOutcome`
     // projection) and applied in a single UPDATE so the read-side
@@ -427,7 +427,7 @@ export class ExperienceRepository {
   }
 
   /**
-   * V24-01: targeted point-lookup by `actionPathId`.
+   * Targeted point-lookup by `actionPathId`.
    *
    * Returns the matching row's full {@link ExperienceActionPathRow}
    * shape, or `undefined` if no row matches. Single-row query: deletes
@@ -446,7 +446,7 @@ export class ExperienceRepository {
   }
 
   /**
-   * Read-only lookup for `experience_suggest_plan` (B-013).
+   * Read-only lookup for `experience_suggest_plan`.
    *
    * Returns up to `input.limit` action paths matching `input.intentSignature`,
    * optionally constrained to `input.pageRole`. The sort order is defined and
@@ -474,7 +474,7 @@ export class ExperienceRepository {
   }
 
   /**
-   * V24-02 — record one replay step outcome. Returns:
+   * Record one replay step outcome. Returns:
    *   - `{status: 'no_match'}` if the row does not exist (caller
    *     should treat as race-with-deletion, NOT as failure);
    *   - `{status: 'ok'}` with the applied delta otherwise.
@@ -486,8 +486,7 @@ export class ExperienceRepository {
    *
    * Re-throws SQLite errors (write-side I/O failure). The handler is
    * responsible for catching them and writing
-   * `experience_writeback_warnings` (isolation rule from V24-02
-   * §failure-handling).
+   * `experience_writeback_warnings` (isolation rule).
    */
   public recordReplayStepOutcome(
     input: RecordReplayStepOutcomeInput,
@@ -512,7 +511,7 @@ export class ExperienceRepository {
   }
 
   /**
-   * V24-02 — write the pre-computed decayed composite score onto the
+   * Write the pre-computed decayed composite score onto the
    * action-path row. Pure UPDATE; missing row is silently a no-op
    * (caller decides whether that is meaningful — usually it means a
    * race with deletion).
@@ -526,7 +525,7 @@ export class ExperienceRepository {
   }
 
   /**
-   * V24-02 — write the raw composite score and its component
+   * Write the raw composite score and its component
    * breakdown onto the originating Memory session row.
    */
   public updateMemorySessionCompositeScore(input: UpdateMemorySessionCompositeScoreInput): void {
@@ -538,7 +537,7 @@ export class ExperienceRepository {
   }
 
   /**
-   * V24-02 — append-only isolation telemetry. Used by the
+   * Append-only isolation telemetry. Used by the
    * `experience_score_step` handler when the per-step UPDATE throws,
    * and by `SessionCompositeScoreWriter` when the session-end write
    * throws.
@@ -560,7 +559,7 @@ export class ExperienceRepository {
   }
 
   /**
-   * V24-02 — read-side helper for tests + handoff verification. Reads
+   * Read-side helper for tests + handoff verification. Reads
    * the most recent N warnings (newest first). Pure SELECT.
    */
   public listRecentWritebackWarnings(limit: number = 100): WritebackWarningRow[] {

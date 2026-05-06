@@ -1,16 +1,15 @@
 /**
- * V24-02 — pure session-end composite score module.
+ * Pure session-end composite score module.
  *
  * Deterministic, side-effect-free maths used by:
  *   - the aggregator at session aggregation time (writes the
  *     decayed composite onto `experience_action_paths` via
  *     `SessionCompositeScoreWriter`);
- *   - V24-03 chooser ranking (reads `composite_score_decayed`
+ *   - chooser ranking (reads `composite_score_decayed`
  *     directly — does NOT recompute on the hot path).
  *
- * SoT: `.claude/TABRIX_MKEP_FRAMEWORK_V2.md` §3.2 + `.claude/TABRIX_V2_4_0_PLAN.md`
- * §V24-02. The four component axes (`accuracy`, `speed`, `token`,
- * `stability`) and the recency half-life live in
+ * The four component axes (`accuracy`, `speed`, `token`, `stability`)
+ * and the recency half-life live in
  * `@tabrix/shared/experience-score-step` so any consumer (extension,
  * benchmark scripts, reports) reads the same constants.
  *
@@ -62,9 +61,9 @@ function clamp01(value: number): number {
  *   - `token`: token-saving ratio (read_page rounds avoided / total
  *     potential rounds). Caller is responsible for capping ≥ 0.
  *   - `stability`: `1 - variancePenalty` where the caller measured
- *     locator-hit variance across the run. The aggregator (V24-02)
- *     passes `failureRate`-derived stability so the first session
- *     has signal even before any benchmark fixture lands.
+ *     locator-hit variance across the run. The aggregator passes
+ *     `failureRate`-derived stability so the first session has signal
+ *     even before any benchmark fixture lands.
  *
  * The four axes are deliberately additive (no max / min folding) so
  * a degenerate "all zeros" session returns `0` rather than NaN.

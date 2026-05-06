@@ -1,7 +1,7 @@
 /**
- * B-013 (`experience_suggest_plan` MCP tool) — pure input/output helpers.
+ * `experience_suggest_plan` MCP tool — pure input/output helpers.
  *
- * Lives next to the aggregator (B-012) on purpose: the read-side and the
+ * Lives next to the aggregator on purpose: the read-side and the
  * write-side share `normalizeIntentSignature` so a `(pageRole, intent)`
  * pair always lands in the same bucket whether it was just observed or
  * is being looked up.
@@ -87,8 +87,7 @@ export function parseExperienceSuggestPlanInput(rawArgs: unknown): ExperienceSug
     throw new ExperienceSuggestPlanInputError("'intent' must be a non-empty string");
   }
   // Truncate before normalization so the bucket stays identical to what
-  // B-012 wrote (which also reads from `memory_tasks.intent`, capped by
-  // SQLite TEXT size).
+  // the aggregator wrote from `memory_tasks.intent`.
   const cappedIntent = trimmedIntent.slice(0, MAX_EXPERIENCE_SUGGEST_PLAN_INTENT_CHARS);
   const intentSignature = normalizeIntentSignature(cappedIntent);
   if (intentSignature.length === 0) {
