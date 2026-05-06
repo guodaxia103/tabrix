@@ -2,7 +2,6 @@ import { createErrorResponse, ToolResult } from '@/common/tool-handler';
 import { BaseBrowserToolExecutor } from '../base-browser';
 import {
   TOOL_NAMES,
-  type ReadPageArtifactRef,
   type ReadPageCompactSnapshot,
   type ReadPageExtensionFields,
   type ReadPageFullSnapshot,
@@ -24,11 +23,7 @@ import {
   recordStableTargetRefSnapshot,
   type StableTargetRefEntry,
 } from './stable-target-ref-registry';
-import {
-  buildMarkdownArtifactRef,
-  buildMarkdownProjection,
-  MARKDOWN_ARTIFACT_KIND,
-} from './read-page-markdown';
+import { buildMarkdownProjection, MARKDOWN_ARTIFACT_KIND } from './read-page-markdown';
 import { inferSchemeGuard } from './read-page-scheme-guard';
 import { hasMeaningfulReadPageText, summarizePageContent } from './read-page-content-summary';
 import {
@@ -36,6 +31,7 @@ import {
   type SnapshotInteractiveElement,
 } from './read-page-interactive-elements';
 import { buildCandidateActions, type CandidateActionSeed } from './read-page-candidate-actions';
+import { buildArtifactRefs, type SnapshotArtifactRef } from './read-page-artifact-refs';
 import { extractVisibleRegionRows, type VisibleRegionRowsResult } from './visible-region-rows';
 
 interface ReadPageStats {
@@ -86,20 +82,6 @@ function reconcilePageUnderstandingWithVisibleRows(payload: Record<string, any>)
       sourceRegion: 'visible_results',
     })),
   };
-}
-
-type SnapshotArtifactRef = ReadPageArtifactRef;
-
-function buildArtifactRefs(tabId: number, includeMarkdown: boolean): SnapshotArtifactRef[] {
-  const safeTabId = Number.isFinite(tabId) ? tabId : 0;
-  const refs: SnapshotArtifactRef[] = [
-    { kind: 'dom_snapshot', ref: `artifact://read_page/tab-${safeTabId}/normal` },
-    { kind: 'dom_snapshot', ref: `artifact://read_page/tab-${safeTabId}/full` },
-  ];
-  if (includeMarkdown) {
-    refs.push({ kind: MARKDOWN_ARTIFACT_KIND, ref: buildMarkdownArtifactRef(safeTabId) });
-  }
-  return refs;
 }
 
 function buildStableSnapshotLayer(params: {
