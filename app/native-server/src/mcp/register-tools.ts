@@ -69,6 +69,7 @@ import {
   withFallbackEvidence,
   type ApiReadFallbackEvidence,
 } from './read-page-api-fallback';
+import { buildKnowledgeApiRowsSuccessResult } from './read-page-api-rows-result';
 import { bridgeRuntimeState } from '../server/bridge-state';
 import { bridgeCommandChannel } from '../server/bridge-command-channel';
 import { getDefaultPrimaryTabController } from '../runtime/primary-tab-controller';
@@ -1092,91 +1093,18 @@ export const handleToolCall = async (name: string, args: any): Promise<CallToolR
                 apiFamily: apiResult.endpointFamily,
               });
               const totals = taskContext.getTaskTotals();
-              const apiPayload = {
-                kind: 'api_rows',
-                readPageAvoided: true,
-                sourceKind: skipPlan.sourceKind,
-                sourceRoute: skipPlan.sourceRoute,
-                chosenSource: recordedDecision.chosenSource ?? skipPlan.sourceKind,
-                dataSource: recordedDecision.dataSource ?? skipPlan.sourceKind,
-                decisionReason: recordedDecision.decisionReason ?? skipPlan.diagnostic,
-                dispatcherInputSource: recordedDecision.dispatcherInputSource ?? null,
-                fallbackPlan:
-                  recordedDecision.fallbackPlan ??
-                  ({
-                    dataSource: 'dom_json',
-                    entryLayer: skipPlan.fallbackEntryLayer,
-                    reason: skipPlan.diagnostic,
-                  } as const),
-                layerContract: mapDataSourceToLayerContract({
-                  dataSource: 'api_rows',
-                  requestedLayer: recordedDecision.chosenLayer,
-                  fallbackEntryLayer: skipPlan.fallbackEntryLayer,
-                }),
-                chosenLayer: recordedDecision.chosenLayer,
-                tokenEstimateChosen: tokenSavings.tokenEstimateChosen,
-                tokenEstimateFullRead: tokenSavings.tokenEstimateFullRead,
-                tokensSavedEstimate: tokenSavings.tokensSavedEstimate,
-                tokensSavedEstimateSource: tokenSavings.tokensSavedEstimateSource,
-                fallbackUsed: 'none',
-                fallbackEntryLayer: skipPlan.fallbackEntryLayer,
-                requiresApiCall: true,
-                requiresExperienceReplay: false,
-                apiFamily: apiResult.endpointFamily,
-                dataPurpose: apiResult.dataPurpose,
-                rows: apiResult.rows,
-                rowCount: apiResult.rowCount,
-                compact: apiResult.compact,
-                rawBodyStored: apiResult.rawBodyStored,
-                // Explicit "verified empty" envelope.
-                // `emptyResult:true` MUST NOT trigger DOM fallback;
-                // it is a successful API outcome with zero rows.
-                // Defaults preserve the legacy wire shape for callers
-                // that have not threaded the closed-enum yet.
-                emptyResult: apiResult.emptyResult ?? false,
-                emptyReason: apiResult.emptyReason ?? null,
-                emptyMessage: apiResult.emptyMessage ?? null,
-                // Closed-enum endpoint-source lineage on every
-                // `chrome_read_page` `kind:'api_rows'` envelope.
-                // The cached path inherits the chooser's
-                // `direct-api-executor` value verbatim; the live
-                // `readApiKnowledgeEndpointPlan` branch always uses
-                // the built-in GitHub/npmjs adapter, so its
-                // lineage is `seed_adapter` by construction. Surfacing
-                // this on the public envelope lets the Gate B
-                // benchmark transformer aggregate
-                // `endpointSourceDistribution` without re-deriving
-                // the bucket from the family string.
-                endpointSource: cachedDirect ? cachedDirect.endpointSource : 'seed_adapter',
-                liveObservedDataUsed: false,
-                apiTelemetry: apiResult.telemetry,
-                diagnostic: skipPlan.diagnostic,
+              const { result: apiCallResult, operationLog } = buildKnowledgeApiRowsSuccessResult({
+                recordedDecision,
+                skipPlan,
+                apiResult,
+                tokenSavings,
+                endpointSource: cachedDirect?.endpointSource ?? 'seed_adapter',
                 taskTotals: totals,
-              };
-              const apiCallResult: CallToolResult = {
-                content: [{ type: 'text', text: JSON.stringify(apiPayload) }],
-              };
+              });
               sessionManager.completeStep(session.sessionId, step.stepId, {
                 status: 'completed',
                 resultSummary: `chrome_read_page fulfilled via ${skipPlan.sourceKind} (saved ~${tokenSavings.tokensSavedEstimate} tok)`,
-                operationLog: {
-                  requestedLayer: recordedDecision.chosenLayer,
-                  selectedDataSource: 'api_rows',
-                  sourceRoute: skipPlan.sourceRoute,
-                  decisionReason: recordedDecision.decisionReason ?? skipPlan.diagnostic,
-                  resultKind: 'api_rows',
-                  fallbackUsed: 'none',
-                  readCount: totals.readPageAvoidedCount,
-                  tokensSaved: tokenSavings.tokensSavedEstimate,
-                  // Record verified-empty evidence on the operation
-                  // log so a post-mortem can answer "did the API
-                  // really come back empty here?" without grepping the
-                  // raw envelope. `success` stays `true` (the API call
-                  // succeeded); only the `emptyResult` evidence flips.
-                  metadata: {
-                    emptyResult: apiResult.emptyResult ? 'true' : 'false',
-                  },
-                },
+                operationLog,
               });
               sessionManager.finishSession(session.sessionId, {
                 status: 'completed',
