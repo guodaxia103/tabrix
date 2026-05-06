@@ -5,7 +5,7 @@ import type {
 } from './read-page-contract';
 
 /**
- * Tabrix MKEP Stage 3h — `tabrix_choose_context` v1 minimal slice (B-018).
+ * Tabrix MKEP `tabrix_choose_context` public contract.
  *
  * SoT for the public input/output contract is
  * [`docs/B_018_CONTEXT_SELECTOR_V1.md`](../../../docs/B_018_CONTEXT_SELECTOR_V1.md).
@@ -20,10 +20,10 @@ import type {
  * lives in the native-server (`mcp/choose-context.ts`).
  */
 
-/** Maximum length of the `intent` argument before truncation. Same as B-013. */
+/** Maximum length of the `intent` argument before truncation. */
 export const MAX_TABRIX_CHOOSE_CONTEXT_INTENT_CHARS = 1024;
 
-/** Maximum length of the optional `pageRole` filter. Same as B-013. */
+/** Maximum length of the optional `pageRole` filter. */
 export const MAX_TABRIX_CHOOSE_CONTEXT_PAGE_ROLE_CHARS = 128;
 
 /**
@@ -45,11 +45,11 @@ export const EXPERIENCE_HIT_MIN_SUCCESS_RATE = 0.5;
 export const EXPERIENCE_LOOKUP_LIMIT = 3;
 
 // ---------------------------------------------------------------------------
-// V24-03 — ranked replay constants
+// Ranked replay constants
 // ---------------------------------------------------------------------------
 
 /**
- * V24-03 / `tabrix_choose_context` v2 — number of replay candidates the
+ * Number of replay candidates the
  * chooser surfaces in the `experience_ranked` artifact. Three is large
  * enough to give a real ladder (top-1 + two backups) and small enough
  * that the upstream LLM will actually attempt them all before giving
@@ -59,7 +59,7 @@ export const EXPERIENCE_LOOKUP_LIMIT = 3;
 export const EXPERIENCE_RANKED_TOP_N = 3;
 
 /**
- * V24-03 — minimum `successRate` (success / (success+failure)) a row
+ * Minimum `successRate` (success / (success+failure)) a row
  * must clear to be considered replay-eligible. This is STRICTER than
  * {@link EXPERIENCE_HIT_MIN_SUCCESS_RATE} (which is the v1 reuse
  * gate): replay actually dispatches the recorded steps against the
@@ -69,7 +69,7 @@ export const EXPERIENCE_RANKED_TOP_N = 3;
 export const EXPERIENCE_REPLAY_MIN_SUCCESS_RATE = 0.8;
 
 /**
- * V24-03 — minimum absolute success count. Pairs with
+ * Minimum absolute success count. Pairs with
  * {@link EXPERIENCE_REPLAY_MIN_SUCCESS_RATE}: 1 success / 0 failures
  * is a perfect rate but a single sample, which is not enough evidence
  * to dispatch a recorded plan. Three matches MKEP §3.2's "min sample
@@ -78,7 +78,7 @@ export const EXPERIENCE_REPLAY_MIN_SUCCESS_RATE = 0.8;
 export const EXPERIENCE_REPLAY_MIN_SUCCESS_COUNT = 3;
 
 /**
- * V24-03 — recency-decay half-life in days for chooser-side ranking.
+ * Recency-decay half-life in days for chooser-side ranking.
  * Mirrors `EXPERIENCE_SCORE_STEP_RECENCY_HALF_LIFE_DAYS` so the
  * read-side ranking and the write-side `compositeScoreDecayed` cache
  * use the same time constant; if these ever drift, the chooser's
@@ -87,7 +87,7 @@ export const EXPERIENCE_REPLAY_MIN_SUCCESS_COUNT = 3;
 export const EXPERIENCE_RECENCY_DECAY_DAYS = 30;
 
 /**
- * V24-03 — closed enum for `TabrixChooseContextResult.replayEligibleBlockedBy`.
+ * Closed enum for `TabrixChooseContextResult.replayEligibleBlockedBy`.
  *
  * Each value is a single, deterministic reason the chooser can give
  * for refusing to route a candidate to `experience_replay`. The
@@ -127,9 +127,9 @@ export type TabrixContextSiteFamily = 'github';
  * Closed v1 strategy set. Adding a new value here is itself a v2 design
  * decision — never silently widen this in a feature branch.
  *
- * V23-04 / B-018 v1.5: `read_page_markdown` joins the set as the
+ * `read_page_markdown` joins the set as the
  * "GitHub text-heavy reading" branch. It points the caller at
- * `chrome_read_page(render='markdown')` (B-015 / V23-03), which is a
+ * `chrome_read_page(render='markdown')`, which is a
  * READING surface — the JSON HVOs / candidateActions / `targetRef`
  * stay the execution truth. The chooser only picks this branch when
  * (a) no experience hit, (b) no usable knowledge catalog, and
@@ -146,7 +146,7 @@ export type ContextStrategyName =
   | 'read_page_required';
 
 /**
- * V23-04 / B-018 v1.5 — small, hand-curated set of `pageRole` values
+ * Small, hand-curated set of `pageRole` values
  * for which the chooser will route the no-experience / no-knowledge
  * fallback to `read_page_markdown` instead of `read_page_required`.
  *
@@ -180,7 +180,7 @@ export interface TabrixChooseContextInput {
   intent: string;
   /** Optional page URL. Unparseable values are silently ignored (see doc §3.1). */
   url?: string;
-  /** Optional `pageRole` filter, mirroring the B-013 contract. */
+  /** Optional `pageRole` filter, mirroring the chooser contract. */
   pageRole?: string;
   /**
    * Optional explicit site-family override. v1 only honours `'github'`;
@@ -191,7 +191,7 @@ export interface TabrixChooseContextInput {
 }
 
 /**
- * V24-03 — single ranked replay candidate inside the
+ * Single ranked replay candidate inside the
  * `experience_ranked` artifact. `score` is the deterministic composite
  * (accuracy / speed / token / stability with recency decay; see
  * `composite-score.ts`); `replayEligible` is the AND of every
@@ -214,7 +214,7 @@ export interface TabrixChooseContextRankedCandidate {
  * native subsystem produced it (Experience action-path id; site name
  * for the Knowledge catalog; etc.).
  *
- * V24-03 added `'experience_ranked'`: the chooser emits a single
+ * The chooser emits a single `'experience_ranked'` artifact
  * artifact of this kind whenever it surfaces a ranked candidate list
  * (whether or not it ultimately routes to `experience_replay`). The
  * top-1 is `ref`; the full list (top-N up to {@link EXPERIENCE_RANKED_TOP_N})
@@ -226,7 +226,7 @@ export interface TabrixChooseContextArtifact {
   /** Compact human-readable label, ≤ 200 chars. Not a UI string. */
   summary: string;
   /**
-   * V24-03 — populated only on `kind === 'experience_ranked'`. List
+   * Populated only on `kind === 'experience_ranked'`. List
    * length is in `[1, EXPERIENCE_RANKED_TOP_N]`; ordering is the
    * deterministic ranking from `rankExperienceCandidates`
    * (composite score DESC, then `successCount` DESC, then
@@ -272,7 +272,7 @@ export interface TabrixChooseContextResult {
   resolved?: TabrixChooseContextResolved;
   error?: TabrixChooseContextErrorBody;
   /**
-   * V23-04 / B-018 v1.5 — opaque decision id (UUIDv4). Present when
+   * Opaque decision id (UUIDv4). Present when
    * `status === 'ok'` AND a telemetry row was successfully written.
    * Absent when telemetry is disabled / failed (the chooser still
    * succeeds; outcome write-back simply has nothing to point at).
@@ -284,7 +284,7 @@ export interface TabrixChooseContextResult {
    */
   decisionId?: string;
   /**
-   * V24-03 — number of replay candidates in the
+   * Number of replay candidates in the
    * `experience_ranked` artifact (0 when none surfaced). Present on
    * any ok result, regardless of strategy: a non-replay strategy
    * still sets this to `0` so post-hoc analysis can cleanly group
@@ -294,7 +294,7 @@ export interface TabrixChooseContextResult {
    */
   rankedCandidateCount?: number;
   /**
-   * V24-03 — first reason the chooser refused to route the top-1
+   * First reason the chooser refused to route the top-1
    * candidate to `experience_replay`. `'none'` is set on the
    * success branch (chooser actually emitted `experience_replay`);
    * any other value is the FIRST blocker in the closed
@@ -305,32 +305,32 @@ export interface TabrixChooseContextResult {
    */
   replayEligibleBlockedBy?: ReplayEligibilityBlockReason;
   /**
-   * V24-03 — replay-engine fallback depth the chooser THINKS the
+   * Replay-engine fallback depth the chooser THINKS the
    * caller will hit. The chooser itself can only declare `0` (we
    * surfaced a candidate) or `'cold'` (no candidates surfaced, so
    * the caller will pay full read-page cost). The actual `1 | 2 | 3`
    * values are written by the replay engine on outcome write-back
-   * (V24-02) and surface in telemetry; the chooser never claims to
+   * and surface in telemetry; the chooser never claims to
    * know the post-execution depth. Numeric encoding intentionally
-   * matches the per-pair K7 metric in V24-05 so analysis joins
+   * matches the per-pair fallback metric so analysis joins
    * across surfaces without translation.
    */
   replayFallbackDepth?: 0 | 1 | 2 | 3 | 'cold';
   /**
-   * V25-02 — chosen layer envelope the dispatcher selected for this
+   * Chosen layer envelope the dispatcher selected for this
    * decision. Optional so older callers / tests that mock the result
    * stay valid; populated whenever `status === 'ok'` and the v25
    * dispatcher ran.
    */
   chosenLayer?: ReadPageRequestedLayer;
   /**
-   * V25-02 — closed-enum reason that maps 1:1 to the V25-02 Layer
-   * Dispatch Strategy Table row. See {@link
+   * Closed-enum reason that maps to the Layer Dispatch Strategy Table.
+   * See {@link
    * ./read-page-contract.LayerDispatchReason}.
    */
   layerDispatchReason?: LayerDispatchReason;
   /**
-   * V25-02 — closed-enum routing instruction telling the caller
+   * Closed-enum routing instruction telling the caller
    * whether `chrome_read_page` is required, the experience replay
    * skip-read shortcut applies, knowledge supports the read, or the
    * dispatcher fell back. See {@link
@@ -338,38 +338,38 @@ export interface TabrixChooseContextResult {
    */
   sourceRoute?: LayerSourceRoute;
   /**
-   * V25-02 — short rationale string for the dispatcher's fallback
+   * Short rationale string for the dispatcher's fallback
    * branch. Empty / omitted on non-fallback branches. Intended for
-   * post-mortems and the v25 release report.
+   * post-mortems and release reports.
    */
   fallbackCause?: string;
   /**
-   * V25-02 — `ceil(byteLength/4)` token estimate of the layer the
+   * `ceil(byteLength/4)` token estimate of the layer the
    * dispatcher chose to ask for. `0` means the dispatcher did not
    * derive an estimate (e.g. unknown page size).
    */
   tokenEstimateChosen?: number;
   /**
-   * V25-02 — `ceil(byteLength/4)` token estimate of the equivalent
+   * `ceil(byteLength/4)` token estimate of the equivalent
    * full `L0+L1+L2` read. `0` when unknown. Always `>= tokenEstimateChosen`
    * when both are known.
    */
   tokenEstimateFullRead?: number;
   /**
-   * V25-02 — `max(0, tokenEstimateFullRead - tokenEstimateChosen)`.
+   * `max(0, tokenEstimateFullRead - tokenEstimateChosen)`.
    * Pre-computed for telemetry ergonomics. Always `0` when either side
    * is unknown.
    */
   tokensSavedEstimate?: number;
   /**
-   * V25-02 — when the dispatcher routes the caller through
+   * When the dispatcher routes the caller through
    * `experience_replay_skip_read`, the caller is expected to skip
    * `chrome_read_page` entirely. This flag is `true` ONLY in that
    * exact branch; the chooser never claims a generic "do not read".
    */
   readPageAvoided?: boolean;
   /**
-   * V26-FIX-02 — closed-enum advisory the chooser writes to tell the
+   * Closed-enum advisory the chooser writes to tell the
    * upstream MCP loop how (and whether) to drive
    * `chrome_network_capture_start/stop` for this task. Defaults to
    * `'disabled'`/`'not_needed'` for a normal execution task with
@@ -386,14 +386,14 @@ export interface TabrixChooseContextResult {
    */
   observeMode?: TabrixObserveMode;
   /**
-   * V26-FIX-02 — closed-enum reason the chooser picked the
+   * Closed-enum reason the chooser picked the
    * {@link observeMode} value above. Same evidence-field discipline
    * as {@link layerDispatchReason} / {@link directApiExecution}: one
    * deterministic token per branch so post-mortems stay groupable.
    */
   observeReason?: TabrixObserveReason;
   /**
-   * V26-FIX-01 — optional inline API execution envelope. Present only
+   * Optional inline API execution envelope. Present only
    * when (a) the chooser routed to `'knowledge_supported_read'`, (b)
    * a high-confidence read-only endpoint candidate was resolved, and
    * (c) the executor actually attempted the call. The closed-enum
@@ -411,17 +411,17 @@ export interface TabrixChooseContextResult {
    *                                confidence / non-read-only intent
    *                                / no candidate / route mismatch);
    *                                upstream behaves exactly like a
-   *                                pre-V26-FIX-01 chooser caller.
+   *                                legacy chooser caller.
    *
    * Absent on every other strategy / status combination so legacy
-   * callers stay bit-identical pre-V26-FIX-01. Field is additive on
+   * callers stay bit-identical. Field is additive on
    * the JSON wire shape; no MCP `tools.ts` schema change.
    */
   directApiExecution?: TabrixDirectApiExecution;
 }
 
 /**
- * V26-FIX-02 — closed-enum advisory for whether the upstream caller
+ * Closed-enum advisory for whether the upstream caller
  * should drive a foreground `chrome_network_capture_start/stop`
  * round-trip for this task.
  *
@@ -444,7 +444,7 @@ export interface TabrixChooseContextResult {
 export type TabrixObserveMode = 'foreground' | 'background' | 'disabled';
 
 /**
- * V26-FIX-02 — closed-enum reason the chooser chose its
+ * Closed-enum reason the chooser chose its
  * {@link TabrixObserveMode}. Tokens are deterministic so post-mortem
  * aggregations stay groupable.
  *
@@ -468,7 +468,7 @@ export type TabrixObserveReason =
   | 'not_needed';
 
 /**
- * V26-FIX-01 — closed-enum executor state surfaced on
+ * Closed-enum executor state surfaced on
  * {@link TabrixChooseContextResult.directApiExecution}.
  */
 export type TabrixDirectApiExecutionMode =
@@ -480,7 +480,7 @@ export type TabrixDirectApiExecutionMode =
   | 'skipped_route_mismatch';
 
 /**
- * V26-FIX-01 — closed-enum reason the executor reached its
+ * Closed-enum reason the executor reached its
  * {@link TabrixDirectApiExecutionMode}. The
  * `'api_call_failed_<reason>'` family is intentionally a string union
  * over the underlying API knowledge fallback reasons (rate_limited /
@@ -496,17 +496,17 @@ export type TabrixDirectApiDecisionReason =
   | `api_call_failed_${string}`;
 
 /**
- * V26-FIX-01 — compact API row shape mirrored from the underlying
+ * Compact API row shape mirrored from the underlying
  * reader (`ApiKnowledgeCompactRow`). Kept as a flat string-or-scalar
  * map so the JSON wire shape never carries nested raw bodies.
  */
 export type TabrixDirectApiCompactRow = Record<string, string | number | boolean | null>;
 
 /**
- * V26-FIX-01 — public view of the executor result the chooser ships.
+ * Public view of the executor result the chooser ships.
  * Intentionally narrower than the internal
  * `DirectApiExecutionResult` to keep the wire surface stable while
- * V26-FIX-04 swaps the underlying lookup module.
+ * the underlying lookup module may evolve.
  */
 export interface TabrixDirectApiExecution {
   executionMode: TabrixDirectApiExecutionMode;
@@ -521,7 +521,7 @@ export interface TabrixDirectApiExecution {
   candidateConfidence: number | null;
   /**
    * Closed-enum reader fallback cause; null on `direct_api` and on
-   * the `'skipped_*'` short-circuits. Surfaced so V26-FIX-07 can log
+   * the `'skipped_*'` short-circuits. Surfaced so operation logs can record
    * a single closed-enum value to the operation log.
    */
   fallbackCause: string | null;
@@ -536,7 +536,7 @@ export interface TabrixDirectApiExecution {
   /** Row count; null when no fetch was attempted. */
   rowCount: number | null;
   /**
-   * V26-PGB-01 — `true` iff the API call succeeded but returned zero
+   * `true` iff the API call succeeded but returned zero
    * rows; `false` on the non-empty happy path. `null` when the
    * executor never reached a reader (no API attempt). Optional so a
    * pre-PGB-01 caller stays bit-identical; PGB-01-aware consumers can
@@ -545,13 +545,13 @@ export interface TabrixDirectApiExecution {
    */
   emptyResult?: boolean | null;
   /**
-   * V26-PGB-01 — closed-enum reason for the empty result; `null` on
+   * Closed-enum reason for the empty result; `null` on
    * the non-empty happy path. Omitted when the executor never reached
    * a reader.
    */
   emptyReason?: 'no_matching_records' | null;
   /**
-   * V26-PGB-01 — human-readable message for the empty result; `null`
+   * Human-readable message for the empty result; `null`
    * on the non-empty happy path. Omitted when the executor never
    * reached a reader.
    */
@@ -559,7 +559,7 @@ export interface TabrixDirectApiExecution {
   /** Optional API telemetry forwarded from the underlying reader. */
   apiTelemetry?: TabrixDirectApiTelemetry | null;
   /**
-   * V26-PGB-04 — closed-enum lineage marker that classifies how the
+   * Closed-enum lineage marker that classifies how the
    * endpoint we (would have) called was sourced. Mirrors the
    * executor's internal `endpointSource` field so the Gate B
    * benchmark transformer / report can split the run mix into
@@ -572,7 +572,7 @@ export interface TabrixDirectApiExecution {
   endpointSource?: 'observed' | 'seed_adapter' | 'manual_seed' | null;
 }
 
-/** V26-FIX-01 — read-only API telemetry fields surfaced upward. */
+/** Read-only API telemetry fields surfaced upward. */
 export interface TabrixDirectApiTelemetry {
   endpointFamily?: string;
   method: string;
@@ -584,7 +584,7 @@ export interface TabrixDirectApiTelemetry {
 }
 
 /**
- * V23-04 / B-018 v1.5 — closed outcome label set for the chooser
+ * Closed outcome label set for the chooser
  * write-back loop. `reuse` means the suggested strategy was acted on
  * AND saved a `read_page`; `fallback` means the caller had to fall
  * back to `read_page` anyway; `completed` means the whole task

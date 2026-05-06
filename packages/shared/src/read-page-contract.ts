@@ -9,7 +9,7 @@
 export type ReadPageMode = 'compact' | 'normal' | 'full';
 
 /**
- * V23-03 / B-015: render mode for `read_page`.
+ * Render mode for `read_page`.
  *
  * `'json'` (default) is the existing behavior: a structured DOM-semantic
  * snapshot whose HVOs / candidateActions / `targetRef` are the execution
@@ -194,7 +194,7 @@ export interface ReadPageHighValueObject {
    */
   href?: string;
   /**
-   * B-011 stable targetRef. Format: `tgt_<10-hex>`, derived deterministically
+   * Stable targetRef. Format: `tgt_<10-hex>`, derived deterministically
    * from `(pageRole | objectSubType | role | normalizedLabel | hrefPathBucket
    * | ordinal)` so that the same logical DOM object surfaces the same value
    * across reloads, cosmetic class toggles, and minor list churn.
@@ -216,7 +216,7 @@ export interface ReadPageHighValueObject {
 }
 
 /**
- * B-011 prefix marking a stable targetRef. Pure constant so the click
+ * Prefix marking a stable targetRef. Pure constant so the click
  * bridge can deterministically distinguish stable refs from per-snapshot
  * refs without parsing or guessing.
  */
@@ -243,7 +243,7 @@ export interface ReadPageTaskLevel2 {
   expansions: string[];
   boundary: string;
   /**
-   * V23-03 explicit source routing (per
+   * Explicit source routing (per
    * `docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md` §11.5). `L2` should
    * point the caller at the *right* deeper source instead of emitting all
    * three at once. Each field is optional and may be `null` when the
@@ -256,7 +256,7 @@ export interface ReadPageTaskLevel2 {
    *   only when `read_page(render='markdown')` was requested AND a
    *   markdown projection was successfully generated.
    * - `knowledgeRef` — placeholder for API Knowledge structured-data
-   *   sources (B-017 / `knowledge_api_endpoints`). Always `null` in v1
+   *   sources (`knowledge_api_endpoints`). Always `null` in v1
    *   because the runtime call surface does not yet exist; reserved so
    *   downstream consumers can start coding against the field shape.
    */
@@ -370,18 +370,18 @@ export interface ReadPageExtensionFields {
   targetRefCoverageRejectedCount?: number;
   rejectedRegionReasonDistribution?: Record<ReadPageVisibleRegionRejectionReason, number>;
   /**
-   * V23-03 / B-015: which render mode was requested for this snapshot.
+   * Which render mode was requested for this snapshot.
    * `'json'` is the default and matches the legacy contract. `'markdown'`
    * means a Markdown projection was opportunistically attached (see
    * `markdown` below); the JSON HVO/candidateActions/targetRef payload
    * is still emitted unchanged so execution paths are unaffected.
    *
-   * Optional so older snapshots that pre-date V23-03 stay valid against
+   * Optional so older snapshots that pre-date render-mode support stay valid against
    * the contract.
    */
   renderMode?: ReadPageRenderMode;
   /**
-   * V23-03 / B-015: optional Markdown projection of the snapshot's
+   * Optional Markdown projection of the snapshot's
    * top objects + interactive labels, intended as a *reading surface*
    * (per `docs/TABRIX_THREE_LAYER_DATA_COORDINATION_V1.md` §4.3).
    *
@@ -464,11 +464,11 @@ export const READ_PAGE_TASK_PROTOCOL_FIELDS = [
 ] as const;
 
 // ---------------------------------------------------------------------------
-// V25-02 — Layer Dispatch Runtime contract
+// Layer Dispatch Runtime contract
 // ---------------------------------------------------------------------------
 
 /**
- * V25-02 / B-LAYER-DISPATCH: which layer envelope the caller wants
+ * Which layer envelope the caller wants
  * `chrome_read_page` to materialize. `L0+L1+L2` is the legacy default
  * shape that callers see when this field is omitted; the two narrower
  * shapes are opt-in by the chooser through the layer dispatcher.
@@ -483,10 +483,10 @@ export type ReadPageRequestedLayer = 'L0' | 'L0+L1' | 'L0+L1+L2';
 export const READ_PAGE_REQUESTED_LAYER_VALUES = ['L0', 'L0+L1', 'L0+L1+L2'] as const;
 
 /**
- * V25-02: closed enum of dispatcher reasons. Each value corresponds to
- * one row of the V25-02 Layer Dispatch Strategy Table (V3.1 §V25-02).
+ * Closed enum of dispatcher reasons. Each value corresponds to
+ * one row of the Layer Dispatch Strategy Table.
  * Stable for telemetry; new reasons MUST be appended, not reordered or
- * renamed, because v2.5 release-gate aggregates against these names.
+ * renamed, because release gates aggregate against these names.
  */
 export type LayerDispatchReason =
   // priority 1: safety override
@@ -528,8 +528,8 @@ export const LAYER_DISPATCH_REASON_VALUES: readonly LayerDispatchReason[] = [
 ] as const;
 
 /**
- * V25-02 kickoff binding — locked 4-value `LayerSourceRoute` enum.
- * Source of truth for both telemetry and the v25 release gate.
+ * Locked 4-value `LayerSourceRoute` enum.
+ * Source of truth for both telemetry and release gates.
  *
  * - `read_page_required` — caller MUST call `chrome_read_page` with
  *   the chosen layer; the chooser cannot pre-build context for it.
@@ -540,7 +540,7 @@ export const LAYER_DISPATCH_REASON_VALUES: readonly LayerDispatchReason[] = [
  * - `dispatcher_fallback_safe` — dispatcher could not classify the
  *   input; fall back to `L0+L1+L2` and call `chrome_read_page`.
  *
- * Adding a fifth value requires a full v2.5 → v2.6 enum migration in
+ * Adding a fifth value requires a full enum migration in
  * the release gate library, the telemetry column allow-list, and the
  * benchmark transformer's `KNOWN_SOURCE_ROUTES`.
  */
@@ -558,8 +558,8 @@ export const LAYER_SOURCE_ROUTE_VALUES: readonly LayerSourceRoute[] = [
 ] as const;
 
 /**
- * V25-02 token estimate helper — `ceil(byteLength / 4)`. Pure, no
- * dependencies. Mirrors the locked decision in V3.1 §V25-02 so the
+ * Token estimate helper — `ceil(byteLength / 4)`. Pure, no
+ * dependencies. Mirrors the locked decision so the
  * dispatcher, the read-page tool, and the release gate all derive the
  * same numbers from the same source string.
  *
