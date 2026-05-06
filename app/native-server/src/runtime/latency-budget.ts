@@ -1,7 +1,7 @@
 /**
  * Tabrix latency / budget constants.
  *
- * SoT: `.claude/strategy/TABRIX_V2_7_CONTRACT_V1_zh.md` §5.
+ * SoT: maintainer-private runtime contract doc.
  *
  * The constants in this module are pinned by `latency-budget.test.ts`
  * as a snapshot. Bumping any value MUST happen in the same commit as
@@ -12,7 +12,7 @@
  */
 
 /**
- * Synthetic per-event observer-overhead ceiling (milliseconds). v2.7
+ * Synthetic per-event observer-overhead ceiling (milliseconds). The runtime
  * runs a micro-bench over a fixed-size synthetic event stream and the
  * average per-event cost MUST be <= this constant. NOT a runtime gate.
  */
@@ -33,7 +33,7 @@ export const WAIT_MS_BUDGET_DEFAULT = 8000 as const;
 export const RETRY_COUNT_BUDGET_DEFAULT = 2 as const;
 
 /**
- * Closed-enum complexity-kind tuples that v2.7 treats as "heavy"
+ * Closed-enum complexity-kind tuples that the runtime treats as "heavy"
  * route transitions (where the executable budget should switch to
  * the alternate fallback chain instead of retrying the same path).
  *

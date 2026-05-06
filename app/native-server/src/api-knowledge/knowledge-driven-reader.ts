@@ -261,9 +261,9 @@ function compactGenericScalarValue(value: unknown): string | number | boolean | 
   }
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value === 'boolean') return value;
-  // Drop nested objects/arrays — the V25 contract forbids nested values
+  // Drop nested objects/arrays — the compact-row contract forbids nested values
   // in compact rows; preserving structural depth here would re-open
-  // the privacy boundary that FIX-03 pinned shut.
+  // the privacy boundary for API-derived rows.
   return null;
 }
 

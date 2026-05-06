@@ -1250,8 +1250,8 @@ export async function runTabrixChooseContextWithDirectApi(
         intentClass,
         // Leave the closed-enum hint at `null` for now.
         // The lookup falls through to "any usable read" semantics,
-        // which is the behaviour the FIX-04 minimum success criteria
-        // require. A future FIX may map intent keywords (`search` /
+        // which is the intended minimum safe lookup behaviour. A future
+        // change may map intent keywords (`search` /
         // `list` / `detail` / `pagination` / `filter`) onto the
         // closed enum once we have telemetry showing it actually
         // helps disambiguate.
