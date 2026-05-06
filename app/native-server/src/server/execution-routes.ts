@@ -1,7 +1,7 @@
 /**
- * V25-03 — Sidepanel "Execution" tab read-only HTTP routes.
+ * Sidepanel "Execution" tab read-only HTTP routes.
  *
- * Surface the V25-02 layer-dispatch + V24-03 ranked-replay telemetry
+ * Surface layer-dispatch and ranked-replay telemetry
  * persisted in `tabrix_choose_context_decisions` and
  * `tabrix_choose_context_outcomes`. These routes intentionally
  * mirror the read-only invariant of `memory-routes.ts`:
@@ -11,14 +11,14 @@
  *     `server/index.ts`; non-localhost requires the standard Bearer
  *     token. No extra auth lives here.
  *
- * Privacy contract (M4 binding — enforced by negative tests in
+ * Privacy contract (enforced by negative tests in
  * `execution-routes.test.ts`):
  *   - response bodies MUST NOT contain full URLs / query strings
  *   - response bodies MUST NOT include any field from
  *     `memory_sessions.user_input`
  *   - response bodies MUST NOT include cookie or auth header values
  *   - intent is only echoed as the structural `intent_signature`
- *     (lower-cased + redacted upstream by B-013)
+ *     (lower-cased + redacted upstream)
  *
  * Routes:
  *   - `GET /execution/decisions/recent?limit=`

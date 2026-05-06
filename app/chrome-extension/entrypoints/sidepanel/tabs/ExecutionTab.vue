@@ -350,10 +350,10 @@ function formatTimestamp(iso: string): string {
 
 <style>
 /*
- * V25-03 — Execution tab. We deliberately avoid `@import './mkep-tab.css'`
+ * Execution tab. We deliberately avoid `@import './mkep-tab.css'`
  * (which Vue scoped styles inline once per importer and was bloating the
  * sidepanel CSS bundle past the 22 kB hard cap, see
- * scripts/check-bundle-size.mjs and the M5 binding in the V25 plan).
+ * scripts/check-bundle-size.mjs and the sidepanel bundle-size gate).
  * Instead, the tab is fully self-contained under the unique `exec-`
  * prefix and uses CSS custom properties so the dark-mode override is
  * one small variable swap instead of a parallel rule set.

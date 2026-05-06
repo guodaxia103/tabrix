@@ -36,7 +36,7 @@ export interface BridgeRuntimeSnapshot {
   /**
    * Primary tab id Tabrix has been driving navigations through during
    * the current process. `null` when the controller has not seen any
-   * navigation yet OR when V26-02 enforcement is off and no navigation
+   * navigation yet OR when primary-tab enforcement is off and no navigation
    * has been observed by an opt-in caller. Source of truth:
    * `runtime/primary-tab-controller.ts::getSnapshot()`.
    */

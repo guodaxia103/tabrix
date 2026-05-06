@@ -1,5 +1,5 @@
 /**
- * `useExecutionInsights` — Sidepanel "Execution" tab data source (V25-03).
+ * `useExecutionInsights` — Sidepanel "Execution" tab data source.
  *
  * Calls the four read-only `/execution/*` HTTP routes added in
  * `app/native-server/src/server/execution-routes.ts` in parallel and

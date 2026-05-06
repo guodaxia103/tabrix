@@ -1,5 +1,5 @@
 /**
- * MKEP Memory read routes (Stage 3e · B-001).
+ * MKEP Memory read routes.
  *
  * These routes expose the persisted Memory tables (`memory_sessions`
  * + `memory_tasks` + `memory_steps`) to the sidepanel Memory tab. They

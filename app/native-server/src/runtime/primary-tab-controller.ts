@@ -1,22 +1,21 @@
 /**
- * Primary Tab Controller — runtime promotion of the V25-05 closeout
- * tab-hygiene contract (V26-02, B-026).
+ * Primary Tab Controller — runtime tab-hygiene enforcement.
  *
  * Why this exists:
- *   v2.5.0 shipped `scripts/lib/v25-primary-tab-session.cjs` as a
- *   benchmark-runner-only helper. It enforced the "navigate within a
- *   single primary tab" contract for the V25-05 acceptance suite, but
- *   the v2.5 production runtime kept the legacy `chrome_navigate({ url
- *   })` behaviour: every multi-site task could open new tabs. The
+ *   Tabrix originally shipped `scripts/lib/v25-primary-tab-session.cjs`
+ *   as a benchmark-runner-only helper. It enforced the "navigate within
+ *   a single primary tab" contract for the acceptance suite, but the
+ *   production runtime kept the legacy `chrome_navigate({ url })`
+ *   behaviour: every multi-site task could open new tabs. The
  *   competitor scorecard (`.claude/strategy/TABRIX_TOOL_METHOD_COMPETI
  *   TOR_SCORECARD_V1.md`) flagged this as the dominant v2.5 reliability
- *   regression vs. agent-browser.
+ *   regression vs. competitor browser agents.
  *
- *   v2.6 V26-02 promotes the contract to a product-side runtime
- *   module so multi-site flows stop leaking tabs. The product-side
+ *   This module promotes the contract to a product-side runtime module
+ *   so multi-site flows stop leaking tabs. The product-side
  *   adoption is fail-soft (env-gated, see below) — the bridge runtime
  *   snapshot still surfaces the controller's hygiene metrics
- *   regardless of enforcement, so the V26-06 benchmark report has
+ *   regardless of enforcement, so benchmark reports have
  *   evidence to show whether enforcement helped without requiring an
  *   irreversible behaviour flip.
  *
@@ -25,9 +24,8 @@
  *   `getInjectedTabId()` to return a non-null value, which
  *   `register-tools.ts` will inject into the `chrome_navigate` args.
  *   When the gate is off (DEFAULT), `getInjectedTabId()` always
- *   returns null and the runtime behaviour is bit-identical to v2.5
- *   except for the additional snapshot fields. This keeps v2.5
- *   regression-free during the v2.6 development window.
+ *   returns null and runtime navigation behaviour stays
+ *   legacy-compatible except for the additional snapshot fields.
  *
  * What this module does NOT do:
  *   - It does not call `chrome_navigate` itself — the runtime caller
@@ -49,10 +47,10 @@
  *     numerator/denominator for `primaryTabReuseRate`. Allowlisted
  *     navigations are excluded from both. Mirrors the cjs helper.
  *   - `benchmarkOwnedTabCount`: number of distinct tabIds the
- *     controller has observed. v2.6 runtime does not track baseline
+ *     controller has observed. The runtime does not track baseline
  *     tabs (those are a benchmark-runner concept), so this counter is
  *     "tabs Tabrix has driven" rather than "tabs the suite created".
- *     The bridge snapshot field name carries the v25 spelling for
+ *     The bridge snapshot field name carries the historical spelling for
  *     report-consumer compatibility.
  *   - `violations`: closed-enum kind list (mirrors the cjs).
  */
@@ -121,11 +119,10 @@ export interface PrimaryTabControllerOptions {
    * When true, `getInjectedTabId()` returns the primary tab id once
    * it has been seeded so the caller can pass it through to
    * `chrome_navigate` args. When false (default), the controller is
-   * observation-only and the runtime caller behaves exactly like v2.5.
+   * observation-only and the runtime caller keeps legacy navigation behavior.
    *
-   * The default is intentionally `false` — fail-soft adoption per
-   * V4.1 §16 / V26-02 backlog notes. Production opt-in flips via
-   * `TABRIX_PRIMARY_TAB_ENFORCE=true` in the environment.
+   * The default is intentionally `false` for fail-soft adoption.
+   * Production opt-in flips via `TABRIX_PRIMARY_TAB_ENFORCE=true`.
    */
   enforce?: boolean;
 }
@@ -148,7 +145,7 @@ export interface PrimaryTabController {
    * If enforcement is on AND a primary tab has been seeded AND the
    * scenario is not allowlisted, returns the primary tabId for the
    * caller to inject into `chrome_navigate({ tabId })`. Otherwise
-   * returns `null` so the caller behaves exactly like v2.5.
+   * returns `null` so the caller keeps legacy navigation behavior.
    */
   getInjectedTabId(opts?: { scenarioId?: string | null; allowsNewTab?: boolean }): number | null;
 
@@ -253,7 +250,7 @@ export function createPrimaryTabController(
 
       // Non-allowlisted mismatch — record a hygiene violation. The
       // runtime controller does NOT auto-retry (that is the runtime
-      // caller's responsibility, mirroring V25-05's runner contract);
+      // caller's responsibility, mirroring the runner contract);
       // it just observes.
       const detail =
         `chrome_navigate returned tabId=${returnedTabId} but primaryTabId=${primaryTabId}` +

@@ -304,10 +304,10 @@ export class Server {
     // Extension communication
     this.setupExtensionRoutes();
 
-    // MKEP Memory read routes (Stage 3e · B-001)
+    // MKEP Memory read routes
     registerMemoryRoutes(this.fastify);
 
-    // V25-03 Sidepanel "Execution" tab read routes
+    // Sidepanel "Execution" tab read routes
     registerExecutionRoutes(this.fastify);
 
     // MCP routes
