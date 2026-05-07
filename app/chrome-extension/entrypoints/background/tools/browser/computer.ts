@@ -38,6 +38,11 @@ interface Modifiers {
   shiftKey?: boolean;
 }
 
+interface FillFormElement {
+  ref: string;
+  value: string | number | boolean;
+}
+
 interface ComputerParams {
   action:
     | 'left_click'
@@ -73,12 +78,18 @@ interface ComputerParams {
   // For fill
   selector?: string;
   selectorType?: 'css' | 'xpath'; // Type of selector (default: 'css')
-  value?: string;
+  value?: string | number | boolean;
   frameId?: number; // Target frame for selector/ref resolution
   tabId?: number; // target existing tab id
   windowId?: number;
   background?: boolean; // avoid focusing/activating
   saveToDownloads?: boolean; // screenshot: also save PNG to downloads
+  // Internal-only compatibility fields used by computer action adapters.
+  width?: number;
+  height?: number;
+  elements?: FillFormElement[];
+  appear?: boolean;
+  timeout?: number;
 }
 
 // Minimal CDP helper encapsulated here to avoid scattering CDP code
@@ -335,10 +346,10 @@ class ComputerTool extends BaseBrowserToolExecutor {
 
     switch (params.action) {
       case 'resize_page': {
-        const width = Number((params as any).coordinates?.x || (params as any).text);
-        const height = Number((params as any).coordinates?.y || (params as any).value);
-        const w = Number((params as any).width ?? width);
-        const h = Number((params as any).height ?? height);
+        const width = Number(params.coordinates?.x || params.text);
+        const height = Number(params.coordinates?.y || params.value);
+        const w = Number(params.width ?? width);
+        const h = Number(params.height ?? height);
         if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
           return createErrorResponse('Provide width and height for resize_page (positive numbers)');
         }
@@ -448,7 +459,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
             'Provide ref or selector or coordinates for hover, or failed to resolve target',
           );
         {
-          const stale = ((): any => {
+          const stale = ((): ToolResult | null => {
             if (!params.coordinates) return null;
             const getHostname = (url: string): string => {
               try {
@@ -551,7 +562,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
         if (!params.coordinates)
           return createErrorResponse('Provide ref, selector, or coordinates for click action');
         {
-          const stale = ((): any => {
+          const stale = ((): ToolResult | null => {
             const getHostname = (url: string): string => {
               try {
                 return new URL(url).hostname;
@@ -607,7 +618,9 @@ class ComputerTool extends BaseBrowserToolExecutor {
           return createErrorResponse(
             'Provide ref, selector, or coordinates for double/triple click',
           );
-        let coord = params.coordinates ? project(params.coordinates)! : (undefined as any);
+        let coord: Coordinates | undefined = params.coordinates
+          ? project(params.coordinates)
+          : undefined;
         // If ref is provided, resolve center via accessibility helper
         if (resolvedRef) {
           try {
@@ -645,7 +658,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
         }
         if (!coord) return createErrorResponse('Failed to resolve coordinates from ref/selector');
         {
-          const stale = ((): any => {
+          const stale = ((): ToolResult | null => {
             if (!params.coordinates) return null;
             const getHostname = (url: string): string => {
               try {
@@ -724,12 +737,14 @@ class ComputerTool extends BaseBrowserToolExecutor {
           return createErrorResponse('Provide startRef or startCoordinates for drag');
         if (!params.coordinates && !resolvedRef)
           return createErrorResponse('Provide ref or end coordinates for drag');
-        let start = params.startCoordinates
-          ? project(params.startCoordinates)!
-          : (undefined as any);
-        let end = params.coordinates ? project(params.coordinates)! : (undefined as any);
+        let start: Coordinates | undefined = params.startCoordinates
+          ? project(params.startCoordinates)
+          : undefined;
+        let end: Coordinates | undefined = params.coordinates
+          ? project(params.coordinates)
+          : undefined;
         {
-          const stale = ((): any => {
+          const stale = ((): ToolResult | null => {
             if (!params.startCoordinates && !params.coordinates) return null;
             const getHostname = (url: string): string => {
               try {
@@ -828,7 +843,9 @@ class ComputerTool extends BaseBrowserToolExecutor {
       case 'scroll': {
         if (!params.coordinates && !resolvedRef)
           return createErrorResponse('Provide ref or coordinates for scroll');
-        let coord = params.coordinates ? project(params.coordinates)! : (undefined as any);
+        let coord: Coordinates | undefined = params.coordinates
+          ? project(params.coordinates)
+          : undefined;
         if (resolvedRef) {
           try {
             await this.injectContentScript(tab.id, ['inject-scripts/accessibility-tree-helper.js']);
@@ -844,7 +861,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
         }
         if (!coord) return createErrorResponse('Failed to resolve scroll coordinates');
         {
-          const stale = ((): any => {
+          const stale = ((): ToolResult | null => {
             if (!params.coordinates) return null;
             const getHostname = (url: string): string => {
               try {
@@ -951,20 +968,23 @@ class ComputerTool extends BaseBrowserToolExecutor {
           return createErrorResponse('Provide ref or selector and a value for fill');
         }
         // Reuse existing fill tool to leverage robust DOM event behavior
+        const fillValue = params.value;
+        if (fillValue === undefined || fillValue === null) {
+          return createErrorResponse(
+            ERROR_MESSAGES.INVALID_PARAMETERS + ': Value must be provided',
+          );
+        }
         const res = await fillTool.execute({
-          selector: resolvedSelector as any,
-          selectorType: resolvedSelectorType as any,
-          ref: resolvedRef as any,
-          candidateAction: params.candidateAction as any,
-          value: params.value as any,
-        } as any);
+          selector: resolvedSelector,
+          selectorType: resolvedSelectorType,
+          ref: resolvedRef,
+          candidateAction: params.candidateAction,
+          value: fillValue,
+        });
         return res;
       }
       case 'fill_form': {
-        const elements = (params as any).elements as Array<{
-          ref: string;
-          value: string | number | boolean;
-        }>;
+        const elements = params.elements;
         if (!Array.isArray(elements) || elements.length === 0) {
           return createErrorResponse('elements must be a non-empty array for fill_form');
         }
@@ -976,9 +996,9 @@ class ComputerTool extends BaseBrowserToolExecutor {
           }
           try {
             const r = await fillTool.execute({
-              ref: item.ref as any,
-              value: item.value as any,
-            } as any);
+              ref: item.ref,
+              value: item.value,
+            });
             const ok = !r.isError;
             results.push({ ref: item.ref, ok, error: ok ? undefined : 'failed' });
           } catch (e) {
@@ -1053,8 +1073,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
         }
       }
       case 'wait': {
-        const hasTextCondition =
-          typeof (params as any).text === 'string' && (params as any).text.trim().length > 0;
+        const hasTextCondition = typeof params.text === 'string' && params.text.trim().length > 0;
         if (hasTextCondition) {
           try {
             // Conditional wait for text appearance/disappearance using content script
@@ -1065,21 +1084,18 @@ class ComputerTool extends BaseBrowserToolExecutor {
               'ISOLATED',
               true,
             );
-            const appear = (params as any).appear !== false; // default to true
-            const timeoutMs = Math.max(
-              0,
-              Math.min(((params as any).timeout as number) || 10000, 120000),
-            );
+            const appear = params.appear !== false; // default to true
+            const timeoutMs = Math.max(0, Math.min(params.timeout || 10000, 120000));
             const resp = await this.sendMessageToTab(tab.id, {
               action: TOOL_MESSAGE_TYPES.WAIT_FOR_TEXT,
-              text: (params as any).text,
+              text: params.text,
               appear,
               timeout: timeoutMs,
             });
             if (!resp || resp.success !== true) {
               return createErrorResponse(
                 resp && resp.reason === 'timeout'
-                  ? `wait_for timed out after ${timeoutMs}ms for text: ${(params as any).text}`
+                  ? `wait_for timed out after ${timeoutMs}ms for text: ${params.text}`
                   : `wait_for failed: ${resp && resp.error ? resp.error : 'unknown error'}`,
               );
             }
@@ -1091,7 +1107,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
                     success: true,
                     action: 'wait_for',
                     appear,
-                    text: (params as any).text,
+                    text: params.text,
                     matched: resp.matched || null,
                     tookMs: resp.tookMs,
                   }),
@@ -1105,7 +1121,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
             );
           }
         } else {
-          const seconds = Math.max(0, Math.min((params as any).duration || 0, 30));
+          const seconds = Math.max(0, Math.min(params.duration || 0, 30));
           if (!seconds)
             return createErrorResponse('Duration parameter is required and must be > 0');
           await new Promise((r) => setTimeout(r, seconds * 1000));
