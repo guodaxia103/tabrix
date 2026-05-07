@@ -282,13 +282,91 @@ describe('SessionRepository', () => {
   });
 });
 
-describe.skip('SessionRepository.listRecent (integration · B-004 placeholder)', () => {
-  it.todo('returns empty array on virgin db');
-  it.todo('respects limit');
-  it.todo('respects offset');
-  it.todo('orders by startedAt desc');
-  it.todo('does not leak unrelated sessions when filtering by id');
-  it.todo('throws typed error on malformed id');
-  it.todo('handles 10k-row pagination consistency');
-  it.todo('respects better-sqlite3 transaction boundary');
+describe('SessionRepository.listRecent (integration · B-004 closure)', () => {
+  it('clamps oversized limits to SESSION_SUMMARY_LIMIT_MAX', () => {
+    const { sessionRepo, close } = bootstrap();
+    try {
+      for (let i = 1; i <= SESSION_SUMMARY_LIMIT_MAX + 1; i += 1) {
+        sessionRepo.insert(
+          sessionFixture({
+            sessionId: `s-${String(i).padStart(3, '0')}`,
+            startedAt: `2026-04-20T00:${String(Math.floor(i / 60)).padStart(2, '0')}:${String(
+              i % 60,
+            ).padStart(2, '0')}.000Z`,
+          }),
+        );
+      }
+
+      const summaries = sessionRepo.listRecent(10_000, 0);
+      expect(summaries).toHaveLength(SESSION_SUMMARY_LIMIT_MAX);
+      expect(summaries[0].sessionId).toBe('s-501');
+      expect(summaries.at(-1)?.sessionId).toBe('s-002');
+      expect(sessionRepo.countAll()).toBe(SESSION_SUMMARY_LIMIT_MAX + 1);
+    } finally {
+      close();
+    }
+  });
+
+  it('keeps task projection and step counts isolated across sessions', () => {
+    const { taskRepo, sessionRepo, stepRepo, close } = bootstrap();
+    try {
+      taskRepo.insert({
+        taskId: 'task-other',
+        taskType: 'browser-action',
+        title: 'other',
+        intent: 'other intent',
+        origin: 'jest',
+        labels: [],
+        status: 'running',
+        createdAt: '2026-04-20T00:00:00.000Z',
+        updatedAt: '2026-04-20T00:00:00.000Z',
+      });
+      sessionRepo.insert(
+        sessionFixture({
+          sessionId: 's-parent',
+          taskId: 'task-parent',
+          startedAt: '2026-04-20T00:00:01.000Z',
+        }),
+      );
+      sessionRepo.insert(
+        sessionFixture({
+          sessionId: 's-other',
+          taskId: 'task-other',
+          startedAt: '2026-04-20T00:00:02.000Z',
+        }),
+      );
+      stepRepo.insert(stepFixture({ stepId: 'parent-1', sessionId: 's-parent', index: 1 }));
+      stepRepo.insert(stepFixture({ stepId: 'other-1', sessionId: 's-other', index: 1 }));
+      stepRepo.insert(stepFixture({ stepId: 'other-2', sessionId: 's-other', index: 2 }));
+
+      expect(sessionRepo.listRecent(10, 0)).toMatchObject([
+        {
+          sessionId: 's-other',
+          taskId: 'task-other',
+          taskTitle: 'other',
+          taskIntent: 'other intent',
+          stepCount: 2,
+        },
+        {
+          sessionId: 's-parent',
+          taskId: 'task-parent',
+          taskTitle: 'parent',
+          taskIntent: 'parent intent',
+          stepCount: 1,
+        },
+      ]);
+    } finally {
+      close();
+    }
+  });
+
+  it('returns empty pages when offset is beyond the available range', () => {
+    const { sessionRepo, close } = bootstrap();
+    try {
+      sessionRepo.insert(sessionFixture({ sessionId: 's-1' }));
+      expect(sessionRepo.listRecent(20, 1)).toEqual([]);
+    } finally {
+      close();
+    }
+  });
 });

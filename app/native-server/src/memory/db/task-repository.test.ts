@@ -100,13 +100,50 @@ describe('TaskRepository', () => {
   });
 });
 
-describe.skip('TaskRepository.get (integration · B-004 placeholder)', () => {
-  it.todo('returns empty array on virgin db');
-  it.todo('respects limit');
-  it.todo('respects offset');
-  it.todo('orders by startedAt desc');
-  it.todo('does not leak unrelated sessions when filtering by id');
-  it.todo('throws typed error on malformed id');
-  it.todo('handles 10k-row pagination consistency');
-  it.todo('respects better-sqlite3 transaction boundary');
+describe('TaskRepository.get (integration · B-004 closure)', () => {
+  it('returns undefined on a virgin DB', () => {
+    const { repo, close } = freshRepo();
+    try {
+      expect(repo.get('task-1')).toBeUndefined();
+    } finally {
+      close();
+    }
+  });
+
+  it('fetches by exact task id without leaking adjacent rows', () => {
+    const { repo, close } = freshRepo();
+    try {
+      repo.insert(fixture({ taskId: 'task-1', title: 'one', labels: ['one'] }));
+      repo.insert(fixture({ taskId: 'task-10', title: 'ten', labels: ['ten'] }));
+
+      expect(repo.get('task-1')).toMatchObject({
+        taskId: 'task-1',
+        title: 'one',
+        labels: ['one'],
+      });
+      expect(repo.get('task')).toBeUndefined();
+    } finally {
+      close();
+    }
+  });
+
+  it('returns fresh read models so caller mutation cannot change stored rows', () => {
+    const { repo, close } = freshRepo();
+    try {
+      repo.insert(fixture({ taskId: 'task-readonly', labels: ['stable'] }));
+
+      const fetched = repo.get('task-readonly');
+      expect(fetched).toBeDefined();
+      fetched!.labels.push('mutated-by-caller');
+      fetched!.status = 'failed';
+
+      expect(repo.get('task-readonly')).toMatchObject({
+        taskId: 'task-readonly',
+        labels: ['stable'],
+        status: 'pending',
+      });
+    } finally {
+      close();
+    }
+  });
 });

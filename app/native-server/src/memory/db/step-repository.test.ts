@@ -5,6 +5,7 @@ import { TaskRepository } from './task-repository';
 import type { ExecutionStep } from '../../execution/types';
 
 function bootstrap(): {
+  sessionRepo: SessionRepository;
   stepRepo: StepRepository;
   close: () => void;
 } {
@@ -34,7 +35,7 @@ function bootstrap(): {
     steps: [],
   });
 
-  return { stepRepo, close: () => db.close() };
+  return { sessionRepo, stepRepo, close: () => db.close() };
 }
 
 function step(overrides: Partial<ExecutionStep> = {}): ExecutionStep {
@@ -148,13 +149,70 @@ describe('StepRepository', () => {
   });
 });
 
-describe.skip('StepRepository.listBySession (integration · B-004 placeholder)', () => {
-  it.todo('returns empty array on virgin db');
-  it.todo('respects limit');
-  it.todo('respects offset');
-  it.todo('orders by startedAt desc');
-  it.todo('does not leak unrelated sessions when filtering by id');
-  it.todo('throws typed error on malformed id');
-  it.todo('handles 10k-row pagination consistency');
-  it.todo('respects better-sqlite3 transaction boundary');
+describe('StepRepository.listBySession (integration · B-004 closure)', () => {
+  it('returns empty arrays for sessions without steps and unknown sessions', () => {
+    const { stepRepo, close } = bootstrap();
+    try {
+      expect(stepRepo.listBySession('session-parent')).toEqual([]);
+      expect(stepRepo.listBySession('missing-session')).toEqual([]);
+    } finally {
+      close();
+    }
+  });
+
+  it('isolates steps by session while preserving per-session step_index order', () => {
+    const { sessionRepo, stepRepo, close } = bootstrap();
+    try {
+      sessionRepo.insert({
+        sessionId: 'session-other',
+        taskId: 'task-parent',
+        transport: 'stdio',
+        clientName: 'jest',
+        status: 'running',
+        startedAt: '2026-04-20T00:00:03.000Z',
+        steps: [],
+      });
+
+      stepRepo.insert(step({ stepId: 'parent-2', sessionId: 'session-parent', index: 2 }));
+      stepRepo.insert(step({ stepId: 'other-1', sessionId: 'session-other', index: 1 }));
+      stepRepo.insert(step({ stepId: 'parent-1', sessionId: 'session-parent', index: 1 }));
+      stepRepo.insert(step({ stepId: 'other-2', sessionId: 'session-other', index: 2 }));
+
+      expect(stepRepo.listBySession('session-parent').map((s) => s.stepId)).toEqual([
+        'parent-1',
+        'parent-2',
+      ]);
+      expect(stepRepo.listBySession('session-other').map((s) => s.stepId)).toEqual([
+        'other-1',
+        'other-2',
+      ]);
+    } finally {
+      close();
+    }
+  });
+
+  it('computes next indexes independently for each session', () => {
+    const { sessionRepo, stepRepo, close } = bootstrap();
+    try {
+      sessionRepo.insert({
+        sessionId: 'session-other',
+        taskId: 'task-parent',
+        transport: 'stdio',
+        clientName: 'jest',
+        status: 'running',
+        startedAt: '2026-04-20T00:00:03.000Z',
+        steps: [],
+      });
+
+      stepRepo.insert(step({ stepId: 'parent-1', sessionId: 'session-parent', index: 1 }));
+      stepRepo.insert(step({ stepId: 'parent-2', sessionId: 'session-parent', index: 2 }));
+      stepRepo.insert(step({ stepId: 'other-1', sessionId: 'session-other', index: 1 }));
+
+      expect(stepRepo.nextIndexFor('session-parent')).toBe(3);
+      expect(stepRepo.nextIndexFor('session-other')).toBe(2);
+      expect(stepRepo.nextIndexFor('missing-session')).toBe(1);
+    } finally {
+      close();
+    }
+  });
 });
