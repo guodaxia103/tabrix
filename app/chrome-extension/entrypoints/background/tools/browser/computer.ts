@@ -43,6 +43,15 @@ interface FillFormElement {
   value: string | number | boolean;
 }
 
+function getContextHostname(tabId: number): string | undefined {
+  return screenshotContextManager.getContext(tabId)?.hostname;
+}
+
+function getFirstTextContent(result: ToolResult): string | undefined {
+  const firstContent = result.content?.[0];
+  return firstContent?.type === 'text' ? firstContent.text : undefined;
+}
+
 interface ComputerParams {
   action:
     | 'left_click'
@@ -469,8 +478,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
               }
             };
             const currentHostname = getHostname(tab.url || '');
-            const ctx = screenshotContextManager.getContext(tab.id!);
-            const contextHostname = (ctx as any)?.hostname as string | undefined;
+            const contextHostname = getContextHostname(tab.id!);
             if (contextHostname && contextHostname !== currentHostname) {
               return createErrorResponse(
                 `Security check failed: Domain changed since last screenshot (from ${contextHostname} to ${currentHostname}) during hover. Capture a new screenshot or use ref/selector.`,
@@ -571,8 +579,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
               }
             };
             const currentHostname = getHostname(tab.url || '');
-            const ctx = screenshotContextManager.getContext(tab.id!);
-            const contextHostname = (ctx as any)?.hostname as string | undefined;
+            const contextHostname = getContextHostname(tab.id!);
             if (contextHostname && contextHostname !== currentHostname) {
               return createErrorResponse(
                 `Security check failed: Domain changed since last screenshot (from ${contextHostname} to ${currentHostname}) during ${params.action}. Capture a new screenshot or use ref/selector.`,
@@ -599,7 +606,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
         return createErrorResponse(
           `Click blocked to avoid unsafe fallback (DOM click failed). ` +
             `Please use ref/selector via chrome_read_page + click, or retry with a precise target. ` +
-            `Original error: ${((domResult.content?.[0] as any)?.text as string) || 'unknown'}`,
+            `Original error: ${getFirstTextContent(domResult) || 'unknown'}`,
         );
       }
       case 'double_click':
@@ -668,8 +675,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
               }
             };
             const currentHostname = getHostname(tab.url || '');
-            const ctx = screenshotContextManager.getContext(tab.id!);
-            const contextHostname = (ctx as any)?.hostname as string | undefined;
+            const contextHostname = getContextHostname(tab.id!);
             if (contextHostname && contextHostname !== currentHostname) {
               return createErrorResponse(
                 `Security check failed: Domain changed since last screenshot (from ${contextHostname} to ${currentHostname}) during ${params.action}. Capture a new screenshot or use ref/selector.`,
@@ -754,8 +760,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
               }
             };
             const currentHostname = getHostname(tab.url || '');
-            const ctx = screenshotContextManager.getContext(tab.id!);
-            const contextHostname = (ctx as any)?.hostname as string | undefined;
+            const contextHostname = getContextHostname(tab.id!);
             if (contextHostname && contextHostname !== currentHostname) {
               return createErrorResponse(
                 `Security check failed: Domain changed since last screenshot (from ${contextHostname} to ${currentHostname}) during left_click_drag. Capture a new screenshot or use ref/selector.`,
@@ -871,8 +876,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
               }
             };
             const currentHostname = getHostname(tab.url || '');
-            const ctx = screenshotContextManager.getContext(tab.id!);
-            const contextHostname = (ctx as any)?.hostname as string | undefined;
+            const contextHostname = getContextHostname(tab.id!);
             if (contextHostname && contextHostname !== currentHostname) {
               return createErrorResponse(
                 `Security check failed: Domain changed since last screenshot (from ${contextHostname} to ${currentHostname}) during scroll. Capture a new screenshot or use ref/selector.`,
@@ -1207,7 +1211,7 @@ class ComputerTool extends BaseBrowserToolExecutor {
             }
           };
           const ctx = screenshotContextManager.getContext(tab.id!);
-          const contextHostname = (ctx as any)?.hostname as string | undefined;
+          const contextHostname = ctx?.hostname;
           const currentHostname = getHostname(tab.url || '');
           if (contextHostname && contextHostname !== currentHostname) {
             return createErrorResponse(
