@@ -14,6 +14,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger } from '../logging/logger';
+
+const stdioLogger = logger.child('stdio-mcp');
 
 export const STDIO_MCP_SERVER_INFO = {
   name: 'TabrixStdioMcpServer',
@@ -35,7 +38,8 @@ const loadConfig = () => {
     const configData = fs.readFileSync(configPath, 'utf8');
     return JSON.parse(configData);
   } catch (error) {
-    console.error('Failed to load stdio-config.json:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    stdioLogger.error('failed to load stdio-config.json', { errorMessage: message });
     throw new Error('Configuration file stdio-config.json not found or invalid');
   }
 };
@@ -73,7 +77,8 @@ export const ensureMcpClient = async () => {
   } catch (error) {
     mcpClient?.close();
     mcpClient = null;
-    console.error('Failed to connect to MCP server:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    stdioLogger.error('failed to connect to MCP server', { errorMessage: message });
   }
 };
 
@@ -131,8 +136,7 @@ async function shutdownGracefully(reason: string): Promise<void> {
   } catch {
     // ignore close errors
   }
-  // stderr only — stdout is MCP protocol stream
-  console.error(`[tabrix-stdio] shutting down (${reason})`);
+  stdioLogger.error('shutting down', { reason });
   process.exit(0);
 }
 
@@ -165,7 +169,8 @@ function isDirectExecution(): boolean {
 
 if (isDirectExecution()) {
   main().catch((error) => {
-    console.error('Fatal error Tabrix stdio MCP server main():', error);
+    const message = error instanceof Error ? error.message : String(error);
+    stdioLogger.error('fatal error in Tabrix stdio MCP server main', { errorMessage: message });
     process.exit(1);
   });
 }

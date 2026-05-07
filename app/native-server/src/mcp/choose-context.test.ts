@@ -26,6 +26,7 @@ import type { ExperienceQueryService } from '../memory/experience';
 import type { KnowledgeApiRepository } from '../memory/knowledge/knowledge-api-repository';
 import type { ExperienceActionPathRow } from '../memory/experience/experience-repository';
 import type { KnowledgeApiEndpoint } from '../memory/knowledge/knowledge-api-repository';
+import { logger } from '../logging/logger';
 
 function fakeRow(overrides: Partial<ExperienceActionPathRow> = {}): ExperienceActionPathRow {
   return {
@@ -1109,7 +1110,7 @@ describe('runTabrixChooseContext telemetry (V23-04)', () => {
     (tele.repo.recordDecision as unknown as jest.Mock) = jest.fn(() => {
       throw new Error('SQLITE_BUSY');
     });
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     try {
       const result = runTabrixChooseContext(
         { intent: 'do something' },
@@ -1204,7 +1205,7 @@ describe('runTabrixChooseContextRecordOutcome (V23-04)', () => {
     (tele.repo.recordOutcome as unknown as jest.Mock) = jest.fn(() => {
       throw new Error('SQLITE_LOCKED');
     });
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     try {
       const result = runTabrixChooseContextRecordOutcome(
         { decisionId: 'dc-known', outcome: 'completed' },

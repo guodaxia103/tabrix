@@ -37,6 +37,10 @@ import {
   type CapturedNetworkBundle,
 } from '../memory/knowledge/api-knowledge-capture';
 import { getCurrentCapabilityEnv, isCapabilityEnabled } from '../policy/capabilities';
+import { logger } from '../logging/logger';
+
+const memoryLogger = logger.child('memory');
+const knowledgeLogger = logger.child('knowledge');
 
 export interface ToolPostProcessorContext {
   toolName: string;
@@ -272,7 +276,7 @@ export const chromeReadPagePostProcessor: ToolPostProcessor = (ctx) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
-    console.warn(`[tabrix/memory] chrome_read_page post-processor failed: ${message}`);
+    memoryLogger.warn('chrome_read_page post-processor failed', { errorMessage: message });
     return empty;
   }
 };
@@ -337,7 +341,7 @@ export const chromeActionPostProcessor: ToolPostProcessor = (ctx) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
-    console.warn(`[tabrix/memory] chrome_action post-processor failed: ${message}`);
+    memoryLogger.warn('chrome_action post-processor failed', { errorMessage: message });
     return empty;
   }
 };
@@ -408,9 +412,10 @@ export const chromeNetworkCapturePostProcessor: ToolPostProcessor = (ctx) => {
       } catch (innerError) {
         const message = innerError instanceof Error ? innerError.message : String(innerError);
 
-        console.warn(
-          `[tabrix/knowledge] api_knowledge upsert failed for ${input.endpointSignature}: ${message}`,
-        );
+        knowledgeLogger.warn('api_knowledge upsert failed', {
+          endpointSignature: input.endpointSignature,
+          errorMessage: message,
+        });
         upsertedBySignature.set(input.endpointSignature, {
           endpointId: null,
           knowledgeUpserted: false,
@@ -443,7 +448,7 @@ export const chromeNetworkCapturePostProcessor: ToolPostProcessor = (ctx) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
-    console.warn(`[tabrix/knowledge] chrome_network_capture post-processor failed: ${message}`);
+    knowledgeLogger.warn('chrome_network_capture post-processor failed', { errorMessage: message });
     return empty;
   }
 };

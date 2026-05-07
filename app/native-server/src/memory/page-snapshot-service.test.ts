@@ -8,6 +8,7 @@ import {
   buildHistoryRef,
   buildSnapshotFromReadPageBody,
 } from './page-snapshot-service';
+import { logger } from '../logging/logger';
 
 function bootstrap(): {
   service: PageSnapshotService;
@@ -212,13 +213,18 @@ describe('PageSnapshotService.recordFromReadPageResult', () => {
 
   it('returns null (and does not throw) when repo write fails', () => {
     const { service, close } = bootstrap();
+    const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     try {
       const result = service.recordFromReadPageResult({
         stepId: 'non-existent-step',
         rawResult: wrap(fakeReadPageBody),
       });
       expect(result).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith('memory', 'page snapshot write failed', {
+        errorMessage: expect.stringContaining('FOREIGN KEY constraint failed'),
+      });
     } finally {
+      warnSpy.mockRestore();
       close();
     }
   });

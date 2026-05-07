@@ -20,7 +20,10 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { logger } from '../logging/logger';
 import type { PageSnapshot, PageSnapshotRepository } from './db/page-snapshot-repository';
+
+const memoryLogger = logger.child('memory');
 
 export interface RecordPageSnapshotInput {
   stepId: string;
@@ -204,7 +207,7 @@ export class PageSnapshotService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
-      console.warn(`[tabrix/memory] page snapshot write failed: ${message}`);
+      memoryLogger.warn('page snapshot write failed', { errorMessage: message });
       return null;
     }
   }

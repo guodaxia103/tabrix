@@ -22,6 +22,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { logger } from '../logging/logger';
 import type {
   ActionRepository,
   MemoryAction,
@@ -30,6 +31,8 @@ import type {
   MemoryNavigateMode,
   PageSnapshotRepository,
 } from './db';
+
+const memoryLogger = logger.child('memory');
 
 export interface RecordActionInput {
   stepId: string;
@@ -289,7 +292,7 @@ export class ActionService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
-      console.warn(`[tabrix/memory] action write failed: ${message}`);
+      memoryLogger.warn('action write failed', { errorMessage: message });
       return null;
     }
   }

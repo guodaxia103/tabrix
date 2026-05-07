@@ -58,6 +58,7 @@ import {
 } from './choose-context-layer-dispatch';
 import type { PageContextProvider } from './page-context-provider';
 import { resolveApiKnowledgeCandidate } from '../api/api-knowledge';
+import { logger } from '../logging/logger';
 import type { ApiKnowledgeFetch } from '../api/api-knowledge';
 import {
   routeDataSource,
@@ -70,6 +71,8 @@ import {
 } from '../execution/data-source-router';
 import { tryDirectApiExecute, type DirectApiIntentClass } from '../execution/direct-api-executor';
 import type { DataNeed, EndpointKnowledgeReader } from '../api-knowledge/types';
+
+const chooseContextLogger = logger.child('choose-context');
 
 export interface TabrixChooseContextRouterTelemetry {
   chosenSource?: DataSourceKind;
@@ -932,7 +935,7 @@ export function runTabrixChooseContext(
       // user-facing; telemetry breakage must not break the user-facing
       // call.
       const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[tabrix/choose-context] telemetry recordDecision failed: ${message}`);
+      chooseContextLogger.warn('telemetry recordDecision failed', { errorMessage: message });
     }
   }
 
@@ -1119,7 +1122,7 @@ export function runTabrixChooseContextRecordOutcome(
     // `unknown_decision` so the caller does not retry forever and the
     // failure is visible in the warning log.
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[tabrix/choose-context] telemetry recordOutcome failed: ${message}`);
+    chooseContextLogger.warn('telemetry recordOutcome failed', { errorMessage: message });
     return {
       status: 'unknown_decision',
       decisionId: parsed.decisionId,

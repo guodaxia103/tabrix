@@ -11,6 +11,7 @@ import {
   redactFillValue,
   ACTION_KIND_BY_TOOL,
 } from './action-service';
+import { logger } from '../logging/logger';
 
 function wrap(body: unknown, isError = false): CallToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(body) }], isError };
@@ -259,7 +260,7 @@ describe('ActionService.recordFromToolCall', () => {
 
   it('returns null and does not throw when DB write fails (e.g. missing step)', () => {
     const { service, close } = bootstrap();
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     try {
       const rec = service.recordFromToolCall({
         stepId: 'does-not-exist',
