@@ -540,10 +540,8 @@ describe('read_page mode', () => {
     expect(payload.taskMode).toBe('read');
     expect(
       payload.highValueObjects.slice(0, 3).map((item: { label: string }) => item.label),
-    ).toEqual(['Issues', 'Pull requests', 'Actions']);
-    expect(payload.L0.summary).toContain(
-      'Primary repo entry points are Issues, Pull requests, Actions.',
-    );
+    ).toEqual(['Pull requests', 'Issues', 'Actions']);
+    expect(payload.L0.summary).toContain('focus on Pull requests, Issues, Actions');
     expect(payload.interactiveElements).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ref: 'ref_issues_link', name: 'Issues' }),

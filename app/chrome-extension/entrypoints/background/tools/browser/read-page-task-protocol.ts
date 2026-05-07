@@ -26,10 +26,6 @@ import {
   scoreCandidateObject,
 } from './read-page-high-value-objects-core';
 import type { PageRole } from './read-page-understanding-core';
-import {
-  githubHighValueObjectAdapter,
-  githubObjectLayerAdapter,
-} from './read-page-high-value-objects-github';
 import { annotateStableTargetRefs } from './stable-target-ref';
 
 interface TaskProtocolParams {
@@ -90,17 +86,14 @@ interface TaskModeSignalContext {
 }
 
 const PAGE_OBJECT_FAMILY_ADAPTERS: readonly PageObjectFamilyAdapter[] = [
-  githubHighValueObjectAdapter,
+  // No platform-specific adapters. Tabrix uses generic high-value object detection.
+  // Platform-specific priors come from the Knowledge layer (MKEP), not hardcoded adapters.
 ];
 
-/**
- * T5.4.4: four-layer object pipeline adapters. The task protocol only calls
- * the neutral `collectCandidateObjects` / `classifyCandidateObject` /
- * `scoreCandidateObject` helpers and hands these family adapters in so that
- * family-specific seeds, classification rules, and prior boosts stay out of
- * the protocol layer.
- */
-const OBJECT_LAYER_ADAPTERS: readonly ObjectLayerFamilyAdapter[] = [githubObjectLayerAdapter];
+const OBJECT_LAYER_ADAPTERS: readonly ObjectLayerFamilyAdapter[] = [
+  // No platform-specific layer adapters.
+  // Object layer classification uses generic rules only.
+];
 
 const MAX_HIGH_VALUE_OBJECTS = 6;
 

@@ -10,8 +10,6 @@ import {
   hasAnySignal,
   resolvePrimaryRegion,
 } from './read-page-understanding-core';
-import { githubPageFamilyAdapter } from './read-page-understanding-github';
-import { douyinPageFamilyAdapter } from './read-page-understanding-douyin';
 import {
   KNOWLEDGE_REGISTRY_MODE,
   isKnowledgeRegistryDiffMode,
@@ -23,8 +21,8 @@ import { resolvePageRole } from '../../knowledge/lookup/resolve-page-role';
 export type { PageRole, PageUnderstandingSummary } from './read-page-understanding-core';
 
 const PAGE_FAMILY_ADAPTERS: PageFamilyAdapter[] = [
-  douyinPageFamilyAdapter,
-  githubPageFamilyAdapter,
+  // No platform-specific adapters. Tabrix uses generic page understanding.
+  // Platform knowledge comes from the Knowledge layer (MKEP), not hardcoded adapters.
 ];
 
 const LOGIN_GATE_RULES: RegionRule[] = [

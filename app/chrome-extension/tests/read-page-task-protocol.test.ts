@@ -142,16 +142,14 @@ describe('read_page task protocol', () => {
     expect(protocol.highValueObjects[0]?.label).toBe('Issues');
     expect(protocol.highValueObjects.slice(0, 3).map((item) => item.label)).toEqual([
       'Issues',
-      'Pull requests',
       'Actions',
+      'Pull requests',
     ]);
-    expect(protocol.L0.summary).toContain(
-      'Primary repo entry points are Issues, Pull requests, Actions.',
-    );
+    expect(protocol.L0.summary).toContain('focus on Issues, Actions, Pull requests');
     expect(protocol.L0.summary).not.toContain('fix(t4): stabilize workflow run detail baseline');
   });
 
-  it('injects repo task seeds when compact snapshot misses named repo tabs', () => {
+  it('falls back to generic high-value objects when snapshot has no repo tabs', () => {
     const protocol = buildTaskProtocol(
       createBaseParams({
         currentUrl: 'https://github.com/example/project',
@@ -185,15 +183,11 @@ describe('read_page task protocol', () => {
     );
 
     expect(protocol.taskMode).toBe('read');
-    expect(protocol.highValueObjects.slice(0, 3).map((item) => item.label)).toEqual([
-      'Issues',
-      'Pull requests',
-      'Actions',
-    ]);
-    expect(protocol.L0.summary).toContain(
-      'Primary repo entry points are Issues, Pull requests, Actions.',
-    );
-    expect(protocol.highValueObjects[3]?.label).toBe('Go to file');
+    // Without platform-specific adapters, high-value objects come from actual page elements,
+    // not injected seeds. The Knowledge layer (MKEP) provides platform knowledge.
+    expect(protocol.highValueObjects[0]?.label).toBe('Watching a repository');
+    expect(protocol.highValueObjects[1]?.label).toBe('Go to file');
+    expect(protocol.highValueObjects[2]?.label).toBe('main branch');
   });
 
   it.each([
