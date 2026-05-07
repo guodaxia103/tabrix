@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
-    "test:contracts": "pnpm run build && node ./test/tool-contracts.mjs",
+    "test:contracts": "pnpm run build && node ./test/run-contracts.mjs",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write \"src/**/*.{js,ts,json}\"",
