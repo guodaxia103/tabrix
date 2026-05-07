@@ -218,6 +218,15 @@ Why: three of the five real bugs in Sprints 1–2 were one side of the extension
 
 Applies equally to owner-lane and fast-lane tasks. Whoever drafts the backlog item (any AI assistant or a human maintainer) puts the citation in the `- **Schema cite**:` bullet (see B-005 / B-006 for examples).
 
+## Code Quality Governance Freeze
+
+**TQG-00 rule (2026-05-07):** until Phase 1 governance tasks (`TQG-00` through `TQG-03`) are complete and the active SoT ledger records the freeze as lifted, no new feature or enhancement work that adds behavior, surface, or public API should be committed. Allowed during the freeze:
+
+- governance refactors, test debt closure, logging/type/report hygiene, and deterministic cleanup within the `TQG-*` scope defined in `.claude/strategy/TABRIX_CODE_QUALITY_GOVERNANCE_SOT_V1_zh.md`;
+- critical security, stability, or user-blocking fixes with explicit owner-lane approval.
+
+This rule is temporary and must be removed or updated once Phase 1 is marked complete in `.claude/handoffs/TABRIX_CODE_QUALITY_GOVERNANCE_PROGRESS_LEDGER_zh.md`.
+
 ## Public Source Of Truth
 
 For this public repository, treat `docs/` (English-only) plus the root-level `README.md`, `README_zh.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, and `AGENTS.md` as the public source of truth. Do not recreate internal PM systems, private review docs, nightly reports, or acceptance evidence inside the public tree.
