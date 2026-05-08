@@ -170,9 +170,9 @@ describe('V27-P0-REAL-01 visible region rows', () => {
   it('promotes localized standalone business links as DOM region rows', () => {
     const rows = extractVisibleRegionRows({
       pageContent: [
-        '- link "AI的七层关系，你搞懂了几层？" [ref=ref_48] href="/search_result/1?token=a"',
-        '- link "学会这些AI工具，轻松替你上班" [ref=ref_58] href="/search_result/2?token=b"',
-        '- link "2026年最值得关注的AI应用清单来啦！" [ref=ref_68] href="/search_result/3?token=c"',
+        '- link "七层工作流方法，你理解了几层？" [ref=ref_48] href="/search_result/1?token=a"',
+        '- link "学会这些自动化工具，轻松整理日常任务" [ref=ref_58] href="/search_result/2?token=b"',
+        '- link "2026年值得关注的实用工具清单" [ref=ref_68] href="/search_result/3?token=c"',
       ].join('\n'),
     });
 
@@ -181,6 +181,62 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.visibleDomRowsCandidateCount).toBe(3);
     expect(rows.rows.map((row) => row.targetRef)).toEqual(['ref_48', 'ref_58', 'ref_68']);
     expect(rows.targetRefCoverageRate).toBeGreaterThanOrEqual(0.95);
+  });
+
+  it('uses structured interactive links when visible text is nested under link shells', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '- generic "Search page" [ref=ref_root] (x=0,y=0)',
+        '  - link "" [ref=ref_result_1] (x=300,y=210) href="/search_result/1?token=a"',
+        '    - generic "A practical seven-layer AI workflow" [ref=ref_title_1] (x=300,y=248)',
+        '  - link "" [ref=ref_profile_1] (x=300,y=260) href="/user/profile/alpha"',
+        '    - generic "Image: strip" [ref=ref_image_1] (x=300,y=260)',
+        '  - link "" [ref=ref_result_2] (x=700,y=220) href="/search_result/2?token=b"',
+        '    - generic "Use AI tools to finish routine office work" [ref=ref_title_2] (x=700,y=258)',
+        '  - link "" [ref=ref_result_3] (x=960,y=230) href="/search_result/3?token=c"',
+        '    - generic "Build a solo business with AI automation" [ref=ref_title_3] (x=960,y=268)',
+      ].join('\n'),
+      fallbackInteractiveElements: [
+        {
+          ref: 'ref_result_1',
+          role: 'link',
+          name: 'A practical seven-layer AI workflow',
+          href: '/search_result/1?token=a',
+        },
+        {
+          ref: 'ref_profile_1',
+          role: 'link',
+          name: 'Image: strip',
+          href: '/user/profile/alpha',
+        },
+        {
+          ref: 'ref_result_2',
+          role: 'link',
+          name: 'Use AI tools to finish routine office work',
+          href: '/search_result/2?token=b',
+        },
+        {
+          ref: 'ref_result_3',
+          role: 'link',
+          name: 'Build a solo business with AI automation',
+          href: '/search_result/3?token=c',
+        },
+      ],
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.visibleDomRowsCandidateCount).toBe(3);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      'A practical seven-layer AI workflow',
+      'Use AI tools to finish routine office work',
+      'Build a solo business with AI automation',
+    ]);
+    expect(rows.rows.map((row) => row.targetRef)).toEqual([
+      'ref_result_1',
+      'ref_result_2',
+      'ref_result_3',
+    ]);
+    expect(rows.rows.map((row) => row.title).join(' ')).not.toMatch(/Image:|profile/i);
   });
 
   it('filters shell/legal/date/image-only fragments instead of returning them as result rows', () => {

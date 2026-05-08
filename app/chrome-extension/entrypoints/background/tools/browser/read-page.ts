@@ -80,6 +80,28 @@ function reconcilePageUnderstandingWithVisibleRows(payload: Record<string, any>)
   };
 }
 
+function completeVisibleRegionRows(params: {
+  rows: VisibleRegionRowsResult;
+  pageContent: string;
+  primaryRegion: string | null;
+  interactiveElements: Array<{ ref: string; role: string; name: string; href?: string }>;
+  currentUrl: string;
+  currentTitle: string;
+  viewport: { width: number | null; height: number | null; dpr: number | null };
+}): VisibleRegionRowsResult {
+  if (params.rows.visibleRegionRowsUsed) {
+    return params.rows;
+  }
+  return extractVisibleRegionRows({
+    pageContent: params.pageContent,
+    sourceRegion: params.primaryRegion,
+    fallbackInteractiveElements: params.interactiveElements,
+    url: params.currentUrl,
+    title: params.currentTitle,
+    viewport: params.viewport,
+  });
+}
+
 function buildModeOutput(params: {
   mode: ReadPageMode;
   renderMode: ReadPageRenderMode;
@@ -128,6 +150,15 @@ function buildModeOutput(params: {
     params.mode,
     params.currentUrl,
   );
+  const visibleRegionRows = completeVisibleRegionRows({
+    rows: params.visibleRegionRows,
+    pageContent: params.pageContent,
+    primaryRegion: params.primaryRegion,
+    interactiveElements,
+    currentUrl: params.currentUrl,
+    currentTitle: params.currentTitle,
+    viewport: params.viewport,
+  });
   const candidateActions =
     params.candidateActions.length > 0
       ? params.candidateActions
@@ -171,7 +202,7 @@ function buildModeOutput(params: {
     candidateActions,
     interactiveElements,
     pageContext,
-    visibleRegionRows: params.visibleRegionRows,
+    visibleRegionRows,
     requestedLayer: params.requestedLayer,
   });
 

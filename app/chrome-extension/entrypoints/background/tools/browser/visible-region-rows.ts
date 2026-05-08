@@ -84,6 +84,12 @@ export function extractVisibleRegionRows(input: {
   pageContent: string;
   sourceRegion?: string | null;
   maxRows?: number;
+  fallbackInteractiveElements?: Array<{
+    ref?: unknown;
+    role?: unknown;
+    name?: unknown;
+    href?: unknown;
+  }>;
   url?: string | null;
   title?: string | null;
   viewport?: { width?: number | null; height?: number | null; dpr?: number | null } | null;
@@ -93,7 +99,11 @@ export function extractVisibleRegionRows(input: {
   const sourceRegion = normalizeText(input.sourceRegion) || 'viewport';
   const nodes = parseVisibleNodes(input.pageContent);
   const { groups, rejectedReasonDistribution } = buildCandidateGroups(nodes, sourceRegion);
-  const orderedGroups = groups.slice().sort(compareGroupsByVisualOrder);
+  const orderedGroups = supplementGroupsFromInteractiveElements(
+    groups.slice().sort(compareGroupsByVisualOrder),
+    input.fallbackInteractiveElements,
+    sourceRegion,
+  );
   const candidateRows = orderedGroups
     .map((group) => buildRow(group))
     .filter((row): row is VisibleRegionRow => row !== null)
@@ -176,9 +186,56 @@ export function extractVisibleRegionRows(input: {
       pixelsAbove: finiteNumber(input.scrollY),
       pixelsBelow: finiteNumber(input.pixelsBelow),
       visibleRegionCount: nodes.filter((node) => hasVisibleCoordinate(node)).length,
-      candidateRegionCount: groups.length,
+      candidateRegionCount: orderedGroups.length,
     },
   };
+}
+
+function supplementGroupsFromInteractiveElements(
+  groups: CandidateGroup[],
+  fallbackInteractiveElements:
+    | Array<{
+        ref?: unknown;
+        role?: unknown;
+        name?: unknown;
+        href?: unknown;
+      }>
+    | null
+    | undefined,
+  sourceRegion: string,
+): CandidateGroup[] {
+  if (!Array.isArray(fallbackInteractiveElements) || fallbackInteractiveElements.length === 0) {
+    return groups;
+  }
+  const usedRefs = new Set(
+    groups
+      .flatMap((group) => group.nodes.map((node) => node.ref))
+      .filter((ref): ref is string => typeof ref === 'string' && ref.length > 0),
+  );
+  const fallbackNodes = fallbackInteractiveElements
+    .map((item, index): ParsedVisibleNode => {
+      const role = normalizeText(item?.role).toLowerCase() || 'generic';
+      const name = normalizeText(item?.name);
+      const ref = normalizeText(item?.ref) || null;
+      const href = normalizeText(item?.href) || null;
+      return { role, name, ref, href, depth: 0, x: null, y: null, order: 10_000 + index };
+    })
+    .filter((node) => isStandaloneResultLink(node))
+    .filter((node) => {
+      if (!node.ref || usedRefs.has(node.ref)) return false;
+      usedRefs.add(node.ref);
+      return true;
+    });
+  if (fallbackNodes.length < 2) return groups;
+  return [
+    ...groups,
+    ...fallbackNodes.map((node, index) => ({
+      container: node,
+      nodes: [node],
+      sourceRegion,
+      regionId: node.ref || `${sourceRegion}_interactive_${index + 1}`,
+    })),
+  ];
 }
 
 function parseVisibleNodes(pageContent: string): ParsedVisibleNode[] {
