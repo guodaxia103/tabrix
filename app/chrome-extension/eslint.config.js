@@ -49,6 +49,24 @@ export default defineConfig([
       'no-empty': 'off',
     },
   },
+  {
+    files: ['inject-scripts/**/*.js'],
+    rules: {
+      'no-redeclare': 'off',
+    },
+  },
+  {
+    files: ['scripts/**/*.cjs'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+      'no-redeclare': 'off',
+    },
+  },
   pluginVue.configs['flat/essential'],
   { files: ['**/*.vue'], languageOptions: { parserOptions: { parser: tseslint.parser } } },
   // Prettier configuration - must be placed last to override previous rules
