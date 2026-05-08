@@ -584,6 +584,87 @@ describe('clickTool integration', () => {
     expect(result.isError).toBe(false);
     expect(payload.lane).toBe('tabrix_owned');
   });
+
+  it('emits clickDiff=no_change when no click facts changed', async () => {
+    vi.spyOn(clickTool as any, 'tryGetTab').mockResolvedValue({
+      id: 4107,
+      title: 'Repo',
+      url: 'https://github.com/octocat/hello',
+      windowId: 7,
+    });
+    vi.spyOn(clickTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(clickTool as any, 'sendMessageToTab').mockResolvedValue({
+      dispatchSucceeded: true,
+      elementInfo: { tagName: 'BUTTON' },
+      signals: {
+        beforeUnloadFired: false,
+        urlBefore: 'https://github.com/octocat/hello',
+        urlAfter: 'https://github.com/octocat/hello',
+        hashBefore: '',
+        hashAfter: '',
+        domChanged: false,
+        domAddedDialog: false,
+        domAddedMenu: false,
+        focusChanged: false,
+        targetStateDelta: null,
+      },
+    });
+
+    const result = await clickTool.execute({
+      tabId: 4107,
+      selector: '#noop',
+    } as any);
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(result.isError).toBe(false);
+    expect(payload.clickDiff).toEqual({ kind: 'no_change' });
+  });
+
+  it('emits clickDiff=change with facts-only signal deltas', async () => {
+    vi.spyOn(clickTool as any, 'tryGetTab').mockResolvedValue({
+      id: 4108,
+      title: 'Repo',
+      url: 'https://github.com/octocat/hello',
+      windowId: 7,
+    });
+    vi.spyOn(clickTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(clickTool as any, 'sendMessageToTab').mockResolvedValue({
+      dispatchSucceeded: true,
+      elementInfo: { tagName: 'A' },
+      signals: {
+        beforeUnloadFired: false,
+        urlBefore: 'https://github.com/octocat/hello',
+        urlAfter: 'https://github.com/octocat/hello/issues',
+        hashBefore: '',
+        hashAfter: '',
+        domChanged: false,
+        domAddedDialog: false,
+        domAddedMenu: false,
+        focusChanged: false,
+        targetStateDelta: null,
+      },
+    });
+
+    const result = await clickTool.execute({
+      tabId: 4108,
+      selector: '#issues-tab',
+    } as any);
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(result.isError).toBe(false);
+    expect(payload.clickDiff).toEqual({
+      kind: 'change',
+      urlDelta: 'same_origin',
+      hashChanged: false,
+      newTabOpened: false,
+      beforeUnloadFired: false,
+      domChanged: false,
+      dialogAdded: false,
+      menuAdded: false,
+      focusChanged: false,
+      stateChanged: false,
+    });
+  });
 });
 
 /**

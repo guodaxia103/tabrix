@@ -205,6 +205,77 @@ export interface ClickBrowserSignals {
   };
 }
 
+type ClickDiffUrlDelta = 'none' | 'hash_only' | 'same_origin' | 'cross_origin' | 'unavailable';
+
+type ClickDiffSummary =
+  | { kind: 'no_change' }
+  | {
+      kind: 'change';
+      urlDelta: ClickDiffUrlDelta;
+      hashChanged: boolean;
+      newTabOpened: boolean;
+      beforeUnloadFired: boolean;
+      domChanged: boolean;
+      dialogAdded: boolean;
+      menuAdded: boolean;
+      focusChanged: boolean;
+      stateChanged: boolean;
+    };
+
+function classifyClickUrlDelta(page: ClickPageSignals): ClickDiffUrlDelta {
+  if (page.urlBefore === page.urlAfter) {
+    return page.hashBefore !== page.hashAfter ? 'hash_only' : 'none';
+  }
+  try {
+    const before = new URL(page.urlBefore);
+    const after = new URL(page.urlAfter);
+    return before.origin === after.origin ? 'same_origin' : 'cross_origin';
+  } catch {
+    return 'unavailable';
+  }
+}
+
+function buildClickDiffSummary(
+  page: ClickPageSignals | null,
+  browser: ClickBrowserSignals,
+): ClickDiffSummary {
+  const stateChanged = page?.targetStateDelta != null;
+  const urlDelta = page ? classifyClickUrlDelta(page) : 'unavailable';
+  const hashChanged = page ? page.hashBefore !== page.hashAfter : false;
+  const beforeUnloadFired = page?.beforeUnloadFired === true;
+  const domChanged = page?.domChanged === true;
+  const dialogAdded = page?.domAddedDialog === true;
+  const menuAdded = page?.domAddedMenu === true;
+  const focusChanged = page?.focusChanged === true;
+
+  const hasChange =
+    browser.newTabOpened ||
+    beforeUnloadFired ||
+    urlDelta !== 'none' ||
+    domChanged ||
+    dialogAdded ||
+    menuAdded ||
+    focusChanged ||
+    stateChanged;
+
+  if (!hasChange) {
+    return { kind: 'no_change' };
+  }
+
+  return {
+    kind: 'change',
+    urlDelta,
+    hashChanged,
+    newTabOpened: browser.newTabOpened,
+    beforeUnloadFired,
+    domChanged,
+    dialogAdded,
+    menuAdded,
+    focusChanged,
+    stateChanged,
+  };
+}
+
 /**
  * Pure function: given the raw signals from page-local + browser-level
  * sources, produce the public click contract fields.
@@ -927,6 +998,7 @@ class ClickTool extends BaseBrowserToolExecutor {
               dispatchSucceeded: merged.dispatchSucceeded,
               observedOutcome: merged.observedOutcome,
               verification: merged.verification,
+              clickDiff: buildClickDiffSummary(pageSignals, browserSignals),
               // One-release compat field; equals verification.navigationOccurred.
               navigationOccurred: merged.verification.navigationOccurred,
               // Explicit lane label. Always `tabrix_owned` for the
