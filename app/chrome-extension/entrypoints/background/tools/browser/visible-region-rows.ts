@@ -39,6 +39,11 @@ interface CandidateBuildResult {
   rejectedReasonDistribution: Record<VisibleRegionRejectionReason, number>;
 }
 
+interface VisibleTextFallbackResult {
+  rows: VisibleRegionRow[];
+  rejectedReasonDistribution: Record<VisibleRegionRejectionReason, number>;
+}
+
 interface SearchShellContext {
   searchTerms: Set<string>;
   pageTitle: string;
@@ -93,9 +98,12 @@ const META_PATTERN =
   /\b(\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|m|min|mins|minute|minutes|ago)|yesterday|today|updated|posted|views?|\d{1,2}:\d{2})\b|\d{4}年\d{1,2}月\d{1,2}日|刚刚|分钟前|小时前|昨天|今天|发布|更新/i;
 const INTERACTION_PATTERN =
   /\b(\d+(?:\.\d+)?\s*[kKmM]?\s*(?:likes?|stars?|comments?|replies?|views?|shares?))\b|点赞|评论|收藏|转发|阅读|浏览/i;
+const VISIBLE_TEXT_FALLBACK_MIN_CHARS = 120;
+const VISIBLE_TEXT_FALLBACK_MAX_ROWS = 5;
 
 export function extractVisibleRegionRows(input: {
   pageContent: string;
+  visibleTextContent?: string | null;
   sourceRegion?: string | null;
   maxRows?: number;
   fallbackInteractiveElements?: Array<{
@@ -141,12 +149,33 @@ export function extractVisibleRegionRows(input: {
       rejectedReasonDistribution.target_ref_coverage_insufficient += candidateRows.length;
     }
   }
+  const visibleTextFallback =
+    rows.length === 0
+      ? buildVisibleTextFallbackRows({
+          visibleTextContent: input.visibleTextContent,
+          sourceRegion,
+          searchShellContext,
+          maxRows: Math.min(
+            VISIBLE_TEXT_FALLBACK_MAX_ROWS,
+            Math.max(1, Math.floor(input.maxRows ?? VISIBLE_TEXT_FALLBACK_MAX_ROWS)),
+          ),
+        })
+      : { rows: [], rejectedReasonDistribution: emptyRejectedDistribution() };
+  const selectedRows = rows.length > 0 ? rows : visibleTextFallback.rows;
+  mergeRejectedDistribution(
+    rejectedReasonDistribution,
+    visibleTextFallback.rejectedReasonDistribution,
+  );
   const rowExtractionConfidence = rows.length
     ? clampConfidence(rows.reduce((sum, row) => sum + row.confidence, 0) / rows.length)
-    : 0;
-  const cardRowsCount = rows.length;
-  const targetRefCoverageRate = rows.length
-    ? clampConfidence(rows.filter((row) => row.targetRef).length / rows.length)
+    : selectedRows.length
+      ? clampConfidence(
+          selectedRows.reduce((sum, row) => sum + row.confidence, 0) / selectedRows.length,
+        )
+      : 0;
+  const cardRowsCount = selectedRows.length;
+  const targetRefCoverageRate = selectedRows.length
+    ? clampConfidence(selectedRows.filter((row) => row.targetRef).length / selectedRows.length)
     : 0;
   const cardPatternConfidence =
     rows.length >= 2
@@ -157,12 +186,14 @@ export function extractVisibleRegionRows(input: {
             repeatedRoleBonus(orderedGroups) +
             Math.min(0.08, averageRowQualityBonus(rows)),
         )
-      : 0;
-  const regionQualityScore = rows.length
+      : selectedRows.length
+        ? clampConfidence(0.5 + Math.min(0.22, selectedRows.length * 0.04))
+        : 0;
+  const regionQualityScore = selectedRows.length
     ? clampConfidence((rowExtractionConfidence + cardPatternConfidence + targetRefCoverageRate) / 3)
     : 0;
   const rejectedReason =
-    rows.length > 0
+    selectedRows.length > 0
       ? null
       : candidateRows.length > 0
         ? candidateRows.length < 2
@@ -172,20 +203,20 @@ export function extractVisibleRegionRows(input: {
 
   return {
     sourceDataSource: 'dom_region_rows',
-    rows,
-    rowCount: rows.length,
-    visibleRegionRowsUsed: rows.length > 0,
+    rows: selectedRows,
+    rowCount: selectedRows.length,
+    visibleRegionRowsUsed: selectedRows.length > 0,
     visibleRegionRowsRejectedReason: rejectedReason,
-    sourceRegion,
+    sourceRegion: selectedRows[0]?.sourceRegion || sourceRegion,
     rowExtractionConfidence,
-    cardExtractorUsed: rows.length > 0,
+    cardExtractorUsed: selectedRows.length > 0,
     cardPatternConfidence,
     cardRowsCount,
     rowOrder: 'visual_order',
     targetRefCoverageRate,
     regionQualityScore,
-    visibleDomRowsCandidateCount: candidateRows.length,
-    visibleDomRowsSelectedCount: rows.length,
+    visibleDomRowsCandidateCount: candidateRows.length + visibleTextFallback.rows.length,
+    visibleDomRowsSelectedCount: selectedRows.length,
     lowValueRegionRejectedCount:
       rejectedReasonDistribution.low_value_region +
       rejectedReasonDistribution.single_isolated_text +
@@ -210,6 +241,163 @@ export function extractVisibleRegionRows(input: {
       candidateRegionCount: orderedGroups.length,
     },
   };
+}
+
+function buildVisibleTextFallbackRows(input: {
+  visibleTextContent?: string | null;
+  sourceRegion: string;
+  searchShellContext: SearchShellContext;
+  maxRows: number;
+}): VisibleTextFallbackResult {
+  const rejectedReasonDistribution = emptyRejectedDistribution();
+  const normalizedText = normalizeVisibleText(input.visibleTextContent);
+  if (normalizedText.length < VISIBLE_TEXT_FALLBACK_MIN_CHARS) {
+    if (normalizedText) rejectedReasonDistribution.single_isolated_text += 1;
+    return { rows: [], rejectedReasonDistribution };
+  }
+
+  const lines = uniqueCompactStrings(
+    normalizedText
+      .split('\n')
+      .map((line) => normalizeText(line))
+      .filter(Boolean),
+  ).slice(0, 80);
+  const rowGroups: string[][] = [];
+  let current: string[] = [];
+
+  for (const line of lines) {
+    const rejectionReason = classifyVisibleTextLineRejection(line, input.searchShellContext);
+    if (rejectionReason) {
+      rejectedReasonDistribution[rejectionReason] += 1;
+      continue;
+    }
+
+    if (isVisibleTextTitleLike(line) && current.length !== 1) {
+      if (current.length > 0) rowGroups.push(current);
+      current = [line];
+      continue;
+    }
+
+    if (current.length > 0 && current.length < 4) {
+      current.push(line);
+    }
+  }
+  if (current.length > 0) rowGroups.push(current);
+
+  const rows = rowGroups
+    .filter((group) => group.some((line) => isVisibleTextTitleLike(line)))
+    .slice(0, input.maxRows)
+    .map((group, index) =>
+      buildVisibleTextFallbackRow({
+        group,
+        sourceRegion: input.sourceRegion,
+        index,
+      }),
+    )
+    .filter((row): row is VisibleRegionRow => row !== null);
+
+  if (rows.length === 0 && rejectedReasonDistribution.low_value_region === 0) {
+    rejectedReasonDistribution.single_isolated_text += Math.max(1, lines.length);
+  }
+
+  return { rows, rejectedReasonDistribution };
+}
+
+function normalizeVisibleText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function classifyVisibleTextLineRejection(
+  line: string,
+  searchShellContext: SearchShellContext,
+): VisibleRegionRejectionReason | null {
+  if (isFooterLikeText(line)) return 'footer_like_region';
+  if (isNavigationLikeText(line)) return 'navigation_like_region';
+  if (isLowValueShellText(line, searchShellContext)) return 'low_value_region';
+  if (isMetaOnlyText(line) || INTERACTION_PATTERN.test(line)) return 'single_isolated_text';
+  if (!isVisibleTextBusinessLike(line)) return 'single_isolated_text';
+  return null;
+}
+
+function isVisibleTextBusinessLike(line: string): boolean {
+  const normalized = normalizeText(line);
+  if (!normalized) return false;
+  if (normalized.length >= 24) return true;
+  if (countCjkCharacters(normalized) >= 10) return true;
+  return normalized.split(/\s+/).filter(Boolean).length >= 4;
+}
+
+function isVisibleTextTitleLike(line: string): boolean {
+  if (!isVisibleTextBusinessLike(line)) return false;
+  if (line.length > 220) return true;
+  if (/[。.!?！？]/.test(line) && line.length >= 18) return true;
+  return line.length >= 18 || countCjkCharacters(line) >= 10;
+}
+
+function buildVisibleTextFallbackRow(input: {
+  group: string[];
+  sourceRegion: string;
+  index: number;
+}): VisibleRegionRow | null {
+  const title = input.group.find((line) => isVisibleTextTitleLike(line));
+  if (!title) return null;
+  const remaining = input.group.filter((line) => line !== title);
+  const metaText = remaining.find((line) => META_PATTERN.test(line)) ?? null;
+  const interactionText = remaining.find((line) => INTERACTION_PATTERN.test(line)) ?? null;
+  const primaryText =
+    remaining.find((line) => line !== metaText && line !== interactionText) ?? null;
+  const secondaryText =
+    remaining.find(
+      (line) => line !== metaText && line !== interactionText && line !== primaryText,
+    ) ?? null;
+  const visibleTextFields = uniqueCompactStrings([
+    title,
+    primaryText,
+    secondaryText,
+    metaText,
+    interactionText,
+  ]);
+  if (visibleTextFields.length === 0) return null;
+
+  const rowId = `${input.sourceRegion}_visible_text_row_${input.index + 1}`;
+  return {
+    rowId,
+    title: title.length > 160 ? `${title.slice(0, 157).trim()}...` : title,
+    primaryText,
+    secondaryText,
+    summary: uniqueCompactStrings([primaryText, secondaryText, metaText]).join(' | ') || null,
+    metaText,
+    interactionText,
+    visibleTextFields,
+    targetRef: null,
+    targetRefCoverageRate: 0,
+    boundingBox: null,
+    regionId: `${input.sourceRegion}_visible_text`,
+    sourceRegion: 'visible_text',
+    confidence: clampConfidence(0.58 + Math.min(0.18, visibleTextFields.length * 0.04)),
+    qualityReasons: ['visible_text_fallback', 'multi_text_fields'].filter(
+      (reason) => reason !== 'multi_text_fields' || visibleTextFields.length >= 2,
+    ),
+  };
+}
+
+function countCjkCharacters(value: string): number {
+  return (value.match(/[\u3400-\u9fff]/g) || []).length;
+}
+
+function mergeRejectedDistribution(
+  target: Record<VisibleRegionRejectionReason, number>,
+  source: Record<VisibleRegionRejectionReason, number>,
+): void {
+  for (const key of Object.keys(source) as VisibleRegionRejectionReason[]) {
+    target[key] += source[key] ?? 0;
+  }
 }
 
 function supplementGroupsFromInteractiveElements(

@@ -399,6 +399,96 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.lowValueRegionRejectedCount).toBeGreaterThan(0);
   });
 
+  it('builds fallback rows from long visible text when semantic rows are unavailable', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '- navigation "Primary navigation" [ref=ref_nav]',
+        '  - link "Home" [ref=ref_home] href="/"',
+        '- footer "Footer" [ref=ref_footer]',
+        '  - link "Privacy" [ref=ref_privacy] href="/privacy"',
+      ].join('\n'),
+      sourceRegion: 'visible_results',
+      visibleTextContent: [
+        'Search',
+        'All',
+        'Practical automation planning guide for small teams using browser workflows',
+        'This walkthrough explains how a team can collect requirements, compare tools, and finish routine web tasks with fewer manual checks.',
+        'Workflow Lab',
+        '2 hours ago',
+        '89 likes',
+        'Reliable operations checklist for browser based AI assistants',
+        'A compact checklist covering page reading, result selection, logs, and handoff evidence for daily operations.',
+        'Ops Review',
+        'yesterday',
+        '34 comments',
+        'Privacy',
+        'Terms',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rowCount).toBe(2);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      'Practical automation planning guide for small teams using browser workflows',
+      'Reliable operations checklist for browser based AI assistants',
+    ]);
+    expect(rows.rows.every((row) => row.targetRef === null)).toBe(true);
+    expect(rows.rows.every((row) => row.sourceRegion === 'visible_text')).toBe(true);
+    expect(rows.rows[0].qualityReasons).toContain('visible_text_fallback');
+    expect(rows.footerLikeRejectedCount).toBeGreaterThan(0);
+    expect(rows.navigationLikeRejectedCount).toBeGreaterThan(0);
+  });
+
+  it('rejects footer/legal-only visible text fallback content', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: '- generic "Sparse page shell"',
+      sourceRegion: 'visible_results',
+      visibleTextContent: [
+        'Privacy policy',
+        'Terms of service',
+        'Copyright 2026 Example Platform',
+        'Business license information',
+        'Internet report center',
+        'Online harmful information report',
+        'Contact us',
+        'Site map',
+        'Download app',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(false);
+    expect(rows.rowCount).toBe(0);
+    expect(rows.visibleRegionRowsRejectedReason).toBe('footer_like_region');
+    expect(rows.footerLikeRejectedCount).toBeGreaterThan(0);
+    expect(rows.lowValueRegionRejectedCount).toBeGreaterThan(0);
+  });
+
+  it('rejects search-shell-only visible text fallback content', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: '- generic "Sparse search shell"',
+      sourceRegion: 'visible_results',
+      url: 'https://example.test/search?q=browser%20automation',
+      title: 'Search results for browser automation',
+      visibleTextContent: [
+        'Search results for browser automation',
+        'browser automation',
+        'Search',
+        'All',
+        'Filters',
+        'Sort',
+        'Topics',
+        'Feedback',
+        'How can we improve search results for this query?',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(false);
+    expect(rows.rowCount).toBe(0);
+    expect(rows.visibleRegionRowsRejectedReason).toBe('low_value_region');
+    expect(rows.lowValueRegionRejectedCount).toBeGreaterThan(0);
+    expect(rows.rows).toEqual([]);
+  });
+
   it('rejects search-shell prompt rows while preserving long result titles', () => {
     const rows = extractVisibleRegionRows({
       pageContent: [
@@ -1137,6 +1227,120 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(payload.lowValueRegionRejectedCount).toBeGreaterThan(0);
     expect(payload.footerLikeRejectedCount).toBeGreaterThan(0);
     expect(payload.rejectedRegionReasonDistribution.low_value_region).toBeGreaterThan(0);
+  });
+
+  it('recovers ready rows from visible text when sparse DOM and interactive fallback are shell-only', async () => {
+    const originalScripting = chrome.scripting;
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5311,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://example.test/search',
+      title: 'Search',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'ensureInteractiveElementsHelper').mockResolvedValue(undefined);
+    (chrome as any).scripting = {
+      executeScript: vi.fn().mockResolvedValue([
+        {
+          result: [
+            'Search',
+            'All',
+            'Practical automation planning guide for small teams using browser workflows',
+            'This walkthrough explains how a team can collect requirements, compare tools, and finish routine web tasks with fewer manual checks.',
+            'Workflow Lab',
+            '2 hours ago',
+            '89 likes',
+            'Reliable operations checklist for browser based AI assistants',
+            'A compact checklist covering page reading, result selection, logs, and handoff evidence for daily operations.',
+            'Ops Review',
+            'yesterday',
+            '34 comments',
+            'Privacy',
+            'Terms',
+          ].join('\n'),
+        },
+      ]),
+    };
+    const sendMessage = vi.spyOn(readPageTool as any, 'sendMessageToTab');
+    sendMessage
+      .mockResolvedValueOnce({
+        success: true,
+        pageContent: [
+          '- navigation "Primary navigation" [ref=ref_nav] (x=0,y=0)',
+          '  - link "Home" [ref=ref_home] (x=20,y=20) href="/"',
+          '- search "Search examples" [ref=ref_search] (x=420,y=42)',
+          '  - searchbox "Search examples" [ref=ref_query] (x=420,y=42)',
+          '- footer "Footer" [ref=ref_footer] (x=640,y=680)',
+          '  - link "Privacy" [ref=ref_privacy] (x=620,y=680) href="/privacy"',
+        ].join('\n'),
+        refMap: [{ ref: 'ref_home', selector: 'a[href="/"]' }],
+        stats: { processed: 6, included: 6, durationMs: 6 },
+        viewport: { width: 0, height: 0, dpr: 1 },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        pageContent: [
+          '- navigation "Primary navigation" [ref=ref_nav] (x=0,y=0)',
+          '  - link "Home" [ref=ref_home] (x=20,y=20) href="/"',
+          '- search "Search examples" [ref=ref_search] (x=420,y=42)',
+          '  - searchbox "Search examples" [ref=ref_query] (x=420,y=42)',
+          '- footer "Footer" [ref=ref_footer] (x=640,y=680)',
+          '  - link "Privacy" [ref=ref_privacy] (x=620,y=680) href="/privacy"',
+        ].join('\n'),
+        refMap: [{ ref: 'ref_home', selector: 'a[href="/"]' }],
+        stats: { processed: 6, included: 6, durationMs: 6 },
+        viewport: { width: 0, height: 0, dpr: 1 },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        elements: [
+          { type: 'link', text: 'Home', selector: 'a.home', href: '/' },
+          { type: 'button', text: 'Search', selector: 'button.search' },
+          { type: 'link', text: 'Privacy', selector: 'a.privacy', href: '/privacy' },
+          { type: 'link', text: 'Terms', selector: 'a.terms', href: '/terms' },
+        ],
+        scrollY: 0,
+        pixelsBelow: 0,
+      });
+
+    try {
+      const result = await readPageTool.execute({ mode: 'compact' });
+      const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+      expect(result.isError).toBe(false);
+      expect(payload).toMatchObject({
+        kind: 'dom_region_rows',
+        selectedDataSource: 'dom_region_rows',
+        readinessVerdict: 'ready',
+        readinessReason: null,
+        rowCount: 2,
+        visibleRegionRowsUsed: true,
+      });
+      expect(payload.pageContext).toMatchObject({
+        sparse: true,
+        fallbackUsed: true,
+        fallbackSource: 'get_interactive_elements',
+      });
+      expect(payload.visibleRegionRows.rows.map((row: { title: string }) => row.title)).toEqual([
+        'Practical automation planning guide for small teams using browser workflows',
+        'Reliable operations checklist for browser based AI assistants',
+      ]);
+      expect(
+        payload.visibleRegionRows.rows.every(
+          (row: { targetRef: string | null }) => row.targetRef === null,
+        ),
+      ).toBe(true);
+      expect(chrome.scripting.executeScript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: { tabId: 5311 },
+          args: [12000],
+        }),
+      );
+    } finally {
+      (chrome as any).scripting = originalScripting;
+    }
   });
 
   it('keeps business results while excluding legal/report rows from rows and top HVOs', async () => {

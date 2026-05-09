@@ -55,6 +55,7 @@ interface ReadPageParams {
 const READ_PAGE_SPARSE_RETRY_DELAY_MS = 450;
 const INTERACTIVE_ELEMENTS_HELPER_FILE = 'inject-scripts/interactive-elements-helper.js';
 const INTERACTIVE_ELEMENTS_HELPER_PING_TIMEOUT_MS = 300;
+const VISIBLE_TEXT_FALLBACK_MAX_CHARS = 12_000;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -83,6 +84,7 @@ function reconcilePageUnderstandingWithVisibleRows(payload: Record<string, any>)
 function completeVisibleRegionRows(params: {
   rows: VisibleRegionRowsResult;
   pageContent: string;
+  visibleTextContent?: string | null;
   primaryRegion: string | null;
   interactiveElements: Array<{ ref: string; role: string; name: string; href?: string }>;
   currentUrl: string;
@@ -94,6 +96,7 @@ function completeVisibleRegionRows(params: {
   }
   return extractVisibleRegionRows({
     pageContent: params.pageContent,
+    visibleTextContent: params.visibleTextContent,
     sourceRegion: params.primaryRegion,
     fallbackInteractiveElements: params.interactiveElements,
     url: params.currentUrl,
@@ -116,6 +119,7 @@ function buildModeOutput(params: {
   footerOnly: boolean;
   anchorTexts: string[];
   pageContent: string;
+  visibleTextContent?: string | null;
   contentSummary: {
     charCount: number;
     normalizedLength: number;
@@ -153,6 +157,7 @@ function buildModeOutput(params: {
   const visibleRegionRows = completeVisibleRegionRows({
     rows: params.visibleRegionRows,
     pageContent: params.pageContent,
+    visibleTextContent: params.visibleTextContent,
     primaryRegion: params.primaryRegion,
     interactiveElements,
     currentUrl: params.currentUrl,
@@ -275,6 +280,27 @@ class ReadPageTool extends BaseBrowserToolExecutor {
     } as any);
   }
 
+  private async sampleVisibleTextContent(tabId: number): Promise<string | null> {
+    try {
+      const result = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: (maxChars: number) => {
+          try {
+            const text = document.body?.innerText || '';
+            return typeof text === 'string' ? text.slice(0, maxChars) : '';
+          } catch {
+            return '';
+          }
+        },
+        args: [VISIBLE_TEXT_FALLBACK_MAX_CHARS],
+      } as any);
+      const text = result?.[0]?.result;
+      return typeof text === 'string' && text.trim() ? text : null;
+    } catch {
+      return null;
+    }
+  }
+
   // Execute read page
   async execute(args: ReadPageParams): Promise<ToolResult> {
     const { filter, depth, refId, mode, render, requestedLayer } = args || {};
@@ -382,6 +408,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
                   footerOnly: false,
                   anchorTexts: [],
                   pageContent: guardPageContent,
+                  visibleTextContent: null,
                   contentSummary: summarizePageContent(guardPageContent),
                   stats: { processed: 0, included: 0, durationMs: 0 },
                   viewport: { width: null, height: null, dpr: null },
@@ -494,6 +521,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         mode: selectedMode,
         filter: filter || 'all',
         pageContent,
+        visibleTextContent: null,
         contentSummary,
         tips: standardTips,
         viewport: treeOk ? resp.viewport : { width: null, height: null, dpr: null },
@@ -545,6 +573,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
           footerOnly: basePayload.footerOnly,
           anchorTexts: basePayload.anchorTexts,
           pageContent: basePayload.pageContent,
+          visibleTextContent: basePayload.visibleTextContent,
           contentSummary: basePayload.contentSummary,
           stats: basePayload.stats,
           viewport: basePayload.viewport,
@@ -630,6 +659,23 @@ class ReadPageTool extends BaseBrowserToolExecutor {
             scrollY: typeof fallback?.scrollY === 'number' ? fallback.scrollY : null,
             pixelsBelow: typeof fallback?.pixelsBelow === 'number' ? fallback.pixelsBelow : null,
           });
+          if (!basePayload.visibleRegionRows.visibleRegionRowsUsed) {
+            const visibleTextContent = await this.sampleVisibleTextContent(tab.id);
+            if (visibleTextContent) {
+              basePayload.visibleTextContent = visibleTextContent;
+              basePayload.visibleRegionRows = extractVisibleRegionRows({
+                pageContent: String(basePayload.pageContent || ''),
+                visibleTextContent,
+                sourceRegion: fallbackUnderstanding.primaryRegion,
+                url: currentUrl,
+                title: currentTitle,
+                viewport: basePayload.viewport,
+                scrollY: typeof fallback?.scrollY === 'number' ? fallback.scrollY : null,
+                pixelsBelow:
+                  typeof fallback?.pixelsBelow === 'number' ? fallback.pixelsBelow : null,
+              });
+            }
+          }
           reconcilePageUnderstandingWithVisibleRows(basePayload);
 
           const modePayload = buildModeOutput({
@@ -646,6 +692,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
             footerOnly: basePayload.footerOnly,
             anchorTexts: basePayload.anchorTexts,
             pageContent: basePayload.pageContent,
+            visibleTextContent: basePayload.visibleTextContent,
             contentSummary: summarizePageContent(String(basePayload.pageContent || '')),
             stats: basePayload.stats,
             viewport: basePayload.viewport,
