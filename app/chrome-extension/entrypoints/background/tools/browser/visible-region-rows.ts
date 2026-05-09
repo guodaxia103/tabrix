@@ -39,6 +39,12 @@ interface CandidateBuildResult {
   rejectedReasonDistribution: Record<VisibleRegionRejectionReason, number>;
 }
 
+interface SearchShellContext {
+  searchTerms: Set<string>;
+  pageTitle: string;
+  titleLooksSearchShell: boolean;
+}
+
 const RESULT_CONTAINER_ROLES = new Set([
   'article',
   'listitem',
@@ -106,15 +112,21 @@ export function extractVisibleRegionRows(input: {
 }): VisibleRegionRowsResult {
   const sourceRegion = normalizeText(input.sourceRegion) || 'viewport';
   const nodes = parseVisibleNodes(input.pageContent);
-  const { groups, rejectedReasonDistribution } = buildCandidateGroups(nodes, sourceRegion);
+  const searchShellContext = buildSearchShellContext(input.url, input.title);
+  const { groups, rejectedReasonDistribution } = buildCandidateGroups(
+    nodes,
+    sourceRegion,
+    searchShellContext,
+  );
   const orderedGroups = supplementGroupsFromInteractiveElements(
     groups.slice().sort(compareGroupsByVisualOrder),
     input.fallbackInteractiveElements,
     sourceRegion,
     rejectedReasonDistribution,
+    searchShellContext,
   );
   const candidateRows = orderedGroups
-    .map((group) => buildRow(group))
+    .map((group) => buildRow(group, searchShellContext))
     .filter((row): row is VisibleRegionRow => row !== null)
     .slice(0, Math.max(1, Math.floor(input.maxRows ?? 20)));
   const candidateTargetRefCoverageRate = candidateRows.length
@@ -213,6 +225,7 @@ function supplementGroupsFromInteractiveElements(
     | undefined,
   sourceRegion: string,
   rejectedReasonDistribution: Record<VisibleRegionRejectionReason, number>,
+  searchShellContext: SearchShellContext,
 ): CandidateGroup[] {
   if (!Array.isArray(fallbackInteractiveElements) || fallbackInteractiveElements.length === 0) {
     return groups;
@@ -232,8 +245,8 @@ function supplementGroupsFromInteractiveElements(
       return { role, name, ref, href, depth: 0, x: null, y: null, order: 10_000 + index };
     })
     .forEach((node) => {
-      if (!isStandaloneResultLink(node)) {
-        const shellReason = classifyShellNode(node);
+      if (!isStandaloneResultLink(node, searchShellContext)) {
+        const shellReason = classifyShellNode(node, searchShellContext);
         if (shellReason) rejectedReasonDistribution[shellReason] += 1;
         return;
       }
@@ -284,12 +297,13 @@ function parseVisibleNodes(pageContent: string): ParsedVisibleNode[] {
 function buildCandidateGroups(
   nodes: ParsedVisibleNode[],
   sourceRegion: string,
+  searchShellContext: SearchShellContext,
 ): CandidateBuildResult {
   const groups: CandidateGroup[] = [];
   const rejectedReasonDistribution = emptyRejectedDistribution();
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index];
-    const shellReason = classifyShellNode(node);
+    const shellReason = classifyShellNode(node, searchShellContext);
     if (shellReason) {
       rejectedReasonDistribution[shellReason] += 1;
       continue;
@@ -320,7 +334,9 @@ function buildCandidateGroups(
       regionId: node.ref || `${sourceRegion}_${groups.length + 1}`,
     });
   }
-  const standaloneResultLinks = nodes.filter((node) => isStandaloneResultLink(node));
+  const standaloneResultLinks = nodes.filter((node) =>
+    isStandaloneResultLink(node, searchShellContext),
+  );
   if (standaloneResultLinks.length < 2) {
     rejectedReasonDistribution.single_isolated_text += standaloneResultLinks.length;
   }
@@ -332,18 +348,24 @@ function buildCandidateGroups(
       regionId: node.ref || `${sourceRegion}_${groups.length + 1}`,
     });
   }
-  groups.push(...buildHeadingAnchoredGroups(nodes, sourceRegion));
-  return { groups: dedupeOverlappingGroups(groups), rejectedReasonDistribution };
+  groups.push(...buildHeadingAnchoredGroups(nodes, sourceRegion, searchShellContext));
+  return {
+    groups: dedupeOverlappingGroups(groups, searchShellContext),
+    rejectedReasonDistribution,
+  };
 }
 
-function isStandaloneResultLink(node: ParsedVisibleNode): boolean {
+function isStandaloneResultLink(
+  node: ParsedVisibleNode,
+  searchShellContext?: SearchShellContext,
+): boolean {
   if (node.role !== 'link') return false;
   if (!node.ref || !node.href) return false;
   const label = normalizeText(node.name);
   if (label.length < 6) return false;
   if (/^image:/i.test(label)) return false;
   if (
-    isLowValueShellNode(node) ||
+    isLowValueShellNode(node, searchShellContext) ||
     isUtilityLinkNode(node) ||
     isTagLikeLink(node) ||
     isFooterLikeText(label) ||
@@ -366,17 +388,20 @@ function isStandaloneResultLink(node: ParsedVisibleNode): boolean {
 function buildHeadingAnchoredGroups(
   nodes: ParsedVisibleNode[],
   sourceRegion: string,
+  searchShellContext: SearchShellContext,
 ): CandidateGroup[] {
   const groups: CandidateGroup[] = [];
   for (let index = 0; index < nodes.length; index += 1) {
-    const titleNode = pickHeadingAnchorTitleNode(nodes, index);
+    const titleNode = pickHeadingAnchorTitleNode(nodes, index, searchShellContext);
     if (!titleNode) continue;
 
     const groupNodes = [titleNode];
     const titleY = titleNode.y;
     for (let cursor = index + 1; cursor < nodes.length; cursor += 1) {
       const candidate = nodes[cursor];
-      if (candidate !== titleNode && isHeadingAnchorTitleNode(candidate)) break;
+      if (candidate !== titleNode && isHeadingAnchorTitleNode(candidate, searchShellContext)) {
+        break;
+      }
       if (
         titleY !== null &&
         candidate.y !== null &&
@@ -406,23 +431,27 @@ function buildHeadingAnchoredGroups(
 function pickHeadingAnchorTitleNode(
   nodes: ParsedVisibleNode[],
   index: number,
+  searchShellContext: SearchShellContext,
 ): ParsedVisibleNode | null {
   const node = nodes[index];
-  if (isHeadingAnchorTitleNode(node)) return node;
+  if (isHeadingAnchorTitleNode(node, searchShellContext)) return node;
   if (node.role !== 'heading') return null;
   const childLink = nodes
     .slice(index + 1)
     .find((candidate) => candidate.depth > node.depth && candidate.role === 'link');
-  if (!childLink || !isHeadingAnchorTitleNode(childLink)) return null;
+  if (!childLink || !isHeadingAnchorTitleNode(childLink, searchShellContext)) return null;
   return childLink;
 }
 
-function isHeadingAnchorTitleNode(node: ParsedVisibleNode): boolean {
+function isHeadingAnchorTitleNode(
+  node: ParsedVisibleNode,
+  searchShellContext?: SearchShellContext,
+): boolean {
   if (node.role !== 'link' && node.role !== 'heading') return false;
   if (!node.ref) return false;
   const label = normalizeText(node.name);
   if (label.length < 6) return false;
-  if (isLowValueShellNode(node) || isTagLikeLink(node)) return false;
+  if (isLowValueShellNode(node, searchShellContext) || isTagLikeLink(node)) return false;
   if (node.role === 'link' && !node.href) return false;
   const wordCount = label.split(/\s+/).filter(Boolean).length;
   return label.includes('/') || wordCount >= 3 || label.length >= 18;
@@ -437,7 +466,10 @@ function isCandidateContainer(node: ParsedVisibleNode): boolean {
   return true;
 }
 
-function classifyShellNode(node: ParsedVisibleNode): VisibleRegionRejectionReason | null {
+function classifyShellNode(
+  node: ParsedVisibleNode,
+  searchShellContext?: SearchShellContext,
+): VisibleRegionRejectionReason | null {
   const label = normalizeText(node.name);
   if (node.role === 'contentinfo' || node.role === 'footer') return 'footer_like_region';
   if (node.role === 'navigation' || node.role === 'banner' || node.role === 'toolbar') {
@@ -450,15 +482,22 @@ function classifyShellNode(node: ParsedVisibleNode): VisibleRegionRejectionReaso
   if (isFooterLikeText(label)) return 'footer_like_region';
   if (isNavigationLikeText(label)) return 'navigation_like_region';
   if (isUtilityLinkNode(node)) return 'low_value_region';
-  if (isLowValueShellText(label)) return 'low_value_region';
+  if (isLowValueShellText(label, searchShellContext)) return 'low_value_region';
   return null;
 }
 
-function dedupeOverlappingGroups(groups: CandidateGroup[]): CandidateGroup[] {
+function dedupeOverlappingGroups(
+  groups: CandidateGroup[],
+  searchShellContext: SearchShellContext,
+): CandidateGroup[] {
   const result: CandidateGroup[] = [];
   const usedRefs = new Set<string>();
   const orderedGroups = groups
-    .map((group, index) => ({ group, index, priority: groupDedupePriority(group) }))
+    .map((group, index) => ({
+      group,
+      index,
+      priority: groupDedupePriority(group, searchShellContext),
+    }))
     .sort((left, right) => right.priority - left.priority || left.index - right.index)
     .map((entry) => entry.group);
 
@@ -475,13 +514,21 @@ function dedupeOverlappingGroups(groups: CandidateGroup[]): CandidateGroup[] {
   return result;
 }
 
-function groupDedupePriority(group: CandidateGroup): number {
+function groupDedupePriority(
+  group: CandidateGroup,
+  searchShellContext: SearchShellContext,
+): number {
   if (isStrongCardContainer(group.container)) return 100;
-  if (group.container.role === 'link' && isStandaloneResultLink(group.container)) return 90;
-  if (isHeadingAnchorTitleNode(group.container)) return 88;
+  if (
+    group.container.role === 'link' &&
+    isStandaloneResultLink(group.container, searchShellContext)
+  ) {
+    return 90;
+  }
+  if (isHeadingAnchorTitleNode(group.container, searchShellContext)) return 88;
 
   const standaloneResultLinkCount = group.nodes.filter((node) =>
-    isStandaloneResultLink(node),
+    isStandaloneResultLink(node, searchShellContext),
   ).length;
   if (group.container.role === 'generic') {
     if (standaloneResultLinkCount === 1 && group.nodes.length <= 8) return 95;
@@ -540,16 +587,19 @@ function averageRowQualityBonus(rows: VisibleRegionRow[]): number {
   return total / rows.length / 20;
 }
 
-function buildRow(group: CandidateGroup): VisibleRegionRow | null {
+function buildRow(
+  group: CandidateGroup,
+  searchShellContext: SearchShellContext,
+): VisibleRegionRow | null {
   const textNodes = group.nodes
     .filter((node) => node.name)
     .filter((node) => node !== group.container || node.role === 'link' || node.role === 'heading')
     .filter((node) => !SHELL_ROLES.has(node.role))
-    .filter((node) => !isLowValueShellNode(node))
+    .filter((node) => !isLowValueShellNode(node, searchShellContext))
     .filter((node) => !isTagLikeLink(node));
   if (textNodes.length === 0) return null;
 
-  const titleNode = pickTitleNode(textNodes);
+  const titleNode = pickTitleNode(textNodes, searchShellContext);
   if (!titleNode) return null;
   const title = titleNode.name;
   const remaining = textNodes.filter((node) => node !== titleNode);
@@ -626,10 +676,13 @@ function buildQualityReasons(
   return reasons.length > 0 ? reasons : ['minimal_visible_text'];
 }
 
-function pickTitleNode(nodes: ParsedVisibleNode[]): ParsedVisibleNode | null {
+function pickTitleNode(
+  nodes: ParsedVisibleNode[],
+  searchShellContext: SearchShellContext,
+): ParsedVisibleNode | null {
   const candidates = nodes
     .filter((node) => !CONTROL_ROLES.has(node.role) || node.role === 'link')
-    .filter((node) => !isLowValueShellNode(node))
+    .filter((node) => !isLowValueShellNode(node, searchShellContext))
     .filter((node) => !isTagLikeLink(node))
     .filter((node) => !isMetaOnlyText(node.name) && !INTERACTION_PATTERN.test(node.name))
     .filter((node) => node.name.length >= 2)
@@ -699,21 +752,26 @@ function uniqueCompactStrings(values: Array<string | null | undefined>): string[
   return out;
 }
 
-function isLowValueShellText(value: string): boolean {
+function isLowValueShellText(value: string, searchShellContext?: SearchShellContext): boolean {
   const normalized = normalizeText(value);
   if (!normalized) return true;
   if (normalized.length <= 1) return true;
   if (/^image:/i.test(normalized)) return true;
   if (/^\d+(?:\.\d+)?(?:万|k|m)?$/i.test(normalized)) return true;
+  if (isSearchShellText(normalized, searchShellContext)) return true;
+  if (isShortStandaloneTopicLabel(normalized)) return true;
   if (FOOTER_LEGAL_REPORT_PATTERN.test(normalized)) return true;
   if (UTILITY_LINK_TEXT_PATTERN.test(normalized) && normalized.length < 48) return true;
   if (SEARCH_CONTROL_TEXT_PATTERN.test(normalized) && normalized.length < 48) return true;
   return SHELL_TEXT_PATTERN.test(normalized) && normalized.length < 24;
 }
 
-function isLowValueShellNode(node: ParsedVisibleNode): boolean {
+function isLowValueShellNode(
+  node: ParsedVisibleNode,
+  searchShellContext?: SearchShellContext,
+): boolean {
   if (isInteractionNode(node)) return false;
-  return isLowValueShellText(node.name);
+  return isLowValueShellText(node.name, searchShellContext);
 }
 
 function isInteractionNode(node: ParsedVisibleNode): boolean {
@@ -737,6 +795,63 @@ function isTagLikeLink(node: ParsedVisibleNode): boolean {
 
 function isShortStandaloneTopicLabel(label: string): boolean {
   return /^(?:automation|browser|browse)$/i.test(normalizeText(label));
+}
+
+function isSearchShellText(
+  label: string,
+  searchShellContext: SearchShellContext | undefined,
+): boolean {
+  const normalized = normalizeSearchShellText(label);
+  if (!normalized) return false;
+  if (SEARCH_RESULT_TITLE_ROW_PATTERN.test(label)) return true;
+  if (!searchShellContext) return false;
+  if (
+    searchShellContext.titleLooksSearchShell &&
+    searchShellContext.pageTitle &&
+    normalized === searchShellContext.pageTitle
+  ) {
+    return true;
+  }
+  return searchShellContext.searchTerms.has(normalized);
+}
+
+const SEARCH_RESULT_TITLE_ROW_PATTERN =
+  /^(?:[a-z0-9][\w\s-]{0,40}\s+)?search results?(?:\s+(?:for|of)\s+|\s*[·:|>\-–—]\s*).{2,}$/i;
+
+function buildSearchShellContext(url: unknown, title: unknown): SearchShellContext {
+  const searchTerms = new Set<string>();
+  const pageTitle = normalizeSearchShellText(title);
+  const titleText = normalizeText(title);
+  const titleLooksSearchShell = SEARCH_RESULT_TITLE_ROW_PATTERN.test(titleText);
+
+  addSearchTerm(searchTerms, extractSearchQueryFromTitle(titleText));
+
+  try {
+    const parsedUrl = new URL(normalizeText(url), 'https://tabrix.invalid');
+    for (const key of ['q', 'query', 'search', 'keyword', 'keywords', 'text']) {
+      addSearchTerm(searchTerms, parsedUrl.searchParams.get(key));
+    }
+  } catch {
+    // Ignore malformed or non-URL inputs; search-shell filtering remains text-only.
+  }
+
+  return { searchTerms, pageTitle, titleLooksSearchShell };
+}
+
+function extractSearchQueryFromTitle(title: string): string {
+  const match = title.match(/(?:search results?(?:\s+(?:for|of)\s+|\s*[·:|>\-–—]\s*))(.+)$/i);
+  return match?.[1] ?? '';
+}
+
+function addSearchTerm(target: Set<string>, value: unknown): void {
+  const normalized = normalizeSearchShellText(value);
+  if (normalized.length >= 3) target.add(normalized);
+}
+
+function normalizeSearchShellText(value: unknown): string {
+  return normalizeText(value)
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+    .toLowerCase();
 }
 
 function isFooterLikeText(value: string): boolean {

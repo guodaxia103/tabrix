@@ -428,21 +428,58 @@ describe('V27-P0-REAL-01 visible region rows', () => {
         '- link "automation" [ref=ref_topic_2] (x=260,y=220)',
         '- link "browser" [ref=ref_topic_3] (x=260,y=260) href="/topics/browser"',
         '- link "browse" [ref=ref_topic_4] (x=260,y=300)',
-        '- link "lightpanda-io/browser" [ref=ref_repo_1] (x=320,y=380) href="/lightpanda-io/browser"',
-        '- link "vercel-labs/agent-browser" [ref=ref_repo_2] (x=320,y=460) href="/vercel-labs/agent-browser"',
+        '- link "example-org/browser-runtime" [ref=ref_repo_1] (x=320,y=380) href="/example-org/browser-runtime"',
+        '- link "example-labs/agent-browser" [ref=ref_repo_2] (x=320,y=460) href="/example-labs/agent-browser"',
         '- link "Practical browser automation guide for teams" [ref=ref_result_3] (x=320,y=540) href="/items/3"',
       ].join('\n'),
     });
 
     expect(rows.visibleRegionRowsUsed).toBe(true);
     expect(rows.rows.map((row) => row.title)).toEqual([
-      'lightpanda-io/browser',
-      'vercel-labs/agent-browser',
+      'example-org/browser-runtime',
+      'example-labs/agent-browser',
       'Practical browser automation guide for teams',
     ]);
     expect(rows.rows.map((row) => row.title)).not.toEqual(
       expect.arrayContaining(['Automation', 'automation', 'browser', 'browse']),
     );
+  });
+
+  it('rejects query-only and search-title shell rows while preserving repo-like result labels', () => {
+    const rows = extractVisibleRegionRows({
+      sourceRegion: 'search_results',
+      url: 'https://example.test/search?q=AI%20browser%20automation&type=repositories',
+      title: 'repositories Search Results · AI browser automation',
+      pageContent: [
+        '- link "AI browser automation" [ref=ref_query] (x=260,y=120) href="/search?q=AI%20browser%20automation"',
+        '- link "repositories Search Results · AI browser automation" [ref=ref_title] (x=260,y=160) href="/search?q=AI%20browser%20automation&type=repositories"',
+        '- link "Automation" [ref=ref_topic_1] (x=260,y=200) href="/topics/automation"',
+        '- link "automation" [ref=ref_topic_2] (x=260,y=240)',
+        '- link "browser" [ref=ref_topic_3] (x=260,y=280) href="/topics/browser"',
+        '- link "browse" [ref=ref_topic_4] (x=260,y=320)',
+        '- link "example-org/browser-runtime" [ref=ref_repo_1] (x=320,y=380) href="/example-org/browser-runtime"',
+        '- link "example-labs/agent-browser" [ref=ref_repo_2] (x=320,y=460) href="/example-labs/agent-browser"',
+        '- link "Practical browser automation guide for teams" [ref=ref_result_3] (x=320,y=540) href="/items/3"',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      'example-org/browser-runtime',
+      'example-labs/agent-browser',
+      'Practical browser automation guide for teams',
+    ]);
+    expect(rows.rows.flatMap((row) => row.visibleTextFields)).not.toEqual(
+      expect.arrayContaining([
+        'AI browser automation',
+        'repositories Search Results · AI browser automation',
+        'Automation',
+        'automation',
+        'browser',
+        'browse',
+      ]),
+    );
+    expect(rows.rejectedRegionReasonDistribution.low_value_region).toBeGreaterThanOrEqual(2);
   });
 
   it('filters shell/legal/date/image-only fragments instead of returning them as result rows', () => {
@@ -986,6 +1023,54 @@ describe('V27-P0-REAL-01 visible region rows', () => {
       visibleRegionRowsUsed: false,
       rowCount: 0,
     });
+  });
+
+  it('reports business_rows_unavailable when only query and search-title shell rows are visible', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5310,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://example.test/search?q=AI%20browser%20automation&type=repositories',
+      title: 'repositories Search Results · AI browser automation',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [
+        '- main "Search results" [ref=ref_main] (x=640,y=360)',
+        '  - link "AI browser automation" [ref=ref_query] (x=260,y=120) href="/search?q=AI%20browser%20automation"',
+        '  - link "repositories Search Results · AI browser automation" [ref=ref_title] (x=260,y=160) href="/search?q=AI%20browser%20automation&type=repositories"',
+        '  - link "Automation" [ref=ref_topic_1] (x=260,y=200) href="/topics/automation"',
+        '  - link "automation" [ref=ref_topic_2] (x=260,y=240)',
+        '  - link "browser" [ref=ref_topic_3] (x=260,y=280) href="/topics/browser"',
+        '  - link "browse" [ref=ref_topic_4] (x=260,y=320)',
+      ].join('\n'),
+      refMap: [
+        { ref: 'ref_query', selector: 'a[href*="q=AI%20browser%20automation"]' },
+        { ref: 'ref_title', selector: 'a[href*="type=repositories"]' },
+        { ref: 'ref_topic_1', selector: 'a[href="/topics/automation"]' },
+      ],
+      stats: { processed: 7, included: 7, durationMs: 6 },
+      viewport: { width: 1280, height: 720, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(result.isError).toBe(false);
+    expect(payload).toMatchObject({
+      readinessVerdict: 'blocked',
+      readinessReason: 'business_rows_unavailable',
+      rowCount: 0,
+      visibleRegionRowsUsed: false,
+      visibleRegionRowsRejectedReason: 'low_value_region',
+    });
+    expect(payload.visibleDomRowsCandidateCount).toBe(0);
+    expect(payload.visibleRegionRows.rows).toEqual([]);
+    expect(payload.lowValueRegionRejectedCount).toBeGreaterThan(0);
+    expect(payload.footerLikeRejectedCount).toBe(0);
+    expect(payload.navigationLikeRejectedCount).toBe(0);
   });
 
   it('does not report ready when fallback utility links are the only row-like candidates', async () => {
