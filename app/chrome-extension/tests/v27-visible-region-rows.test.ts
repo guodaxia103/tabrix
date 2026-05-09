@@ -399,6 +399,52 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.lowValueRegionRejectedCount).toBeGreaterThan(0);
   });
 
+  it('rejects search-shell prompt rows while preserving long result titles', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '- link "客户端" [ref=ref_client] (x=120,y=80) href="/download/client"',
+        '- link "为你找到以下结果，问问AI智能总结内容" [ref=ref_ai_summary] (x=320,y=140) href="/search/summary"',
+        '- link "2026 年最好用的十大 AI 工具，免费且强大" [ref=ref_video_1] (x=320,y=260) href="/video/1"',
+        '- link "职场人的自动办公 Agent 新版本教程" [ref=ref_video_2] (x=320,y=340) href="/video/2"',
+        '- link "AI 人物视频更真实的三大提示词技巧" [ref=ref_video_3] (x=320,y=420) href="/video/3"',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      '2026 年最好用的十大 AI 工具，免费且强大',
+      '职场人的自动办公 Agent 新版本教程',
+      'AI 人物视频更真实的三大提示词技巧',
+    ]);
+    expect(rows.rows.map((row) => row.title).join(' ')).not.toMatch(
+      /客户端|为你找到以下结果|问问AI智能总结内容/,
+    );
+  });
+
+  it('rejects standalone short topic chips without dropping repo-like labels', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '- link "Automation" [ref=ref_topic_1] (x=260,y=180) href="/topics/automation"',
+        '- link "automation" [ref=ref_topic_2] (x=260,y=220)',
+        '- link "browser" [ref=ref_topic_3] (x=260,y=260) href="/topics/browser"',
+        '- link "browse" [ref=ref_topic_4] (x=260,y=300)',
+        '- link "lightpanda-io/browser" [ref=ref_repo_1] (x=320,y=380) href="/lightpanda-io/browser"',
+        '- link "vercel-labs/agent-browser" [ref=ref_repo_2] (x=320,y=460) href="/vercel-labs/agent-browser"',
+        '- link "Practical browser automation guide for teams" [ref=ref_result_3] (x=320,y=540) href="/items/3"',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      'lightpanda-io/browser',
+      'vercel-labs/agent-browser',
+      'Practical browser automation guide for teams',
+    ]);
+    expect(rows.rows.map((row) => row.title)).not.toEqual(
+      expect.arrayContaining(['Automation', 'automation', 'browser', 'browse']),
+    );
+  });
+
   it('filters shell/legal/date/image-only fragments instead of returning them as result rows', () => {
     const rows = extractVisibleRegionRows({
       pageContent: [

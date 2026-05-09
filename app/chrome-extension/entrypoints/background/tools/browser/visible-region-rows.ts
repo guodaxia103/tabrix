@@ -76,13 +76,13 @@ const CONTROL_ROLES = new Set([
 const SHELL_TEXT_PATTERN =
   /\b(filter|filters?|sort|footer|navigation|menu|home|login|sign in|submit|search|all|more|settings|privacy|terms|help|sponsor|sponsors?|sponsorable|skip to content|copyright|feedback|sidebar|topics?)\b|筛选|过滤|排序|首页|登录|搜索|赞助|隐私|协议|帮助|创作中心|放映厅|小游戏|业务合作|营业执照|公网安备|网文|ICP备|备案|许可证|许可|网络交易服务|医疗器械/i;
 const FOOTER_LEGAL_REPORT_PATTERN =
-  /\b(footer|privacy|terms|copyright|license|legal|compliance|sponsors?|sponsorable|report (?:abuse|harmful|center)|harmful information report|rumou?r exposure|exposure desk|internet report center|business license)\b|隐私|协议|版权|赞助|举报|有害信息|互联网举报|网络谣言|谣言曝光|许可证|备案|公网安备|网文|营业执照|违法不良|网信算备|ICP备?/i;
+  /\b(footer|privacy|terms|copyright|certificate|license|permit|legal|compliance|sponsors?|sponsorable|report (?:abuse|harmful|center)|harmful information report|rumou?r exposure|exposure desk|internet report center|business license|internet drug information service)\b|隐私|协议|版权|赞助|举报|有害信息|互联网举报|网络谣言|谣言曝光|资格证书|许可证|备案|公网安备|网文|营业执照|违法不良|网信算备|增值电信|ICP备?/i;
 const SEARCH_CONTROL_TEXT_PATTERN =
-  /\b(search results?|search query|query|filters?|sort|feedback|how can we improve|topics?|sponsors?)\b|搜索结果|搜索词|筛选|过滤|排序|反馈|话题|赞助/i;
+  /\b(search results?(?: for)?|results for|search query|query|filters?|sort|feedback|how can we improve|ask ai summary|ai summary|topics?|sponsors?)\b|搜索结果|搜索词|筛选|过滤|排序|反馈|话题|赞助|为你找到以下结果|问问AI智能总结内容|^客户端$/i;
 const UTILITY_LINK_TEXT_PATTERN =
   /\b(creator center|creator learning center|upload|upload video|video management|works? data|live data|ads?|advertising|advertisements?|account recovery|contact us|join us|site map|sitemap|friend links|business license|about us|download app)\b|发布视频(?:\/图文)?|发布图文|视频管理|作品数据|直播数据|创作者学习中心|创作中心|广告投放|账号找回|联系我们|加入我们|站点地图|友情链接|业务合作|营业执照|^下载(?:app|应用|客户端)?$/i;
 const UTILITY_LINK_HREF_PATTERN =
-  /(?:^|\/)(?:creator(?:-center)?|creator-center|upload|video-management|ads?|advertising|account(?:-recovery)?|recover|recovery|contact(?:-us)?|about(?:-us)?|sitemap|site-map|friend-links?|download(?:-app)?|legal|privacy|terms|license|report|feedback|sponsors?)(?:\/|$|\?)/i;
+  /(?:^|\/)(?:creator(?:-center)?|creator-center|upload|video-management|ads?|advertising|account(?:-recovery)?|recover|recovery|contact(?:-us)?|about(?:-us)?|sitemap|site-map|friend-links?|download(?:-app)?|legal|privacy|terms|certificate|license|permit|compliance|icp|record|report|feedback|sponsors?)(?:\/|$|\?)/i;
 const META_PATTERN =
   /\b(\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|m|min|mins|minute|minutes|ago)|yesterday|today|updated|posted|views?|\d{1,2}:\d{2})\b|\d{4}年\d{1,2}月\d{1,2}日|刚刚|分钟前|小时前|昨天|今天|发布|更新/i;
 const INTERACTION_PATTERN =
@@ -725,11 +725,18 @@ function isInteractionNode(node: ParsedVisibleNode): boolean {
 }
 
 function isTagLikeLink(node: ParsedVisibleNode): boolean {
-  if (node.role !== 'link' || !node.href) return false;
+  if (node.role !== 'link') return false;
   const label = normalizeText(node.name);
   if (!label || label.length > 32) return false;
+  if (label.includes('/')) return false;
   if (/\s/.test(label) && label.split(/\s+/).length > 2) return false;
+  if (isShortStandaloneTopicLabel(label)) return true;
+  if (!node.href) return false;
   return /(?:^|\/)(?:topics?|tags?|tag|labels?)(?:\/|$|\?)/i.test(node.href);
+}
+
+function isShortStandaloneTopicLabel(label: string): boolean {
+  return /^(?:automation|browser|browse)$/i.test(normalizeText(label));
 }
 
 function isFooterLikeText(value: string): boolean {

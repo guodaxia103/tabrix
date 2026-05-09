@@ -190,6 +190,64 @@ describe('read_page task protocol', () => {
     expect(protocol.highValueObjects[2]?.label).toBe('main branch');
   });
 
+  it('filters certificate and compliance links out of high-value objects', () => {
+    const protocol = buildTaskProtocol(
+      createBaseParams({
+        currentUrl: 'https://example.com/search',
+        currentTitle: 'Search results',
+        pageRole: 'web_page',
+        primaryRegion: 'visible_results',
+        interactiveElements: [
+          {
+            ref: 'ref_result_1',
+            role: 'link',
+            name: 'Practical workflow guide for solo teams',
+            href: '/items/1',
+          },
+          {
+            ref: 'ref_certificate',
+            role: 'link',
+            name: 'Internet drug information service certificate',
+            href: '/service/info',
+          },
+          {
+            ref: 'ref_license',
+            role: 'link',
+            name: '业务经营许可证',
+            href: '/public/credential',
+          },
+          {
+            ref: 'ref_icp',
+            role: 'link',
+            name: 'ICP备案',
+            href: '/footer/record',
+          },
+          {
+            ref: 'ref_security',
+            role: 'link',
+            name: '公网安备',
+            href: '/site/security',
+          },
+          {
+            ref: 'ref_result_2',
+            role: 'link',
+            name: 'Automation checklist for daily operations',
+            href: '/items/2',
+          },
+        ],
+      }),
+    );
+
+    const labels = protocol.highValueObjects.map((item) => item.label);
+    expect(labels).toEqual([
+      'Practical workflow guide for solo teams',
+      'Automation checklist for daily operations',
+    ]);
+    expect(labels.join(' ')).not.toMatch(
+      /certificate|license|许可证|ICP备|公网安备|compliance|permit/i,
+    );
+  });
+
   it.each([
     {
       name: 'maps repo_home to read from role and primary region',
