@@ -74,7 +74,7 @@ const CONTROL_ROLES = new Set([
 ]);
 
 const SHELL_TEXT_PATTERN =
-  /\b(filter|filters?|sort|footer|navigation|menu|home|login|sign in|submit|search|all|more|settings|privacy|terms|help|skip to content|copyright)\b|筛选|过滤|排序|首页|登录|搜索|隐私|协议|帮助|创作中心|放映厅|小游戏|业务合作|营业执照|公网安备|网文|ICP备|备案|许可证|许可|网络交易服务|医疗器械/i;
+  /\b(filter|filters?|sort|footer|navigation|menu|home|login|sign in|submit|search|all|more|settings|privacy|terms|help|sponsor|sponsors?|skip to content|copyright)\b|筛选|过滤|排序|首页|登录|搜索|赞助|隐私|协议|帮助|创作中心|放映厅|小游戏|业务合作|营业执照|公网安备|网文|ICP备|备案|许可证|许可|网络交易服务|医疗器械/i;
 const META_PATTERN =
   /\b(\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|m|min|mins|minute|minutes|ago)|yesterday|today|updated|posted|views?|\d{1,2}:\d{2})\b|\d{4}年\d{1,2}月\d{1,2}日|刚刚|分钟前|小时前|昨天|今天|发布|更新/i;
 const INTERACTION_PATTERN =
@@ -317,6 +317,7 @@ function buildCandidateGroups(
       regionId: node.ref || `${sourceRegion}_${groups.length + 1}`,
     });
   }
+  groups.push(...buildHeadingAnchoredGroups(nodes, sourceRegion));
   return { groups: dedupeOverlappingGroups(groups), rejectedReasonDistribution };
 }
 
@@ -326,16 +327,88 @@ function isStandaloneResultLink(node: ParsedVisibleNode): boolean {
   const label = normalizeText(node.name);
   if (label.length < 6) return false;
   if (/^image:/i.test(label)) return false;
-  if (isLowValueShellText(label) || isFooterLikeText(label) || isNavigationLikeText(label)) {
+  if (
+    isLowValueShellNode(node) ||
+    isTagLikeLink(node) ||
+    isFooterLikeText(label) ||
+    isNavigationLikeText(label)
+  ) {
     return false;
   }
   const href = node.href.toLowerCase();
   if (/^\/?(?:explore|home)(?:$|\?)/i.test(href)) return false;
   if (/\.(?:pdf|png|jpe?g|webp|gif|svg)(?:$|\?)/i.test(href)) return false;
-  if (/(^|\/)(?:user|profile|account|settings|help|about|privacy|terms)(?:\/|$)/i.test(href)) {
+  if (
+    /(^|\/)(?:user|profile|account|settings|help|about|privacy|terms|sponsors?)(?:\/|$)/i.test(href)
+  ) {
     return false;
   }
   return true;
+}
+
+function buildHeadingAnchoredGroups(
+  nodes: ParsedVisibleNode[],
+  sourceRegion: string,
+): CandidateGroup[] {
+  const groups: CandidateGroup[] = [];
+  for (let index = 0; index < nodes.length; index += 1) {
+    const titleNode = pickHeadingAnchorTitleNode(nodes, index);
+    if (!titleNode) continue;
+
+    const groupNodes = [titleNode];
+    const titleY = titleNode.y;
+    for (let cursor = index + 1; cursor < nodes.length; cursor += 1) {
+      const candidate = nodes[cursor];
+      if (candidate !== titleNode && isHeadingAnchorTitleNode(candidate)) break;
+      if (
+        titleY !== null &&
+        candidate.y !== null &&
+        Math.abs(candidate.y - titleY) > 170 &&
+        groupNodes.length >= 2
+      ) {
+        break;
+      }
+      if (candidate === titleNode) continue;
+      if (candidate.role === 'link' && isTagLikeLink(candidate)) continue;
+      if (isFooterLikeText(candidate.name) || isNavigationLikeText(candidate.name)) continue;
+      groupNodes.push(candidate);
+      if (groupNodes.length >= 10) break;
+    }
+
+    if (groupNodes.length < 2) continue;
+    groups.push({
+      container: titleNode,
+      nodes: groupNodes,
+      sourceRegion,
+      regionId: titleNode.ref || `${sourceRegion}_heading_${groups.length + 1}`,
+    });
+  }
+  return groups;
+}
+
+function pickHeadingAnchorTitleNode(
+  nodes: ParsedVisibleNode[],
+  index: number,
+): ParsedVisibleNode | null {
+  const node = nodes[index];
+  if (isHeadingAnchorTitleNode(node)) return node;
+  if (node.role !== 'heading') return null;
+  const childLink = nodes
+    .slice(index + 1)
+    .find((candidate) => candidate.depth > node.depth && candidate.role === 'link');
+  if (!childLink || !isHeadingAnchorTitleNode(childLink)) return null;
+  return childLink;
+}
+
+function isHeadingAnchorTitleNode(node: ParsedVisibleNode): boolean {
+  if (node.role !== 'link' && node.role !== 'heading') return false;
+  if (!node.ref) return false;
+  const label = normalizeText(node.name);
+  if (label.length < 6) return false;
+  if (isLowValueShellNode(node) || isTagLikeLink(node)) return false;
+  if (node.role === 'link' && !node.href) return false;
+  const wordCount = label.split(/\s+/).filter(Boolean).length;
+  return label.includes('/') || wordCount >= 3 || label.length >= 18;
 }
 
 function isCandidateContainer(node: ParsedVisibleNode): boolean {
@@ -387,6 +460,7 @@ function dedupeOverlappingGroups(groups: CandidateGroup[]): CandidateGroup[] {
 function groupDedupePriority(group: CandidateGroup): number {
   if (isStrongCardContainer(group.container)) return 100;
   if (group.container.role === 'link' && isStandaloneResultLink(group.container)) return 90;
+  if (isHeadingAnchorTitleNode(group.container)) return 88;
 
   const standaloneResultLinkCount = group.nodes.filter((node) =>
     isStandaloneResultLink(node),
@@ -453,16 +527,20 @@ function buildRow(group: CandidateGroup): VisibleRegionRow | null {
     .filter((node) => node.name)
     .filter((node) => node !== group.container || node.role === 'link' || node.role === 'heading')
     .filter((node) => !SHELL_ROLES.has(node.role))
-    .filter((node) => !isLowValueShellText(node.name));
+    .filter((node) => !isLowValueShellNode(node))
+    .filter((node) => !isTagLikeLink(node));
   if (textNodes.length === 0) return null;
 
   const titleNode = pickTitleNode(textNodes);
   if (!titleNode) return null;
   const title = titleNode.name;
   const remaining = textNodes.filter((node) => node !== titleNode);
-  const interactionText = firstMatchingText(remaining, INTERACTION_PATTERN);
+  const interactionText = firstInteractionText(remaining);
   const metaText = firstMatchingText(remaining, META_PATTERN);
-  const primaryText = firstNonMatchingText(remaining, [INTERACTION_PATTERN, META_PATTERN]);
+  const primaryText = firstNonMatchingText(
+    remaining.filter((node) => !isInteractionNode(node)),
+    [INTERACTION_PATTERN, META_PATTERN],
+  );
   const secondaryText = firstNonMatchingText(
     remaining.filter((node) => node.name !== primaryText),
     [INTERACTION_PATTERN, META_PATTERN],
@@ -533,7 +611,8 @@ function buildQualityReasons(
 function pickTitleNode(nodes: ParsedVisibleNode[]): ParsedVisibleNode | null {
   const candidates = nodes
     .filter((node) => !CONTROL_ROLES.has(node.role) || node.role === 'link')
-    .filter((node) => !isLowValueShellText(node.name))
+    .filter((node) => !isLowValueShellNode(node))
+    .filter((node) => !isTagLikeLink(node))
     .filter((node) => !isMetaOnlyText(node.name) && !INTERACTION_PATTERN.test(node.name))
     .filter((node) => node.name.length >= 2)
     .sort(
@@ -555,6 +634,10 @@ function scoreTitleNode(node: ParsedVisibleNode): number {
 
 function firstMatchingText(nodes: ParsedVisibleNode[], pattern: RegExp): string | null {
   return nodes.find((node) => pattern.test(node.name))?.name ?? null;
+}
+
+function firstInteractionText(nodes: ParsedVisibleNode[]): string | null {
+  return nodes.find((node) => isInteractionNode(node))?.name ?? null;
 }
 
 function firstNonMatchingText(nodes: ParsedVisibleNode[], patterns: RegExp[]): string | null {
@@ -607,8 +690,29 @@ function isLowValueShellText(value: string): boolean {
   return SHELL_TEXT_PATTERN.test(normalized) && normalized.length < 24;
 }
 
+function isLowValueShellNode(node: ParsedVisibleNode): boolean {
+  if (isInteractionNode(node)) return false;
+  return isLowValueShellText(node.name);
+}
+
+function isInteractionNode(node: ParsedVisibleNode): boolean {
+  if (INTERACTION_PATTERN.test(node.name)) return true;
+  if (!node.href) return false;
+  const normalized = normalizeText(node.name);
+  if (!/^\d+(?:\.\d+)?\s*(?:k|m)?$/i.test(normalized)) return false;
+  return /(?:stars?|stargazers?|forks?|likes?|watchers?)(?:\/|$|\?)/i.test(node.href);
+}
+
+function isTagLikeLink(node: ParsedVisibleNode): boolean {
+  if (node.role !== 'link' || !node.href) return false;
+  const label = normalizeText(node.name);
+  if (!label || label.length > 32) return false;
+  if (/\s/.test(label) && label.split(/\s+/).length > 2) return false;
+  return /(?:^|\/)(?:topics?|tags?|tag|labels?)(?:\/|$|\?)/i.test(node.href);
+}
+
 function isFooterLikeText(value: string): boolean {
-  return /\b(footer|privacy|terms|copyright|license|legal|help)\b|隐私|协议|版权|营业执照|公网安备|网文|ICP备|备案/i.test(
+  return /\b(footer|privacy|terms|copyright|license|legal|help|sponsor|sponsors?)\b|隐私|协议|版权|赞助|营业执照|公网安备|网文|ICP备|备案/i.test(
     value,
   );
 }

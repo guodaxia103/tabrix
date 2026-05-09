@@ -67,6 +67,75 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.rows[1].title).toBe('Family route checklist');
   });
 
+  it('groups GitHub-like repo search results without topic or footer rows', () => {
+    const rows = extractVisibleRegionRows({
+      sourceRegion: 'search_results',
+      url: 'https://github.com/search?q=browser&type=repositories',
+      title: 'Repository search results',
+      viewport: { width: 1280, height: 720, dpr: 1 },
+      pageContent: [
+        '- main "Repository search results" [ref=ref_main] (x=640,y=370)',
+        '  - search "Search" [ref=ref_search] (x=420,y=32)',
+        '    - searchbox "Search or jump to..." [ref=ref_query] (x=410,y=32)',
+        '  - generic "Repository result" [ref=ref_repo_1] (x=260,y=160)',
+        '    - heading "lightpanda-io/browser" [ref=ref_heading_1] (x=260,y=150)',
+        '      - link "lightpanda-io/browser" [ref=ref_repo_1_link] (x=260,y=150) href="/lightpanda-io/browser"',
+        '    - generic "A lightweight browser runtime for automation" [ref=ref_desc_1] (x=260,y=188)',
+        '    - link "browser" [ref=ref_topic_1] (x=260,y=226) href="/topics/browser"',
+        '    - link "5.2k" [ref=ref_star_1] (x=620,y=226) href="/lightpanda-io/browser/stargazers"',
+        '    - generic "Updated May 8, 2026" [ref=ref_updated_1] (x=700,y=226)',
+        '  - generic "Repository result" [ref=ref_repo_2] (x=260,y=270)',
+        '    - heading "vercel-labs/agent-browser" [ref=ref_heading_2] (x=260,y=260)',
+        '      - link "vercel-labs/agent-browser" [ref=ref_repo_2_link] (x=260,y=260) href="/vercel-labs/agent-browser"',
+        '    - generic "AI browser control toolkit" [ref=ref_desc_2] (x=260,y=298)',
+        '    - link "automation" [ref=ref_topic_2] (x=260,y=336) href="/topics/automation"',
+        '    - link "1.9k" [ref=ref_star_2] (x=620,y=336) href="/vercel-labs/agent-browser/stargazers"',
+        '    - generic "Updated Apr 30, 2026" [ref=ref_updated_2] (x=700,y=336)',
+        '  - generic "Repository result" [ref=ref_repo_3] (x=260,y=380)',
+        '    - heading "hyperbrowserai/HyperAgent" [ref=ref_heading_3] (x=260,y=370)',
+        '      - link "hyperbrowserai/HyperAgent" [ref=ref_repo_3_link] (x=260,y=370) href="/hyperbrowserai/HyperAgent"',
+        '    - generic "Agentic web automation examples" [ref=ref_desc_3] (x=260,y=408)',
+        '    - link "agent" [ref=ref_topic_3] (x=260,y=446) href="/topics/agent"',
+        '    - link "2.1k" [ref=ref_star_3] (x=620,y=446) href="/hyperbrowserai/HyperAgent/stargazers"',
+        '    - generic "Updated May 1, 2026" [ref=ref_updated_3] (x=700,y=446)',
+        '  - generic "Repository result" [ref=ref_repo_4] (x=260,y=490)',
+        '    - heading "ServiceNow/BrowserGym" [ref=ref_heading_4] (x=260,y=480)',
+        '      - link "ServiceNow/BrowserGym" [ref=ref_repo_4_link] (x=260,y=480) href="/ServiceNow/BrowserGym"',
+        '    - generic "Benchmark environment for web agents" [ref=ref_desc_4] (x=260,y=518)',
+        '    - link "benchmark" [ref=ref_topic_4] (x=260,y=556) href="/topics/benchmark"',
+        '    - link "3.4k" [ref=ref_star_4] (x=620,y=556) href="/ServiceNow/BrowserGym/stargazers"',
+        '    - generic "Updated Mar 27, 2026" [ref=ref_updated_4] (x=700,y=556)',
+        '  - generic "Repository result" [ref=ref_repo_5] (x=260,y=600)',
+        '    - heading "ntegrals/openbrowser" [ref=ref_heading_5] (x=260,y=590)',
+        '      - link "ntegrals/openbrowser" [ref=ref_repo_5_link] (x=260,y=590) href="/ntegrals/openbrowser"',
+        '    - generic "Open browser automation primitives" [ref=ref_desc_5] (x=260,y=628)',
+        '    - link "browser" [ref=ref_topic_5] (x=260,y=666) href="/topics/browser"',
+        '    - link "944" [ref=ref_star_5] (x=620,y=666) href="/ntegrals/openbrowser/stargazers"',
+        '    - generic "Updated Feb 12, 2026" [ref=ref_updated_5] (x=700,y=666)',
+        '  - footer "Footer" [ref=ref_footer] (x=640,y=920)',
+        '    - link "Sponsor" [ref=ref_sponsor] (x=260,y=920) href="/sponsors"',
+        '    - link "Privacy" [ref=ref_privacy] (x=340,y=920) href="/privacy"',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rowCount).toBe(5);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      'lightpanda-io/browser',
+      'vercel-labs/agent-browser',
+      'hyperbrowserai/HyperAgent',
+      'ServiceNow/BrowserGym',
+      'ntegrals/openbrowser',
+    ]);
+    for (const row of rows.rows) {
+      expect(row.targetRef).toMatch(/^ref_repo_\d+_link$/);
+      expect([row.metaText, row.interactionText].filter(Boolean).length).toBeGreaterThanOrEqual(1);
+    }
+    expect(rows.rows.flatMap((row) => row.visibleTextFields)).not.toEqual(
+      expect.arrayContaining(['browser', 'automation', 'agent', 'benchmark', 'Sponsor', 'Privacy']),
+    );
+  });
+
   it('does not turn footer, filters, or query chips into rows', () => {
     const rows = extractVisibleRegionRows({
       pageContent: [
@@ -726,6 +795,60 @@ describe('V27-P0-REAL-01 visible region rows', () => {
       visibleRegionRowsUsed: false,
     });
     expect(payload.summary.quality).toBe('sparse');
+  });
+
+  it('does not report ready when read_page only sees footer navigation and search controls', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5306,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://example.test/search',
+      title: 'Search',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [
+        '- navigation "Primary navigation" [ref=ref_nav] (x=0,y=0)',
+        '  - link "Home" [ref=ref_home] (x=20,y=20) href="/"',
+        '  - link "Help" [ref=ref_help] (x=90,y=20) href="/help"',
+        '- search "Search examples" [ref=ref_search] (x=420,y=42)',
+        '  - searchbox "Search examples" [ref=ref_query] (x=420,y=42)',
+        '  - button "Search" [ref=ref_search_button] (x=760,y=42)',
+        '  - button "All" [ref=ref_all] (x=280,y=110)',
+        '  - button "Recent" [ref=ref_recent] (x=380,y=110)',
+        '- footer "Footer" [ref=ref_footer] (x=640,y=680)',
+        '  - link "Privacy" [ref=ref_privacy] (x=620,y=680) href="/privacy"',
+        '  - link "Terms" [ref=ref_terms] (x=720,y=680) href="/terms"',
+      ].join('\n'),
+      refMap: [
+        { ref: 'ref_home', selector: 'a[href="/"]' },
+        { ref: 'ref_help', selector: 'a[href="/help"]' },
+        { ref: 'ref_search_button', selector: 'button[type="submit"]' },
+      ],
+      stats: { processed: 11, included: 11, durationMs: 6 },
+      viewport: { width: 1280, height: 720, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(result.isError).toBe(false);
+    expect(payload).toMatchObject({
+      readinessVerdict: 'blocked',
+      readinessReason: 'footer_or_navigation_only',
+      rowCount: 0,
+      visibleRegionRowsUsed: false,
+      visibleRegionRowsRejectedReason: 'footer_like_region',
+    });
+    expect(payload.footerLikeRejectedCount).toBeGreaterThan(0);
+    expect(payload.navigationLikeRejectedCount).toBeGreaterThan(0);
+    expect(payload.rejectedRegionReasonDistribution.footer_like_region).toBeGreaterThan(0);
+    expect(payload.visibleRegionRows).toMatchObject({
+      visibleRegionRowsUsed: false,
+      rowCount: 0,
+    });
   });
 
   it('emits empty readiness evidence for empty pages without rows', async () => {

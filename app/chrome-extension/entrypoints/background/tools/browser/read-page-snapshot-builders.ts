@@ -123,19 +123,49 @@ export function buildExtensionLayer(params: {
   const includeL2 = params.requestedLayer === 'L0+L1+L2';
   const hasVisibleRows = params.visibleRegionRows.visibleRegionRowsUsed;
   const hasTextSignal = hasMeaningfulReadPageText(params.contentSummary);
+  const shellRejectedCount =
+    params.visibleRegionRows.footerLikeRejectedCount +
+    params.visibleRegionRows.navigationLikeRejectedCount +
+    params.visibleRegionRows.lowValueRegionRejectedCount;
+  const shellOnlyRows =
+    !hasVisibleRows &&
+    params.visibleRegionRows.visibleDomRowsCandidateCount === 0 &&
+    shellRejectedCount > 0;
   const selectedDataSource = hasVisibleRows
     ? 'dom_region_rows'
     : params.renderMode === 'markdown'
       ? 'markdown'
       : 'dom_json';
   const readinessVerdict =
-    params.pageType === 'unsupported_page' ? 'error' : hasTextSignal ? 'ready' : 'empty';
+    params.pageType === 'unsupported_page'
+      ? 'error'
+      : !hasTextSignal
+        ? 'empty'
+        : shellOnlyRows
+          ? 'blocked'
+          : 'ready';
+  const readinessReason = shellOnlyRows
+    ? params.visibleRegionRows.footerLikeRejectedCount +
+        params.visibleRegionRows.navigationLikeRejectedCount >
+      0
+      ? 'footer_or_navigation_only'
+      : 'business_rows_unavailable'
+    : null;
   const extensionLayer = {
     kind: selectedDataSource,
     selectedDataSource,
     readinessVerdict,
+    readinessReason,
     rowCount: hasVisibleRows ? params.visibleRegionRows.rowCount : 0,
     visibleRegionRowsUsed: hasVisibleRows,
+    visibleRegionRowsRejectedReason: params.visibleRegionRows.visibleRegionRowsRejectedReason,
+    visibleDomRowsCandidateCount: params.visibleRegionRows.visibleDomRowsCandidateCount,
+    visibleDomRowsSelectedCount: params.visibleRegionRows.visibleDomRowsSelectedCount,
+    lowValueRegionRejectedCount: params.visibleRegionRows.lowValueRegionRejectedCount,
+    footerLikeRejectedCount: params.visibleRegionRows.footerLikeRejectedCount,
+    navigationLikeRejectedCount: params.visibleRegionRows.navigationLikeRejectedCount,
+    targetRefCoverageRejectedCount: params.visibleRegionRows.targetRefCoverageRejectedCount,
+    rejectedRegionReasonDistribution: params.visibleRegionRows.rejectedRegionReasonDistribution,
     candidateActions: includeL1 ? params.candidateActions : [],
     pageContext: params.pageContext,
     // T3.2: reserved extension fields (not locked as long-term schema yet).
