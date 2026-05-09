@@ -1,27 +1,39 @@
-# Why Tabrix?（与同类方案对比）
+# Why MCP on Chrome?
 
-> 精简版对比说明，用于快速定位使用场景与边界。
+This page gives a short public comparison between Tabrix and common browser
+automation approaches.
 
-## 三个核心差异
+## Three Differences
 
-| 维度          | Tabrix                                                                | Playwright MCP / browser-use 等                          |
-| ------------- | --------------------------------------------------------------------- | -------------------------------------------------------- |
-| **浏览器**    | 你日常使用的 **真实 Chrome**，继承全部登录态                          | 独立 Chromium/Playwright 实例，通常 **无已登录 session** |
-| **AI 客户端** | 任意支持 **MCP** 的客户端（Cursor、Claude Desktop、CoPaw、OpenClaw…） | 多为库/SDK，需自行集成                                   |
-| **安装心智**  | 扩展 + 本机 bridge（`tabrix`）                                        | 常需下载浏览器二进制、配置 Playwright                    |
+| Dimension   | Tabrix                                                                                              | Playwright MCP / browser-use style tools                                                             |
+| ----------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Browser     | The user's daily real Chrome session, including existing login state.                               | A separate Chromium or Playwright runtime, often without the user's logged-in session.               |
+| AI client   | Any MCP-capable assistant or host, such as Cursor, Claude Desktop, Codex CLI, or other MCP clients. | Often exposed as a library, SDK, or dedicated automation runtime that needs extra integration work.  |
+| Setup model | Chrome extension plus local `tabrix` bridge.                                                        | Frequently requires browser binary download, Playwright setup, or a separate automation environment. |
 
-## 适合谁
+## Good Fit
 
-- 要在 **已登录** 的站点上操作（后台、飞书、GitHub 私有仓库、内网系统）。
-- 希望 **不绑定** 某一厂商的 AI 应用，只用标准 MCP 连接自己的助手。
-- 可接受在 Chrome 中加载扩展（Manifest V3）并运行本机 Node 服务。
+Use Tabrix when you need to:
 
-## 不适合谁
+- operate websites where the user is already logged in, such as admin systems,
+  internal tools, GitHub repositories, CMS, CRM, or support tools;
+- expose the same real browser session to different MCP clients;
+- keep browser state local by default while still supporting controlled LAN
+  access when needed;
+- debug or verify assistant browser actions against the user's actual Chrome
+  profile.
 
-- 需要 **无头大规模并发爬虫**（请用云浏览器 + Playwright/Browserbase）。
-- 需要 **完全不装扩展** 的纯 CLI（可看 CDP 直连类方案）。
-- 期望 **100% 免确认** 的自动化（浏览器与 AI 操作真实会话，需自行做好权限与敏感站策略）。
+## Poor Fit
 
-## 一句话
+Tabrix is not the best first choice when you need:
 
-**Tabrix = 把「你已经登录好的 Chrome」通过 MCP 交给 AI 操作**；不是再开一个干净浏览器，而是复用真实会话。
+- large-scale headless crawling with high concurrency;
+- a pure CLI automation path with no browser extension;
+- fully unattended automation over sensitive logged-in sessions without any
+  operator-side policy or permission model.
+
+## One Sentence
+
+Tabrix turns the Chrome session the user already trusts into an MCP-native
+browser execution layer for AI assistants. It does not start from a clean,
+throwaway browser profile by default.

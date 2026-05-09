@@ -1,65 +1,66 @@
-# Tabrix Extension - Latest Release
+# Tabrix Extension Releases
 
-## 🚀 快速安装
+This directory is release guidance for extension assets. The authoritative
+distribution source is GitHub Releases.
 
-### 1. 下载扩展
+## Download
 
-请前往 [GitHub Releases](https://github.com/guodaxia103/tabrix/releases) 下载最新扩展资产（文件名形如 `tabrix-extension-vX.Y.Z.zip`）。
+Download the latest extension zip from
+[GitHub Releases](https://github.com/guodaxia103/tabrix/releases).
 
-说明：
+The asset name should be versioned, for example:
 
-- 以 GitHub Releases 中的版本化资产为准（`tabrix-extension-vX.Y.Z.zip`）。
-- 仓库内 `releases/chrome-extension/latest/` 仅作为本地临时目录，不作为发布来源。
+```text
+tabrix-extension-vX.Y.Z.zip
+```
 
-### 2. 安装步骤
+Notes:
 
-1. 解压下载的 zip 文件
-2. 打开 Chrome 浏览器
-3. 地址栏输入 `chrome://extensions/`
-4. 开启右上角的"开发者模式"开关
-5. 点击"加载已解压的扩展程序"
-6. 选择解压后的文件夹
+- Use the versioned asset published on GitHub Releases as the source of truth.
+- `releases/chrome-extension/latest/`, if present locally, is a temporary build
+  directory and is not a public distribution source.
 
-### 3. 验证安装
+## Install
 
-- 扩展图标应该出现在浏览器工具栏
-- 点击图标打开配置面板
-- 确认扩展状态显示正常
+1. Unzip the downloaded asset.
+2. Open Chrome.
+3. Navigate to `chrome://extensions/`.
+4. Enable `Developer mode`.
+5. Click `Load unpacked`.
+6. Select the unzipped extension directory.
 
-## ⚙️ 配置说明
+## Verify
 
-### Tabrix Native Server 连接
+- The Tabrix extension icon appears in the browser toolbar.
+- The extension popup opens.
+- The popup shows the expected connection and server status.
 
-1. 确保 Native Server 正在运行（默认端口 12306）
-2. 在扩展 popup 中输入正确的端口号
-3. 点击"连接"按钮测试连接
+## Native Server Connection
 
-## 🔧 故障排除
+1. Ensure the Tabrix native server is running. The default port is `12306`.
+2. Enter the correct port in the extension popup if needed.
+3. Use the popup connection action to verify the bridge.
 
-### 常见问题
+## Troubleshooting
 
-1. **扩展无法加载**
-   - 确保已开启开发者模式
-   - 检查文件夹结构是否完整
+### Extension does not load
 
-2. **无法连接 Native Server**
-   - 确认 Native Server 正在运行
-   - 检查端口号是否正确
-   - 查看浏览器控制台错误信息
+- Confirm `Developer mode` is enabled.
+- Confirm the selected directory is the unpacked extension root.
 
-3. **功能异常**
-   - 刷新页面重试
-   - 重启浏览器
-   - 重新加载扩展
+### Native server does not connect
 
-## 📞 技术支持
+- Confirm the native server is running.
+- Confirm the port is correct.
+- Check the browser console and Tabrix logs.
 
-遇到问题请：
+### Browser behavior is unexpected
 
-1. 查看浏览器控制台错误信息
-2. 在 GitHub Issues 中搜索相似问题
-3. 提交新的 Issue 并附上详细信息
+- Refresh the target page.
+- Reload the extension.
+- Restart Chrome if the extension or Native Messaging bridge is stale.
 
-## ⚠️ 安全提醒
+## Security
 
-- 此扩展具有较高权限，请确保从可信来源下载
+This extension has broad browser permissions. Install only assets from trusted
+release sources.

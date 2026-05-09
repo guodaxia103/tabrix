@@ -72,8 +72,10 @@ direction and execution rules.
 ## Language Policy
 
 - English is the single public language for `docs/`.
-- The only Chinese documents outside `docs/` are [`../README_zh.md`](../README_zh.md) (public landing page in Chinese) and [`../AGENTS.md`](../AGENTS.md) (internal contributor rules, bilingual prose)
-- Chinese variants of other internal materials are maintained outside this repository
+- [`../README_zh.md`](../README_zh.md) is the public Chinese landing page.
+- [`../AGENTS.md`](../AGENTS.md) may contain bilingual AI-contributor rules.
+- Legacy public prompt or skill examples outside `docs/` may still contain localized prose, but they are not public documentation source of truth.
+- Chinese variants of private governance, planning, acceptance, and release evidence materials are maintained outside this repository.
 
 ## Naming Rules
 

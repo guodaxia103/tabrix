@@ -104,6 +104,6 @@ only record the shipped capability boundary and headline outcome.
 
 ## Known limitations carried into v2.3.0
 
-- `experience_replay` is **not** shipped — only the owner brief is. Until the maintainer answers the 7 open questions, the chooser's `'experience_replay'` strategy remains absent and the K5 metric (`懂用户`) cannot improve beyond what `experience_suggest_plan` already provides.
+- `experience_replay` is **not** shipped — only the owner brief is. Until the maintainer answers the 7 open questions, the chooser's `'experience_replay'` strategy remains absent and the K5 metric (`user understanding`) cannot improve beyond what `experience_suggest_plan` already provides.
 - `historyRef` promotion to a true content-hash anchor (carried over from v2.2.0 §B-011 caveat) remains out of scope; B-011 v1 stability does not depend on it.
 - `knowledge_call_api` (B-017 v2) remains absent. The chooser still routes to `knowledge_light` rather than inventing an `api_only` strategy when API Knowledge has rows but no executable call layer exists.
