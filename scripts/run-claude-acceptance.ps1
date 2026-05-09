@@ -1,3 +1,16 @@
+<#
+Legacy client-specific smoke helper.
+
+This script predates the current agent-agnostic acceptance split. It
+drives Claude CLI against a local Tabrix runtime and fixture page, so it
+is useful only as an explicit maintainer smoke helper. It is not wired
+from package.json, CI, release:check, or the public release process.
+
+Product-level acceptance for real platforms, private accounts, raw
+browser evidence, and competitor deltas belongs in the maintainer-private
+acceptance lane. Do not treat this helper as a substitute for that lane.
+#>
+
 param(
   [ValidateSet('fast', 'full')]
   [string]$Profile = 'fast',

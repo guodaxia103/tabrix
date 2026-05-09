@@ -7,13 +7,10 @@
  * shipped. This file owns the v2.5 gate and applies ONLY to v2.5+
  * tags (`benchmarkGateAppliesV25`).
  *
- * V25-01 scope: this file is the GATE LIBRARY only. It is not yet
- * wired into `scripts/check-release-readiness.mjs` — that wiring is
- * V25-05's job (per `.claude/strategy/TABRIX_V2_5_P0_CHAIN_V3_1.md`
- * §V25-01 step 4 and §V25-05 step 1). The library is exported so
- * `scripts/benchmark-v25.mjs --gate` can use it locally and
- * `release-gate-v25-fs.test.ts` (V25-05) can fixture-test it
- * end-to-end.
+ * Current release-gate status: this library is wired into
+ * `scripts/check-release-readiness.mjs` for v2.5.0+ tags. It is still
+ * exported so `scripts/benchmark-v25.mjs --gate` can use it locally
+ * and release-gate tests can fixture-test it end-to-end.
  *
  * Hard invariants (v2.5 release blockers, per V3.1 §V25-05 step 2):
  *   - reportVersion === BENCHMARK_REPORT_VERSION_EXPECTED (= 1).

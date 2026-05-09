@@ -46,10 +46,9 @@
  * v2.4.0 ship contract. Modifying it risks regressing the v2.4.0
  * release gate. The v25 CLI is additive; the v24 CLI is unchanged.
  *
- * V25-01 scope: this CLI ships with the gate library
- * (`scripts/lib/v25-benchmark-gate.cjs`) ready, but
- * `scripts/check-release-readiness.mjs` is NOT yet wired to it. That
- * wiring is V25-05's job.
+ * Current release-gate status: `scripts/check-release-readiness.mjs`
+ * is wired to the v25 gate for v2.5.0+ tags. Keep this CLI additive;
+ * do not change the v24 ship contract when evolving v25 evidence.
  */
 
 import fs from 'node:fs';

@@ -26,7 +26,7 @@ tabrix/
 ├─ packages/
 │  └─ shared/              # Shared types, tool schemas, and cross-process contracts
 ├─ docs/                   # User and developer documentation
-├─ scripts/                # Repo-level maintenance scripts
+├─ scripts/                # Repo-level maintenance scripts (see scripts/README.md)
 ├─ skills/                 # Public Tabrix assistant-routing skill definitions
 ├─ prompt/                 # Legacy public prompt examples, not runtime SoT
 └─ releases/               # Release notes and release assets guidance
