@@ -1327,6 +1327,33 @@ describe('V27-P0-REAL-01 visible region rows', () => {
         'Practical automation planning guide for small teams using browser workflows',
         'Reliable operations checklist for browser based AI assistants',
       ]);
+      expect(payload.highValueObjects.slice(0, 2)).toEqual([
+        expect.objectContaining({
+          kind: 'visible_region_row',
+          label: 'Practical automation planning guide for small teams using browser workflows',
+          objectType: 'record',
+          region: 'visible_text',
+          sourceKind: 'dom_semantic',
+        }),
+        expect.objectContaining({
+          kind: 'visible_region_row',
+          label: 'Reliable operations checklist for browser based AI assistants',
+          objectType: 'record',
+          region: 'visible_text',
+          sourceKind: 'dom_semantic',
+        }),
+      ]);
+      for (const object of payload.highValueObjects.slice(0, 2)) {
+        expect(object).not.toHaveProperty('ref');
+        expect(object).not.toHaveProperty('targetRef');
+        expect(object).not.toHaveProperty('actions');
+      }
+      expect(payload.L0.focusObjectIds.slice(0, 2)).toEqual(
+        payload.highValueObjects.slice(0, 2).map((item: { id: string }) => item.id),
+      );
+      expect(payload.L0.summary).toContain(
+        'Practical automation planning guide for small teams using browser workflows, Reliable operations checklist for browser based AI assistants',
+      );
       expect(
         payload.visibleRegionRows.rows.every(
           (row: { targetRef: string | null }) => row.targetRef === null,

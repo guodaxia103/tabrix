@@ -248,6 +248,134 @@ describe('read_page task protocol', () => {
     );
   });
 
+  it('surfaces selected visible text rows as read-only facts before shell controls', () => {
+    const protocol = buildTaskProtocol(
+      createBaseParams({
+        currentUrl: 'https://example.com/search',
+        currentTitle: 'Search results',
+        pageRole: 'web_page',
+        primaryRegion: 'visible_results',
+        interactiveElements: [
+          { ref: 'ref_home', role: 'link', name: 'Home', href: '/' },
+          { ref: 'ref_search', role: 'button', name: 'Search' },
+          { ref: 'ref_download', role: 'link', name: 'Download app', href: '/download-app' },
+        ],
+        candidateActions: [
+          {
+            id: 'ca_click_ref_home',
+            actionType: 'click',
+            targetRef: 'ref_home',
+            confidence: 0.72,
+            matchReason: 'navigation shell candidate',
+            locatorChain: [{ type: 'aria', value: 'Home' }],
+          },
+        ],
+        visibleRegionRows: {
+          sourceDataSource: 'dom_region_rows',
+          rows: [
+            {
+              rowId: 'visible_text_1',
+              title: 'Practical automation planning guide for small teams',
+              primaryText: 'Practical automation planning guide for small teams',
+              secondaryText: 'Workflow Lab',
+              metaText: '2 hours ago',
+              interactionText: '89 likes',
+              visibleTextFields: ['Practical automation planning guide for small teams'],
+              targetRef: null,
+              targetRefCoverageRate: 0,
+              boundingBox: null,
+              regionId: 'visible_text_1',
+              sourceRegion: 'visible_text',
+              confidence: 0.7,
+              qualityReasons: ['visible_text_fallback'],
+            },
+            {
+              rowId: 'visible_text_2',
+              title: 'Reliable operations checklist for browser based AI assistants',
+              primaryText: 'Reliable operations checklist for browser based AI assistants',
+              secondaryText: 'Ops Review',
+              metaText: 'yesterday',
+              interactionText: '34 comments',
+              visibleTextFields: ['Reliable operations checklist for browser based AI assistants'],
+              targetRef: null,
+              targetRefCoverageRate: 0,
+              boundingBox: null,
+              regionId: 'visible_text_2',
+              sourceRegion: 'visible_text',
+              confidence: 0.7,
+              qualityReasons: ['visible_text_fallback'],
+            },
+          ],
+          rowCount: 2,
+          visibleRegionRowsUsed: true,
+          visibleRegionRowsRejectedReason: null,
+          sourceRegion: 'visible_text',
+          rowExtractionConfidence: 0.7,
+          cardExtractorUsed: true,
+          cardPatternConfidence: 0.58,
+          cardRowsCount: 2,
+          rowOrder: 'visual_order',
+          targetRefCoverageRate: 0,
+          regionQualityScore: 0.43,
+          visibleDomRowsCandidateCount: 2,
+          visibleDomRowsSelectedCount: 2,
+          lowValueRegionRejectedCount: 3,
+          footerLikeRejectedCount: 1,
+          navigationLikeRejectedCount: 2,
+          targetRefCoverageRejectedCount: 0,
+          rejectedRegionReasonDistribution: {
+            low_value_region: 3,
+            footer_like_region: 1,
+            navigation_like_region: 2,
+            target_ref_coverage_insufficient: 0,
+            single_isolated_text: 0,
+            empty_shell: 0,
+          },
+          pageInfo: {
+            url: 'https://example.com/search',
+            title: 'Search results',
+            viewport: { width: 1280, height: 720, dpr: 1 },
+            scrollY: 0,
+            pixelsAbove: 0,
+            pixelsBelow: 0,
+            candidateRegionCount: 2,
+          },
+        },
+      }),
+    );
+
+    const topObjects = protocol.highValueObjects.slice(0, 2);
+    expect(topObjects.map((item) => item.label)).toEqual([
+      'Practical automation planning guide for small teams',
+      'Reliable operations checklist for browser based AI assistants',
+    ]);
+    for (const object of topObjects) {
+      expect(object).toMatchObject({
+        kind: 'visible_region_row',
+        objectType: 'record',
+        region: 'visible_text',
+        sourceKind: 'dom_semantic',
+      });
+      expect(object.ref).toBeUndefined();
+      expect(object.targetRef).toBeUndefined();
+      expect(object.actions).toBeUndefined();
+      expect(object.reasons).toEqual(
+        expect.arrayContaining(['visible_text_fallback', 'read_fact']),
+      );
+    }
+    expect(protocol.L0.focusObjectIds.slice(0, 2)).toEqual(topObjects.map((item) => item.id));
+    expect(protocol.L0.summary).toContain(
+      'focus on Practical automation planning guide for small teams, Reliable operations checklist for browser based AI assistants',
+    );
+    expect(protocol.L1.highValueObjectIds.slice(0, 2)).toEqual(topObjects.map((item) => item.id));
+    expect(protocol.L1.overview).toContain(
+      'Top objects: Practical automation planning guide for small teams, Reliable operations checklist for browser based AI assistants',
+    );
+    expect(protocol.highValueObjects.map((item) => item.label).join(' ')).not.toMatch(
+      /Download app/i,
+    );
+  });
+
   it.each([
     {
       name: 'maps repo_home to read from role and primary region',

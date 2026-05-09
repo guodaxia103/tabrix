@@ -27,6 +27,7 @@ import {
 } from './read-page-high-value-objects-core';
 import type { PageRole } from './read-page-understanding-core';
 import { annotateStableTargetRefs } from './stable-target-ref';
+import type { VisibleRegionRowsResult } from './visible-region-rows';
 
 interface TaskProtocolParams {
   mode: 'compact' | 'normal' | 'full';
@@ -55,6 +56,7 @@ interface TaskProtocolParams {
    * the Markdown artifact; that is `read-page.ts`'s responsibility.
    */
   markdownArtifactRef?: string | null;
+  visibleRegionRows?: VisibleRegionRowsResult;
 }
 
 interface TaskProtocolResult {
@@ -100,6 +102,7 @@ const OBJECT_LAYER_ADAPTERS: readonly ObjectLayerFamilyAdapter[] = [
 ];
 
 const MAX_HIGH_VALUE_OBJECTS = 6;
+const MAX_VISIBLE_TEXT_ROW_FACTS = 3;
 
 // T5.4.0 intentionally scopes out generic task-mode inference. These role/region
 // hints drive the taskMode (read/search/monitor/...) scoring, not the object
@@ -374,6 +377,61 @@ function toHighValueObject(
   return out;
 }
 
+function buildVisibleTextRowFacts(params: TaskProtocolParams): ReadPageHighValueObject[] {
+  const rows = params.visibleRegionRows;
+  if (!rows?.visibleRegionRowsUsed || !Array.isArray(rows.rows) || rows.rows.length === 0) {
+    return [];
+  }
+
+  const facts: ReadPageHighValueObject[] = [];
+  const seenLabels = new Set<string>();
+  for (const row of rows.rows) {
+    if (facts.length >= MAX_VISIBLE_TEXT_ROW_FACTS) break;
+    if (row.sourceRegion !== 'visible_text' || row.targetRef) continue;
+    const label = String(row.title || row.primaryText || '').trim();
+    const normalized = normalizeHighValueLabel(label);
+    if (!normalized || seenLabels.has(normalized) || isLowBusinessSignalObject(label)) {
+      continue;
+    }
+    seenLabels.add(normalized);
+    const confidence = Number.isFinite(row.confidence)
+      ? Number(row.confidence.toFixed(3))
+      : undefined;
+    const reasons = Array.from(
+      new Set(['visible_text_fallback', 'read_fact', ...row.qualityReasons]),
+    );
+    const fact: ReadPageHighValueObject = {
+      id: `hvo_visible_region_row_${facts.length + 1}`,
+      kind: 'visible_region_row',
+      label,
+      reason: 'visible text fallback row surfaced as a read fact',
+      objectType: 'record',
+      region: row.sourceRegion,
+      importance: 0.9,
+      sourceKind: 'dom_semantic',
+      reasons,
+    };
+    if (typeof confidence === 'number') fact.confidence = confidence;
+    facts.push(fact);
+  }
+  return facts;
+}
+
+function mergeVisibleTextRowFacts(
+  rankedObjects: ReadPageHighValueObject[],
+  params: TaskProtocolParams,
+): ReadPageHighValueObject[] {
+  const rowFacts = buildVisibleTextRowFacts(params);
+  if (rowFacts.length === 0) return rankedObjects;
+
+  const seenLabels = new Set(rowFacts.map((item) => normalizeHighValueLabel(item.label)));
+  const remaining = rankedObjects.filter((item) => {
+    const normalized = normalizeHighValueLabel(item.label);
+    return normalized && !seenLabels.has(normalized);
+  });
+  return [...rowFacts, ...remaining].slice(0, MAX_HIGH_VALUE_OBJECTS);
+}
+
 function runObjectPipeline(
   context: ObjectLayerContext,
   inputs: CollectInputs,
@@ -440,12 +498,21 @@ function buildHighValueObjects(
   const ranked = rankScoredObjects(finalScored)
     .slice(0, MAX_HIGH_VALUE_OBJECTS)
     .map((item) => toHighValueObject(item, params));
+  const merged = mergeVisibleTextRowFacts(ranked, params);
+  const clickableRanked = merged.filter((item) => item.kind !== 'visible_region_row');
+  const readOnlyFacts = merged.filter((item) => item.kind === 'visible_region_row');
 
   // Annotate stable targetRefs after ranking + dedup so ordinals are
   // computed against the *final* HVO order (visible to upstream callers).
   // This must happen after `rankScoredObjects` and the slice cap so two
   // reads of the same page produce the same ordinals per identity tuple.
-  const highValueObjects = annotateStableTargetRefs(ranked, params.pageRole);
+  const annotatedClickableObjects = annotateStableTargetRefs(clickableRanked, params.pageRole);
+  const highValueObjects = merged.map((item) => {
+    if (item.kind === 'visible_region_row') {
+      return readOnlyFacts.shift() ?? item;
+    }
+    return annotatedClickableObjects.shift() ?? item;
+  });
 
   return { highValueObjects, taskMode };
 }

@@ -81,6 +81,7 @@ export function buildExtensionLayer(params: {
     pageContext: params.pageContext,
     contentSummary: params.contentSummary,
     markdownArtifactRef: markdownArtifact?.ref ?? null,
+    visibleRegionRows: params.visibleRegionRows,
   });
 
   // Populate `historyRef` with a compact snapshot identifier so upstream
