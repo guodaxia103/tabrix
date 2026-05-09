@@ -27,8 +27,8 @@ tabrix/
 │  └─ shared/              # Shared types, tool schemas, and cross-process contracts
 ├─ docs/                   # User and developer documentation
 ├─ scripts/                # Repo-level maintenance scripts
-├─ skills/                 # Bundled Tabrix skill definitions
-├─ prompt/                 # Prompt templates and references
+├─ skills/                 # Public Tabrix assistant-routing skill definitions
+├─ prompt/                 # Legacy public prompt examples, not runtime SoT
 └─ releases/               # Release notes and release assets guidance
 ```
 
@@ -37,6 +37,17 @@ tabrix/
 > tree.
 
 ## 2. Workspace Responsibilities
+
+### `skills/` and `prompt/`
+
+`skills/` contains public helper skills that route AI assistants toward the
+current Tabrix browser execution path. They are contributor-facing aids, not a
+replacement for the public product docs or maintainer-private owner-lane plans.
+
+`prompt/` contains legacy prompt examples. Files in that directory are not
+runtime instructions, release evidence, or current tool contracts. Prefer
+`docs/TOOLS.md`, `docs/CLI_AND_MCP.md`, and `skills/tabrix_browser/SKILL.md`
+when deciding how an assistant should operate Tabrix.
 
 ### `app/chrome-extension/`
 

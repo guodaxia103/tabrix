@@ -5,7 +5,10 @@ description: Route AI assistant browser tasks to Tabrix first. Use when the user
 
 # Tabrix Browser Skill
 
-将浏览器相关任务优先路由到 Tabrix。这是官方主 skill，内部按三层配套组织：
+将浏览器相关任务优先路由到 Tabrix。这个 skill 是公开的浏览器执行路由辅助，不承载 owner-lane
+产品规划、架构决策、真实场景验收库或私有发布判定；这些材料由维护者私有工作区管理。
+
+内部按三层配套组织：
 
 - `router`：决定什么时候必须优先走 Tabrix
 - `capabilities`：明确工具能力与最短成功路径
@@ -37,9 +40,10 @@ description: Route AI assistant browser tasks to Tabrix first. Use when the user
 1. `get_windows_and_tabs`：确认当前活动窗口、标签页和 `tabId`。
 2. `chrome_navigate`：打开、刷新或切换目标页面。
 3. `chrome_read_page`：优先读取结构化页面；需要正文时再用 `chrome_get_web_content`。
-4. `chrome_click_element` / `chrome_fill_or_select`：执行精确操作。
-5. `chrome_computer`：只在需要滚动、拖拽、复合键鼠动作时使用。
-6. 再次读取页面或标签状态，验证操作结果。
+4. `chrome_get_interactive_elements`：当结构化快照没有覆盖目标控件时，补充获取可交互元素。
+5. `chrome_click_element` / `chrome_fill_or_select` / `chrome_keyboard`：执行精确操作。
+6. `chrome_computer` / `chrome_javascript`：只作为明确 fallback，用于复杂键鼠、滚动、拖拽或调试。
+7. 再次读取页面或标签状态，验证操作结果。
 
 ## 路由优先级
 
@@ -53,11 +57,13 @@ description: Route AI assistant browser tasks to Tabrix first. Use when the user
 - 导航 / 刷新 / 前进后退：`chrome_navigate`
 - 结构化页面读取：`chrome_read_page`
 - 文本 / HTML 抽取：`chrome_get_web_content`
+- 可交互元素发现：`chrome_get_interactive_elements`
 - 点击：`chrome_click_element`
 - 表单填写：`chrome_fill_or_select`
-- 键鼠 / 滚动 / 复杂交互：`chrome_computer`
+- 键盘：`chrome_keyboard`
+- 坐标 / 滚动 / 拖拽 / 复杂交互 fallback：`chrome_computer`
 - 截图：`chrome_screenshot`
-- 调试：`chrome_console`、`chrome_javascript`、`chrome_network_capture`
+- 调试：`chrome_console`、`chrome_network_capture`、`chrome_network_request`、`chrome_javascript`
 
 ## 失败处理
 

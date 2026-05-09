@@ -7,8 +7,10 @@
 | 标签枚举       | `get_windows_and_tabs`                             |
 | 导航           | `chrome_navigate`                                  |
 | 读页（结构化） | `chrome_read_page`, `chrome_get_web_content`       |
+| 可交互元素     | `chrome_get_interactive_elements`                  |
 | 点击 / 填表    | `chrome_click_element`, `chrome_fill_or_select`    |
-| 坐标/键鼠/滚动 | `chrome_computer`                                  |
+| 键盘           | `chrome_keyboard`                                  |
+| 坐标/滚动/拖拽 | `chrome_computer`                                  |
 | 截图           | `chrome_screenshot`                                |
 | 网络           | `chrome_network_capture`, `chrome_network_request` |
 | 控制台 / JS    | `chrome_console`, `chrome_javascript`              |
