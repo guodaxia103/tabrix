@@ -74,11 +74,15 @@ const CONTROL_ROLES = new Set([
 ]);
 
 const SHELL_TEXT_PATTERN =
-  /\b(filter|filters?|sort|footer|navigation|menu|home|login|sign in|submit|search|all|more|settings|privacy|terms|help|sponsor|sponsors?|skip to content|copyright|feedback|sidebar|topics?)\b|筛选|过滤|排序|首页|登录|搜索|赞助|隐私|协议|帮助|创作中心|放映厅|小游戏|业务合作|营业执照|公网安备|网文|ICP备|备案|许可证|许可|网络交易服务|医疗器械/i;
+  /\b(filter|filters?|sort|footer|navigation|menu|home|login|sign in|submit|search|all|more|settings|privacy|terms|help|sponsor|sponsors?|sponsorable|skip to content|copyright|feedback|sidebar|topics?)\b|筛选|过滤|排序|首页|登录|搜索|赞助|隐私|协议|帮助|创作中心|放映厅|小游戏|业务合作|营业执照|公网安备|网文|ICP备|备案|许可证|许可|网络交易服务|医疗器械/i;
 const FOOTER_LEGAL_REPORT_PATTERN =
-  /\b(footer|privacy|terms|copyright|license|legal|compliance|sponsors?|report (?:abuse|harmful|center)|harmful information report|rumou?r exposure|exposure desk|internet report center|business license)\b|隐私|协议|版权|赞助|举报|有害信息|互联网举报|网络谣言|谣言曝光|许可证|备案|公网安备|网文|营业执照|违法不良|网信算备|ICP备?/i;
+  /\b(footer|privacy|terms|copyright|license|legal|compliance|sponsors?|sponsorable|report (?:abuse|harmful|center)|harmful information report|rumou?r exposure|exposure desk|internet report center|business license)\b|隐私|协议|版权|赞助|举报|有害信息|互联网举报|网络谣言|谣言曝光|许可证|备案|公网安备|网文|营业执照|违法不良|网信算备|ICP备?/i;
 const SEARCH_CONTROL_TEXT_PATTERN =
   /\b(search results?|search query|query|filters?|sort|feedback|how can we improve|topics?|sponsors?)\b|搜索结果|搜索词|筛选|过滤|排序|反馈|话题|赞助/i;
+const UTILITY_LINK_TEXT_PATTERN =
+  /\b(creator center|creator learning center|upload|upload video|video management|works? data|live data|ads?|advertising|advertisements?|account recovery|contact us|join us|site map|sitemap|friend links|business license|about us|download app)\b|发布视频(?:\/图文)?|发布图文|视频管理|作品数据|直播数据|创作者学习中心|创作中心|广告投放|账号找回|联系我们|加入我们|站点地图|友情链接|业务合作|营业执照|^下载(?:app|应用|客户端)?$/i;
+const UTILITY_LINK_HREF_PATTERN =
+  /(?:^|\/)(?:creator(?:-center)?|creator-center|upload|video-management|ads?|advertising|account(?:-recovery)?|recover|recovery|contact(?:-us)?|about(?:-us)?|sitemap|site-map|friend-links?|download(?:-app)?|legal|privacy|terms|license|report|feedback|sponsors?)(?:\/|$|\?)/i;
 const META_PATTERN =
   /\b(\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|m|min|mins|minute|minutes|ago)|yesterday|today|updated|posted|views?|\d{1,2}:\d{2})\b|\d{4}年\d{1,2}月\d{1,2}日|刚刚|分钟前|小时前|昨天|今天|发布|更新/i;
 const INTERACTION_PATTERN =
@@ -107,6 +111,7 @@ export function extractVisibleRegionRows(input: {
     groups.slice().sort(compareGroupsByVisualOrder),
     input.fallbackInteractiveElements,
     sourceRegion,
+    rejectedReasonDistribution,
   );
   const candidateRows = orderedGroups
     .map((group) => buildRow(group))
@@ -207,6 +212,7 @@ function supplementGroupsFromInteractiveElements(
     | null
     | undefined,
   sourceRegion: string,
+  rejectedReasonDistribution: Record<VisibleRegionRejectionReason, number>,
 ): CandidateGroup[] {
   if (!Array.isArray(fallbackInteractiveElements) || fallbackInteractiveElements.length === 0) {
     return groups;
@@ -216,7 +222,8 @@ function supplementGroupsFromInteractiveElements(
       .flatMap((group) => group.nodes.map((node) => node.ref))
       .filter((ref): ref is string => typeof ref === 'string' && ref.length > 0),
   );
-  const fallbackNodes = fallbackInteractiveElements
+  const fallbackNodes: ParsedVisibleNode[] = [];
+  fallbackInteractiveElements
     .map((item, index): ParsedVisibleNode => {
       const role = normalizeText(item?.role).toLowerCase() || 'generic';
       const name = normalizeText(item?.name);
@@ -224,11 +231,15 @@ function supplementGroupsFromInteractiveElements(
       const href = normalizeText(item?.href) || null;
       return { role, name, ref, href, depth: 0, x: null, y: null, order: 10_000 + index };
     })
-    .filter((node) => isStandaloneResultLink(node))
-    .filter((node) => {
-      if (!node.ref || usedRefs.has(node.ref)) return false;
+    .forEach((node) => {
+      if (!isStandaloneResultLink(node)) {
+        const shellReason = classifyShellNode(node);
+        if (shellReason) rejectedReasonDistribution[shellReason] += 1;
+        return;
+      }
+      if (!node.ref || usedRefs.has(node.ref)) return;
       usedRefs.add(node.ref);
-      return true;
+      fallbackNodes.push(node);
     });
   if (fallbackNodes.length < 2) return groups;
   return [
@@ -333,6 +344,7 @@ function isStandaloneResultLink(node: ParsedVisibleNode): boolean {
   if (/^image:/i.test(label)) return false;
   if (
     isLowValueShellNode(node) ||
+    isUtilityLinkNode(node) ||
     isTagLikeLink(node) ||
     isFooterLikeText(label) ||
     isNavigationLikeText(label)
@@ -347,6 +359,7 @@ function isStandaloneResultLink(node: ParsedVisibleNode): boolean {
   ) {
     return false;
   }
+  if (isUtilityHref(href)) return false;
   return true;
 }
 
@@ -436,6 +449,7 @@ function classifyShellNode(node: ParsedVisibleNode): VisibleRegionRejectionReaso
   if (!label) return null;
   if (isFooterLikeText(label)) return 'footer_like_region';
   if (isNavigationLikeText(label)) return 'navigation_like_region';
+  if (isUtilityLinkNode(node)) return 'low_value_region';
   if (isLowValueShellText(label)) return 'low_value_region';
   return null;
 }
@@ -692,6 +706,7 @@ function isLowValueShellText(value: string): boolean {
   if (/^image:/i.test(normalized)) return true;
   if (/^\d+(?:\.\d+)?(?:万|k|m)?$/i.test(normalized)) return true;
   if (FOOTER_LEGAL_REPORT_PATTERN.test(normalized)) return true;
+  if (UTILITY_LINK_TEXT_PATTERN.test(normalized) && normalized.length < 48) return true;
   if (SEARCH_CONTROL_TEXT_PATTERN.test(normalized) && normalized.length < 48) return true;
   return SHELL_TEXT_PATTERN.test(normalized) && normalized.length < 24;
 }
@@ -719,6 +734,16 @@ function isTagLikeLink(node: ParsedVisibleNode): boolean {
 
 function isFooterLikeText(value: string): boolean {
   return FOOTER_LEGAL_REPORT_PATTERN.test(value);
+}
+
+function isUtilityLinkNode(node: ParsedVisibleNode): boolean {
+  const label = normalizeText(node.name);
+  if (label && UTILITY_LINK_TEXT_PATTERN.test(label) && label.length < 64) return true;
+  return Boolean(node.href && isUtilityHref(node.href));
+}
+
+function isUtilityHref(href: string): boolean {
+  return UTILITY_LINK_HREF_PATTERN.test(href.toLowerCase());
 }
 
 function isNavigationLikeText(value: string): boolean {

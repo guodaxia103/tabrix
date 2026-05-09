@@ -329,6 +329,76 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.rows.map((row) => row.title).join(' ')).not.toMatch(/Image:|profile/i);
   });
 
+  it('rejects fallback interactive creator and footer utility links', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: '- generic "Search shell"',
+      sourceRegion: 'visible_results',
+      fallbackInteractiveElements: [
+        { ref: 'ref_upload', role: 'link', name: '发布视频/图文', href: '/creator/upload' },
+        {
+          ref: 'ref_learning',
+          role: 'link',
+          name: '创作者学习中心',
+          href: '/creator/learning',
+        },
+        { ref: 'ref_ads', role: 'link', name: '广告投放', href: '/advertising' },
+        { ref: 'ref_recovery', role: 'link', name: '账号找回', href: '/account/recovery' },
+        { ref: 'ref_contact', role: 'link', name: '联系我们', href: '/contact-us' },
+        { ref: 'ref_friend', role: 'link', name: '友情链接', href: '/friend-links' },
+        { ref: 'ref_license', role: 'link', name: 'Business license', href: '/legal/license' },
+        { ref: 'ref_report', role: 'link', name: 'Report center', href: '/report' },
+      ],
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(false);
+    expect(rows.rowCount).toBe(0);
+    expect(rows.visibleDomRowsCandidateCount).toBe(0);
+    expect(rows.visibleDomRowsSelectedCount).toBe(0);
+    expect(rows.visibleRegionRowsRejectedReason).toBe('footer_like_region');
+    expect(rows.lowValueRegionRejectedCount).toBeGreaterThan(0);
+    expect(rows.footerLikeRejectedCount).toBeGreaterThan(0);
+    expect(rows.rejectedRegionReasonDistribution.low_value_region).toBeGreaterThan(0);
+    expect(rows.rejectedRegionReasonDistribution.footer_like_region).toBeGreaterThan(0);
+  });
+
+  it('keeps fallback business results while rejecting utility links', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: '- generic "Sparse search shell"',
+      sourceRegion: 'visible_results',
+      fallbackInteractiveElements: [
+        {
+          ref: 'ref_result_1',
+          role: 'link',
+          name: 'Practical workflow guide for solo teams',
+          href: '/items/1',
+        },
+        { ref: 'ref_upload', role: 'link', name: 'Upload video', href: '/creator/upload' },
+        {
+          ref: 'ref_result_2',
+          role: 'link',
+          name: 'Automation checklist for daily operations',
+          href: '/items/2',
+        },
+        { ref: 'ref_ads', role: 'link', name: 'Advertising', href: '/ads' },
+        { ref: 'ref_contact', role: 'link', name: 'Contact us', href: '/contact-us' },
+        { ref: 'ref_sitemap', role: 'link', name: 'Site map', href: '/site-map' },
+      ],
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rowCount).toBe(2);
+    expect(rows.visibleDomRowsCandidateCount).toBe(2);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      'Practical workflow guide for solo teams',
+      'Automation checklist for daily operations',
+    ]);
+    expect(rows.rows.map((row) => row.targetRef)).toEqual(['ref_result_1', 'ref_result_2']);
+    expect(rows.rows.flatMap((row) => row.visibleTextFields).join(' ')).not.toMatch(
+      /Upload|Advertising|Contact us|Site map/i,
+    );
+    expect(rows.lowValueRegionRejectedCount).toBeGreaterThan(0);
+  });
+
   it('filters shell/legal/date/image-only fragments instead of returning them as result rows', () => {
     const rows = extractVisibleRegionRows({
       pageContent: [
@@ -872,7 +942,7 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     });
   });
 
-  it('does not report ready when report/legal links are the only row-like candidates', async () => {
+  it('does not report ready when fallback utility links are the only row-like candidates', async () => {
     vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
       id: 5307,
       windowId: 1,
@@ -882,21 +952,43 @@ describe('V27-P0-REAL-01 visible region rows', () => {
       title: 'Search',
     });
     vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
-    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
-      success: true,
-      pageContent: [
-        '- link "Network rumor exposure desk" [ref=ref_report_1] (x=200,y=620) href="/report/rumors"',
-        '- link "Online harmful information report" [ref=ref_report_2] (x=200,y=660) href="/report/harmful"',
-        '- link "网上有害信息举报专区" [ref=ref_report_3] (x=200,y=700) href="/report/harmful-info"',
-      ].join('\n'),
-      refMap: [
-        { ref: 'ref_report_1', selector: 'a[href="/report/rumors"]' },
-        { ref: 'ref_report_2', selector: 'a[href="/report/harmful"]' },
-        { ref: 'ref_report_3', selector: 'a[href="/report/harmful-info"]' },
-      ],
-      stats: { processed: 3, included: 3, durationMs: 6 },
-      viewport: { width: 1280, height: 720, dpr: 1 },
-    });
+    vi.spyOn(readPageTool as any, 'ensureInteractiveElementsHelper').mockResolvedValue(undefined);
+    const sendMessage = vi.spyOn(readPageTool as any, 'sendMessageToTab');
+    sendMessage
+      .mockResolvedValueOnce({
+        success: true,
+        pageContent: '- generic "Search shell"',
+        refMap: [],
+        stats: { processed: 1, included: 1, durationMs: 6 },
+        viewport: { width: 1280, height: 720, dpr: 1 },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        pageContent: '- generic "Search shell"',
+        refMap: [],
+        stats: { processed: 1, included: 1, durationMs: 6 },
+        viewport: { width: 1280, height: 720, dpr: 1 },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        elements: [
+          { type: 'link', text: '发布视频/图文', selector: 'a.upload', href: '/creator/upload' },
+          {
+            type: 'link',
+            text: '创作者学习中心',
+            selector: 'a.learning',
+            href: '/creator/learning',
+          },
+          { type: 'link', text: '广告投放', selector: 'a.ads', href: '/advertising' },
+          { type: 'link', text: '账号找回', selector: 'a.recovery', href: '/account/recovery' },
+          { type: 'link', text: '联系我们', selector: 'a.contact', href: '/contact-us' },
+          { type: 'link', text: '友情链接', selector: 'a.friend', href: '/friend-links' },
+          { type: 'link', text: 'Business license', selector: 'a.license', href: '/legal/license' },
+          { type: 'link', text: 'Report center', selector: 'a.report', href: '/report' },
+        ],
+        scrollY: 0,
+        pixelsBelow: 300,
+      });
 
     const result = await readPageTool.execute({ mode: 'compact' });
     const payload = JSON.parse((result.content[0] as { text: string }).text);
@@ -911,6 +1003,9 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     });
     expect(payload.visibleDomRowsCandidateCount).toBe(0);
     expect(payload.visibleRegionRows.rows).toEqual([]);
+    expect(payload.lowValueRegionRejectedCount).toBeGreaterThan(0);
+    expect(payload.footerLikeRejectedCount).toBeGreaterThan(0);
+    expect(payload.rejectedRegionReasonDistribution.low_value_region).toBeGreaterThan(0);
   });
 
   it('keeps business results while excluding legal/report rows from rows and top HVOs', async () => {
@@ -932,6 +1027,11 @@ describe('V27-P0-REAL-01 visible region rows', () => {
         '    - button "Search" [ref=ref_search_button] (x=760,y=42)',
         '  - link "Practical workflow guide for solo teams" [ref=ref_result_1] (x=320,y=260) href="/items/1"',
         '  - link "Automation checklist for daily operations" [ref=ref_result_2] (x=640,y=280) href="/items/2"',
+        '  - link "Creator center" [ref=ref_creator] (x=200,y=540) href="/creator-center"',
+        '  - link "Account recovery" [ref=ref_recovery] (x=200,y=580) href="/account/recovery"',
+        '  - link "Contact us" [ref=ref_contact] (x=200,y=600) href="/contact-us"',
+        '  - link "Site map" [ref=ref_sitemap] (x=200,y=610) href="/site-map"',
+        '  - link "Download app" [ref=ref_download] (x=200,y=620) href="/download-app"',
         '  - link "Network rumor exposure desk" [ref=ref_report_1] (x=200,y=620) href="/report/rumors"',
         '  - link "网上有害信息举报专区" [ref=ref_report_2] (x=200,y=660) href="/report/harmful-info"',
         '  - link "Business license information" [ref=ref_license] (x=200,y=700) href="/legal/license.pdf"',
@@ -939,11 +1039,16 @@ describe('V27-P0-REAL-01 visible region rows', () => {
       refMap: [
         { ref: 'ref_result_1', selector: 'a[href="/items/1"]' },
         { ref: 'ref_result_2', selector: 'a[href="/items/2"]' },
+        { ref: 'ref_creator', selector: 'a[href="/creator-center"]' },
+        { ref: 'ref_recovery', selector: 'a[href="/account/recovery"]' },
+        { ref: 'ref_contact', selector: 'a[href="/contact-us"]' },
+        { ref: 'ref_sitemap', selector: 'a[href="/site-map"]' },
+        { ref: 'ref_download', selector: 'a[href="/download-app"]' },
         { ref: 'ref_report_1', selector: 'a[href="/report/rumors"]' },
         { ref: 'ref_report_2', selector: 'a[href="/report/harmful-info"]' },
         { ref: 'ref_license', selector: 'a[href="/legal/license.pdf"]' },
       ],
-      stats: { processed: 9, included: 9, durationMs: 6 },
+      stats: { processed: 14, included: 14, durationMs: 6 },
       viewport: { width: 1280, height: 720, dpr: 1 },
     });
 
@@ -964,7 +1069,7 @@ describe('V27-P0-REAL-01 visible region rows', () => {
       'Automation checklist for daily operations',
     ]);
     expect([...rowTitles, ...hvoLabels].join(' ')).not.toMatch(
-      /rumor|harmful|举报|license|Search query/i,
+      /rumor|harmful|举报|license|Search query|Creator center|Account recovery|Contact us|Site map|Download app/i,
     );
   });
 

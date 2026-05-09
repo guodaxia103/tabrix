@@ -74,7 +74,9 @@ const SEARCH_HINT_PATTERN =
   /\b(search(?: issues?)?|filter(?: issues?)?|find|labels?|milestone|assignee|query|new issue|issue entries)\b/i;
 const COMMIT_SHA_PATTERN = /\b[0-9a-f]{7,40}\b/i;
 const LOW_BUSINESS_SIGNAL_PATTERN =
-  /\b(footer|privacy|terms|copyright|license|legal|compliance|sponsors?|search query|feedback|topics?|report (?:abuse|harmful|center)|harmful information report|rumou?r exposure|exposure desk|internet report center|business license)\b|隐私|协议|版权|赞助|举报|有害信息|互联网举报|网络谣言|谣言曝光|许可证|备案|公网安备|网文|营业执照|违法不良|网信算备|ICP备?/i;
+  /\b(footer|privacy|terms|copyright|license|legal|compliance|sponsors?|sponsorable|search query|feedback|topics?|report (?:abuse|harmful|center)|harmful information report|rumou?r exposure|exposure desk|internet report center|business license|creator center|creator learning center|upload|upload video|video management|works? data|live data|ads?|advertising|account recovery|contact us|join us|site map|sitemap|friend links|about us|download app)\b|隐私|协议|版权|赞助|举报|有害信息|互联网举报|网络谣言|谣言曝光|许可证|备案|公网安备|网文|营业执照|违法不良|网信算备|ICP备?|发布视频(?:\/图文)?|发布图文|视频管理|作品数据|直播数据|创作者学习中心|创作中心|广告投放|账号找回|联系我们|加入我们|站点地图|友情链接|业务合作|^下载(?:app|应用|客户端)?$/i;
+const LOW_BUSINESS_HREF_PATTERN =
+  /(?:^|\/)(?:legal|privacy|terms|sponsors?|topics?|report|feedback|creator(?:-center)?|upload|video-management|ads?|advertising|account(?:-recovery)?|recover|recovery|contact(?:-us)?|about(?:-us)?|sitemap|site-map|friend-links?|download(?:-app)?|license)(?:\/|$|\?)/i;
 
 type RankedTaskMode = Exclude<ReadPageTaskMode, 'read'>;
 
@@ -155,13 +157,7 @@ function isLowBusinessSignalObject(label: string, href?: string): boolean {
   const normalizedHref = String(href || '').trim();
   if (!normalizedLabel) return true;
   if (LOW_BUSINESS_SIGNAL_PATTERN.test(normalizedLabel)) return true;
-  if (
-    /(?:^|\/)(?:legal|privacy|terms|sponsors?|topics?|report|feedback)(?:\/|$|\?)/i.test(
-      normalizedHref,
-    )
-  ) {
-    return true;
-  }
+  if (LOW_BUSINESS_HREF_PATTERN.test(normalizedHref)) return true;
   return false;
 }
 
