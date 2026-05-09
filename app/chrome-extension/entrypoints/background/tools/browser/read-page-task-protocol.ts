@@ -73,6 +73,8 @@ const MONITOR_HINT_PATTERN = /\b(summary|jobs?|logs?|annotations?|workflow run|r
 const SEARCH_HINT_PATTERN =
   /\b(search(?: issues?)?|filter(?: issues?)?|find|labels?|milestone|assignee|query|new issue|issue entries)\b/i;
 const COMMIT_SHA_PATTERN = /\b[0-9a-f]{7,40}\b/i;
+const LOW_BUSINESS_SIGNAL_PATTERN =
+  /\b(footer|privacy|terms|copyright|license|legal|compliance|sponsors?|search query|feedback|topics?|report (?:abuse|harmful|center)|harmful information report|rumou?r exposure|exposure desk|internet report center|business license)\b|隐私|协议|版权|赞助|举报|有害信息|互联网举报|网络谣言|谣言曝光|许可证|备案|公网安备|网文|营业执照|违法不良|网信算备|ICP备?/i;
 
 type RankedTaskMode = Exclude<ReadPageTaskMode, 'read'>;
 
@@ -144,6 +146,22 @@ function isTaskModeNoiseLabel(label: string): boolean {
   if (/^search or jump to/i.test(normalized)) return true;
   if (/^open copilot/i.test(normalized)) return true;
   if (/^skip to content$/i.test(normalized)) return true;
+  if (LOW_BUSINESS_SIGNAL_PATTERN.test(normalized)) return true;
+  return false;
+}
+
+function isLowBusinessSignalObject(label: string, href?: string): boolean {
+  const normalizedLabel = String(label || '').trim();
+  const normalizedHref = String(href || '').trim();
+  if (!normalizedLabel) return true;
+  if (LOW_BUSINESS_SIGNAL_PATTERN.test(normalizedLabel)) return true;
+  if (
+    /(?:^|\/)(?:legal|privacy|terms|sponsors?|topics?|report|feedback)(?:\/|$|\?)/i.test(
+      normalizedHref,
+    )
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -390,6 +408,7 @@ function rankScoredObjects(scored: readonly ScoredCandidateObject[]): ScoredCand
   const seenLabels = new Set<string>();
   const deduped: ScoredCandidateObject[] = [];
   for (const { item } of indexed) {
+    if (isLowBusinessSignalObject(item.label, item.href)) continue;
     const normalized = normalizeHighValueLabel(item.label);
     if (!normalized) continue;
     if (seenLabels.has(normalized)) continue;

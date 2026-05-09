@@ -159,6 +159,27 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.rejectedRegionReasonDistribution.footer_like_region).toBeGreaterThan(0);
   });
 
+  it('rejects legal and report-only links as non-business rows', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '- link "Network rumor exposure desk" [ref=ref_report_1] (x=200,y=620) href="/report/rumors"',
+        '- link "Online harmful information report" [ref=ref_report_2] (x=200,y=660) href="/report/harmful"',
+        '- link "互联网举报中心" [ref=ref_report_3] (x=200,y=700) href="/report"',
+        '- link "网上有害信息举报专区" [ref=ref_report_4] (x=200,y=740) href="/report/harmful-info"',
+        '- link "增值电信业务经营许可证" [ref=ref_license] (x=200,y=780) href="/legal/license.pdf"',
+        '- generic "公网安备 00000000000000" [ref=ref_police] (x=200,y=820)',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(false);
+    expect(rows.rowCount).toBe(0);
+    expect(rows.visibleDomRowsCandidateCount).toBe(0);
+    expect(rows.visibleDomRowsSelectedCount).toBe(0);
+    expect(rows.visibleRegionRowsRejectedReason).toBe('footer_like_region');
+    expect(rows.footerLikeRejectedCount).toBeGreaterThan(0);
+    expect(rows.rejectedRegionReasonDistribution.footer_like_region).toBeGreaterThan(0);
+  });
+
   it('rejects navigation and sidebar-only regions with closed evidence', () => {
     const rows = extractVisibleRegionRows({
       pageContent: [
@@ -849,6 +870,102 @@ describe('V27-P0-REAL-01 visible region rows', () => {
       visibleRegionRowsUsed: false,
       rowCount: 0,
     });
+  });
+
+  it('does not report ready when report/legal links are the only row-like candidates', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5307,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://example.test/search',
+      title: 'Search',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [
+        '- link "Network rumor exposure desk" [ref=ref_report_1] (x=200,y=620) href="/report/rumors"',
+        '- link "Online harmful information report" [ref=ref_report_2] (x=200,y=660) href="/report/harmful"',
+        '- link "网上有害信息举报专区" [ref=ref_report_3] (x=200,y=700) href="/report/harmful-info"',
+      ].join('\n'),
+      refMap: [
+        { ref: 'ref_report_1', selector: 'a[href="/report/rumors"]' },
+        { ref: 'ref_report_2', selector: 'a[href="/report/harmful"]' },
+        { ref: 'ref_report_3', selector: 'a[href="/report/harmful-info"]' },
+      ],
+      stats: { processed: 3, included: 3, durationMs: 6 },
+      viewport: { width: 1280, height: 720, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+    expect(result.isError).toBe(false);
+    expect(payload).toMatchObject({
+      readinessVerdict: 'blocked',
+      readinessReason: 'footer_or_navigation_only',
+      rowCount: 0,
+      visibleRegionRowsUsed: false,
+      visibleRegionRowsRejectedReason: 'footer_like_region',
+    });
+    expect(payload.visibleDomRowsCandidateCount).toBe(0);
+    expect(payload.visibleRegionRows.rows).toEqual([]);
+  });
+
+  it('keeps business results while excluding legal/report rows from rows and top HVOs', async () => {
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5308,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://example.test/search',
+      title: 'Search results',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [
+        '- generic "Search page" [ref=ref_root] (x=0,y=0)',
+        '  - search "Search controls" [ref=ref_search] (x=420,y=42)',
+        '    - searchbox "Search query" [ref=ref_query] (x=420,y=42)',
+        '    - button "Search" [ref=ref_search_button] (x=760,y=42)',
+        '  - link "Practical workflow guide for solo teams" [ref=ref_result_1] (x=320,y=260) href="/items/1"',
+        '  - link "Automation checklist for daily operations" [ref=ref_result_2] (x=640,y=280) href="/items/2"',
+        '  - link "Network rumor exposure desk" [ref=ref_report_1] (x=200,y=620) href="/report/rumors"',
+        '  - link "网上有害信息举报专区" [ref=ref_report_2] (x=200,y=660) href="/report/harmful-info"',
+        '  - link "Business license information" [ref=ref_license] (x=200,y=700) href="/legal/license.pdf"',
+      ].join('\n'),
+      refMap: [
+        { ref: 'ref_result_1', selector: 'a[href="/items/1"]' },
+        { ref: 'ref_result_2', selector: 'a[href="/items/2"]' },
+        { ref: 'ref_report_1', selector: 'a[href="/report/rumors"]' },
+        { ref: 'ref_report_2', selector: 'a[href="/report/harmful-info"]' },
+        { ref: 'ref_license', selector: 'a[href="/legal/license.pdf"]' },
+      ],
+      stats: { processed: 9, included: 9, durationMs: 6 },
+      viewport: { width: 1280, height: 720, dpr: 1 },
+    });
+
+    const result = await readPageTool.execute({ mode: 'compact' });
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    const rowTitles = payload.visibleRegionRows.rows.map((row: { title: string }) => row.title);
+    const hvoLabels = payload.highValueObjects.map((item: { label: string }) => item.label);
+
+    expect(result.isError).toBe(false);
+    expect(payload).toMatchObject({
+      kind: 'dom_region_rows',
+      readinessVerdict: 'ready',
+      rowCount: 2,
+      visibleRegionRowsUsed: true,
+    });
+    expect(rowTitles).toEqual([
+      'Practical workflow guide for solo teams',
+      'Automation checklist for daily operations',
+    ]);
+    expect([...rowTitles, ...hvoLabels].join(' ')).not.toMatch(
+      /rumor|harmful|举报|license|Search query/i,
+    );
   });
 
   it('emits empty readiness evidence for empty pages without rows', async () => {

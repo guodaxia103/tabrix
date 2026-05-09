@@ -74,7 +74,11 @@ const CONTROL_ROLES = new Set([
 ]);
 
 const SHELL_TEXT_PATTERN =
-  /\b(filter|filters?|sort|footer|navigation|menu|home|login|sign in|submit|search|all|more|settings|privacy|terms|help|sponsor|sponsors?|skip to content|copyright)\b|筛选|过滤|排序|首页|登录|搜索|赞助|隐私|协议|帮助|创作中心|放映厅|小游戏|业务合作|营业执照|公网安备|网文|ICP备|备案|许可证|许可|网络交易服务|医疗器械/i;
+  /\b(filter|filters?|sort|footer|navigation|menu|home|login|sign in|submit|search|all|more|settings|privacy|terms|help|sponsor|sponsors?|skip to content|copyright|feedback|sidebar|topics?)\b|筛选|过滤|排序|首页|登录|搜索|赞助|隐私|协议|帮助|创作中心|放映厅|小游戏|业务合作|营业执照|公网安备|网文|ICP备|备案|许可证|许可|网络交易服务|医疗器械/i;
+const FOOTER_LEGAL_REPORT_PATTERN =
+  /\b(footer|privacy|terms|copyright|license|legal|compliance|sponsors?|report (?:abuse|harmful|center)|harmful information report|rumou?r exposure|exposure desk|internet report center|business license)\b|隐私|协议|版权|赞助|举报|有害信息|互联网举报|网络谣言|谣言曝光|许可证|备案|公网安备|网文|营业执照|违法不良|网信算备|ICP备?/i;
+const SEARCH_CONTROL_TEXT_PATTERN =
+  /\b(search results?|search query|query|filters?|sort|feedback|how can we improve|topics?|sponsors?)\b|搜索结果|搜索词|筛选|过滤|排序|反馈|话题|赞助/i;
 const META_PATTERN =
   /\b(\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|m|min|mins|minute|minutes|ago)|yesterday|today|updated|posted|views?|\d{1,2}:\d{2})\b|\d{4}年\d{1,2}月\d{1,2}日|刚刚|分钟前|小时前|昨天|今天|发布|更新/i;
 const INTERACTION_PATTERN =
@@ -687,6 +691,8 @@ function isLowValueShellText(value: string): boolean {
   if (normalized.length <= 1) return true;
   if (/^image:/i.test(normalized)) return true;
   if (/^\d+(?:\.\d+)?(?:万|k|m)?$/i.test(normalized)) return true;
+  if (FOOTER_LEGAL_REPORT_PATTERN.test(normalized)) return true;
+  if (SEARCH_CONTROL_TEXT_PATTERN.test(normalized) && normalized.length < 48) return true;
   return SHELL_TEXT_PATTERN.test(normalized) && normalized.length < 24;
 }
 
@@ -712,9 +718,7 @@ function isTagLikeLink(node: ParsedVisibleNode): boolean {
 }
 
 function isFooterLikeText(value: string): boolean {
-  return /\b(footer|privacy|terms|copyright|license|legal|help|sponsor|sponsors?)\b|隐私|协议|版权|赞助|营业执照|公网安备|网文|ICP备|备案/i.test(
-    value,
-  );
+  return FOOTER_LEGAL_REPORT_PATTERN.test(value);
 }
 
 function isNavigationLikeText(value: string): boolean {
