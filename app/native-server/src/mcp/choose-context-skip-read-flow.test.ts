@@ -966,6 +966,166 @@ describe('V26-03 choose_context → chrome_read_page skip-read execution loop', 
     expect(ctx.targetRefsSeen.has('ref_result_2')).toBe(true);
   });
 
+  it('V27-REAL-BLOCKER-C2: GitHub search API unavailable still returns complete repo DOM rows without pageContent', async () => {
+    markBridgeReady();
+    const completeSpy = jest.spyOn(sessionManager, 'completeStep');
+    const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:43');
+    ctx.noteUrlChange(
+      'https://github.com/search?q=ACP&type=repositories&s=stars&o=desc',
+      'search_list',
+    );
+    ctx.noteChooseContextDecision({
+      sourceRoute: 'knowledge_supported_read',
+      chosenLayer: 'L0+L1+L2',
+      fullReadTokenEstimate: 12000,
+      replayCandidate: null,
+      apiCapability: {
+        available: true,
+        family: 'github_search_repositories',
+        dataPurpose: 'search_list',
+        params: { query: 'ACP', sort: 'stars', order: 'desc' },
+      },
+    });
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 403,
+      headers: { get: jest.fn().mockReturnValue('application/json') },
+      json: jest.fn().mockResolvedValue({ message: 'forbidden' }),
+    } as never);
+    mockBridgeRoundTrip(
+      JSON.stringify({
+        kind: 'page',
+        pageContent: 'full GitHub search page should stay hidden when compact rows are usable',
+        visibleRegionRows: {
+          sourceDataSource: 'dom_region_rows',
+          rows: [
+            {
+              rowId: 'github_search_row_1',
+              title: 'aaif-goose/goose',
+              primaryText: 'Local, extensible, open source AI agent',
+              secondaryText: 'TypeScript',
+              summary: 'aaif-goose/goose | TypeScript | 45k | May 11, 2026, 2:09 AM UTC',
+              metaText: 'May 11, 2026, 2:09 AM UTC',
+              interactionText: '45k',
+              visibleTextFields: [
+                'aaif-goose/goose',
+                'TypeScript',
+                '45k',
+                'May 11, 2026, 2:09 AM UTC',
+              ],
+              targetRef: 'ref_repo_1_link',
+              targetRefCoverageRate: 0.99,
+              boundingBox: { x: 432, y: 153, width: 520, height: 110 },
+              regionId: 'github_search_results',
+              sourceRegion: 'github_search_results',
+              confidence: 0.86,
+              qualityReasons: [
+                'target_ref_available',
+                'multi_text_fields',
+                'metadata_or_interaction_present',
+              ],
+            },
+            {
+              rowId: 'github_search_row_2',
+              title: 'iOfficeAI/AionUi',
+              primaryText: 'Agent UI toolkit',
+              secondaryText: 'JavaScript',
+              summary: 'iOfficeAI/AionUi | JavaScript | 24.3k | May 11, 2026, 2:40 AM UTC',
+              metaText: 'May 11, 2026, 2:40 AM UTC',
+              interactionText: '24.3k',
+              visibleTextFields: [
+                'iOfficeAI/AionUi',
+                'JavaScript',
+                '24.3k',
+                'May 11, 2026, 2:40 AM UTC',
+              ],
+              targetRef: 'ref_repo_2_link',
+              targetRefCoverageRate: 0.99,
+              boundingBox: { x: 427, y: 311, width: 520, height: 110 },
+              regionId: 'github_search_results',
+              sourceRegion: 'github_search_results',
+              confidence: 0.84,
+              qualityReasons: [
+                'target_ref_available',
+                'multi_text_fields',
+                'metadata_or_interaction_present',
+              ],
+            },
+          ],
+          rowCount: 2,
+          visibleRegionRowsUsed: true,
+          visibleRegionRowsRejectedReason: null,
+          sourceRegion: 'github_search_results',
+          rowExtractionConfidence: 0.86,
+          cardExtractorUsed: true,
+          cardPatternConfidence: 0.84,
+          cardRowsCount: 2,
+          rowOrder: 'visual_order',
+          targetRefCoverageRate: 0.99,
+          regionQualityScore: 0.84,
+          visibleDomRowsCandidateCount: 2,
+          visibleDomRowsSelectedCount: 2,
+          lowValueRegionRejectedCount: 0,
+          footerLikeRejectedCount: 0,
+          navigationLikeRejectedCount: 0,
+          targetRefCoverageRejectedCount: 0,
+          rejectedRegionReasonDistribution: {
+            low_value_region: 0,
+            footer_like_region: 0,
+          },
+        },
+      }),
+    );
+
+    const result = await handleToolCall('chrome_read_page', {
+      requestedLayer: 'L0+L1+L2',
+      tabId: 43,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(String(result.content[0].text)) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      kind: 'dom_region_rows',
+      sourceDataSource: 'dom_region_rows',
+      visibleRegionRowsUsed: true,
+      rowCount: 2,
+      apiRowsUnavailableReason: 'api_unavailable',
+      fallbackCause: null,
+      fallbackUsed: 'none',
+    });
+    expect(payload).not.toHaveProperty('kind', 'api_rows');
+    expect(payload).not.toHaveProperty('pageContent');
+    const rows = payload.rows as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      title: 'aaif-goose/goose',
+      secondaryText: 'TypeScript',
+      interactionText: '45k',
+      metaText: 'May 11, 2026, 2:09 AM UTC',
+      targetRef: 'ref_repo_1_link',
+    });
+    expect(rows[1]).toMatchObject({
+      title: 'iOfficeAI/AionUi',
+      secondaryText: 'JavaScript',
+      interactionText: '24.3k',
+      metaText: 'May 11, 2026, 2:40 AM UTC',
+      targetRef: 'ref_repo_2_link',
+    });
+    const operationLog = takeLatestReadPageOperationLog(completeSpy);
+    expect(operationLog).toMatchObject({
+      selectedDataSource: 'dom_region_rows',
+      resultKind: 'dom_region_rows',
+      success: true,
+      metadata: {
+        apiRowsUnavailableReason: 'api_unavailable',
+        visibleRegionRowsUsed: 'true',
+        visibleRegionRowCount: '2',
+      },
+    });
+    expect(ctx.lastReadSource).toBe('dom_region_rows');
+    expect(ctx.targetRefsSeen.has('ref_repo_1_link')).toBe(true);
+    expect(ctx.targetRefsSeen.has('ref_repo_2_link')).toBe(true);
+  });
+
   it('V27-P0-REAL closeout: available API rows are not preempted by stored visible rows', async () => {
     markBridgeReady();
     const ctx = sessionManager.getOrCreateExternalTaskContext('mcp:auto:tab:42');
