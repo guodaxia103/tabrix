@@ -4,6 +4,9 @@ import * as fs from 'fs';
 import { getChromeMcpUrl } from '../constant';
 import { COMMAND_NAME } from './constant';
 
+export const DEFAULT_MCP_TOOLS_TIMEOUT_MS = 15_000;
+export const DEFAULT_MCP_CALL_TIMEOUT_MS = 120_000;
+
 export interface McpInspectOptions {
   json?: boolean;
   url?: string;
@@ -37,7 +40,10 @@ function resolveFetch(): FetchFn | null {
 }
 
 function stringifyError(err: unknown): string {
-  if (err instanceof Error) return err.message;
+  if (err instanceof Error) {
+    if (err.name === 'AbortError') return 'Request timed out or was aborted';
+    return err.message;
+  }
   return String(err);
 }
 
@@ -282,7 +288,7 @@ export async function runMcpTools(options: McpInspectOptions = {}): Promise<numb
   const client = new StreamableHttpMcpClient(
     options.url || getChromeMcpUrl(),
     buildDefaultHeaders(options.authToken),
-    options.timeoutMs ?? 15_000,
+    options.timeoutMs ?? DEFAULT_MCP_TOOLS_TIMEOUT_MS,
     fetchFn,
   );
 
@@ -324,7 +330,7 @@ export async function runMcpCall(toolName: string, options: McpCallOptions = {})
   const client = new StreamableHttpMcpClient(
     options.url || getChromeMcpUrl(),
     buildDefaultHeaders(options.authToken),
-    options.timeoutMs ?? 30_000,
+    options.timeoutMs ?? DEFAULT_MCP_CALL_TIMEOUT_MS,
     fetchFn,
   );
 
@@ -341,7 +347,9 @@ export async function runMcpCall(toolName: string, options: McpCallOptions = {})
 
     return result?.isError ? 1 : 0;
   } catch (error) {
-    process.stderr.write(`MCP call failed: ${stringifyError(error)}\n`);
+    process.stderr.write(
+      `MCP call failed after ${options.timeoutMs ?? DEFAULT_MCP_CALL_TIMEOUT_MS}ms: ${stringifyError(error)}\n`,
+    );
     process.stderr.write(
       `Hint: verify the runtime with "${COMMAND_NAME} status" and "${COMMAND_NAME} doctor --fix"\n`,
     );

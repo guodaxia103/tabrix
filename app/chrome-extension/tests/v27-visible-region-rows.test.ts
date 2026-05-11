@@ -129,7 +129,11 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     ]);
     for (const row of rows.rows) {
       expect(row.targetRef).toMatch(/^ref_repo_\d+_link$/);
-      expect([row.metaText, row.interactionText].filter(Boolean).length).toBeGreaterThanOrEqual(1);
+      expect(row.metaText).toMatch(/^Updated /);
+      expect(row.interactionText).toMatch(/^\d+(?:\.\d+)?k?$/);
+      expect(row.visibleTextFields).toEqual(
+        expect.arrayContaining([row.title, row.metaText, row.interactionText]),
+      );
     }
     expect(rows.rows.flatMap((row) => row.visibleTextFields)).not.toEqual(
       expect.arrayContaining(['browser', 'automation', 'agent', 'benchmark', 'Sponsor', 'Privacy']),

@@ -17,7 +17,12 @@ import { runReport } from './scripts/report';
 import { runStatus } from './scripts/status';
 import { runConfig } from './scripts/config';
 import { runClients } from './scripts/clients';
-import { runMcpCall, runMcpTools } from './scripts/mcp-inspect';
+import {
+  DEFAULT_MCP_CALL_TIMEOUT_MS,
+  DEFAULT_MCP_TOOLS_TIMEOUT_MS,
+  runMcpCall,
+  runMcpTools,
+} from './scripts/mcp-inspect';
 import { runSmoke } from './scripts/smoke';
 import { runStdioSmoke } from './scripts/stdio-smoke';
 import { runSetup } from './scripts/setup';
@@ -386,7 +391,7 @@ mcpCommand
   .option('--json', 'Output tools as JSON')
   .option('--url <mcp-url>', 'Target MCP endpoint URL (default: current local Tabrix MCP URL)')
   .option('--auth-token <token>', 'Bearer token for remote MCP endpoints')
-  .option('--timeout <ms>', 'Request timeout in milliseconds', '15000')
+  .option('--timeout <ms>', 'Request timeout in milliseconds', String(DEFAULT_MCP_TOOLS_TIMEOUT_MS))
   .action(async (options) => {
     try {
       const exitCode = await runMcpTools({
@@ -416,7 +421,7 @@ mcpCommand
   .option('--json', 'Output result as JSON')
   .option('--url <mcp-url>', 'Target MCP endpoint URL (default: current local Tabrix MCP URL)')
   .option('--auth-token <token>', 'Bearer token for remote MCP endpoints')
-  .option('--timeout <ms>', 'Request timeout in milliseconds', '30000')
+  .option('--timeout <ms>', 'Request timeout in milliseconds', String(DEFAULT_MCP_CALL_TIMEOUT_MS))
   .action(async (toolName: string, options) => {
     try {
       const exitCode = await runMcpCall(toolName, {

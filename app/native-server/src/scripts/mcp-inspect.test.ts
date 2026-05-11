@@ -228,6 +228,37 @@ describe('mcp inspect script', () => {
     expect(String(thirdCall[1].body)).toContain('"windowId":123');
   });
 
+  test('uses the 120s tool-call timeout by default to match extension bridge calls', async () => {
+    const abortError = Object.assign(new Error('This operation was aborted'), {
+      name: 'AbortError',
+    });
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        createResponse({
+          headers: { 'mcp-session-id': 'session-timeout-default' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            result: { protocolVersion: '2025-03-26' },
+          }),
+        }),
+      )
+      .mockResolvedValueOnce(createResponse({ body: '' }))
+      .mockRejectedValueOnce(abortError)
+      .mockResolvedValueOnce(createResponse({ status: 204 }));
+    globalThis.fetch = fetchMock as unknown as FetchMock;
+
+    const code = await runMcpCall('chrome_close_tabs', {
+      args: '{"tabIds":[1850319377]}',
+    });
+
+    expect(code).toBe(1);
+    const errorOutput = stderrSpy.mock.calls.map(([chunk]) => String(chunk)).join('');
+    expect(errorOutput).toContain('MCP call failed after 120000ms');
+    expect(errorOutput).toContain('Request timed out or was aborted');
+  });
+
   test('supports --arg style key=value entries', async () => {
     const fetchMock = jest
       .fn()
