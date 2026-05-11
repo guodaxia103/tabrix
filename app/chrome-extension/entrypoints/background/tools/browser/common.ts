@@ -22,20 +22,33 @@ function buildNavigationReadinessFields(input: {
   settled?: boolean;
   readyState?: string | null;
   finalUrl?: string | null;
+  previousUrl?: string | null;
   status?: string | null;
 }) {
   const finalUrl = input.finalUrl || '';
+  const hasDocumentUrl = finalUrl.length > 0 && finalUrl !== 'about:blank';
+  const previousUrl = input.previousUrl || '';
+  const staleAfterAttempt =
+    previousUrl.length > 0 &&
+    normalizeComparableUrl(previousUrl) === normalizeComparableUrl(finalUrl);
+  const canAttemptStructuredRead =
+    hasDocumentUrl &&
+    !staleAfterAttempt &&
+    (input.readyState === 'interactive' || input.readyState === 'complete');
   const pageReadable =
     input.settled === true &&
     input.readyState === 'complete' &&
-    finalUrl.length > 0 &&
-    finalUrl !== 'about:blank';
+    hasDocumentUrl &&
+    !staleAfterAttempt;
 
   return {
     pageReadable,
+    canAttemptStructuredRead,
     nextStepHint: pageReadable
       ? 'safe_to_read_page'
-      : 'navigation_not_readable; avoid chrome_read_page until navigation settles or choose another path',
+      : canAttemptStructuredRead
+        ? 'navigation_interactive; structured_read_may_succeed'
+        : 'navigation_not_readable; avoid chrome_read_page until navigation reaches a document',
   };
 }
 
@@ -247,6 +260,13 @@ class NavigateTool extends BaseBrowserToolExecutor {
                 settleReason: settleResult.reason,
                 waitedMs: settleResult.waitedMs,
                 readyState: settleResult.readyState,
+                ...buildNavigationReadinessFields({
+                  settled: settleResult.settled,
+                  readyState: settleResult.readyState,
+                  finalUrl: updatedTab.url,
+                  previousUrl,
+                  status: updatedTab.status,
+                }),
               }),
             },
           ],
@@ -384,6 +404,13 @@ class NavigateTool extends BaseBrowserToolExecutor {
                 settleReason: settleResult.reason,
                 waitedMs: settleResult.waitedMs,
                 readyState: settleResult.readyState,
+                ...buildNavigationReadinessFields({
+                  settled: settleResult.settled,
+                  readyState: settleResult.readyState,
+                  finalUrl: updatedTab.url,
+                  previousUrl,
+                  status: updatedTab.status,
+                }),
               }),
             },
           ],

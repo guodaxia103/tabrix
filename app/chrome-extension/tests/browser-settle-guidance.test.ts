@@ -88,7 +88,46 @@ describe('browser settle guidance', () => {
       waitedMs: 240,
       readyState: 'complete',
       pageReadable: true,
+      canAttemptStructuredRead: true,
       nextStepHint: 'safe_to_read_page',
+    });
+  });
+
+  it('allows structured reads when navigation is interactive with a document URL', async () => {
+    vi.spyOn(navigateTool as any, 'tryGetTab').mockResolvedValue(null);
+    vi.spyOn(navigateTool as any, 'waitForTabSettled').mockResolvedValue({
+      tab: {
+        id: 20,
+        windowId: 1,
+        active: true,
+        status: 'loading',
+        url: 'https://github.com/search?type=repositories&q=ACP&s=stars&o=desc',
+        title: 'Repository search results',
+      },
+      settled: false,
+      timedOut: true,
+      reason: 'timeout',
+      waitedMs: 8000,
+      readyState: 'interactive',
+    });
+
+    const result = await navigateTool.execute({
+      url: 'https://github.com/search?type=repositories&q=ACP&s=stars&o=desc',
+    });
+
+    expect(result.isError).toBe(false);
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    expect(payload).toMatchObject({
+      success: true,
+      finalUrl: 'https://github.com/search?type=repositories&q=ACP&s=stars&o=desc',
+      status: 'loading',
+      settled: false,
+      settleReason: 'timeout',
+      waitedMs: 8000,
+      readyState: 'interactive',
+      pageReadable: false,
+      canAttemptStructuredRead: true,
+      nextStepHint: 'navigation_interactive; structured_read_may_succeed',
     });
   });
 
@@ -125,8 +164,118 @@ describe('browser settle guidance', () => {
       waitedMs: 8000,
       readyState: null,
       pageReadable: false,
+      canAttemptStructuredRead: false,
       nextStepHint:
-        'navigation_not_readable; avoid chrome_read_page until navigation settles or choose another path',
+        'navigation_not_readable; avoid chrome_read_page until navigation reaches a document',
+    });
+  });
+
+  it('returns structured-read guidance after explicit tab navigation times out at interactive', async () => {
+    vi.mocked(chrome.tabs.query).mockResolvedValue([
+      {
+        id: 10,
+        windowId: 1,
+        active: true,
+        status: 'complete',
+        url: 'https://github.com/example/project',
+        title: 'example/project',
+      } as chrome.tabs.Tab,
+    ]);
+    vi.spyOn(navigateTool as any, 'tryGetTab').mockResolvedValue({
+      id: 10,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://github.com/example/project',
+      title: 'example/project',
+    } as chrome.tabs.Tab);
+    vi.spyOn(navigateTool as any, 'waitForTabSettled').mockResolvedValue({
+      tab: {
+        id: 10,
+        windowId: 1,
+        active: true,
+        status: 'loading',
+        url: 'https://github.com/search?type=repositories&q=ACP&s=stars&o=desc',
+        title: 'Repository search results',
+      },
+      settled: false,
+      timedOut: true,
+      reason: 'timeout',
+      waitedMs: 8000,
+      readyState: 'interactive',
+    });
+
+    const result = await navigateTool.execute({
+      tabId: 10,
+      url: 'https://github.com/search?type=repositories&q=ACP&s=stars&o=desc',
+    });
+
+    expect(result.isError).toBe(false);
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    expect(payload).toMatchObject({
+      success: true,
+      usedExistingTab: true,
+      navigatedExplicitTab: true,
+      finalUrl: 'https://github.com/search?type=repositories&q=ACP&s=stars&o=desc',
+      settled: false,
+      readyState: 'interactive',
+      pageReadable: false,
+      canAttemptStructuredRead: true,
+      nextStepHint: 'navigation_interactive; structured_read_may_succeed',
+    });
+  });
+
+  it('blocks structured-read guidance when explicit navigation is still on the previous URL', async () => {
+    vi.mocked(chrome.tabs.query).mockResolvedValue([
+      {
+        id: 10,
+        windowId: 1,
+        active: true,
+        status: 'complete',
+        url: 'https://github.com/example/project',
+        title: 'example/project',
+      } as chrome.tabs.Tab,
+    ]);
+    vi.spyOn(navigateTool as any, 'tryGetTab').mockResolvedValue({
+      id: 10,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://github.com/example/project',
+      title: 'example/project',
+    } as chrome.tabs.Tab);
+    vi.spyOn(navigateTool as any, 'waitForTabSettled').mockResolvedValue({
+      tab: {
+        id: 10,
+        windowId: 1,
+        active: true,
+        status: 'loading',
+        url: 'https://github.com/example/project',
+        title: 'example/project',
+      },
+      settled: false,
+      timedOut: true,
+      reason: 'timeout',
+      waitedMs: 8000,
+      readyState: 'complete',
+    });
+
+    const result = await navigateTool.execute({
+      tabId: 10,
+      url: 'https://github.com/search?type=repositories&q=ACP&s=stars&o=desc',
+    });
+
+    expect(result.isError).toBe(false);
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    expect(payload).toMatchObject({
+      success: true,
+      finalUrl: 'https://github.com/example/project',
+      settled: false,
+      readyState: 'complete',
+      pageReadable: false,
+      canAttemptStructuredRead: false,
+      nextStepHint:
+        'navigation_not_readable; avoid chrome_read_page until navigation reaches a document',
     });
   });
 
