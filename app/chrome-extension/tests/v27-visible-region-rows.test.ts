@@ -140,6 +140,71 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     );
   });
 
+  it('groups sparse GitHub-like repo links with nearby metadata rows', () => {
+    const rows = extractVisibleRegionRows({
+      sourceRegion: 'viewport',
+      url: 'https://github.com/search?q=ACP&type=repositories&s=stars&o=desc',
+      title: 'Repository search results',
+      viewport: { width: 1280, height: 720, dpr: 1 },
+      pageContent: [
+        '- main "Repository search results" [ref=ref_main] (x=640,y=370)',
+        '  - generic "Repository result" [ref=ref_repo_1] (x=432,y=153)',
+        '    - link "aaif-goose/goose" [ref=ref_repo_1_link] (x=432,y=153) href="/aaif-goose/goose"',
+        '  - link "45k" [ref=ref_star_1] (x=524,y=239) href="/aaif-goose/goose/stargazers"',
+        '  - generic "May 11, 2026, 2:09 AM UTC" [ref=ref_updated_1] (x=560,y=239)',
+        '  - generic "Repository result" [ref=ref_repo_2] (x=427,y=311)',
+        '    - link "iOfficeAI/AionUi" [ref=ref_repo_2_link] (x=427,y=311) href="/iOfficeAI/AionUi"',
+        '  - link "24.3k" [ref=ref_star_2] (x=561,y=397) href="/iOfficeAI/AionUi/stargazers"',
+        '  - generic "May 11, 2026, 2:40 AM UTC" [ref=ref_updated_2] (x=610,y=397)',
+        '  - generic "Repository result" [ref=ref_repo_3] (x=482,y=469)',
+        '    - link "olimorris/codecompanion.nvim" [ref=ref_repo_3_link] (x=482,y=469) href="/olimorris/codecompanion.nvim"',
+        '  - link "6.6k" [ref=ref_star_3] (x=516,y=555) href="/olimorris/codecompanion.nvim/stargazers"',
+        '  - generic "May 10, 2026, 10:05 AM UTC" [ref=ref_updated_3] (x=552,y=555)',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rowCount).toBe(3);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      'aaif-goose/goose',
+      'iOfficeAI/AionUi',
+      'olimorris/codecompanion.nvim',
+    ]);
+    for (const row of rows.rows) {
+      expect(row.targetRef).toMatch(/^ref_repo_\d+_link$/);
+      expect(row.metaText).toMatch(/2026/);
+      expect(row.interactionText).toMatch(/^\d+(?:\.\d+)?k?$/);
+      expect(row.visibleTextFields).toEqual(
+        expect.arrayContaining([row.title, row.metaText, row.interactionText]),
+      );
+    }
+    expect(rows.rows.map((row) => row.title).join(' ')).not.toMatch(/UTC/);
+  });
+
+  it('does not promote meta-only timestamp fragments as standalone rows', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '- generic "Search results" [ref=ref_main] (x=640,y=370)',
+        '  - generic "Repository result" [ref=ref_repo] (x=348,y=153)',
+        '    - link "example/project" [ref=ref_repo_link] (x=348,y=153) href="/example/project"',
+        '    - generic "Example repo summary" [ref=ref_desc] (x=348,y=190)',
+        '    - link "120 stars" [ref=ref_stars] (x=420,y=239) href="/example/project/stargazers"',
+        '    - generic "Updated" [ref=ref_updated_label] (x=500,y=239)',
+        '  - generic "May 11, 2026, 2:09 AM UTC" [ref=ref_updated_time] (x=560,y=239)',
+        '  - generic "Repository result" [ref=ref_repo_2] (x=348,y=311)',
+        '    - link "example/toolkit" [ref=ref_repo_2_link] (x=348,y=311) href="/example/toolkit"',
+        '    - generic "Toolkit summary" [ref=ref_desc_2] (x=348,y=348)',
+        '    - link "88 stars" [ref=ref_stars_2] (x=420,y=397) href="/example/toolkit/stargazers"',
+        '    - generic "Updated" [ref=ref_updated_label_2] (x=500,y=397)',
+        '  - generic "Apr 21, 2026, 12:16 AM UTC" [ref=ref_updated_time_2] (x=560,y=397)',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rows.map((row) => row.title)).toEqual(['example/project', 'example/toolkit']);
+    expect(rows.rows.map((row) => row.title).join(' ')).not.toMatch(/UTC/);
+  });
+
   it('does not turn footer, filters, or query chips into rows', () => {
     const rows = extractVisibleRegionRows({
       pageContent: [

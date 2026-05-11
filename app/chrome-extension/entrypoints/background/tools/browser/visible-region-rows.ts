@@ -136,6 +136,7 @@ export function extractVisibleRegionRows(input: {
   const candidateRows = orderedGroups
     .map((group) => buildRow(group, searchShellContext))
     .filter((row): row is VisibleRegionRow => row !== null)
+    .filter((row) => !isMetaOnlyRow(row))
     .slice(0, Math.max(1, Math.floor(input.maxRows ?? 20)));
   const candidateTargetRefCoverageRate = candidateRows.length
     ? clampConfidence(candidateRows.filter((row) => row.targetRef).length / candidateRows.length)
@@ -503,6 +504,7 @@ function buildCandidateGroups(
       if (candidate.depth <= node.depth) break;
       children.push(candidate);
     }
+    children.push(...nearbySiblingMetadataNodes(nodes, index, node, children, searchShellContext));
     if (children.length < 2 && !node.href) {
       rejectedReasonDistribution.single_isolated_text += 1;
       continue;
@@ -531,7 +533,7 @@ function buildCandidateGroups(
   for (const node of standaloneResultLinks.length >= 2 ? standaloneResultLinks : []) {
     groups.push({
       container: node,
-      nodes: [node],
+      nodes: buildStandaloneResultLinkGroupNodes(nodes, node, searchShellContext),
       sourceRegion,
       regionId: node.ref || `${sourceRegion}_${groups.length + 1}`,
     });
@@ -541,6 +543,51 @@ function buildCandidateGroups(
     groups: dedupeOverlappingGroups(groups, searchShellContext),
     rejectedReasonDistribution,
   };
+}
+
+function nearbySiblingMetadataNodes(
+  nodes: ParsedVisibleNode[],
+  containerIndex: number,
+  container: ParsedVisibleNode,
+  currentChildren: ParsedVisibleNode[],
+  searchShellContext: SearchShellContext,
+): ParsedVisibleNode[] {
+  const existingRefs = new Set(
+    currentChildren
+      .map((node) => node.ref)
+      .filter((ref): ref is string => typeof ref === 'string' && ref.length > 0),
+  );
+  const titleNode = currentChildren.find((node) =>
+    isStandaloneResultLink(node, searchShellContext),
+  );
+  if (!titleNode || !titleNode.href || container.y === null) return [];
+
+  const result: ParsedVisibleNode[] = [];
+  const titleHref = titleNode.href.toLowerCase();
+  for (let cursor = containerIndex + currentChildren.length; cursor < nodes.length; cursor += 1) {
+    const candidate = nodes[cursor];
+    if (candidate.depth < container.depth) break;
+    if (candidate.y !== null && Math.abs(candidate.y - container.y) > 180) break;
+    if (candidate.ref && existingRefs.has(candidate.ref)) continue;
+    if (
+      candidate.depth === container.depth &&
+      isCandidateContainer(candidate) &&
+      !META_PATTERN.test(candidate.name)
+    ) {
+      break;
+    }
+    if (
+      isInteractionNode(candidate) &&
+      candidate.href &&
+      candidate.href.toLowerCase().startsWith(titleHref)
+    ) {
+      result.push(candidate);
+    } else if (META_PATTERN.test(candidate.name)) {
+      result.push(candidate);
+    }
+    if (result.length >= 4) break;
+  }
+  return result;
 }
 
 function isStandaloneResultLink(
@@ -571,6 +618,31 @@ function isStandaloneResultLink(
   }
   if (isUtilityHref(href)) return false;
   return true;
+}
+
+function buildStandaloneResultLinkGroupNodes(
+  nodes: ParsedVisibleNode[],
+  titleNode: ParsedVisibleNode,
+  searchShellContext: SearchShellContext,
+): ParsedVisibleNode[] {
+  const startIndex = nodes.indexOf(titleNode);
+  if (startIndex < 0 || titleNode.y === null) return [titleNode];
+
+  const groupNodes = [titleNode];
+  for (let cursor = startIndex + 1; cursor < nodes.length; cursor += 1) {
+    const candidate = nodes[cursor];
+    if (candidate !== titleNode && isHeadingAnchorTitleNode(candidate, searchShellContext)) break;
+    if (isStandaloneResultLink(candidate, searchShellContext)) break;
+    if (candidate.y !== null && Math.abs(candidate.y - titleNode.y) > 180) break;
+    if (candidate.role === 'link' && isTagLikeLink(candidate)) continue;
+    if (isFooterLikeText(candidate.name) || isNavigationLikeText(candidate.name)) continue;
+    if (isInteractionNode(candidate) || META_PATTERN.test(candidate.name)) {
+      groupNodes.push(candidate);
+    }
+    if (groupNodes.length >= 5) break;
+  }
+
+  return groupNodes;
 }
 
 function buildHeadingAnchoredGroups(
@@ -706,24 +778,33 @@ function groupDedupePriority(
   group: CandidateGroup,
   searchShellContext: SearchShellContext,
 ): number {
-  if (isStrongCardContainer(group.container)) return 100;
+  const completenessBonus = groupCompletenessBonus(group);
+  if (isStrongCardContainer(group.container)) return 120 + completenessBonus;
   if (
     group.container.role === 'link' &&
     isStandaloneResultLink(group.container, searchShellContext)
   ) {
     return 90;
   }
-  if (isHeadingAnchorTitleNode(group.container, searchShellContext)) return 88;
+  if (isHeadingAnchorTitleNode(group.container, searchShellContext)) return 88 + completenessBonus;
 
   const standaloneResultLinkCount = group.nodes.filter((node) =>
     isStandaloneResultLink(node, searchShellContext),
   ).length;
   if (group.container.role === 'generic') {
-    if (standaloneResultLinkCount === 1 && group.nodes.length <= 8) return 95;
+    if (standaloneResultLinkCount === 1 && group.nodes.length <= 8) return 85 + completenessBonus;
     if (standaloneResultLinkCount > 1) return 10;
   }
 
-  return 50;
+  return 50 + completenessBonus;
+}
+
+function groupCompletenessBonus(group: CandidateGroup): number {
+  const nonContainerNodes = group.nodes.filter((node) => node !== group.container);
+  const hasInteraction = nonContainerNodes.some((node) => isInteractionNode(node));
+  const hasMetadata = nonContainerNodes.some((node) => META_PATTERN.test(node.name));
+  const textFieldBonus = Math.min(3, nonContainerNodes.filter((node) => node.name).length) * 2;
+  return (hasInteraction ? 8 : 0) + (hasMetadata ? 8 : 0) + textFieldBonus;
 }
 
 function isStrongCardContainer(node: ParsedVisibleNode): boolean {
@@ -845,6 +926,14 @@ function buildRow(
     confidence,
     qualityReasons,
   };
+}
+
+function isMetaOnlyRow(row: VisibleRegionRow): boolean {
+  const fields = row.visibleTextFields.filter((field) => normalizeText(field));
+  if (fields.length === 0) return true;
+  if (row.interactionText) return false;
+  if (row.primaryText || row.secondaryText) return false;
+  return fields.every((field) => isMetaOnlyText(field));
 }
 
 function buildQualityReasons(
@@ -1064,6 +1153,13 @@ function isMetaOnlyText(value: string): boolean {
   const normalized = normalizeText(value);
   if (!normalized) return true;
   if (/^\d{4}年\d{1,2}月\d{1,2}日(?:\s+GMT[+-]?\d*\s+\d{1,2}:\d{2})?$/i.test(normalized)) {
+    return true;
+  }
+  if (
+    /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}(?:,\s+\d{1,2}:\d{2}\s+[AP]M\s+UTC)?$/i.test(
+      normalized,
+    )
+  ) {
     return true;
   }
   if (/^\d{1,2}:\d{2}$/.test(normalized)) return true;
