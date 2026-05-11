@@ -557,6 +557,28 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       };
       reconcilePageUnderstandingWithVisibleRows(basePayload);
 
+      if (treeOk && !userControlled && !basePayload.visibleRegionRows.visibleRegionRowsUsed) {
+        const visibleTextContent = await this.sampleVisibleTextContent(tab.id);
+        if (visibleTextContent) {
+          const visibleTextRows = extractVisibleRegionRows({
+            pageContent: String(basePayload.pageContent || ''),
+            visibleTextContent,
+            sourceRegion: pageUnderstanding.primaryRegion,
+            url: currentUrl,
+            title: currentTitle,
+            viewport: basePayload.viewport,
+            scrollY: typeof resp?.scrollY === 'number' ? resp.scrollY : null,
+            pixelsBelow: typeof resp?.pixelsBelow === 'number' ? resp.pixelsBelow : null,
+          });
+          if (visibleTextRows.visibleRegionRowsUsed) {
+            basePayload.visibleTextContent = visibleTextContent;
+            basePayload.visibleRegionRows = visibleTextRows;
+            basePayload.fallbackSource = 'visible_text';
+            reconcilePageUnderstandingWithVisibleRows(basePayload);
+          }
+        }
+      }
+
       // Normal path: return tree
       if (treeOk && !isSparse) {
         const modePayload = buildModeOutput({

@@ -1504,6 +1504,96 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     );
   });
 
+  it('recovers visible-text rows when a non-sparse semantic tree misses business results', async () => {
+    const originalScripting = chrome.scripting;
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5312,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://example.test/search?q=workflow',
+      title: 'Search results',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    (chrome as any).scripting = {
+      executeScript: vi.fn().mockResolvedValue([
+        {
+          result: [
+            'Search',
+            'All',
+            'Open assistant',
+            'Practical automation planning guide for small teams using browser workflows',
+            'This walkthrough explains how a team can collect requirements and compare tools.',
+            'Workflow Lab',
+            '2 hours ago',
+            '89 likes',
+            'Reliable operations checklist for browser based AI assistants',
+            'A compact checklist covering page reading, result selection, logs, and evidence.',
+            'Ops Review',
+            'yesterday',
+            '34 comments',
+            'Privacy',
+            'Terms',
+          ].join('\n'),
+        },
+      ]),
+    };
+    vi.spyOn(readPageTool as any, 'sendMessageToTab').mockResolvedValue({
+      success: true,
+      pageContent: [
+        '- banner "Site header" [ref=ref_banner] (x=640,y=40)',
+        '  - button "Home" [ref=ref_home] (x=40,y=40)',
+        '  - button "Open assistant" [ref=ref_assistant] (x=980,y=40)',
+        '- navigation "Primary navigation" [ref=ref_nav] (x=640,y=84)',
+        '  - button "All" [ref=ref_all] (x=700,y=84)',
+        '  - button "Recent" [ref=ref_recent] (x=780,y=84)',
+        '  - button "Filters" [ref=ref_filters] (x=880,y=84)',
+        '- search "Search controls" [ref=ref_search] (x=420,y=120)',
+        '  - searchbox "Search query" [ref=ref_query] (x=420,y=120)',
+        '  - button "Search" [ref=ref_search_button] (x=760,y=120)',
+      ].join('\n'),
+      refMap: [
+        { ref: 'ref_home', selector: 'button.home' },
+        { ref: 'ref_all', selector: 'button.all' },
+        { ref: 'ref_recent', selector: 'button.recent' },
+        { ref: 'ref_filters', selector: 'button.filters' },
+      ],
+      stats: { processed: 10, included: 10, durationMs: 6 },
+      viewport: { width: 1280, height: 720, dpr: 1 },
+    });
+
+    try {
+      const result = await readPageTool.execute({ mode: 'compact' });
+      const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+      expect(result.isError).toBe(false);
+      expect(payload).toMatchObject({
+        kind: 'dom_region_rows',
+        selectedDataSource: 'dom_region_rows',
+        readinessVerdict: 'ready',
+        rowCount: 2,
+        visibleRegionRowsUsed: true,
+      });
+      expect(payload.pageContext).toMatchObject({
+        sparse: false,
+        fallbackUsed: false,
+        fallbackSource: 'visible_text',
+      });
+      expect(payload.visibleRegionRows.rows.map((row: { title: string }) => row.title)).toEqual([
+        'Practical automation planning guide for small teams using browser workflows',
+        'Reliable operations checklist for browser based AI assistants',
+      ]);
+      expect(chrome.scripting.executeScript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: { tabId: 5312 },
+          args: [12000],
+        }),
+      );
+    } finally {
+      (chrome as any).scripting = originalScripting;
+    }
+  });
+
   it('emits empty readiness evidence for empty pages without rows', async () => {
     vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
       id: 5305,
