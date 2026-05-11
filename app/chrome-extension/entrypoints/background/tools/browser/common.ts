@@ -18,6 +18,27 @@ interface NavigateToolParams {
   background?: boolean; // when true, do not activate tab or focus window
 }
 
+function buildNavigationReadinessFields(input: {
+  settled?: boolean;
+  readyState?: string | null;
+  finalUrl?: string | null;
+  status?: string | null;
+}) {
+  const finalUrl = input.finalUrl || '';
+  const pageReadable =
+    input.settled === true &&
+    input.readyState === 'complete' &&
+    finalUrl.length > 0 &&
+    finalUrl !== 'about:blank';
+
+  return {
+    pageReadable,
+    nextStepHint: pageReadable
+      ? 'safe_to_read_page'
+      : 'navigation_not_readable; avoid chrome_read_page until navigation settles or choose another path',
+  };
+}
+
 function shouldAddWwwVariant(hostname: string): boolean {
   if (!hostname || hostname === 'localhost') {
     return false;
@@ -161,6 +182,12 @@ class NavigateTool extends BaseBrowserToolExecutor {
                 settleReason: settleResult.reason,
                 waitedMs: settleResult.waitedMs,
                 readyState: settleResult.readyState,
+                ...buildNavigationReadinessFields({
+                  settled: settleResult.settled,
+                  readyState: settleResult.readyState,
+                  finalUrl: updatedTab.url,
+                  status: updatedTab.status,
+                }),
               }),
             },
           ],
@@ -466,6 +493,12 @@ class NavigateTool extends BaseBrowserToolExecutor {
                   settleReason: settleResult?.reason || null,
                   waitedMs: settleResult?.waitedMs || 0,
                   readyState: settleResult?.readyState || null,
+                  ...buildNavigationReadinessFields({
+                    settled: settleResult?.settled ?? false,
+                    readyState: settleResult?.readyState || null,
+                    finalUrl: settleResult?.tab.url || newTab.url,
+                    status: settleResult?.tab.status || newTab.status,
+                  }),
                 }),
               },
             ],

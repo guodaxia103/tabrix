@@ -17,11 +17,16 @@ describe('browser settle guidance', () => {
         getAll: vi.fn().mockResolvedValue([]),
         getLastFocused: vi.fn().mockResolvedValue({ id: 1 }),
         get: vi.fn().mockResolvedValue({ id: 1 }),
+        create: vi.fn().mockResolvedValue({ id: 2, tabs: [{ id: 21, url: 'about:blank' }] }),
       };
-    } else if (!chrome.windows.update) {
-      (chrome.windows as any).update = vi.fn().mockResolvedValue({ id: 1, focused: true });
     } else {
-      (chrome.windows.update as any) = vi.fn().mockResolvedValue({ id: 1, focused: true });
+      (chrome.windows as any).update = vi.fn().mockResolvedValue({ id: 1, focused: true });
+      (chrome.windows as any).getAll = vi.fn().mockResolvedValue([]);
+      (chrome.windows as any).getLastFocused = vi.fn().mockResolvedValue({ id: 1 });
+      (chrome.windows as any).get = vi.fn().mockResolvedValue({ id: 1 });
+      (chrome.windows as any).create = vi
+        .fn()
+        .mockResolvedValue({ id: 2, tabs: [{ id: 21, url: 'about:blank' }] });
     }
     vi.mocked(chrome.tabs.query).mockResolvedValue([]);
     vi.mocked(chrome.tabs.get).mockResolvedValue({
@@ -82,6 +87,46 @@ describe('browser settle guidance', () => {
       settleReason: 'complete',
       waitedMs: 240,
       readyState: 'complete',
+      pageReadable: true,
+      nextStepHint: 'safe_to_read_page',
+    });
+  });
+
+  it('marks timed out new-tab navigation as not readable before read_page', async () => {
+    vi.spyOn(navigateTool as any, 'tryGetTab').mockResolvedValue(null);
+    vi.spyOn(navigateTool as any, 'waitForTabSettled').mockResolvedValue({
+      tab: {
+        id: 20,
+        windowId: 1,
+        active: true,
+        status: 'loading',
+        url: '',
+        title: '',
+      },
+      settled: false,
+      timedOut: true,
+      reason: 'timeout',
+      waitedMs: 8000,
+      readyState: null,
+    });
+
+    const result = await navigateTool.execute({
+      url: 'https://github.com/search?q=ACP&type=repositories&s=stars&o=desc',
+    });
+
+    expect(result.isError).toBe(false);
+    const payload = JSON.parse((result.content[0] as { text: string }).text);
+    expect(payload).toMatchObject({
+      success: true,
+      requestedUrl: 'https://github.com/search?q=ACP&type=repositories&s=stars&o=desc',
+      status: 'loading',
+      settled: false,
+      settleReason: 'timeout',
+      waitedMs: 8000,
+      readyState: null,
+      pageReadable: false,
+      nextStepHint:
+        'navigation_not_readable; avoid chrome_read_page until navigation settles or choose another path',
     });
   });
 
