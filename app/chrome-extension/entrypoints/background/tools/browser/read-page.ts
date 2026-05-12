@@ -753,6 +753,26 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       );
     } catch (error) {
       console.error('Error in read page tool:', error);
+      const classified = this.classifyContentScriptError(error);
+      if (classified) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: false,
+                reason: classified.reason,
+                pageType: 'browser_error_page',
+                recommendedAction: classified.recommendedAction,
+                error: classified.message,
+                nextStepHint:
+                  'page_unreadable; return BLOCKED or retry navigation before attempting structured reads',
+              }),
+            },
+          ],
+          isError: false,
+        };
+      }
       return createErrorResponse(
         `Error generating accessibility tree: ${error instanceof Error ? error.message : String(error)}`,
       );

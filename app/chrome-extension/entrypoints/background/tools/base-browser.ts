@@ -43,6 +43,25 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
   abstract name: string;
   abstract execute(args: any): Promise<ToolResult>;
 
+  protected classifyContentScriptError(error: unknown): {
+    reason: 'page_unreadable';
+    recommendedAction: 'retry_navigation_or_use_browser_status';
+    message: string;
+  } | null {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      /showing error page/i.test(message) ||
+      /Cannot access contents of url "chrome-error:\/\//i.test(message)
+    ) {
+      return {
+        reason: 'page_unreadable',
+        recommendedAction: 'retry_navigation_or_use_browser_status',
+        message,
+      };
+    }
+    return null;
+  }
+
   /**
    * Inject content script into tab
    */
