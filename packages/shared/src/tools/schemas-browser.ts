@@ -554,16 +554,17 @@ export const BROWSER_SCHEMAS: Tool[] = [
         tabIds: {
           type: 'array',
           items: { type: 'number' },
-          description: 'Array of tab IDs to close. If not provided, will close the active tab.',
+          description:
+            'Array of explicit tab IDs to close. Use this for run-owned tabs; active-tab close without tabIds is refused.',
         },
         url: {
           type: 'string',
-          description: 'Close tabs matching this URL. Can be used instead of tabIds.',
+          description:
+            'Close tabs matching this URL. Prefer explicit tabIds for cleanup; broad URL close can affect user tabs.',
         },
         windowId: {
           type: 'number',
-          description:
-            'When neither tabIds nor url is set, close the active tab in this window (default: current window).',
+          description: 'Optional window scope for URL-based close operations.',
         },
       },
       required: [],
