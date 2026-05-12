@@ -46,10 +46,30 @@ export function inferSchemeGuard(url: string): SchemeGuardSummary {
     };
   }
 
+  if (lower.startsWith('chrome-error://')) {
+    return {
+      scheme: 'chrome-error',
+      pageType: 'browser_internal_page',
+      supportedForContentScript: false,
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
   if (lower.startsWith('devtools://')) {
     return {
       scheme: 'devtools',
       pageType: 'devtools_page',
+      supportedForContentScript: false,
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
+  if (lower.startsWith('view-source:') || lower.startsWith('file://')) {
+    return {
+      scheme: lower.startsWith('view-source:') ? 'view-source' : 'file',
+      pageType: 'unsupported_page',
       supportedForContentScript: false,
       unsupportedPageType: 'non_web_tab',
       recommendedAction: 'switch_to_http_tab',

@@ -381,9 +381,12 @@ export abstract class BaseBrowserToolExecutor implements ToolExecutor {
 
     return (
       url.startsWith('chrome://') ||
+      url.startsWith('chrome-error://') ||
       url.startsWith('edge://') ||
       url.startsWith('about:') ||
       url.startsWith('devtools://') ||
+      url.startsWith('view-source:') ||
+      url.startsWith('file://') ||
       url.startsWith('chrome-extension://') ||
       url.startsWith('https://chrome.google.com/webstore') ||
       url.startsWith('https://microsoftedge.microsoft.com/')

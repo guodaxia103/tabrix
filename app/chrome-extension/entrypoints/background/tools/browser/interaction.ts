@@ -114,11 +114,31 @@ function inferInteractionSchemeGuard(url: string): InteractionSchemeGuard {
     };
   }
 
+  if (lower.startsWith('chrome-error://')) {
+    return {
+      allowed: false,
+      scheme: 'chrome-error',
+      pageType: 'browser_internal_page',
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
   if (lower.startsWith('devtools://')) {
     return {
       allowed: false,
       scheme: 'devtools',
       pageType: 'devtools_page',
+      unsupportedPageType: 'non_web_tab',
+      recommendedAction: 'switch_to_http_tab',
+    };
+  }
+
+  if (lower.startsWith('view-source:') || lower.startsWith('file://')) {
+    return {
+      allowed: false,
+      scheme: lower.startsWith('view-source:') ? 'view-source' : 'file',
+      pageType: 'unsupported_page',
       unsupportedPageType: 'non_web_tab',
       recommendedAction: 'switch_to_http_tab',
     };
