@@ -1660,7 +1660,6 @@
     return false;
   });
 
-  console.log('Accessibility tree helper script loaded');
   // Cross-frame bridge: child listens for ensure-ref requests from parent (composite selector)
   try {
     window.addEventListener(

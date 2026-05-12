@@ -1,4 +1,4 @@
- 
+/* global window, document, chrome, CSS, Element, Node, HTMLInputElement, HTMLTextAreaElement, HTMLSelectElement, location, requestAnimationFrame, cancelAnimationFrame */
 // recorder.js - content script for recording user interactions into steps
 
 (function () {
@@ -1943,6 +1943,4 @@
     }
     return false;
   });
-
-  console.log('Record & Replay recorder.js loaded');
 })();

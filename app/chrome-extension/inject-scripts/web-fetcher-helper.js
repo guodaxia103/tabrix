@@ -2780,7 +2780,6 @@ if (window.__WEB_FETCHER_HELPER_INITIALIZED__) {
           }
         }
       } catch (error) {
-        console.error('Error extracting text content:', error);
         sendResponse({
           success: false,
           error: `Failed to extract text content: ${error.message}`,
@@ -2868,11 +2867,7 @@ if (window.__WEB_FETCHER_HELPER_INITIALIZED__) {
             }
           }
         }
-      } catch (error) {
-        console.warn(
-          `Cannot access iframe content (possible cross-origin restriction): ${error.message}`,
-        );
-      }
+      } catch {}
     }
 
     return allIframeText.trim();

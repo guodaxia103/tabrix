@@ -38,6 +38,7 @@
     "audit": "node ./scripts/audit-prod.mjs",
     "docs:check": "node ./scripts/check-docs.mjs",
     "governance:console": "node ./scripts/check-console-governance.mjs",
+    "governance:extension-logs": "node ./scripts/check-extension-production-logs.mjs",
     "i18n:check": "node ./scripts/check-i18n.mjs",
     "ubuntu:self-check": "powershell -ExecutionPolicy Bypass -File ./scripts/run-ubuntu-docker-self-check.ps1",
     "ubuntu:xvfb-self-check": "powershell -ExecutionPolicy Bypass -File ./scripts/run-ubuntu-xvfb-self-check.ps1",

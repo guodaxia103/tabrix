@@ -98,6 +98,12 @@ export default defineConfig({
         }),
   },
   vite: (env) => ({
+    esbuild:
+      env.mode === 'production'
+        ? {
+            drop: ['console', 'debugger'],
+          }
+        : undefined,
     plugins: [
       // @protobufjs/inquire uses eval("require") which violates Chrome MV3 CSP.
       // Strip the eval call at build time so the function just returns null.

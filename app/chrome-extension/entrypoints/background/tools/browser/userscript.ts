@@ -266,7 +266,7 @@ async function injectJsPersistent(
         });
         (new Function(${JSON.stringify(code)}))();
       } catch (e) {
-        console.warn('Userscript MAIN injection error:', e);
+        window.dispatchEvent(new CustomEvent('chrome-mcp:script-error', { detail: { error: String(e && (e as any).message || e) } }));
       }
     })();`;
     await chrome.scripting.executeScript({

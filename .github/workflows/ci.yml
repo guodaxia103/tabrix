@@ -67,6 +67,9 @@ jobs:
       - name: Build extension (for bundle-size check)
         run: pnpm --filter @tabrix/extension build
 
+      - name: Extension production log gate
+        run: pnpm run governance:extension-logs
+
       - name: Sidepanel bundle-size gate
         run: pnpm run size:check
 

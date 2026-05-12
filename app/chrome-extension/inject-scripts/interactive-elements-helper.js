@@ -576,7 +576,6 @@
         }
         sendResponse({ success: true, elements });
       } catch (error) {
-        console.error('Error in getInteractiveElements:', error);
         sendResponse({ success: false, error: error.message });
       }
       return true; // Async response
@@ -585,6 +584,4 @@
       return false;
     }
   });
-
-  console.log('Interactive elements helper script loaded');
 })();

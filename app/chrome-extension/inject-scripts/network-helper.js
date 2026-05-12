@@ -159,9 +159,7 @@ if (window.__NETWORK_CAPTURE_HELPER_INITIALIZED__) {
               }
             }
           }
-        } catch (e) {
-          console.warn('Failed to construct FormData:', e);
-        }
+        } catch {}
         // Let browser set the correct multipart boundary
         try {
           if (options.headers) {
@@ -233,7 +231,6 @@ if (window.__NETWORK_CAPTURE_HELPER_INITIALIZED__) {
         response: responseData,
       };
     } catch (error) {
-      console.warn('Error replaying request:', error);
       return {
         success: false,
         error: `Error replaying request: ${error.message}`,

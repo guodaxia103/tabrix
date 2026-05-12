@@ -9,7 +9,7 @@
     "ensure:key": "node ./scripts/ensure-extension-key.cjs",
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "build": "pnpm run build:direct",
+    "build": "pnpm run build:direct && pnpm -C ../.. run governance:extension-logs",
     "build:direct": "pnpm run ensure:key && wxt build",
     "build:firefox": "wxt build -b firefox",
     "clean:zip": "node ./scripts/clean-zip-artifacts.cjs",

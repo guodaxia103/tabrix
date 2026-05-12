@@ -82,7 +82,9 @@
   function logWarn(...args) {
     if (!isDebugLoggingEnabled()) return;
     try {
-      console.warn(LOG_PREFIX, ...args);
+      window.dispatchEvent(
+        new CustomEvent('tabrix-props-agent-debug', { detail: [LOG_PREFIX, ...args] }),
+      );
     } catch {
       // Silently ignore
     }

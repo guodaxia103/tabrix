@@ -113,7 +113,6 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
         mainKeyPart = part;
       } else {
         // Invalid format: multiple main keys in a single combination (e.g., "Ctrl+A+B")
-        console.warn(`Invalid key combination string: ${keyString}. Multiple main keys found.`);
         return null;
       }
     }
@@ -133,7 +132,6 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
         if (mainKeyPart === 'meta' || mainKeyPart === 'command' || mainKeyPart === 'cmd')
           return { key: 'Meta', code: 'MetaLeft', keyCode: 91, modifiers };
       } else {
-        console.warn(`Invalid key combination string: ${keyString}. No main key specified.`);
         return null;
       }
     }
@@ -162,7 +160,6 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
       };
     }
 
-    console.warn(`Unknown key: ${mainKeyPart} in string "${keyString}"`);
     return null; // Or handle as an error
   }
 
@@ -204,7 +201,6 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
       element.dispatchEvent(new KeyboardEvent('keyup', eventOptions));
       return { success: true };
     } catch (error) {
-      console.error(`Error dispatching key events for "${key}":`, error);
       return {
         success: false,
         error: `Error dispatching key events for "${key}": ${error.message}`,
@@ -257,9 +253,6 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
         if (dispatchResult.error) {
           // Optionally, decide if sequence should stop on first error
           // For now, we continue but log the error in results
-          console.warn(
-            `Failed to simulate key combination "${comboString}": ${dispatchResult.error}`,
-          );
         }
 
         if (delay > 0 && i < keyCombinations.length - 1) {
@@ -287,7 +280,6 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
         },
       };
     } catch (error) {
-      console.error('Error in simulateKeyboard:', error);
       return {
         success: false,
         error: `Error simulating keyboard events: ${error.message}`,
@@ -316,7 +308,6 @@ if (window.__KEYBOARD_HELPER_INITIALIZED__) {
         .then(sendResponse)
         .catch((error) => {
           // This catch is for unexpected errors in simulateKeyboard promise chain itself
-          console.error('Unexpected error in simulateKeyboard promise chain:', error);
           sendResponse({
             success: false,
             error: `Unexpected error during keyboard simulation: ${error.message}`,
