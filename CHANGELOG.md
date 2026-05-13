@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.7.0] - 2026-05-13
 
 ### Removed (BREAKING — product surface pruning aligned with MKEP)
 
@@ -87,6 +87,26 @@ Policy Phase 0's risk-tier coverage matrix and Knowledge Registry Stage
 1/2 are unaffected.
 
 ### Fixed
+
+- **Extension**: `chrome_close_tabs` now requires explicit `tabIds` or `url` arguments;
+  empty args no longer close the active tab, preventing accidental user tab loss
+  during Browser Hygiene cleanup (commit `44bb8a6`).
+- **Extension**: `read_page` and `chrome_get_web_content` now return structured
+  `success=false / reason=page_unreadable / pageType=browser_error_page` for Chrome
+  error-page injection failures, instead of crashing or hanging (commit `507817f`).
+- **Extension**: browser error pages (e.g. `chrome://extensions` error injection) are
+  now guarded so tools report unreadable state rather than attempting DOM extraction
+  on non-web content (commit `ab221a6`).
+- **Extension**: production builds gate console/debugger statement leakage via ESLint
+  governance scan (commit `e89c351`).
+- **Extension**: `read_page` recovers visible text rows when structured DOM extraction
+  returns empty results, improving fallback reliability (commits `5e6b6a6`, `572ef96`).
+- **Extension**: navigation state now distinguishes between stale pages, readable pages,
+  and pages requiring further wait before reading (commits `aee8115`, `4f9011b`).
+- **Native server**: CLI `mcp call` timeout aligned with bridge tool timeouts for
+  consistent diagnostic behavior (commit `3142672`).
+- **Build**: `.gitattributes` enforces LF line endings to prevent CRLF drift on
+  cross-platform filesystems (commit `6bbf334`).
 
 - **CI**: `better-sqlite3` native binding (`node-v127-linux-x64`) was
   missing on GitHub Actions so all Memory / SessionManager Jest

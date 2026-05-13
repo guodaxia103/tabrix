@@ -1,6 +1,6 @@
 {
   "name": "@tabrix/tabrix",
-  "version": "2.6.1",
+  "version": "2.7.0",
   "description": "Tabrix Native-Messaging host (Node)",
   "main": "dist/index.js",
   "bin": {
