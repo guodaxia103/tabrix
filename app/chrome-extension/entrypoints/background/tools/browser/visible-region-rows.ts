@@ -142,7 +142,9 @@ export function extractVisibleRegionRows(input: {
     ? clampConfidence(candidateRows.filter((row) => row.targetRef).length / candidateRows.length)
     : 0;
   const rows =
-    candidateRows.length >= 2 && candidateTargetRefCoverageRate >= 0.95 ? candidateRows : [];
+    candidateRows.length >= 2 && candidateRows.length <= 5 && candidateTargetRefCoverageRate >= 0.95
+      ? candidateRows
+      : [];
   if (candidateRows.length > 0 && rows.length === 0) {
     if (candidateRows.length < 2) {
       rejectedReasonDistribution.single_isolated_text += candidateRows.length;
@@ -296,6 +298,11 @@ function buildVisibleTextFallbackRows(input: {
       }),
     )
     .filter((row): row is VisibleRegionRow => row !== null);
+
+  if (rows.length > 0 && rows.length < 2) {
+    rejectedReasonDistribution.single_isolated_text += Math.max(1, rows.length);
+    return { rows: [], rejectedReasonDistribution };
+  }
 
   if (rows.length === 0 && rejectedReasonDistribution.low_value_region === 0) {
     rejectedReasonDistribution.single_isolated_text += Math.max(1, lines.length);

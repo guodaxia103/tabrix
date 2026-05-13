@@ -508,6 +508,37 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.navigationLikeRejectedCount).toBeGreaterThan(0);
   });
 
+  it('does not promote one isolated long visible text item as DOM region rows', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: '- generic "Sparse page shell"',
+      sourceRegion: 'visible_results',
+      visibleTextContent: [
+        'A single long information page introduction that should remain document text',
+        'This page explains one topic in prose without presenting a comparable result list.',
+        'Updated today',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(false);
+    expect(rows.rowCount).toBe(0);
+    expect(rows.visibleRegionRowsRejectedReason).toBe('single_isolated_text');
+  });
+
+  it('does not promote prose-only heading sections as DOM region rows', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: [
+        '[1] heading "Information Page"',
+        '[2] paragraph "This is a simple information page with some text content but no structured data cards or API endpoints."',
+        '[3] paragraph "The page provides general documentation and help content for users."',
+        '[4] contentinfo "Copyright 2026. Help Center."',
+      ].join('\n'),
+      sourceRegion: 'visible_results',
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(false);
+    expect(rows.rowCount).toBe(0);
+  });
+
   it('rejects footer/legal-only visible text fallback content', () => {
     const rows = extractVisibleRegionRows({
       pageContent: '- generic "Sparse page shell"',
