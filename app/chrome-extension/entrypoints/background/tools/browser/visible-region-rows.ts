@@ -1172,6 +1172,13 @@ function isMetaOnlyText(value: string): boolean {
   if (/^\d{1,2}:\d{2}$/.test(normalized)) return true;
   if (/^(?:yesterday|today|updated|posted)$/i.test(normalized)) return true;
   if (
+    /^(?:updated|posted)\s+\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|m|min|mins|minute|minutes)(?:\s+ago)?$/i.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+  if (
     /^\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|m|min|mins|minute|minutes)(?:\s+ago)?$/i.test(
       normalized,
     )
