@@ -496,6 +496,13 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       }
 
       const pageUnderstanding = inferPageUnderstanding(currentUrl, currentTitle, pageContent);
+      const treeInteractiveElements = buildInteractiveElements(
+        pageContent,
+        [],
+        selectedMode === 'compact' ? 24 : 80,
+        selectedMode,
+        currentUrl,
+      );
 
       // Extract stats from response
       const stats: ReadPageStats | null =
@@ -548,6 +555,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         visibleRegionRows: extractVisibleRegionRows({
           pageContent,
           sourceRegion: pageUnderstanding.primaryRegion,
+          fallbackInteractiveElements: treeInteractiveElements,
           url: currentUrl,
           title: currentTitle,
           viewport: treeOk ? resp.viewport : null,
