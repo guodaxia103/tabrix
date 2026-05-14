@@ -510,6 +510,130 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     expect(rows.navigationLikeRejectedCount).toBeGreaterThan(0);
   });
 
+  it('links visible text fallback rows to matching interactive result targets', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: '- generic "Sparse search shell"',
+      sourceRegion: 'visible_results',
+      visibleTextContent: [
+        'Practical automation planning guide for small teams using browser workflows',
+        'This walkthrough explains how a team can collect requirements and finish routine web tasks with fewer manual checks.',
+        'Workflow Lab',
+        '2 hours ago',
+        'Reliable operations checklist for browser based AI assistants',
+        'A compact checklist covering page reading, result selection, logs, and handoff evidence for daily operations.',
+        'Ops Review',
+        'yesterday',
+      ].join('\n'),
+      fallbackInteractiveElements: [
+        {
+          ref: 'ref_result_1',
+          role: 'link',
+          name: 'Practical automation planning guide for small teams using browser workflows',
+          href: '/items/1',
+        },
+        {
+          ref: 'ref_result_2',
+          role: 'link',
+          name: 'Reliable operations checklist for browser based AI assistants',
+          href: '/items/2',
+        },
+      ],
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rowCount).toBe(2);
+    expect(rows.rows.map((row) => row.targetRef)).toEqual(['ref_result_1', 'ref_result_2']);
+    expect(rows.targetRefCoverageRate).toBeGreaterThanOrEqual(0.95);
+    expect(rows.regionQualityScore).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it('does not bind visible text fallback rows to unrelated shell actions', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: '- generic "Sparse search shell"',
+      sourceRegion: 'visible_results',
+      visibleTextContent: [
+        'Practical automation planning guide for small teams using browser workflows',
+        'This walkthrough explains how a team can collect requirements and finish routine web tasks with fewer manual checks.',
+        'Workflow Lab',
+        '2 hours ago',
+        'Reliable operations checklist for browser based AI assistants',
+        'A compact checklist covering page reading, result selection, logs, and handoff evidence for daily operations.',
+        'Ops Review',
+        'yesterday',
+      ].join('\n'),
+      fallbackInteractiveElements: [
+        { ref: 'ref_sort_new', role: 'link', name: 'Newest', href: '?sort=new' },
+        { ref: 'ref_sort_popular', role: 'link', name: 'Most Popular', href: '?sort=popular' },
+        { ref: 'ref_home', role: 'link', name: 'Home', href: '/' },
+      ],
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rowCount).toBe(2);
+    expect(rows.rows.every((row) => row.targetRef === null)).toBe(true);
+    expect(rows.targetRefCoverageRate).toBe(0);
+  });
+
+  it('links visible text fallback rows to matching non-link interactive result targets', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: '- generic "Sparse search shell"',
+      sourceRegion: 'visible_results',
+      visibleTextContent: [
+        'Practical automation planning guide for small teams using browser workflows',
+        'This walkthrough explains how a team can collect requirements and finish routine web tasks with fewer manual checks.',
+        'Workflow Lab',
+        '2 hours ago',
+        'Reliable operations checklist for browser based AI assistants',
+        'A compact checklist covering page reading, result selection, logs, and handoff evidence for daily operations.',
+        'Ops Review',
+        'yesterday',
+      ].join('\n'),
+      fallbackInteractiveElements: [
+        {
+          ref: 'ref_card_1',
+          role: 'button',
+          name: 'Practical automation planning guide for small teams using browser workflows',
+        },
+        {
+          ref: 'ref_card_2',
+          role: 'interactive',
+          name: 'Reliable operations checklist for browser based AI assistants',
+        },
+      ],
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rowCount).toBe(2);
+    expect(rows.rows.map((row) => row.targetRef)).toEqual(['ref_card_1', 'ref_card_2']);
+    expect(rows.targetRefCoverageRate).toBeGreaterThanOrEqual(0.95);
+  });
+
+  it('does not treat footer company address blocks as visible text result rows', () => {
+    const rows = extractVisibleRegionRows({
+      pageContent: '- generic "Sparse search shell"',
+      sourceRegion: 'visible_results',
+      visibleTextContent: [
+        'Example Information Technology Co., Ltd.',
+        'Address: Building C, 388 Main Road',
+        'Practical automation planning guide for small teams using browser workflows',
+        'This walkthrough explains how a team can collect requirements and finish routine web tasks with fewer manual checks.',
+        'Workflow Lab',
+        '2 hours ago',
+        'Reliable operations checklist for browser based AI assistants',
+        'A compact checklist covering page reading, result selection, logs, and handoff evidence for daily operations.',
+        'Ops Review',
+        'yesterday',
+      ].join('\n'),
+    });
+
+    expect(rows.visibleRegionRowsUsed).toBe(true);
+    expect(rows.rowCount).toBe(2);
+    expect(rows.rows.map((row) => row.title)).toEqual([
+      'Practical automation planning guide for small teams using browser workflows',
+      'Reliable operations checklist for browser based AI assistants',
+    ]);
+  });
+
   it('does not promote one isolated long visible text item as DOM region rows', () => {
     const rows = extractVisibleRegionRows({
       pageContent: '- generic "Sparse page shell"',
@@ -1032,6 +1156,112 @@ describe('V27-P0-REAL-01 visible region rows', () => {
     }
   });
 
+  it('repairs visible text rows with get_interactive_elements when normal tree lacks target refs', async () => {
+    const originalScripting = chrome.scripting;
+    const originalTabsSendMessage = chrome.tabs.sendMessage;
+    vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
+      id: 5312,
+      windowId: 1,
+      active: true,
+      status: 'complete',
+      url: 'https://example.test/search',
+      title: 'Search results',
+    });
+    vi.spyOn(readPageTool as any, 'injectContentScript').mockResolvedValue(undefined);
+    (chrome.tabs as any).sendMessage = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('interactive helper missing'));
+    (chrome as any).scripting = {
+      executeScript: vi.fn().mockResolvedValueOnce([
+        {
+          result: [
+            'Practical automation planning guide for small teams using browser workflows',
+            'This walkthrough explains how a team can collect requirements and finish routine web tasks with fewer manual checks.',
+            'Workflow Lab',
+            '2 hours ago',
+            'Reliable operations checklist for browser based AI assistants',
+            'A compact checklist covering page reading, result selection, logs, and handoff evidence for daily operations.',
+            'Ops Review',
+            'yesterday',
+          ].join('\n'),
+        },
+      ]),
+    };
+    const sendMessage = vi.spyOn(readPageTool as any, 'sendMessageToTab');
+    sendMessage
+      .mockResolvedValueOnce({
+        success: true,
+        pageContent: [
+          '- generic "Search page" [ref=ref_root] (x=0,y=0)',
+          '  - search "Search examples" [ref=ref_search] (x=420,y=42)',
+          '    - searchbox "Search query" [ref=ref_query] (x=420,y=42)',
+          '  - button "Search" [ref=ref_search_button] (x=760,y=42)',
+          '  - button "All" [ref=ref_all] (x=280,y=92)',
+          '  - button "Recent" [ref=ref_recent] (x=340,y=92)',
+          '  - footer "Footer" [ref=ref_footer] (x=640,y=680)',
+          '    - link "Privacy" [ref=ref_privacy] (x=620,y=680) href="/privacy"',
+        ].join('\n'),
+        refMap: [
+          { ref: 'ref_root', selector: 'main' },
+          { ref: 'ref_search', selector: 'form.search' },
+          { ref: 'ref_query', selector: 'input[type="search"]' },
+          { ref: 'ref_search_button', selector: 'button.search' },
+          { ref: 'ref_all', selector: 'button.all' },
+          { ref: 'ref_recent', selector: 'button.recent' },
+          { ref: 'ref_footer', selector: 'footer' },
+          { ref: 'ref_privacy', selector: 'a[href="/privacy"]' },
+        ],
+        stats: { processed: 8, included: 8, durationMs: 6 },
+        viewport: { width: 1280, height: 720, dpr: 1 },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        elements: [
+          {
+            type: 'interactive',
+            text: 'Practical automation planning guide for small teams using browser workflows',
+            selector: 'section:nth-of-type(1)',
+            coordinates: { x: 300, y: 210 },
+          },
+          {
+            type: 'button',
+            text: 'Reliable operations checklist for browser based AI assistants',
+            selector: 'section:nth-of-type(2)',
+            coordinates: { x: 700, y: 220 },
+          },
+        ],
+        scrollY: 0,
+        pixelsBelow: 900,
+      });
+
+    try {
+      const result = await readPageTool.execute({ mode: 'compact' });
+      const payload = JSON.parse((result.content[0] as { text: string }).text);
+
+      expect(result.isError).toBe(false);
+      expect(payload).toMatchObject({
+        kind: 'dom_region_rows',
+        selectedDataSource: 'dom_region_rows',
+        rowCount: 2,
+        visibleRegionRowsUsed: true,
+        targetRefCoverageRate: expect.any(Number),
+      });
+      expect(payload.pageContext).toMatchObject({
+        sparse: false,
+        fallbackUsed: true,
+        fallbackSource: 'get_interactive_elements_target_ref_repair',
+        refMapCount: 2,
+      });
+      expect(
+        payload.visibleRegionRows.rows.map((row: { targetRef: string | null }) => row.targetRef),
+      ).toEqual(['ref_fallback_1', 'ref_fallback_2']);
+      expect(payload.visibleRegionRows.targetRefCoverageRate).toBeGreaterThanOrEqual(0.95);
+    } finally {
+      (chrome.tabs as any).sendMessage = originalTabsSendMessage;
+      (chrome as any).scripting = originalScripting;
+    }
+  });
+
   it('does not classify a page as login_required when fallback DOM rows are usable', async () => {
     vi.spyOn(readPageTool as any, 'tryGetTab').mockResolvedValue({
       id: 5303,
@@ -1422,8 +1652,8 @@ describe('V27-P0-REAL-01 visible region rows', () => {
       });
       expect(payload.pageContext).toMatchObject({
         sparse: true,
-        fallbackUsed: true,
-        fallbackSource: 'get_interactive_elements',
+        fallbackUsed: false,
+        fallbackSource: 'visible_text',
       });
       expect(payload.visibleRegionRows.rows.map((row: { title: string }) => row.title)).toEqual([
         'Practical automation planning guide for small teams using browser workflows',

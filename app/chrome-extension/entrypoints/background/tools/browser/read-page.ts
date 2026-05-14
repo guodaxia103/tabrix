@@ -56,6 +56,7 @@ const READ_PAGE_SPARSE_RETRY_DELAY_MS = 450;
 const INTERACTIVE_ELEMENTS_HELPER_FILE = 'inject-scripts/interactive-elements-helper.js';
 const INTERACTIVE_ELEMENTS_HELPER_PING_TIMEOUT_MS = 300;
 const VISIBLE_TEXT_FALLBACK_MAX_CHARS = 12_000;
+const VISIBLE_ROWS_TARGET_REF_REPAIR_THRESHOLD = 0.95;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -102,6 +103,24 @@ function completeVisibleRegionRows(params: {
     url: params.currentUrl,
     title: params.currentTitle,
     viewport: params.viewport,
+  });
+}
+
+function shouldRepairVisibleRowsTargetRefs(rows: VisibleRegionRowsResult | undefined): boolean {
+  return (
+    rows?.visibleRegionRowsUsed === true &&
+    rows.rowCount >= 2 &&
+    rows.targetRefCoverageRate < VISIBLE_ROWS_TARGET_REF_REPAIR_THRESHOLD
+  );
+}
+
+function attachFallbackRefs(
+  elements: any[],
+  refMap: ReturnType<typeof buildFallbackRefMap>,
+): any[] {
+  return elements.map((element, index) => {
+    const ref = refMap[index]?.ref;
+    return typeof ref === 'string' ? { ...element, ref } : element;
   });
 }
 
@@ -299,6 +318,72 @@ class ReadPageTool extends BaseBrowserToolExecutor {
     } catch {
       return null;
     }
+  }
+
+  private async collectInteractiveElementsFallback(tabId: number): Promise<any | null> {
+    let fallback: any = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (attempt > 0) await delay(READ_PAGE_SPARSE_RETRY_DELAY_MS);
+      await this.ensureInteractiveElementsHelper(tabId);
+      fallback = await this.sendMessageToTab(tabId, {
+        action: TOOL_MESSAGE_TYPES.GET_INTERACTIVE_ELEMENTS,
+        includeCoordinates: true,
+      });
+      if (fallback && fallback.success && Array.isArray(fallback.elements)) break;
+    }
+    return fallback && fallback.success && Array.isArray(fallback.elements) ? fallback : null;
+  }
+
+  private async repairVisibleRowsTargetRefs(params: {
+    tabId: number;
+    basePayload: Record<string, any>;
+    pageUnderstanding: ReturnType<typeof inferPageUnderstanding>;
+    currentUrl: string;
+    currentTitle: string;
+  }): Promise<boolean> {
+    if (!shouldRepairVisibleRowsTargetRefs(params.basePayload.visibleRegionRows)) return false;
+
+    const fallback = await this.collectInteractiveElementsFallback(params.tabId);
+    if (!fallback) return false;
+    const merged = fallback.elements.slice(0, 150);
+    const fallbackRefMap = buildFallbackRefMap(merged);
+    const mergedWithRefs = attachFallbackRefs(merged, fallbackRefMap);
+    const visibleTextContent =
+      typeof params.basePayload.visibleTextContent === 'string' &&
+      params.basePayload.visibleTextContent.trim()
+        ? params.basePayload.visibleTextContent
+        : await this.sampleVisibleTextContent(params.tabId);
+    if (!visibleTextContent) return false;
+
+    const repairedRows = extractVisibleRegionRows({
+      pageContent: String(params.basePayload.pageContent || ''),
+      visibleTextContent,
+      sourceRegion: params.pageUnderstanding.primaryRegion,
+      fallbackInteractiveElements: mergedWithRefs,
+      url: params.currentUrl,
+      title: params.currentTitle,
+      viewport: params.basePayload.viewport,
+      scrollY: typeof fallback?.scrollY === 'number' ? fallback.scrollY : null,
+      pixelsBelow: typeof fallback?.pixelsBelow === 'number' ? fallback.pixelsBelow : null,
+    });
+    if (
+      !repairedRows.visibleRegionRowsUsed ||
+      repairedRows.targetRefCoverageRate <=
+        params.basePayload.visibleRegionRows.targetRefCoverageRate
+    ) {
+      return false;
+    }
+
+    params.basePayload.visibleTextContent = visibleTextContent;
+    params.basePayload.visibleRegionRows = repairedRows;
+    params.basePayload.fallbackUsed = true;
+    params.basePayload.fallbackSource = 'get_interactive_elements_target_ref_repair';
+    params.basePayload.elements = mergedWithRefs;
+    params.basePayload.count = fallback.elements.length;
+    params.basePayload.refMap = fallbackRefMap;
+    params.basePayload.refMapCount = fallbackRefMap.filter((entry) => entry != null).length;
+    reconcilePageUnderstandingWithVisibleRows(params.basePayload);
+    return true;
   }
 
   // Execute read page
@@ -503,6 +588,10 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         selectedMode,
         currentUrl,
       );
+      const rowLinkingInteractiveElements =
+        selectedMode === 'compact'
+          ? buildInteractiveElements(pageContent, [], 80, 'compact', currentUrl)
+          : treeInteractiveElements;
 
       // Extract stats from response
       const stats: ReadPageStats | null =
@@ -555,7 +644,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
         visibleRegionRows: extractVisibleRegionRows({
           pageContent,
           sourceRegion: pageUnderstanding.primaryRegion,
-          fallbackInteractiveElements: treeInteractiveElements,
+          fallbackInteractiveElements: rowLinkingInteractiveElements,
           url: currentUrl,
           title: currentTitle,
           viewport: treeOk ? resp.viewport : null,
@@ -572,6 +661,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
             pageContent: String(basePayload.pageContent || ''),
             visibleTextContent,
             sourceRegion: pageUnderstanding.primaryRegion,
+            fallbackInteractiveElements: rowLinkingInteractiveElements,
             url: currentUrl,
             title: currentTitle,
             viewport: basePayload.viewport,
@@ -586,9 +676,17 @@ class ReadPageTool extends BaseBrowserToolExecutor {
           }
         }
       }
+      await this.repairVisibleRowsTargetRefs({
+        tabId: tab.id,
+        basePayload,
+        pageUnderstanding,
+        currentUrl,
+        currentTitle,
+      });
 
-      // Normal path: return tree
-      if (treeOk && !isSparse) {
+      // Normal path: return tree when the tree is sufficiently rich or the
+      // visible-text fallback has already recovered business rows.
+      if (treeOk && (!isSparse || basePayload.visibleRegionRows.visibleRegionRowsUsed)) {
         const modePayload = buildModeOutput({
           mode: selectedMode,
           renderMode: selectedRender,
@@ -644,31 +742,23 @@ class ReadPageTool extends BaseBrowserToolExecutor {
       // Newly opened MV3 pages can report document complete before the
       // injected helper is ready to answer its first runtime message.
       try {
-        let fallback: any = null;
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-          if (attempt > 0) await delay(READ_PAGE_SPARSE_RETRY_DELAY_MS);
-          await this.ensureInteractiveElementsHelper(tab.id);
-          fallback = await this.sendMessageToTab(tab.id, {
-            action: TOOL_MESSAGE_TYPES.GET_INTERACTIVE_ELEMENTS,
-            includeCoordinates: true,
-          });
-          if (fallback && fallback.success && Array.isArray(fallback.elements)) break;
-        }
+        const fallback = await this.collectInteractiveElementsFallback(tab.id);
 
-        if (fallback && fallback.success && Array.isArray(fallback.elements)) {
+        if (fallback) {
           const merged = fallback.elements.slice(0, 150);
           const fallbackRefMap = buildFallbackRefMap(merged);
+          const mergedWithRefs = attachFallbackRefs(merged, fallbackRefMap);
           const fallbackRefEntryCount = fallbackRefMap.filter((entry) => entry != null).length;
 
           basePayload.fallbackUsed = true;
           basePayload.fallbackSource = 'get_interactive_elements';
           basePayload.reason = treeOk ? 'sparse_tree' : resp?.error || 'tree_failed';
-          basePayload.elements = merged;
+          basePayload.elements = mergedWithRefs;
           basePayload.count = fallback.elements.length;
           basePayload.refMap = fallbackRefMap;
           basePayload.refMapCount = fallbackRefEntryCount;
-          if (merged.length > 0 || !basePayload.pageContent) {
-            basePayload.pageContent = formatElementsAsPageContent(merged, fallbackRefMap);
+          if (mergedWithRefs.length > 0 || !basePayload.pageContent) {
+            basePayload.pageContent = formatElementsAsPageContent(mergedWithRefs, fallbackRefMap);
           }
           const fallbackUnderstanding = inferPageUnderstanding(
             currentUrl,
@@ -683,6 +773,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
           basePayload.visibleRegionRows = extractVisibleRegionRows({
             pageContent: String(basePayload.pageContent || ''),
             sourceRegion: fallbackUnderstanding.primaryRegion,
+            fallbackInteractiveElements: mergedWithRefs,
             url: currentUrl,
             title: currentTitle,
             viewport: basePayload.viewport,
@@ -697,6 +788,7 @@ class ReadPageTool extends BaseBrowserToolExecutor {
                 pageContent: String(basePayload.pageContent || ''),
                 visibleTextContent,
                 sourceRegion: fallbackUnderstanding.primaryRegion,
+                fallbackInteractiveElements: mergedWithRefs,
                 url: currentUrl,
                 title: currentTitle,
                 viewport: basePayload.viewport,

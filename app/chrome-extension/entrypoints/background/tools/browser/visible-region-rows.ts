@@ -44,6 +44,15 @@ interface VisibleTextFallbackResult {
   rejectedReasonDistribution: Record<VisibleRegionRejectionReason, number>;
 }
 
+interface FallbackInteractiveElement {
+  ref?: unknown;
+  role?: unknown;
+  type?: unknown;
+  name?: unknown;
+  text?: unknown;
+  href?: unknown;
+}
+
 interface SearchShellContext {
   searchTerms: Set<string>;
   pageTitle: string;
@@ -90,6 +99,8 @@ const FOOTER_LEGAL_REPORT_PATTERN =
   /\b(footer|privacy|terms|copyright|certificate|license|permit|legal|compliance|sponsors?|sponsorable|report (?:abuse|harmful|center)|harmful information report|rumou?r exposure|exposure desk|internet report center|business license|internet drug information service)\b|隐私|协议|版权|赞助|举报|有害信息|互联网举报|网络谣言|谣言曝光|资格证书|许可证|备案|公网安备|网文|营业执照|违法不良|网信算备|增值电信|ICP备?/i;
 const SEARCH_CONTROL_TEXT_PATTERN =
   /\b(search results?(?: for)?|results for|search query|query|filters?|sort|feedback|how can we improve|ask ai summary|ai summary|topics?|sponsors?)\b|搜索结果|搜索词|筛选|过滤|排序|反馈|话题|赞助|为你找到以下结果|问问AI智能总结内容|^客户端$/i;
+const COMPANY_FOOTER_TEXT_PATTERN =
+  /\b(?:company|co\.,?\s*ltd|limited|inc\.?|llc|address|registered office)\b|公司|有限公司|地址：|地址:/i;
 const UTILITY_LINK_TEXT_PATTERN =
   /\b(creator center|creator learning center|upload|upload video|video management|works? data|live data|ads?|advertising|advertisements?|account recovery|contact us|join us|site map|sitemap|friend links|business license|about us|download app)\b|发布视频(?:\/图文)?|发布图文|视频管理|作品数据|直播数据|创作者学习中心|创作中心|广告投放|账号找回|联系我们|加入我们|站点地图|友情链接|业务合作|营业执照|^下载(?:app|应用|客户端)?$/i;
 const UTILITY_LINK_HREF_PATTERN =
@@ -106,12 +117,7 @@ export function extractVisibleRegionRows(input: {
   visibleTextContent?: string | null;
   sourceRegion?: string | null;
   maxRows?: number;
-  fallbackInteractiveElements?: Array<{
-    ref?: unknown;
-    role?: unknown;
-    name?: unknown;
-    href?: unknown;
-  }>;
+  fallbackInteractiveElements?: FallbackInteractiveElement[];
   url?: string | null;
   title?: string | null;
   viewport?: { width?: number | null; height?: number | null; dpr?: number | null } | null;
@@ -156,6 +162,7 @@ export function extractVisibleRegionRows(input: {
     rows.length === 0
       ? buildVisibleTextFallbackRows({
           visibleTextContent: input.visibleTextContent,
+          fallbackInteractiveElements: input.fallbackInteractiveElements,
           sourceRegion,
           searchShellContext,
           maxRows: Math.min(
@@ -248,6 +255,7 @@ export function extractVisibleRegionRows(input: {
 
 function buildVisibleTextFallbackRows(input: {
   visibleTextContent?: string | null;
+  fallbackInteractiveElements?: FallbackInteractiveElement[] | null;
   sourceRegion: string;
   searchShellContext: SearchShellContext;
   maxRows: number;
@@ -287,17 +295,22 @@ function buildVisibleTextFallbackRows(input: {
   }
   if (current.length > 0) rowGroups.push(current);
 
-  const rows = rowGroups
-    .filter((group) => group.some((line) => isVisibleTextTitleLike(line)))
-    .slice(0, input.maxRows)
-    .map((group, index) =>
-      buildVisibleTextFallbackRow({
-        group,
-        sourceRegion: input.sourceRegion,
-        index,
-      }),
-    )
-    .filter((row): row is VisibleRegionRow => row !== null);
+  const rows = attachTargetRefsToVisibleTextRows(
+    rowGroups
+      .filter((group) => group.some((line) => isVisibleTextTitleLike(line)))
+      .filter((group) => !isVisibleTextFooterBusinessGroup(group))
+      .slice(0, input.maxRows)
+      .map((group, index) =>
+        buildVisibleTextFallbackRow({
+          group,
+          sourceRegion: input.sourceRegion,
+          index,
+        }),
+      )
+      .filter((row): row is VisibleRegionRow => row !== null),
+    input.fallbackInteractiveElements,
+    input.searchShellContext,
+  );
 
   if (rows.length > 0 && rows.length < 2) {
     rejectedReasonDistribution.single_isolated_text += Math.max(1, rows.length);
@@ -309,6 +322,85 @@ function buildVisibleTextFallbackRows(input: {
   }
 
   return { rows, rejectedReasonDistribution };
+}
+
+function attachTargetRefsToVisibleTextRows(
+  rows: VisibleRegionRow[],
+  fallbackInteractiveElements: FallbackInteractiveElement[] | null | undefined,
+  searchShellContext: SearchShellContext,
+): VisibleRegionRow[] {
+  if (!Array.isArray(fallbackInteractiveElements) || fallbackInteractiveElements.length === 0) {
+    return rows;
+  }
+  const candidates = fallbackInteractiveElements
+    .map((item, index): ParsedVisibleNode => {
+      const role = normalizeText(item?.role ?? item?.type).toLowerCase() || 'generic';
+      const name = normalizeText(item?.name ?? item?.text);
+      const ref = normalizeText(item?.ref) || null;
+      const href = normalizeText(item?.href) || null;
+      return { role, name, ref, href, depth: 0, x: null, y: null, order: 20_000 + index };
+    })
+    .filter((node) => isVisibleTextTargetCandidate(node, searchShellContext));
+  if (candidates.length < 2) return rows;
+
+  const usedRefs = new Set<string>();
+  return rows.map((row) => {
+    const match = candidates.find((candidate) => {
+      if (!candidate.ref || usedRefs.has(candidate.ref)) return false;
+      return rowMatchesInteractiveCandidate(row, candidate);
+    });
+    if (!match?.ref) return row;
+    usedRefs.add(match.ref);
+    return {
+      ...row,
+      targetRef: match.ref,
+      targetRefCoverageRate: 0.99,
+      confidence: clampConfidence(row.confidence + 0.16),
+      qualityReasons: uniqueCompactStrings([...row.qualityReasons, 'target_ref_available']),
+    };
+  });
+}
+
+function rowMatchesInteractiveCandidate(
+  row: VisibleRegionRow,
+  candidate: ParsedVisibleNode,
+): boolean {
+  const candidateName = normalizeComparableText(candidate.name);
+  if (candidateName.length < 6) return false;
+  const fields = uniqueCompactStrings([row.title, ...row.visibleTextFields])
+    .map((field) => normalizeComparableText(field))
+    .filter((field) => field.length >= 6);
+  return fields.some(
+    (field) =>
+      field === candidateName || field.includes(candidateName) || candidateName.includes(field),
+  );
+}
+
+function isVisibleTextTargetCandidate(
+  node: ParsedVisibleNode,
+  searchShellContext: SearchShellContext,
+): boolean {
+  if (isStandaloneResultLink(node, searchShellContext)) return true;
+  if (!node.ref) return false;
+  if (node.href) return false;
+  if (!['button', 'interactive', 'generic'].includes(node.role)) return false;
+  const label = normalizeText(node.name);
+  if (label.length < 6) return false;
+  return (
+    !isLowValueShellNode(node, searchShellContext) &&
+    !isUtilityLinkNode(node) &&
+    !isFooterLikeText(label) &&
+    !isNavigationLikeText(label) &&
+    !SEARCH_CONTROL_TEXT_PATTERN.test(label)
+  );
+}
+
+function normalizeComparableText(value: string): string {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function normalizeVisibleText(value: unknown): string {
@@ -331,6 +423,11 @@ function classifyVisibleTextLineRejection(
   if (isMetaOnlyText(line) || INTERACTION_PATTERN.test(line)) return 'single_isolated_text';
   if (!isVisibleTextBusinessLike(line)) return 'single_isolated_text';
   return null;
+}
+
+function isVisibleTextFooterBusinessGroup(group: string[]): boolean {
+  if (group.length === 0) return false;
+  return group.every((line) => COMPANY_FOOTER_TEXT_PATTERN.test(line));
 }
 
 function isVisibleTextBusinessLike(line: string): boolean {
@@ -410,15 +507,7 @@ function mergeRejectedDistribution(
 
 function supplementGroupsFromInteractiveElements(
   groups: CandidateGroup[],
-  fallbackInteractiveElements:
-    | Array<{
-        ref?: unknown;
-        role?: unknown;
-        name?: unknown;
-        href?: unknown;
-      }>
-    | null
-    | undefined,
+  fallbackInteractiveElements: FallbackInteractiveElement[] | null | undefined,
   sourceRegion: string,
   rejectedReasonDistribution: Record<VisibleRegionRejectionReason, number>,
   searchShellContext: SearchShellContext,
@@ -434,8 +523,8 @@ function supplementGroupsFromInteractiveElements(
   const fallbackNodes: ParsedVisibleNode[] = [];
   fallbackInteractiveElements
     .map((item, index): ParsedVisibleNode => {
-      const role = normalizeText(item?.role).toLowerCase() || 'generic';
-      const name = normalizeText(item?.name);
+      const role = normalizeText(item?.role ?? item?.type).toLowerCase() || 'generic';
+      const name = normalizeText(item?.name ?? item?.text);
       const ref = normalizeText(item?.ref) || null;
       const href = normalizeText(item?.href) || null;
       return { role, name, ref, href, depth: 0, x: null, y: null, order: 10_000 + index };
@@ -616,6 +705,9 @@ function isStandaloneResultLink(
     return false;
   }
   const href = node.href.toLowerCase();
+  if (/^[?#]/.test(href) || /(?:^|[?&])(?:sort|filter|order|tab|view)=/i.test(href)) {
+    return false;
+  }
   if (/^\/?(?:explore|home)(?:$|\?)/i.test(href)) return false;
   if (/\.(?:pdf|png|jpe?g|webp|gif|svg)(?:$|\?)/i.test(href)) return false;
   if (
