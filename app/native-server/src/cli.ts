@@ -339,10 +339,10 @@ program
       const exitCode = await runConfig({
         json: Boolean(options.json),
       });
-      process.exit(exitCode);
+      process.exitCode = exitCode;
     } catch (error: any) {
       console.error(colorText(`Config failed: ${error.message}`, 'red'));
-      process.exit(1);
+      process.exitCode = 1;
     }
   });
 
