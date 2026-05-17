@@ -40,5 +40,7 @@ Public-safe summary of the accepted Gate B contract:
 ## Known Boundaries
 
 - v2.7.0 does not claim arbitrary-platform API/interface reuse. API reuse remains evidence-bounded; broader observed-endpoint reuse and lifecycle sensing continue after this release.
-- Same-profile browser reuse is Tabrix's primary advantage over isolated-profile browser competitors, but fallback success is not claimed as API parity.
+- Same-profile browser reuse is a core Tabrix requirement, but it is not unique to Tabrix. Other extension-backed browser tools can also operate against the user's real Chrome profile.
+- The release does not claim full competitor superiority. Competitor comparison remains evidence-bounded by tool path, profile mode, data source quality, and scenario coverage.
+- DOM fallback success is not claimed as API/CDP parity.
 - Private real-browser artifacts and raw benchmark JSON stay outside public docs by design.
