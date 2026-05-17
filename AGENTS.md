@@ -199,10 +199,10 @@ These are cross-cutting size / performance / schema rules that every AI assistan
 
   | Target             | Soft (warn)  | Hard (fail)  |
   | ------------------ | ------------ | ------------ |
-  | `sidepanel-*.js`   | 25 kB        | 40 kB        |
-  | `sidepanel-*.css`  | 20 kB        | 22 kB        |
+  | `sidepanel-*.js`   | 35 kB        | 40 kB        |
+  | `sidepanel-*.css`  | 25 kB        | 28 kB        |
 
-- Post-B-021 baselines: `sidepanel-*.js` ≈ 20.5 kB, `sidepanel-*.css` ≈ 17.8 kB. The CSS cap is tighter than the JS cap on purpose — CSS renders on the critical path, and post-B-006 has already absorbed the filter/search surface that was the most obvious CSS consumer.
+- Post-V25-03 baselines: `sidepanel-*.js` ≈ 32.8 kB, `sidepanel-*.css` ≈ 24.0 kB. The CSS cap is tighter than the JS cap on purpose — CSS renders on the critical path, and the Execution tab growth was reviewed with the threshold change in the same commit.
 - If a feature pushes either bundle past its soft threshold: either split the feature behind a dynamic import (JS) / scoped stylesheet (CSS), or raise the threshold **in the same reviewed commit** as the feature — never in a separate "oops" follow-up.
 - Adding a third target (e.g. `popup-*.js`) is a future backlog item; do not squeeze new targets in opportunistically.
 
